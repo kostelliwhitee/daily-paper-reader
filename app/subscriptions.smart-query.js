@@ -288,10 +288,7 @@ window.SubscriptionsSmartQuery = (function () {
       )
     );
   const canSelectProfileForRunMode = (profile) => {
-    if (!runSelectionMode) return false;
-    if (runSelectionMode === 'daily') return !isConferenceOnlyProfile(profile);
-    if (runSelectionMode === 'conference') return true;
-    return false;
+    return !!profile;
   };
   const notifySelectionChange = () => {
     if (typeof selectionChangeHandler !== 'function') return;
@@ -306,7 +303,6 @@ window.SubscriptionsSmartQuery = (function () {
     })));
   };
   const toggleProfileSelection = (profileId) => {
-    if (!runSelectionMode) return;
     const profile = findCurrentProfile(profileId);
     if (!profile || !canSelectProfileForRunMode(profile)) return;
     const key = getProfileKey(profile);
@@ -1920,17 +1916,15 @@ window.SubscriptionsSmartQuery = (function () {
           'dpr-entry-card',
           isPaused ? 'dpr-entry-card--paused' : '',
           isTemporary ? 'dpr-entry-card--temporary' : '',
-          runSelectionMode ? 'dpr-entry-card--selection-mode' : '',
+          'dpr-entry-card--selection-mode',
           selectable ? 'dpr-entry-card--selectable' : '',
           selected ? 'is-selected' : '',
-          runSelectionMode && !selectable ? 'dpr-entry-card--selection-disabled' : '',
+          !selectable ? 'dpr-entry-card--selection-disabled' : '',
         ].filter(Boolean).join(' ');
         const pausedBadge = isPaused ? '<span class="dpr-entry-paused-badge">已暂停</span>' : '';
         const temporaryBadge = isTemporary ? '<span class="dpr-entry-temp-badge">临时</span>' : '';
         const profileId = escapeHtml(getProfileKey(p) || '');
-        const selectionControl = runSelectionMode
-          ? `<span class="dpr-entry-select-dot" aria-hidden="true">${selected ? '✓' : ''}</span>`
-          : '';
+        const selectionControl = `<span class="dpr-entry-select-dot" aria-hidden="true">${selected ? '✓' : ''}</span>`;
         return `
           <div class="${cardClass}" data-profile-id="${profileId}">
             <div class="dpr-entry-top">
@@ -2691,7 +2685,7 @@ window.SubscriptionsSmartQuery = (function () {
     const actionEl = e.target && e.target.closest ? e.target.closest('[data-action][data-profile-id]') : null;
     if (!actionEl) {
       const card = e.target && e.target.closest ? e.target.closest('.dpr-entry-card[data-profile-id]') : null;
-      if (card && runSelectionMode) {
+      if (card) {
         toggleProfileSelection(card.getAttribute('data-profile-id') || '');
       }
       return;
@@ -2825,20 +2819,23 @@ window.SubscriptionsSmartQuery = (function () {
     renderMain();
   };
   const setRunSelectionMode = (mode, onSelectionChange) => {
-    const nextMode = mode === 'conference' || mode === 'daily' ? mode : '';
-    if (runSelectionMode !== nextMode) {
-      selectedProfileKeys.clear();
-    }
-    runSelectionMode = nextMode;
+    runSelectionMode = mode === 'conference' || mode === 'daily' ? mode : '';
     selectionChangeHandler = typeof onSelectionChange === 'function' ? onSelectionChange : null;
     renderMain();
     notifySelectionChange();
   };
-  const getSelectedProfileTags = () =>
+  const getSelectedProfilesForRun = () =>
     (currentProfiles || [])
       .filter((profile) => selectedProfileKeys.has(getProfileKey(profile)))
-      .map((profile) => normalizeText(profile && profile.tag))
-      .filter(Boolean);
+      .map((profile) => ({
+        tag: normalizeText(profile && profile.tag),
+        description: normalizeText(profile && profile.description),
+        scope: normalizeText(profile && profile.scope),
+        temporary: isConferenceOnlyProfile(profile),
+      }))
+      .filter((profile) => profile.tag);
+  const getSelectedProfileTags = () =>
+    getSelectedProfilesForRun().map((profile) => profile.tag);
   const clearRunSelection = () => {
     selectedProfileKeys.clear();
     renderMain();
@@ -2850,6 +2847,7 @@ window.SubscriptionsSmartQuery = (function () {
     render,
     clearPendingDeletedProfileIds,
     setRunSelectionMode,
+    getSelectedProfilesForRun,
     getSelectedProfileTags,
     clearRunSelection,
     __test: {

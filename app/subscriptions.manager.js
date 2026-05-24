@@ -17,11 +17,11 @@ window.SubscriptionsManager = (function () {
   let quickRun30dStandardBtn = null;
   let quickRunOpenWorkflowPanelBtn = null;
   let quickRunConferenceBtn = null;
-  let quickRunActivateBtn = null;
-  let conferenceRunActivateBtn = null;
   let quickRunMsgEl = null;
-  let quickRunSelectionActive = false;
-  let conferenceRunSelectionActive = false;
+  let quickRunSelectionCountEl = null;
+  let conferenceSelectionCountEl = null;
+  let quickRunHintEl = null;
+  let conferenceHintEl = null;
   const selectedConferenceYearPairs = new Set();
   let resetContentBtn = null;
   let resetContentMsgEl = null;
@@ -499,24 +499,34 @@ window.SubscriptionsManager = (function () {
     }
     return window.SubscriptionsSmartQuery.getSelectedProfileTags();
   };
+  const getSelectedProfilesForRun = () => {
+    if (window.SubscriptionsSmartQuery && typeof window.SubscriptionsSmartQuery.getSelectedProfilesForRun === 'function') {
+      return window.SubscriptionsSmartQuery.getSelectedProfilesForRun();
+    }
+    return getSelectedProfileTagsForRun().map((tag) => ({ tag, temporary: false }));
+  };
+  const getDailySelectedProfileTagsForRun = () =>
+    getSelectedProfilesForRun()
+      .filter((profile) => !profile.temporary)
+      .map((profile) => normalizeText(profile && profile.tag))
+      .filter(Boolean);
 
   const syncRunSelectionMode = () => {
     if (!window.SubscriptionsSmartQuery || typeof window.SubscriptionsSmartQuery.setRunSelectionMode !== 'function') {
       return;
     }
-    const mode = quickRunSelectionActive
-      ? 'daily'
-      : (conferenceRunSelectionActive ? 'conference' : '');
-    window.SubscriptionsSmartQuery.setRunSelectionMode(mode, () => {
+    window.SubscriptionsSmartQuery.setRunSelectionMode(activeAdminPanelTab, () => {
       refreshQuickRunButtons();
     });
   };
 
   const refreshQuickRunButtons = () => {
-    const selectedProfileCount = getSelectedProfileTagsForRun().length;
-    const dailyBlocked = hasUnsavedChanges || !quickRunSelectionActive || selectedProfileCount < 1;
+    const selectedProfiles = getSelectedProfilesForRun();
+    const selectedProfileCount = selectedProfiles.length;
+    const dailySelectedProfileCount = selectedProfiles.filter((profile) => !profile.temporary).length;
+    const dailyBlocked = hasUnsavedChanges || dailySelectedProfileCount < 1;
     const conferenceBlocked =
-      hasUnsavedChanges || !conferenceRunSelectionActive || selectedProfileCount < 1 || selectedConferenceYearPairs.size < 1;
+      hasUnsavedChanges || selectedProfileCount < 1 || selectedConferenceYearPairs.size < 1;
     [
       [quickRun10dBtn, dailyBlocked],
       [quickRun30dBtn, dailyBlocked],
@@ -530,23 +540,37 @@ window.SubscriptionsManager = (function () {
       if (blocked) {
         if (hasUnsavedChanges) {
           title = btn === quickRunConferenceBtn ? '请先点击“保存”后再发起会议论文检索。' : '请先点击“保存”后再发起快速抓取。';
-        } else if (btn === quickRunConferenceBtn && !selectedConferenceYearPairs.size) {
-          title = '请先选择至少一个会议年份。';
         } else if (selectedProfileCount < 1) {
           title = '请先在上方选择至少一个词条。';
+        } else if (btn === quickRunConferenceBtn && !selectedConferenceYearPairs.size) {
+          title = '请先选择至少一个会议年份。';
         } else {
-          title = btn === quickRunConferenceBtn ? '请先启用会议论文检索模式。' : '请先启用快速抓取模式。';
+          title = btn === quickRunConferenceBtn ? '请先选择至少一个会议年份。' : '临时词条不参与日常抓取，请选择至少一个常规词条。';
         }
       }
       btn.title = title;
     });
-    if (quickRunActivateBtn) {
-      quickRunActivateBtn.classList.toggle('is-active', quickRunSelectionActive);
-      quickRunActivateBtn.setAttribute('aria-pressed', quickRunSelectionActive ? 'true' : 'false');
+    if (quickRunSelectionCountEl) {
+      quickRunSelectionCountEl.textContent = dailySelectedProfileCount > 0
+        ? `已选择 ${dailySelectedProfileCount} 个常规词条`
+        : '先勾选上方词条';
+      quickRunSelectionCountEl.classList.toggle('is-empty', dailySelectedProfileCount < 1);
     }
-    if (conferenceRunActivateBtn) {
-      conferenceRunActivateBtn.classList.toggle('is-active', conferenceRunSelectionActive);
-      conferenceRunActivateBtn.setAttribute('aria-pressed', conferenceRunSelectionActive ? 'true' : 'false');
+    if (conferenceSelectionCountEl) {
+      conferenceSelectionCountEl.textContent = selectedProfileCount > 0
+        ? `已选择 ${selectedProfileCount} 个词条`
+        : '先勾选上方词条';
+      conferenceSelectionCountEl.classList.toggle('is-empty', selectedProfileCount < 1);
+    }
+    if (quickRunHintEl) {
+      quickRunHintEl.textContent = dailySelectedProfileCount > 0
+        ? '选择抓取范围后会对已勾选的常规词条批量执行。'
+        : '勾选一个或多个常规词条后，下方快速抓取按钮会自动激活。';
+    }
+    if (conferenceHintEl) {
+      conferenceHintEl.textContent = selectedProfileCount > 0
+        ? '继续选择会议年份，然后点击开始检索。'
+        : '勾选一个或多个词条，再选择会议年份进行批量会议检索。';
     }
     if (hasUnsavedChanges && quickRunMsgEl) {
       quickRunMsgEl.textContent = '检测到未保存修改，请先保存后再发起快速抓取。';
@@ -616,11 +640,6 @@ window.SubscriptionsManager = (function () {
       return;
     }
     activeAdminPanelTab = nextTab;
-    if (nextTab === 'daily') {
-      conferenceRunSelectionActive = false;
-    } else {
-      quickRunSelectionActive = false;
-    }
     syncRunSelectionMode();
     syncAdminPanelTabs();
   };
@@ -676,9 +695,9 @@ window.SubscriptionsManager = (function () {
   };
 
   const runSelectedQuickFetch = (days, runOptions = {}) => {
-    const tags = getSelectedProfileTagsForRun();
-    if (!quickRunSelectionActive || !tags.length) {
-      setQuickRunMessage('请先点击「快速抓取」并选择至少一个词条。', '#c00');
+    const tags = getDailySelectedProfileTagsForRun();
+    if (!tags.length) {
+      setQuickRunMessage('请先勾选至少一个常规词条。临时词条不会参与日常快速抓取。', '#c00');
       refreshQuickRunButtons();
       return false;
     }
@@ -710,9 +729,9 @@ window.SubscriptionsManager = (function () {
       return false;
     }
     const profileTags = getSelectedProfileTagsForRun();
-    if (!conferenceRunSelectionActive || !profileTags.length) {
+    if (!profileTags.length) {
       if (msgEl) {
-        msgEl.textContent = '请先点击「会议论文检索」并选择至少一个词条。';
+        msgEl.textContent = '请先勾选至少一个词条。';
         msgEl.style.color = '#c00';
       }
       refreshQuickRunButtons();
@@ -1027,13 +1046,14 @@ window.SubscriptionsManager = (function () {
             role="tabpanel"
             aria-labelledby="dpr-admin-tab-daily"
           >
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
-              <button id="arxiv-admin-quick-run-activate-btn" class="dpr-task-activate-btn" type="button" aria-pressed="false">
-                快速抓取
-              </button>
+            <div class="dpr-bulk-bar-head">
+              <div>
+                <div class="chat-quick-run-title">快速抓取</div>
+                <div id="arxiv-admin-quick-run-selection-count" class="dpr-bulk-selection-count is-empty">先勾选上方词条</div>
+              </div>
               <button id="arxiv-admin-open-workflow-panel-btn" class="arxiv-tool-btn" type="button" style="padding:2px 8px;">打开工作流面板</button>
             </div>
-            <div class="dpr-task-hint">先启用快速抓取，再在上方勾选词条。临时词条不会参与日常抓取。</div>
+            <div id="arxiv-admin-quick-run-hint" class="dpr-task-hint">勾选一个或多个常规词条后，下方快速抓取按钮会自动激活。</div>
             <button id="arxiv-admin-quick-run-10d-btn" class="chat-quick-run-item" type="button">立即搜寻十天内论文</button>
             <button id="arxiv-admin-quick-run-30d-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全速览，约 0.76）</button>
             <button id="arxiv-admin-quick-run-30d-standard-btn" class="chat-quick-run-item" type="button">立即搜寻三十天内论文（全标准 / 精读，约 1.22）</button>
@@ -1060,13 +1080,16 @@ window.SubscriptionsManager = (function () {
             hidden
           >
             <div class="dpr-conference-pane">
-              <button id="arxiv-admin-conference-activate-btn" class="dpr-task-activate-btn" type="button" aria-pressed="false">
-                会议论文检索
-              </button>
+              <div class="dpr-bulk-bar-head">
+                <div>
+                  <div class="chat-quick-run-title">会议论文检索</div>
+                  <div id="arxiv-admin-conference-selection-count" class="dpr-bulk-selection-count is-empty">先勾选上方词条</div>
+                </div>
+              </div>
               <div class="dpr-conference-subtitle">按会议和年份从 Supabase 召回候选，不参与每日论文抓取。</div>
 
-              <div class="dpr-conference-note">
-                先启用会议论文检索，再选择上方词条和下方会议年份。会议名仅分组，年份可多选。
+              <div id="arxiv-admin-conference-hint" class="dpr-conference-note">
+                勾选一个或多个词条，再选择会议年份进行批量会议检索。会议名仅分组，年份可多选。
               </div>
 
               <div class="dpr-choice-field">
@@ -1217,8 +1240,6 @@ window.SubscriptionsManager = (function () {
       }
       draftConfig = null;
       hasUnsavedChanges = false;
-      quickRunSelectionActive = false;
-      conferenceRunSelectionActive = false;
       syncRunSelectionMode();
       refreshQuickRunButtons();
     }
@@ -1293,13 +1314,15 @@ window.SubscriptionsManager = (function () {
     quickRun10dBtn = document.getElementById('arxiv-admin-quick-run-10d-btn');
     quickRun30dBtn = document.getElementById('arxiv-admin-quick-run-30d-btn');
     quickRun30dStandardBtn = document.getElementById('arxiv-admin-quick-run-30d-standard-btn');
-    quickRunActivateBtn = document.getElementById('arxiv-admin-quick-run-activate-btn');
-    conferenceRunActivateBtn = document.getElementById('arxiv-admin-conference-activate-btn');
     quickRunOpenWorkflowPanelBtn = document.getElementById('arxiv-admin-open-workflow-panel-btn');
     quickRunConferenceBtn = document.getElementById(
       'arxiv-admin-quick-run-conference-run-btn',
     );
     quickRunMsgEl = document.getElementById('arxiv-admin-quick-run-msg');
+    quickRunSelectionCountEl = document.getElementById('arxiv-admin-quick-run-selection-count');
+    conferenceSelectionCountEl = document.getElementById('arxiv-admin-conference-selection-count');
+    quickRunHintEl = document.getElementById('arxiv-admin-quick-run-hint');
+    conferenceHintEl = document.getElementById('arxiv-admin-conference-hint');
     resetContentBtn = document.getElementById('arxiv-admin-reset-content-btn');
     resetContentMsgEl = document.getElementById('arxiv-admin-reset-content-msg');
     if (quickRunConferenceBtn) {
@@ -1340,26 +1363,6 @@ window.SubscriptionsManager = (function () {
           30,
           { fetchMode: 'standard' },
         );
-      });
-    }
-
-    if (quickRunActivateBtn && !quickRunActivateBtn._bound) {
-      quickRunActivateBtn._bound = true;
-      quickRunActivateBtn.addEventListener('click', () => {
-        quickRunSelectionActive = !quickRunSelectionActive;
-        if (quickRunSelectionActive) conferenceRunSelectionActive = false;
-        syncRunSelectionMode();
-        refreshQuickRunButtons();
-      });
-    }
-
-    if (conferenceRunActivateBtn && !conferenceRunActivateBtn._bound) {
-      conferenceRunActivateBtn._bound = true;
-      conferenceRunActivateBtn.addEventListener('click', () => {
-        conferenceRunSelectionActive = !conferenceRunSelectionActive;
-        if (conferenceRunSelectionActive) quickRunSelectionActive = false;
-        syncRunSelectionMode();
-        refreshQuickRunButtons();
       });
     }
 
@@ -1479,8 +1482,6 @@ window.SubscriptionsManager = (function () {
         hasUnsavedChanges = !!value;
       },
       __setRunSelectionState: (value) => {
-        quickRunSelectionActive = !!(value && value.quick);
-        conferenceRunSelectionActive = !!(value && value.conference);
         selectedConferenceYearPairs.clear();
         (Array.isArray(value && value.conferencePairs) ? value.conferencePairs : []).forEach((item) => {
           const text = normalizeText(item);
