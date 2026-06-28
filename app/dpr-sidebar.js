@@ -961,6 +961,7 @@
     activeConference: '',
     activeConferenceTag: '',
     sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+    titleOverflowFrame: 0,
   };
 
   function loadPersistedFilter() {
@@ -1016,6 +1017,7 @@
     if (document.documentElement && document.documentElement.style) {
       document.documentElement.style.setProperty('--dpr-sidebar-width', nextWidth + 'px');
     }
+    schedulePaperTitleOverflowMarks();
     return nextWidth;
   }
   function persistSidebarWidth(width) {
@@ -1214,7 +1216,38 @@
       collapsedAxisSections: state.collapsedAxisSections,
     };
     state.bodyEl.innerHTML = renderBodyHtml(state.model, viewState);
+    schedulePaperTitleOverflowMarks(state.bodyEl);
     syncResolvedAxisState();
+  }
+
+  function updatePaperTitleOverflowMarks(root) {
+    var scope = root || state.bodyEl;
+    if (!scope || !scope.querySelectorAll) return;
+    var papers = scope.matches && scope.matches('.dpr-sidebar-paper')
+      ? [scope]
+      : $$('.dpr-sidebar-paper', scope);
+    papers.forEach(function (li) {
+      var title = $('.dpr-sidebar-paper-title', li);
+      if (!title || !li.classList) return;
+      var overflow = (title.scrollWidth || 0) > ((title.clientWidth || 0) + 1);
+      li.classList.toggle('is-title-overflowing', overflow);
+    });
+  }
+
+  function schedulePaperTitleOverflowMarks(root) {
+    var scope = root || state.bodyEl;
+    if (!scope) return;
+    if (!window.requestAnimationFrame) {
+      updatePaperTitleOverflowMarks(scope);
+      return;
+    }
+    if (state.titleOverflowFrame) {
+      window.cancelAnimationFrame && window.cancelAnimationFrame(state.titleOverflowFrame);
+    }
+    state.titleOverflowFrame = window.requestAnimationFrame(function () {
+      state.titleOverflowFrame = 0;
+      updatePaperTitleOverflowMarks(scope);
+    });
   }
 
   function updateAxisTabUnreadMarks(readMap) {
@@ -1661,6 +1694,18 @@
       }
     });
 
+    root.addEventListener('mouseover', function (e) {
+      var paper = e.target.closest('.dpr-sidebar-paper');
+      if (!paper) return;
+      schedulePaperTitleOverflowMarks(paper);
+    });
+
+    root.addEventListener('focusin', function (e) {
+      var paper = e.target.closest('.dpr-sidebar-paper');
+      if (!paper) return;
+      schedulePaperTitleOverflowMarks(paper);
+    });
+
     root.addEventListener('mousedown', function (e) {
       var handle = e.target.closest('.dpr-sidebar-resizer');
       if (!handle) return;
@@ -1817,6 +1862,7 @@
         rerenderOptionsForAxisInteraction: rerenderOptionsForAxisInteraction,
         rerenderOptionsForStatusClick: rerenderOptionsForStatusClick,
         syncActiveOptionsForInitialLoad: syncActiveOptionsForInitialLoad,
+        updatePaperTitleOverflowMarks: updatePaperTitleOverflowMarks,
       },
     };
   }

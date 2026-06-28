@@ -338,6 +338,30 @@ function testSidebarUtilityHelpers() {
     syncActive: false,
     scrollPanel: 'daily',
   });
+
+  assert.equal(typeof tools.updatePaperTitleOverflowMarks, 'function');
+  function fakePaper(scrollWidth, clientWidth) {
+    const marks = {};
+    const title = { scrollWidth, clientWidth };
+    const li = {
+      classList: {
+        toggle: (name, value) => {
+          marks[name] = value;
+        },
+      },
+      querySelector: (selector) => selector === '.dpr-sidebar-paper-title' ? title : null,
+    };
+    return { li, marks };
+  }
+  const overflowing = fakePaper(160, 100);
+  const fitting = fakePaper(98, 100);
+  tools.updatePaperTitleOverflowMarks({
+    querySelectorAll: (selector) => selector === '.dpr-sidebar-paper'
+      ? [overflowing.li, fitting.li]
+      : [],
+  });
+  assert.equal(overflowing.marks['is-title-overflowing'], true);
+  assert.equal(fitting.marks['is-title-overflowing'], false);
 }
 
 function testEvidenceCssIsPersistent() {
@@ -381,21 +405,32 @@ function testSidebarPaperVisualStateCssContract() {
 
   const titleRule = cssRule(css, '.dpr-sidebar-paper-title');
   assert.ok(/display:\s*block/i.test(titleRule));
+  assert.ok(/position:\s*relative/i.test(titleRule));
   assert.ok(/white-space:\s*nowrap/i.test(titleRule));
   assert.ok(/overflow:\s*hidden/i.test(titleRule));
-  assert.ok(/text-overflow:\s*ellipsis/i.test(titleRule));
+  assert.ok(/text-overflow:\s*clip/i.test(titleRule));
   assert.ok(/padding-right:\s*20px/i.test(titleRule));
   assert.ok(/box-sizing:\s*border-box/i.test(titleRule));
   assert.ok(!/-webkit-line-clamp/i.test(titleRule));
 
+  const titleDotsRule = cssRule(css, '.dpr-sidebar-paper-title::after');
+  assert.ok(/content:\s*"\.\."/i.test(titleDotsRule));
+  assert.ok(/position:\s*absolute/i.test(titleDotsRule));
+  assert.ok(/right:\s*20px/i.test(titleDotsRule));
+  assert.ok(/opacity:\s*0/i.test(titleDotsRule));
+
+  assert.ok(/\.dpr-sidebar-paper\.is-title-overflowing \.dpr-sidebar-paper-title::after\s*{[^}]*opacity:\s*1/i.test(css));
+  assert.ok(/\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-title,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-title\s*{[^}]*padding-right:\s*var\(--dpr-sidebar-paper-action-reserve\)/i.test(css));
+  assert.ok(/\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-title::after,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-title::after\s*{[^}]*right:\s*var\(--dpr-sidebar-paper-action-reserve\)/i.test(css));
+
   const actionsRule = cssRule(css, '.dpr-sidebar-paper-actions');
   assert.ok(/position:\s*absolute/i.test(actionsRule));
   assert.ok(/right:\s*6px/i.test(actionsRule));
-  assert.ok(/top:\s*28px/i.test(actionsRule));
-  assert.ok(/transform:\s*none/i.test(actionsRule));
+  assert.ok(/top:\s*50%/i.test(actionsRule));
+  assert.ok(/transform:\s*translateY\(-50%\)/i.test(actionsRule));
   assert.ok(/width:\s*39px/i.test(actionsRule));
 
-  assert.ok(/\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-evidence,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-evidence,\s*\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-meta,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-meta\s*{[^}]*padding-right:\s*52px/i.test(css));
+  assert.ok(/\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-evidence,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-evidence,\s*\.dpr-sidebar-paper:hover \.dpr-sidebar-paper-meta,\s*\.dpr-sidebar-paper:focus-within \.dpr-sidebar-paper-meta\s*{[^}]*padding-right:\s*var\(--dpr-sidebar-paper-action-reserve\)/i.test(css));
 
   const readRowRule = /\.dpr-sidebar-paper\[data-read-status="read"\]\s*{[^}]*background:/i;
   assert.ok(!readRowRule.test(css), 'read should not paint the whole row');
