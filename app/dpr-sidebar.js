@@ -177,6 +177,15 @@
   function shouldAutoMarkRead(status) {
     return !normalizeReadStatus(status);
   }
+  function rememberPendingPaperHref(href) {
+    var normalized = normalizeRouteHref(href || '');
+    state.pendingPaperHref = normalized || '';
+    return state.pendingPaperHref;
+  }
+  function resolveCurrentPaperHrefForRender(model, viewState) {
+    var requested = viewState && viewState.currentPaperHref || state.pendingPaperHref || currentRouteHref();
+    return findCurrentPaperHrefFromModel(model, requested);
+  }
   function clampSidebarWidth(width) {
     var n = parseInt(width, 10);
     if (!isFinite(n)) n = DEFAULT_SIDEBAR_WIDTH;
@@ -957,6 +966,7 @@
     unreadCountEl: null,
     filter: 'all', // 'all' | 'unread'
     search: '',
+    pendingPaperHref: '',
     lastFetchAt: 0,
     expandedGroups: { conference: true, daily: true },
     collapsedAxisSections: new Set(),
@@ -1165,6 +1175,7 @@
       filter: vs.filter === 'unread' ? 'unread' : 'all',
       readMap: vs.readMap || {},
       collapsedAxisSections: normalizeSet(vs.collapsedAxisSections),
+      currentPaperHref: normalizeRouteHref(vs.currentPaperHref || ''),
     };
   }
 
@@ -1173,7 +1184,7 @@
     var map = readMap || vs.readMap || {};
     var axisMode = mode || '';
     var resultMode = axisMode === 'results' || !!vs.search.trim() || vs.filter === 'unread';
-    var currentPaperHref = findCurrentPaperHrefFromModel(model);
+    var currentPaperHref = resolveCurrentPaperHrefForRender(model, vs);
     var resultOptions = {
       keyword: vs.search.trim(),
       readMap: map,
@@ -1198,7 +1209,7 @@
     var unreadOnly = vs.filter === 'unread';
     var keyword = vs.search.trim();
     var resultMode = !!keyword || unreadOnly;
-    var currentPaperHref = findCurrentPaperHrefFromModel(model);
+    var currentPaperHref = resolveCurrentPaperHrefForRender(model, vs);
     var resultOptions = {
       keyword: keyword,
       readMap: vs.readMap,
@@ -1542,6 +1553,9 @@
     if (!state.bodyEl) return;
     stripAppNav(state.bodyEl); // docsify 可能再次注入 .app-nav（每次路由）
     var href = findActivePaper();
+    if (state.pendingPaperHref && normalizeRouteHref(href) === state.pendingPaperHref) {
+      state.pendingPaperHref = '';
+    }
     $$('.dpr-sidebar-paper.is-active', state.bodyEl).forEach(function (li) {
       li.classList.remove('is-active');
     });
@@ -1792,6 +1806,7 @@
       // 论文点击：移动端自动关闭抽屉
       var paperLink = e.target.closest('.dpr-sidebar-paper-link');
       if (paperLink) {
+        rememberPendingPaperHref(paperLink.getAttribute('href') || '');
         if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
           root.classList.remove('is-open');
         }
@@ -1977,6 +1992,8 @@
         rerenderOptionsForAxisInteraction: rerenderOptionsForAxisInteraction,
         rerenderOptionsForStatusClick: rerenderOptionsForStatusClick,
         syncActiveOptionsForInitialLoad: syncActiveOptionsForInitialLoad,
+        rememberPendingPaperHref: rememberPendingPaperHref,
+        resolveCurrentPaperHrefForRender: resolveCurrentPaperHrefForRender,
         updatePaperTitleOverflowMarks: updatePaperTitleOverflowMarks,
         renderQuickLink: renderQuickLink,
         renderSidebarFooterControls: renderSidebarFooterControls,

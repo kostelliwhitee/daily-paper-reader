@@ -803,6 +803,43 @@ function testUnreadResultsKeepCurrentReadPaperVisible() {
   assert.ok(/class="dpr-sidebar-paper dpr-sidebar-paper-deep is-active"/.test(html));
 }
 
+function testUnreadClickPendingHrefKeepsClickedPaperVisibleBeforeHashUpdates() {
+  const sidebar = loadSidebarForTest('#/202606/24/paper-a');
+  const tools = sidebar.__test;
+  const model = tools.parseSidebar(sampleSidebar);
+  assert.equal(typeof tools.rememberPendingPaperHref, 'function');
+  tools.rememberPendingPaperHref('#/202606/24/paper-b');
+
+  const html = tools.renderBodyHtml(model, {
+    expandedGroups: { conference: true, daily: true },
+    conferenceViewMode: 'conf',
+    dailyViewMode: 'date',
+    activeConference: 'neurips-2024',
+    activeDailyDate: '20260624',
+    filter: 'unread',
+    readMap: {
+      '202606/24/paper-a': 'read',
+      '202606/24/paper-b': 'read',
+    },
+  });
+
+  assert.ok(!html.includes('Paper A'));
+  assert.ok(html.includes('Paper B'));
+  assert.ok(html.includes('data-paper-id="202606/24/paper-b"'));
+  assert.ok(/class="dpr-sidebar-paper dpr-sidebar-paper-quick is-active"/.test(html));
+  assert.ok(/class="dpr-sidebar-axis-section dpr-sidebar-axis-section-daily[^"]*has-active-paper/.test(html));
+}
+
+function testPaperLinkClickStoresPendingHrefBeforeRouteChange() {
+  const js = fs.readFileSync('app/dpr-sidebar.js', 'utf8');
+  const start = js.indexOf("var paperLink = e.target.closest('.dpr-sidebar-paper-link');");
+  const end = js.indexOf("// 顶部 Home / Tutorial", start);
+  assert.ok(start > 0 && end > start, 'paper link click handler should be present');
+  const block = js.slice(start, end);
+  assert.ok(block.includes('rememberPendingPaperHref('));
+  assert.ok(block.includes("paperLink.getAttribute('href')"));
+}
+
 function testStatusClickKeepsPaperRowInPlace() {
   const js = fs.readFileSync('app/dpr-sidebar.js', 'utf8');
   const start = js.indexOf("var statusButton = e.target.closest('.dpr-sidebar-paper-status-btn');");
@@ -848,6 +885,8 @@ testSearchResultsComeFromFullModel();
 testSearchNoResultsShowsEmptyState();
 testUnreadResultsComeFromFullModel();
 testUnreadResultsKeepCurrentReadPaperVisible();
+testUnreadClickPendingHrefKeepsClickedPaperVisibleBeforeHashUpdates();
+testPaperLinkClickStoresPendingHrefBeforeRouteChange();
 testStatusClickKeepsPaperRowInPlace();
 testReadStatusNormalization();
 
