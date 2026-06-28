@@ -304,6 +304,10 @@ window.PrivateDiscussionChat = (function () {
     'ICML',
     'IJCAI',
     'NeurIPS',
+    'OSDI',
+    'SOSP',
+    'S&P',
+    'NDSS',
     'SIGIR',
   ];
 

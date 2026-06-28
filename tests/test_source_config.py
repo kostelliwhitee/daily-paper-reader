@@ -364,6 +364,35 @@ class SourceConfigMigrationTest(unittest.TestCase):
             self.assertEqual(backend["vector_rpc_exact"], f"match_{source_key}_papers_exact")
             self.assertEqual(backend["bm25_rpc"], f"match_{source_key}_papers_bm25")
 
+    def test_resolve_source_backends_supports_env_systems_security_backends(self):
+        cfg = {
+            "supabase_shared": {
+                "url": "https://shared.supabase.co",
+                "anon_key": "shared-key",
+                "schema": "public",
+            }
+        }
+        cases = {
+            "osdi": "OSDI",
+            "sosp": "SOSP",
+            "ieee_sp": "IEEE_SP",
+            "ndss": "NDSS",
+        }
+        for source_key, prefix in cases.items():
+            env = {
+                f"DPR_ENABLE_{prefix}_BACKEND": "1",
+                f"DPR_{prefix}_ENABLED": "1",
+                f"DPR_{prefix}_PAPERS_TABLE": f"{source_key}_papers",
+                f"DPR_{prefix}_VECTOR_RPC_EXACT": f"match_{source_key}_papers_exact",
+                f"DPR_{prefix}_BM25_RPC": f"match_{source_key}_papers_bm25",
+            }
+            with self.subTest(source_key=source_key), patch.dict("os.environ", env, clear=False):
+                backend = get_source_backend(cfg, source_key)
+            self.assertEqual(backend["url"], "https://shared.supabase.co")
+            self.assertEqual(backend["papers_table"], f"{source_key}_papers")
+            self.assertEqual(backend["vector_rpc_exact"], f"match_{source_key}_papers_exact")
+            self.assertEqual(backend["bm25_rpc"], f"match_{source_key}_papers_bm25")
+
 
 if __name__ == "__main__":
     unittest.main()

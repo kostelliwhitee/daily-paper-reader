@@ -60,6 +60,10 @@ alter table public.emnlp_papers enable row level security;
 alter table public.cvpr_papers enable row level security;
 alter table public.eccv_papers enable row level security;
 alter table public.ijcai_papers enable row level security;
+alter table public.osdi_papers enable row level security;
+alter table public.sosp_papers enable row level security;
+alter table public.ieee_sp_papers enable row level security;
+alter table public.ndss_papers enable row level security;
 
 grant select on table public.aaai_papers to anon, authenticated;
 grant select on table public.acl_papers to anon, authenticated;
@@ -67,6 +71,10 @@ grant select on table public.emnlp_papers to anon, authenticated;
 grant select on table public.cvpr_papers to anon, authenticated;
 grant select on table public.eccv_papers to anon, authenticated;
 grant select on table public.ijcai_papers to anon, authenticated;
+grant select on table public.osdi_papers to anon, authenticated;
+grant select on table public.sosp_papers to anon, authenticated;
+grant select on table public.ieee_sp_papers to anon, authenticated;
+grant select on table public.ndss_papers to anon, authenticated;
 
 drop policy if exists "public read aaai papers" on public.aaai_papers;
 create policy "public read aaai papers"
@@ -122,6 +130,42 @@ using (
   source ~ '^IJCAI-[0-9]{4}-[A-Za-z0-9-]+$'
 );
 
+drop policy if exists "public read osdi papers" on public.osdi_papers;
+create policy "public read osdi papers"
+on public.osdi_papers
+for select
+to anon, authenticated
+using (
+  source ~ '^OSDI-[0-9]{4}-[A-Za-z0-9-]+$'
+);
+
+drop policy if exists "public read sosp papers" on public.sosp_papers;
+create policy "public read sosp papers"
+on public.sosp_papers
+for select
+to anon, authenticated
+using (
+  source ~ '^SOSP-[0-9]{4}-[A-Za-z0-9-]+$'
+);
+
+drop policy if exists "public read ieee sp papers" on public.ieee_sp_papers;
+create policy "public read ieee sp papers"
+on public.ieee_sp_papers
+for select
+to anon, authenticated
+using (
+  source ~ '^IEEE-SP-[0-9]{4}-[A-Za-z0-9-]+$'
+);
+
+drop policy if exists "public read ndss papers" on public.ndss_papers;
+create policy "public read ndss papers"
+on public.ndss_papers
+for select
+to anon, authenticated
+using (
+  source ~ '^NDSS-[0-9]{4}-[A-Za-z0-9-]+$'
+);
+
 -- RPC execute grants
 grant execute on function public.match_icml_openreview_papers_exact(vector, int, timestamptz, timestamptz)
 to anon, authenticated;
@@ -166,6 +210,26 @@ to anon, authenticated;
 grant execute on function public.match_ijcai_papers_exact(vector, int, timestamptz, timestamptz)
 to anon, authenticated;
 grant execute on function public.match_ijcai_papers_bm25(text, int, timestamptz, timestamptz)
+to anon, authenticated;
+
+grant execute on function public.match_osdi_papers_exact(vector, int, timestamptz, timestamptz)
+to anon, authenticated;
+grant execute on function public.match_osdi_papers_bm25(text, int, timestamptz, timestamptz)
+to anon, authenticated;
+
+grant execute on function public.match_sosp_papers_exact(vector, int, timestamptz, timestamptz)
+to anon, authenticated;
+grant execute on function public.match_sosp_papers_bm25(text, int, timestamptz, timestamptz)
+to anon, authenticated;
+
+grant execute on function public.match_ieee_sp_papers_exact(vector, int, timestamptz, timestamptz)
+to anon, authenticated;
+grant execute on function public.match_ieee_sp_papers_bm25(text, int, timestamptz, timestamptz)
+to anon, authenticated;
+
+grant execute on function public.match_ndss_papers_exact(vector, int, timestamptz, timestamptz)
+to anon, authenticated;
+grant execute on function public.match_ndss_papers_bm25(text, int, timestamptz, timestamptz)
 to anon, authenticated;
 
 commit;

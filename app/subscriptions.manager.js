@@ -103,11 +103,15 @@ window.SubscriptionsManager = (function () {
     'IJCAI',
     'ACL',
     'EMNLP',
+    'OSDI',
+    'SOSP',
+    'IEEE S&P',
+    'NDSS',
   ];
   // 2026 年会议数据可用性（截至 2026-06）：
-  // 有数据: ICLR 2026, AAAI 2026
-  // 无数据: CVPR 2026（刚结束未上传）, 其余未举办
-  const CONFERENCE_2026_AVAILABLE = new Set(['ICLR', 'AAAI']);
+  // 有数据: ICLR 2026, AAAI 2026, NDSS 2026
+  // 无数据: CVPR/OSDI/SOSP/IEEE S&P 2026（论文 PDF 尚未全量公开或未上传）
+  const CONFERENCE_2026_AVAILABLE = new Set(['ICLR', 'AAAI', 'NDSS']);
   // ECCV 是双年会议（偶数年）
   const BIENNIAL_EVEN_CONFERENCES = new Set(['ECCV']);
   const CONFERENCES_WITH_PENDING_CURRENT_YEAR = new Set([
@@ -504,6 +508,9 @@ window.SubscriptionsManager = (function () {
         NEURIPS: '2026 年 12 月会后',
         NIPS:    '2026 年 12 月会后',
         ECCV:    '2026 年秋季会后',
+        OSDI:    '2026 年会后论文 PDF 公开后',
+        SOSP:    '2026 年会后论文 PDF 公开后',
+        'IEEE S&P': '2026 年 CSDL 论文 PDF 公开后',
       };
       const est = ESTIMATED_DATES[conf];
       if (est) return `预计 ${est} 纳入`;

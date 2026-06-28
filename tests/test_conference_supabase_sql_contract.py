@@ -71,6 +71,34 @@ CONFERENCE_SQL = {
         "exact": "match_ijcai_papers_exact",
         "bm25": "match_ijcai_papers_bm25",
     },
+    "osdi": {
+        "table": "osdi_papers",
+        "create": "create_osdi_papers_schema.sql",
+        "match": "match_osdi_papers.sql",
+        "exact": "match_osdi_papers_exact",
+        "bm25": "match_osdi_papers_bm25",
+    },
+    "sosp": {
+        "table": "sosp_papers",
+        "create": "create_sosp_papers_schema.sql",
+        "match": "match_sosp_papers.sql",
+        "exact": "match_sosp_papers_exact",
+        "bm25": "match_sosp_papers_bm25",
+    },
+    "ieee_sp": {
+        "table": "ieee_sp_papers",
+        "create": "create_ieee_sp_papers_schema.sql",
+        "match": "match_ieee_sp_papers.sql",
+        "exact": "match_ieee_sp_papers_exact",
+        "bm25": "match_ieee_sp_papers_bm25",
+    },
+    "ndss": {
+        "table": "ndss_papers",
+        "create": "create_ndss_papers_schema.sql",
+        "match": "match_ndss_papers.sql",
+        "exact": "match_ndss_papers_exact",
+        "bm25": "match_ndss_papers_bm25",
+    },
 }
 
 

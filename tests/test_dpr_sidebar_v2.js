@@ -182,6 +182,20 @@ function testAxisViewsForDailyAndConference() {
   assert.deepEqual(confTagView.groups[0].papers.map((paper) => paper.title), ['Paper C']);
 }
 
+function testHyphenatedConferenceMarkerParsing() {
+  const sidebar = loadSidebarForTest('#/conference/ieee-sp-2025/paper-s');
+  const tools = sidebar.__test;
+  const model = tools.parseSidebar(`
+* Conference Papers
+  * IEEE_SP 2025 <!--dpr-conference:ieee-sp-2025-->
+    * security
+      * <a class="dpr-sidebar-item-link" href="#/conference/ieee-sp-2025/paper-s" data-sidebar-item="{&quot;title&quot;:&quot;Paper S&quot;}">Paper S</a>
+`);
+  assert.deepEqual(model.conferences.map((conf) => [conf.name, conf.years]), [['ieee-sp', '2025']]);
+  const confView = tools.buildConferenceConfView(model, 'ieee-sp-2025');
+  assert.deepEqual(confView.tabs.map((tab) => tab.key), ['ieee-sp-2025']);
+}
+
 function testAxisTabsRenderUnreadCounts() {
   const sidebar = loadSidebarForTest('#/202606/24/paper-a');
   const tools = sidebar.__test;
@@ -912,6 +926,7 @@ function testReadStatusNormalization() {
 
 testSidebarNavigationContract();
 testAxisViewsForDailyAndConference();
+testHyphenatedConferenceMarkerParsing();
 testAxisTabsRenderUnreadCounts();
 testPaperEvidenceAndActionButtonsRender();
 testPaperMetaOrderKeepsEvidenceBetweenTitleAndStars();

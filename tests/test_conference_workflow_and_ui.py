@@ -96,12 +96,26 @@ class ConferenceWorkflowAndUiTest(unittest.TestCase):
         self.assertNotIn("bodyEl.scrollTop = bodyEl.scrollHeight", runner)
         self.assertIn("refreshLocalRun(r.runId)", runner)
         self.assertIn("runConferenceRetrieval(conf, years, {", manager)
+        for conference in ["OSDI", "SOSP", "IEEE S&P", "NDSS"]:
+            self.assertIn(conference, manager)
+        for conference in ["OSDI", "SOSP", "S&P", "NDSS"]:
+            self.assertIn(conference, runner)
         self.assertIn("profile_tag: profileTags.join(',')", manager)
         self.assertIn("会议论文检索", manager)
         self.assertNotIn("showPrettyConfirm", manager)
         self.assertNotIn("确认对 <strong>", manager)
         self.assertNotIn("dpr-run-confirm", css)
         self.assertNotIn("runConferenceMaintain(conf, years)", manager)
+
+    def test_maintain_workflow_knows_public_systems_security_conferences(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        workflow_path = root / ".github" / "workflows" / "maintain-supabase.yml"
+        text = workflow_path.read_text(encoding="utf-8")
+
+        for source_key in ["osdi", "sosp", "ieee_sp", "ndss"]:
+            self.assertIn(f"src/maintain/{source_key}.py", text)
+            self.assertIn(f"DPR_ENABLE_{source_key.upper()}_BACKEND", text)
+            self.assertIn(f"DPR_{source_key.upper()}_PAPERS_TABLE", text)
 
     def test_local_debug_uses_browser_config_override(self):
         root = pathlib.Path(__file__).resolve().parents[1]

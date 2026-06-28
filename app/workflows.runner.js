@@ -1025,6 +1025,9 @@ window.DPRWorkflowRunner = (function () {
       icml: 'ICML', iclr: 'ICLR', aaai: 'AAAI',
       cvpr: 'CVPR', eccv: 'ECCV', ijcai: 'IJCAI',
       acl: 'ACL', emnlp: 'EMNLP',
+      osdi: 'OSDI', sosp: 'SOSP', ndss: 'NDSS',
+      sp: 'IEEE S&P', 's&p': 'IEEE S&P', ieeesp: 'IEEE S&P',
+      'ieee-sp': 'IEEE S&P', ieee_sp: 'IEEE S&P', 'ieee s&p': 'IEEE S&P',
     };
     return MAP[lower] || '';
   };

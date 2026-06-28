@@ -511,7 +511,7 @@
         i += 1;
         while (i < lines.length && !/^\*\s/.test(lines[i])) {
           var confLine = lines[i];
-          var confMarker = confLine.match(/<!--dpr-conference:([^-]+)-(.+?)-->/);
+          var confMarker = confLine.match(/<!--dpr-conference:(.+?)-([0-9]{4}(?:-[0-9]{4})*)-->/);
           if (/^\s{2}\*\s/.test(confLine) && !/^\s{4}/.test(confLine)) {
             var confLabel = confLine.replace(/^\s{2}\*\s+/, '').replace(/<!--.*?-->/g, '').trim();
             var confBlock = {

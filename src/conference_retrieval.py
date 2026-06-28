@@ -96,6 +96,30 @@ CONFERENCE_DEFAULTS: Dict[str, Dict[str, str]] = {
         "bm25_rpc": "match_emnlp_papers_bm25",
         "vector_rpc_exact": "match_emnlp_papers_exact",
     },
+    "osdi": {
+        "label": "OSDI",
+        "papers_table": "osdi_papers",
+        "bm25_rpc": "match_osdi_papers_bm25",
+        "vector_rpc_exact": "match_osdi_papers_exact",
+    },
+    "sosp": {
+        "label": "SOSP",
+        "papers_table": "sosp_papers",
+        "bm25_rpc": "match_sosp_papers_bm25",
+        "vector_rpc_exact": "match_sosp_papers_exact",
+    },
+    "ieee_sp": {
+        "label": "IEEE S&P",
+        "papers_table": "ieee_sp_papers",
+        "bm25_rpc": "match_ieee_sp_papers_bm25",
+        "vector_rpc_exact": "match_ieee_sp_papers_exact",
+    },
+    "ndss": {
+        "label": "NDSS",
+        "papers_table": "ndss_papers",
+        "bm25_rpc": "match_ndss_papers_bm25",
+        "vector_rpc_exact": "match_ndss_papers_exact",
+    },
 }
 
 CONFERENCE_ALIASES = {
@@ -109,6 +133,15 @@ CONFERENCE_ALIASES = {
     "ijcai": "ijcai",
     "acl": "acl",
     "emnlp": "emnlp",
+    "osdi": "osdi",
+    "sosp": "sosp",
+    "sp": "ieee_sp",
+    "s&p": "ieee_sp",
+    "ieeesp": "ieee_sp",
+    "ieee-sp": "ieee_sp",
+    "ieee_sp": "ieee_sp",
+    "ieee s&p": "ieee_sp",
+    "ndss": "ndss",
 }
 
 
@@ -174,7 +207,8 @@ def parse_conferences(value: str) -> List[str]:
     for raw in parse_csv_items(value):
         key = CONFERENCE_ALIASES.get(raw.strip().lower())
         if not key:
-            raise ValueError(f"不支持的会议：{raw}，当前仅支持 ICML / NIPS(NeurIPS)。")
+            supported = ", ".join(sorted(CONFERENCE_DEFAULTS))
+            raise ValueError(f"不支持的会议：{raw}，当前支持：{supported}。")
         if key not in seen:
             seen.add(key)
             out.append(key)
