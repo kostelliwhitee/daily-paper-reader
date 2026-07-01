@@ -122,6 +122,7 @@ window.SubscriptionsManager = (function () {
     'NEURIPS',
     'ICML',
   ]);
+  const MAX_CONFERENCE_STORED_TOTAL = 30000;
 
   const normalizeText = (v) => String(v || '').trim();
   const truncateDisplayText = (value, maxChars) => {
@@ -139,6 +140,7 @@ window.SubscriptionsManager = (function () {
     const num = parseInt(String(value ?? '').trim(), 10);
     return Number.isFinite(num) ? num : 0;
   };
+  const formatCount = (value) => toSafeInteger(value).toLocaleString('en-US');
   const normalizeConferenceStatsKey = (value) => {
     const compact = normalizeText(value)
       .toLowerCase()
@@ -187,6 +189,19 @@ window.SubscriptionsManager = (function () {
     const yearNum = toSafeInteger(year);
     if (!conferenceKey || !yearNum) return null;
     return conferenceStatsSnapshot.byKey.get(`${conferenceKey}:${yearNum}`) || null;
+  };
+  const getConferenceYearStoredTotal = (conference, year) => {
+    const stats = getConferenceYearStats(conference, year);
+    return stats ? toSafeInteger(stats.stored_total_count) : 0;
+  };
+  const getSelectedConferenceStoredTotal = () => {
+    let total = 0;
+    selectedConferenceYearPairs.forEach((item) => {
+      const [conference, year] = String(item || '').split(':');
+      if (!conference || !year) return;
+      total += getConferenceYearStoredTotal(conference, year);
+    });
+    return total;
   };
   const formatConferenceShortYear = (year) => {
     const yearText = normalizeText(year);
@@ -779,9 +794,15 @@ window.SubscriptionsManager = (function () {
     const dailySelectedProfileCount = selectedProfileCount;
     const MAX_CONFERENCE_PROFILES = 2;
     const profileOverLimit = selectedProfileCount > MAX_CONFERENCE_PROFILES;
+    const conferenceStoredTotal = getSelectedConferenceStoredTotal();
+    const conferenceTotalOverLimit = conferenceStoredTotal >= MAX_CONFERENCE_STORED_TOTAL;
     const dailyBlocked = hasUnsavedChanges || dailySelectedProfileCount < 1;
     const conferenceBlocked =
-      hasUnsavedChanges || selectedProfileCount < 1 || selectedConferenceYearPairs.size < 1 || profileOverLimit;
+      hasUnsavedChanges
+      || selectedProfileCount < 1
+      || selectedConferenceYearPairs.size < 1
+      || profileOverLimit
+      || conferenceTotalOverLimit;
     renderProfilePickers();
     [
       [quickRunStartBtn, dailyBlocked],
@@ -796,6 +817,8 @@ window.SubscriptionsManager = (function () {
           title = btn === quickRunConferenceBtn ? '请先保存后再检索会议论文。' : '请先保存后再抓取。';
         } else if (btn === quickRunConferenceBtn && profileOverLimit) {
           title = `会议检索最多选择 ${MAX_CONFERENCE_PROFILES} 个词条，当前已选 ${selectedProfileCount} 个。`;
+        } else if (btn === quickRunConferenceBtn && conferenceTotalOverLimit) {
+          title = `会议年份库内总数需小于 ${formatCount(MAX_CONFERENCE_STORED_TOTAL)} 篇，当前已选 ${formatCount(conferenceStoredTotal)} 篇。`;
         } else if (selectedProfileCount < 1) {
           title = '请先在上方选择至少一个词条。';
         } else if (btn === quickRunConferenceBtn && !selectedConferenceYearPairs.size) {
@@ -817,23 +840,23 @@ window.SubscriptionsManager = (function () {
       if (profCount > MAX_CONFERENCE_PROFILES) {
         conferenceHintEl.textContent = `会议检索最多选择 ${MAX_CONFERENCE_PROFILES} 个词条，当前已选 ${profCount} 个，请取消部分词条。`;
         conferenceHintEl.style.color = '#c00';
-      } else if (confCount > 5) {
-        conferenceHintEl.textContent = `最多同时选择 5 个会议年份（已选 ${confCount} 个），请取消部分后再添加。`;
+      } else if (conferenceTotalOverLimit) {
+        conferenceHintEl.textContent = `会议年份库内总数需小于 ${formatCount(MAX_CONFERENCE_STORED_TOTAL)} 篇，当前已选 ${formatCount(conferenceStoredTotal)} 篇，请取消部分会议年份。`;
         conferenceHintEl.style.color = '#c00';
       } else if (confCount > 0 && profCount > 0) {
         const totalTasks = confCount * profCount;
         const estMin = totalTasks * 5;
         const estCost = (totalTasks * 0.2).toFixed(1);
-        conferenceHintEl.textContent = `${profCount} 个词条 × ${confCount} 个会议 = ${totalTasks} 组任务，预计耗时约 ${estMin} 分钟，费用约 ¥${estCost}`;
+        conferenceHintEl.textContent = `${profCount} 个词条 × ${confCount} 个会议（库内约 ${formatCount(conferenceStoredTotal)} 篇）= ${totalTasks} 组任务，预计耗时约 ${estMin} 分钟，费用约 ¥${estCost}`;
         conferenceHintEl.style.color = '';
       } else if (confCount > 0 && profCount === 0) {
         conferenceHintEl.textContent = '请先在上方勾选词条（最多 2 个）。';
         conferenceHintEl.style.color = '';
       } else if (profCount > 0 && confCount === 0) {
-        conferenceHintEl.textContent = '请勾选会议年份。每组任务约需 5 分钟，费用约 ¥0.2';
+        conferenceHintEl.textContent = `请勾选会议年份。库内总数需小于 ${formatCount(MAX_CONFERENCE_STORED_TOTAL)} 篇；每组任务约需 5 分钟，费用约 ¥0.2`;
         conferenceHintEl.style.color = '';
       } else {
-        conferenceHintEl.textContent = '先勾选词条（最多 2 个），再勾选会议年份（最多 5 个）。每组约 5 分钟 / ¥0.2';
+        conferenceHintEl.textContent = `先勾选词条（最多 2 个），再勾选会议年份（库内总数 < ${formatCount(MAX_CONFERENCE_STORED_TOTAL)} 篇）。每组约 5 分钟 / ¥0.2`;
         conferenceHintEl.style.color = '';
       }
     }
@@ -1033,6 +1056,15 @@ window.SubscriptionsManager = (function () {
         msgEl.textContent = '请先选择至少一个会议年份。';
         msgEl.style.color = '#c00';
       }
+      return false;
+    }
+    const selectedStoredTotal = getSelectedConferenceStoredTotal();
+    if (selectedStoredTotal >= MAX_CONFERENCE_STORED_TOTAL) {
+      if (msgEl) {
+        msgEl.textContent = `会议年份库内总数需小于 ${formatCount(MAX_CONFERENCE_STORED_TOTAL)} 篇，当前已选 ${formatCount(selectedStoredTotal)} 篇，请取消部分会议年份。`;
+        msgEl.style.color = '#c00';
+      }
+      refreshQuickRunButtons();
       return false;
     }
     if (!window.DPRWorkflowRunner || typeof window.DPRWorkflowRunner.runConferenceRetrieval !== 'function') {
@@ -1762,12 +1794,6 @@ window.SubscriptionsManager = (function () {
         if (selectedConferenceYearPairs.has(key)) {
           selectedConferenceYearPairs.delete(key);
         } else {
-          if (selectedConferenceYearPairs.size >= 5) {
-            // 超过上限，不添加，显示提示
-            renderConferenceChoiceButtons();
-            refreshQuickRunButtons();
-            return;
-          }
           selectedConferenceYearPairs.add(key);
         }
         renderConferenceChoiceButtons();
@@ -1842,6 +1868,9 @@ window.SubscriptionsManager = (function () {
       },
       __setQuickRunConferenceBtn: (el) => {
         quickRunConferenceBtn = el || null;
+      },
+      __setConferenceHintEl: (el) => {
+        conferenceHintEl = el || null;
       },
       __setUnsavedChanges: (value) => {
         hasUnsavedChanges = !!value;

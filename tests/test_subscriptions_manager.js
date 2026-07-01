@@ -15,6 +15,7 @@ const {
   clearQuickRunUnsavedMessage,
   __setQuickRunMsgEl,
   __setQuickRunConferenceBtn,
+  __setConferenceHintEl,
   __setUnsavedChanges,
   __setRunSelectionState,
   __initializeConferenceChoices,
@@ -283,6 +284,73 @@ function testConferenceRunDisabledWhenUnsaved() {
   delete global.window.SubscriptionsSmartQuery;
 }
 
+function testConferenceRunAllowsMoreThanFiveYearsWhenStoredTotalUnderLimit() {
+  const btn = buildMockButton();
+  const hintEl = { textContent: '', style: { color: '' } };
+  global.window.SubscriptionsSmartQuery = {
+    getSelectedProfileTags() {
+      return ['GENE'];
+    },
+  };
+  __setConferenceStatsSnapshot({
+    items: [
+      { conference_key: 'aaai', year: 2026, stored_total_count: 1000 },
+      { conference_key: 'aaai', year: 2025, stored_total_count: 1000 },
+      { conference_key: 'aaai', year: 2024, stored_total_count: 1000 },
+      { conference_key: 'acl', year: 2025, stored_total_count: 1000 },
+      { conference_key: 'acl', year: 2024, stored_total_count: 1000 },
+      { conference_key: 'ndss', year: 2026, stored_total_count: 1000 },
+    ],
+  });
+  __setQuickRunConferenceBtn(btn);
+  __setConferenceHintEl(hintEl);
+  __setRunSelectionState({
+    conferencePairs: ['AAAI:2026', 'AAAI:2025', 'AAAI:2024', 'ACL:2025', 'ACL:2024', 'NDSS:2026'],
+  });
+  __setUnsavedChanges(false);
+  refreshQuickRunButtons();
+
+  assert.equal(btn.disabled, false);
+  assert.equal(hintEl.textContent.includes('最多同时选择 5 个会议年份'), false);
+  assert.equal(hintEl.textContent.includes('库内约 6,000 篇'), true);
+
+  __setQuickRunConferenceBtn(null);
+  __setConferenceHintEl(null);
+  __setRunSelectionState({});
+  delete global.window.SubscriptionsSmartQuery;
+}
+
+function testConferenceRunDisabledWhenSelectedStoredTotalReachesLimit() {
+  const btn = buildMockButton();
+  const hintEl = { textContent: '', style: { color: '' } };
+  global.window.SubscriptionsSmartQuery = {
+    getSelectedProfileTags() {
+      return ['GENE'];
+    },
+  };
+  __setConferenceStatsSnapshot({
+    items: [
+      { conference_key: 'iclr', year: 2025, stored_total_count: 20000 },
+      { conference_key: 'neurips', year: 2025, stored_total_count: 10000 },
+    ],
+  });
+  __setQuickRunConferenceBtn(btn);
+  __setConferenceHintEl(hintEl);
+  __setRunSelectionState({ conferencePairs: ['ICLR:2025', 'NeurIPS:2025'] });
+  __setUnsavedChanges(false);
+  refreshQuickRunButtons();
+
+  assert.equal(btn.disabled, true);
+  assert.equal(btn.title, '会议年份库内总数需小于 30,000 篇，当前已选 30,000 篇。');
+  assert.equal(hintEl.textContent, '会议年份库内总数需小于 30,000 篇，当前已选 30,000 篇，请取消部分会议年份。');
+  assert.equal(hintEl.style.color, '#c00');
+
+  __setQuickRunConferenceBtn(null);
+  __setConferenceHintEl(null);
+  __setRunSelectionState({});
+  delete global.window.SubscriptionsSmartQuery;
+}
+
 async function testQuickFetchIncludesAnySelectedProfile() {
   const calls = [];
   const msgEl = {
@@ -336,6 +404,8 @@ async function testQuickFetchIncludesAnySelectedProfile() {
   testConferenceYearChoicesShowTwoDigitYearAndStoredTotalOnly();
   testQuickRunUnsavedMessageClearsAfterSave();
   testConferenceRunDisabledWhenUnsaved();
+  testConferenceRunAllowsMoreThanFiveYearsWhenStoredTotalUnderLimit();
+  testConferenceRunDisabledWhenSelectedStoredTotalReachesLimit();
   await testQuickFetchIncludesAnySelectedProfile();
 
   console.log('subscriptions manager tests passed');
