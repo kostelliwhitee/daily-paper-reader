@@ -1,0 +1,2687 @@
+Title: Graph Convolutional Attention: A Spectral Perspective on Graph Denoising and Diffusion
+
+URL Source: https://arxiv.org/pdf/2607.06546v1
+
+Published Time: Wed, 08 Jul 2026 01:29:34 GMT
+
+Number of Pages: 34
+
+Markdown Content:
+# Graph Convolutional Attention: A Spectral Perspective on Graph Denoising and Diffusion 
+
+Shervin Khalafi ∗
+
+University of Pennsylvania 
+
+shervink@seas.upenn.edu 
+
+Igor Krawczuk ∗
+
+igor@krawczuk.eu 
+
+Sergio Rozada 
+
+King Juan Carlos University 
+
+sergio.rozada@urjc.es 
+
+Charilaos Kanatsoulis 
+
+Stanford University 
+
+charilaos@cs.stanford.edu 
+
+Antonio G. Marques 
+
+King Juan Carlos University 
+
+antonio.garcia.marques@urjc.es 
+
+Alejandro Ribeiro 
+
+University of Pennsylvania 
+
+aribeiro@seas.upenn.edu 
+
+## Abstract 
+
+Denoising graphs is a fundamental problem in graph learning and the core operation of graph diffusion models. Attention-based architectures like graph transformers have recently shown promise in denoising graphs. However, our principled un-derstanding of attention-based graph denoising remains limited, making it unclear whether standard attention is the right mechanism for this task. Here we show that, under a denoising objective, linear attention is suboptimal and can only learn an average spectral denoising filter over the training distribution. This creates a fundamental limitation as graphs often vary spectrally across the distribution. To overcome this limitation, we introduce Spectral Attention, which directly utilizes the input graph spectrum and provably outperforms linear attention by a margin governed by the spectral diversity of the distribution. We then derive Graph Con-volutional Attention (GCA), a practical and permutation-equivariant realization of this idea that implements spectral denoising through graph-filtered queries and keys. For stochastic block models, GCA provably matches the idealized Spectral Attention mechanism. We further show that the softmax operation, that follows the attention, provides additional denoising by approximately projecting noisy eigenvectors onto the clean eigenspace. Empirically, replacing linear attention with GCA consistently improves graph denoising and diffusion on synthetic and real datasets, with gains strongly correlated with spectral diversity. In DiGress, GCA matches standard graph-transformer performance without computing expen-sive structural features, and when combined with the recently proposed PEARL positional encodings, avoids explicit eigendecomposition computations result-ing in faster inference without degrading quality. The code can be found here: 
+
+github.com/shervinkhalafi/graph_conv_att 
+
+## 1 Introduction 
+
+Denoising is a fundamental problem in machine learning [ 29 ], both in its own right and as the central learning primitive behind denoising diffusion models [ 39 , 40 ]. Graph denoising introduces a unique 
+
+> ∗Equal contribution. Preprint. arXiv:2607.06546v1 [cs.LG] 7 Jul 2026
+
+challenge: the object to be denoised is not merely a signal on a known domain, but the domain itself. In image and audio denoising, the underlying grid or temporal axis is fixed, so models can exploit geometry through convolutions [ 28 ]. In graphs, by contrast, the geometry and spectral frequency is corrupted and must itself be recovered. Classical approaches address graph denoising through regularized optimization [ 46 , 38 ], but the parametric perspective has received comparatively little attention. Interest has grown recently, driven by graph diffusion models [ 14 , 44 ], where the dominant approach is graph transformers that take the eigenvectors of the graph, and optionally additional structural features, as input. Yet a theoretical understanding of how such parametric models learn to denoise graphs remains limited. In this work, we aim to provide insight into the mechanisms underlying parametric graph denoising through theoretical analysis. We proceed in four steps. First, we (i) analyze linear attention, the outer product of linear query-key projections, as it underlies every attention-based graph denoiser. We show it learns an average of the spectral properties across the graph distribution, which is suboptimal when those spectra vary. To address this sub-optimality, we (ii) introduce and analyze the spectral attention, an abstract class in which the attention mechanism depends arbitrarily on the input eigenvalues. The loss with respect to spectral attention is strictly smaller than that of linear attention, and the gap depends on the concept of spectral diversity, i.e., how diverse the spectra are across the distribution. Spectral attention, however, is abstract and in general not permutation equivariant. To turn the insight into something usable, we (iii) introduce graph convolutional attention (GCA), in which the attention pattern is a pointwise function of the eigenvalues. This makes the mechanism permutation equivariant and expressible as a graph convolutional filter. For asymptotically large Stochastic Block Models (SBMs), we show that under suitable conditions GCA matches spectral attention and therefore strictly improves on linear attention. Finally, we (iv) analyze the nonlinearity, typically a softmax, that follows linear attention. We show that once the clean eigenvalues are known, e.g., recovered by GCA, the softmax denoises the eigenvectors by acting like an approximate projection onto the subspace spanned by the clean eigenvectors, which provably reduces noise. Experimentally, across real and synthetic datasets, a graph transformer using GCA in place of the standard query-key projections outperforms the standard graph transformer at denoising, and the per-dataset improvement correlates strongly with a surrogate of the spectral diversity metric, validating the theory. For diffusion models, GCA improves training loss and, on many datasets, sample quality both qualitatively and under standard metrics. Finally, drop-in augmentation of DiGress with GCA + R-PEARL[ 16 ] is competitive with the standard DiGress without any hyperparameter tuning, slightly improving on some MMDs without its usual expensive to compute spectral features. We summarize our contributions as follows: 
+
+C1 Theoretical analysis of attention-based denoising. We show linear attention only learns an average of spectral properties over the graph distribution, which is suboptimal when graphs have varying spectra. We introduce spectral attention, and show that its improvement over linear attention is captured by the spectral diversity of the graph distribution. 
+
+C2 Graph Convolutional Attention (GCA). Motivated by the analysis, we propose GCA, where the attention pattern can be expressed as a graph convolutional filter, making it permutation equivariant. For asymptotically large SBMs, we show GCA matches the optimal loss of spectral attention, and thus strictly outperforms linear attention. 
+
+C3 Role of the softmax. In the SBM setting, we show that softmax can further improve the denoising of graph by comparing it to a projection of the noisy eigenvectors onto the eigenbasis spanned by the clean eigenvectors. 
+
+C4 Empirical validation. Across real and synthetic datasets, replacing standard query-key projections with GCA consistently improves denoising, and the per-dataset gain correlates with a surrogate of our spectral diversity metric, directly validating the theory. The gains transfer to discrete diffusion: GCA yields lower training loss and better samples. 
+
+C5 Implications for modern diffusion models. Plugging GCA into DiGress we observe that we can match DiGress performance with hand-crafted features while avoiding their cost. Combined with R-PEARL, it can even sidestep eigenvector computation entirely leading to a reduction in training and inference time on larger graphs. 21.1 Literature review Graph denoising. Existing graph denoising methods can be broadly divided into optimization-based and learned approaches. The former recover a clean graph by solving an inverse problem regularized with structural priors such as edge-error models [ 46 , 15 ], spectral consistency [ 38 , 34 , 42 ], or low-rank, sparse, and smooth graph structure [ 51 , 45 , 24 ]. The latter replace instance-wise optimization with a parametric denoiser, either as a preprocessing or jointly trained module for downstream GNNs [ 7, 4, 49 ], or as the core component of diffusion and flow-based generative models that iteratively remove graph corruption [ 19 , 14 , 44 ]. Overall, prior work spans from hand-crafted regularization to fully learned graph restoration, but most methods are not designed to explicitly exploit spectral structure within the denoising mechanism itself. 
+
+Spectral attention. A parallel line of work incorporates graph spectral information into Transformer architectures. Early methods use Laplacian eigenvectors or eigenvalues as spectral features or positional encodings for attention-based models [ 11 , 18 , 6, 31 ], while later approaches address eigenvector ambiguities through invariant spectral encoders such as SignNet and BasisNet [ 21 ]. More recent models integrate spectral structure directly into the attention mechanism or the learned operator. GIST reweights attention using inner products of random filtered spectral features [ 35 ], whereas Specformer, PolyFormer, and Eigenformer use Transformer blocks to parametrize spectral filters using attention [ 2 , 25 , 10 ]. These works show that spectral information can be embedded into attention in several ways, but they are mainly aimed at representation learning and prediction rather than graph denoising. 
+
+## 2 Denoising Graphs with a Linear Model 
+
+Problem Setup. We start with the graph denoising problem as it is fundamental to graph diffusion. In particular, the next two sections analyze how attention-based neural networks perform denoising from a spectral perspective. We first show that the linear part of the network can learn to denoise the eigenvalues of a noisy graph. Then, in Section 3, we show that the nonlinearities help remove noise from the eigenvectors. We consider unweighted, undirected graphs G sampled from a distribution over graphs which we denote DG . For a given graph G, we denote by A ∈ Rn×n the symmetric adjacency matrix. Denote the noisy adjacency eA = A + E, where E ∈ Rn×n is a symmetric noise matrix sampled from a noise distribution. We note that depending on the noising method this distribution could depend on the input graph for example when flipping edges in an unweighted graph, or it could be independent e.g., Gaussian noise. We write the eigendecomposition of the adjacency as 
+
+A = U ΛU ⊤, and that of the noisy adjacency as eA = eU eΛ eU ⊤.
+
+2.1 Using Eigenvalue Information Improves Denoising. 
+
+Consider an arbitrary denoising function f (·) : Rn×n → Rn×n that takes the noisy adjacency as input and returns a prediction of the denoised graph. We define the following loss functional characterizing the denoising capability of f over different graphs and noise samples from the distribution: 
+
+ℓ(f ) = EA, E f ( eA) − A 2
+
+> F
+
+(1) A common candidate for implementing the denoising map is attention [ 44 , 32 ]. For a sequence of 
+
+d-dimensional input tokens X ∈ Rn×d, standard attention computes 
+
+gAtt (X) = softmax (XW QW ⊤ 
+
+> K
+
+X⊤)XW V (2) where WQ ∈ Rd×dk , WK ∈ Rd×dk , and WV ∈ Rd×dv are learnable query, key, and value matrices, respectively. In graph denoising, attention-based estimators of the adjacency can be built as an outer product of representations [44]: 
+
+f ( eA) = gAtt ( eU )gAtt ( eU )⊤ = softmax ( eU W QW ⊤ 
+
+> K
+
+eU ⊤) · eU W V W ⊤ 
+
+> V
+
+eU ⊤ · softmax ( eU W QW ⊤ 
+
+> K
+
+eU ⊤)⊤.
+
+(3) In this view, attention acts on eU to recover a clean spectral representation of the underlying graph 
+
+A. We analyze this mechanism as a two-stage process. First, the score matrix eU W QW ⊤ 
+
+> K
+
+eU ⊤ can be 3interpreted as a linear spectral estimator that seeks to recover a denoised graph with clean eigenvalues. Second, the softmax operation further denoises the noisy eigenvectors eU to approach the clean noiseless adjacency. To study the first step, in this section we restrict our focus to three classes of simplified graph-denoising maps: 1. Linear Attention: We define W = WQW ⊤ 
+
+> K
+
+and consider the function class FLA :
+
+FLA =
+
+n
+
+f ( eA; W ) = eU W eU ⊤| W ∈ Rn×no
+
+(4) 2. Spectral Attention: The broader class of functions FSA where the attention pattern can depend on the eigenvalues of the noisy input graph via any arbitrary function g(·):
+
+FSA =
+
+n
+
+f ( eA; g(·)) = eU g (eΛ) eU ⊤| g(·) : Rn → Rn×no
+
+(5) 3. Graph Convolutional Attention: We consider the class of functions FGCA where the attention pattern is replaced by a function η(·) acting point-wise on the eigenvalues of the graph: 
+
+FGCA =
+
+n
+
+f ( eA; η(·)) = eU η (eΛ) eU ⊤| η(·) : R → R
+
+o
+
+, (6) where, with a slight abuse of notation, η(eΛ) denotes the pointwise application of η to the entries of the diagonal matrix eΛ.Note that the linear attention model is in general not permutation equivariant, due to the non-uniqueness of the eigenvectors. Similarly, the spectral attention model is also in general not permuta-tion equivariant since FLA ⊂ F SA . The graph convolutional attention model, however, is permutation equivariant as it can be written as f ( eA; h(·)) = Pni=1 h(eλi)vivTi which is a permutation equivariant aggregation of the eigenvectors each processed individually by the function h(·).Next, in Propositions 1, and 2 we characterize the minimum achievable loss for the linear and spectral attention classes respectively. The proofs can be found in Appendices C.3, and C.4. 
+
+Proposition 1. The minimum loss achievable with linear attention, ℓ⋆ 
+
+> LA
+
+:= min f ∈F LA ℓ(f ), can be characterized as: 
+
+ℓ⋆ 
+
+> LA
+
+= tr (Cov(vec( B))) + c, (7) 
+
+where B := eU ⊤A eU . Furthermore, the minimizer is given by f (· ; W ⋆) where: 
+
+W ⋆ = EA, E [B] (8) 
+
+Proposition 2. The minimum loss achievable with spectral attention, ℓ⋆ 
+
+> SA
+
+:= min f ∈F SA ℓ(f ), can be characterized as: 
+
+ℓ⋆ 
+
+> SA
+
+= tr 
+
+
+
+Cov(vec( B) | eΛ) 
+
+
+
++ c (9) 
+
+where B := eU ⊤A eU . Furthermore, the minimizer is given by f (· ; g⋆) where: 
+
+g⋆(eΛ) = EA, E
+
+h
+
+B eΛ
+
+i
+
+(10) By the law of total variance, conditioning can only reduce variance, so ℓ⋆ 
+
+> SA
+
+is going to be smaller or equal to ℓ⋆
+
+> LA
+
+. We formalize this in Theorem 1, proven in Appendix C.5. 
+
+Theorem 1. The improvement in the minimum achievable loss by the spectral attention class compared to the linear attention class is given by: 
+
+ℓ⋆ 
+
+> SA
+
+− ℓ⋆ 
+
+> LA
+
+= SD (DG ) := E
+
+
+
+E[B | eΛ] − E[B] 2
+
+> F
+
+
+
+= tr(Cov( E[vec( B) | eΛ])) , (11) 
+
+where we define SD (DG ) as the ’Spectral Diversity’ which depends on the graph data distribution and, implicitly, on the noise distribution. 
+
+Remark 1. The Spectral Diversity SD (DG ) essentially quantifies how much information we gain about the clean graph by observing the noisy spectrum. For more intuition on this, if we assume the noise is sufficiently small such that the noisy eigenvectors are close to the clean ones, then from (11) 
+
+we can write tr(Cov( E[vec( B) | eΛk])) ≈ tr(Cov( E[Λ | eΛ])) which is akin to the variance of the expected value of Λ having observed eΛ. On one extreme, if the graph distribution is degenerate, i.e., its support is only a single graph, then E[Λ | eΛ] = E[Λ] , and its variance and therefore the spectral diversity are 0. On the other hand, the more varied Λ is across graphs, E[Λ | eΛ] can also vary significantly leading to a larger variance and spectral diversity. 
+
+42.2 From Spectral Attention to Graph Convolutional Attention 
+
+The Spectral Attention class is quite abstract as it includes any arbitrary function of the eigenvalues. Graph Convolutional Attention on the other hand, is practically realizable with graph convolutional filters. In this section we aim to bridge the gap between these two classes under certain settings. We begin by defining a graph convolutional filter bank acting on input graph features X ∈ Rn×d as: 
+
+h(X) = 
+
+> L−1
+
+X
+
+> l=0
+
+SlXH (l) (12) where S is the shift operator (e.g., Adjacency or Laplacian of the graph) and H(l) ∈ Rd×d are a set of learnable weights. In our case the input features are the eigenvectors of the graph, i.e., X = U ,thus (12) simplifies to: 
+
+h(U ) = 
+
+> L−1
+
+X
+
+> l=0
+
+U ΛlU ⊤U H (l) = U
+
+> L−1
+
+X
+
+> l=0
+
+ΛlH(l)
+
+!
+
+(13) By replacing the linear projections in self-attention with graph convolutional filter banks as in (13) we get the following function of the adjacency: 
+
+f (A; H) = U
+
+> L−1
+
+X
+
+> l=0
+
+ΛlH(l)
+
+> Q
+
+! L−1X
+
+> l=0
+
+ΛlH(l)
+
+> K
+
+!⊤
+
+U ⊤ (14) Eq. (14) is not permutation equivariant in its most general form. Equivariance is recovered when 
+
+H(l) 
+
+> K
+
+and H(l) 
+
+> Q
+
+are constant diagonal matrices, so that Eq. (14) reduces to a product of graph filters. Accordingly, in the rest of the analysis we restrict H(l) 
+
+> K
+
+and H(l) 
+
+> Q
+
+to this setting. In our experiments, however, we primarily use the more general graph-filter-bank formulation. Lemma 1, proven in Appendix C.2, connects the graph convolutional filter to the GCA class defined in (6). 
+
+Lemma 1. A graph convolutional filter bank, i.e., gfilt (Λ) = 
+
+PL−1 
+
+> l=0
+
+ΛlH(l)
+
+> Q
+
+  PL−1 
+
+> l=0
+
+ΛlH(l)
+
+> K
+
+⊤
+
+, for sufficiently large L, can approximate any function acting pointwise on the eigenvalues η(λ) : R → R,if η is continuous on any compact interval [a, b ] ⊂ R.
+
+With the preceding discussions and Lemma 1 we have established a practical way to realize the functions in FGCA . Still in general there could be a gap between the minimum achievable loss of the graph convolutional attention model and the spectral attention model because the minimizer of the loss in FSA is not necessarily a pointwise function of the eigenvalues. In other words since 
+
+FGCA ⊂ F SA , it follows that in general ℓ⋆ 
+
+> SA
+
+≤ ℓ⋆
+
+> GCA
+
+. Thus, it is not obvious whether GCA also improves upon linear attention. In order to bridge this gap we show in this section that under certain conditions we have ℓ⋆ 
+
+> GCA
+
+= ℓ⋆
+
+> SA
+
+.
+
+Stochastic Block Model (SBM). Consider the general SBM of size n with k communities. A given graph sampled from this model can be written as: 
+
+A = E [A] + ( A − E [A]) 
+
+| {z }
+
+> ∆
+
+(15) where E [A] is a deterministic rank k matrix with block structure and the matrix ∆ := A − E [A]
+
+encodes the randomness. Now consider our noisy observation eA = A + E which we can write as: 
+
+eA = E [A] + ∆ + E (16) 
+
+Assumption 1. We assume the variance of ∆ is small compared to eigenvalues of E [A]. In this setting we can ignore ∆ and focus on recovering the low rank signal A ≈ E [A] from the noisy observation A + E. We further consider E to be a standard Wigner matrix scaled by σ.
+
+A Wigner matrix is a symmetric random matrix with independent zero-mean entries on and above the diagonal. This assumption is not overly restrictive in our setting, since it captures independent entrywise perturbations of a graph. Gaussian noise with independent entries is a Wigner perturbation. 5Additionally, edge-flipping noise in the SBM setting, can be decomposed into a zero-mean Wigner-type component plus a deterministic bias term (See C.8 for proof). Hence the edge flip setting is also reduced to low-rank deterministic matrix plus Wigner-type noise matrix. 
+
+Theorem 2 (Outlier Shrinkage) . Under the setting of Assumption 1, we have: 
+
+lim  
+
+> n→∞
+
+E
+
+h eU ⊤A eU eΛ
+
+i
+
+= ηout (eΛ) (17) 
+
+where ηout (·) : R → R is a function acting pointwise on the noisy eigenvalues, as a result ηout (·) ∈FGCA . More precisely, we have: 
+
+ηout (eλ) = 
+
+(p eλ2 − 4σ2 if |eλ| > 2σ
+
+0 if |eλ| ≤ 2σ (18) See Appendix C.1 for proof. 
+
+Remark 2. It follows immediately from Theorem 2 and Lemma 1 that in this asymptotic regime considered above, ℓ⋆ 
+
+> GCA
+
+= ℓ⋆
+
+> SA
+
+. As such, the graph convolutional attention model can approximate the optimal spectral attention model in this asymptotic regime and lead to an improvement in the minimum achievable loss over the linear attention model according to Theorem 1. 
+
+## 3 How Softmax Can Help Denoise Further 
+
+In Section 2 we saw how a model that is linear (in the input tokens eU ) can learn to denoise the eigenvalues. Building on this observation, we now study how applying an additional nonlinearity, specifically the softmax often used in attention-based models, can further improve denoising. We will see that from a spectral view, this corresponds to denoising the eigenvectors , beyond the eigenvalue denoising of Section 2. 
+
+Problem Setup. Consider A ∈ Rn×n to be block diagonal with k blocks of size m1, . . . , m k
+
+respectively. The entries within each block are all one and outside of the blocks are all zero. This leads to A being a rank k matrix with Uk denoting the matrix of the top k eigenvectors. We denote by bA = eU Λ eU ⊤ the matrix with clean eigenvalues and noisy eigenvectors. Consider the attention-based estimator introduced in (3) . We idealize the spectral denoising step studied in Section 2 as exact, and set WV W ⊤ 
+
+> V
+
+= 1 
+
+> α
+
+WQW ⊤ 
+
+> K
+
+= Λ . With this choice of WQ, Q K , W V ,the attention-based denoising map from (3) , simplifies into an analytically tractable surrogate, which we use to study denoising under the assumption that the clean eigenvalues (and hence bA) are known: 
+
+fsm ( bA; α) = softmax (α bA) · bA · (softmax (α bA)) ⊤ (19) where softmax (·) applies a row-wise softmax operation. The model in (19) isolates the role of the softmax, with the parameter α controlling how sharp the softmax is. 
+
+Loss definitions and goal. We define the denoising loss dependent on α as: 
+
+ℓsoft (α) = EE f ( bA; α) − A 2
+
+> F
+
+(20) where E is the noise matrix. Our goal is to show that the minimum of this loss is smaller than the loss when we have the clean eigenvalues with the noisy eigenvectors. The latter we denote as ℓbasis since it is essentially the loss caused by the mismatch between the noisy eigenbasis eU and the original U :
+
+ℓbasis = EE bA − A 2
+
+> F
+
+(21) Next, we will show that the softmax denoiser approximates projection onto the clean eigenbasis, which itself improves over ℓbasis . Concretely, we proceed in two steps. First, in Lemma 2 we show projection onto the clean eigenbasis strictly improves over ℓbasis . Then, in Theorem 3 we show that for the correct choice of α, the softmax denoiser approximates this projection well enough to inherit the improvement. 6The connection between softmax and the aforementioned projection is more clear if we note that by replacing bA in the softmax denoiser with the clean adjacency matrix A, we get 
+
+lim  
+
+> α→∞
+
+softmax (αA ) = PU , (22) where PU = UkU ⊤ 
+
+> k
+
+is the projection matrix onto the space of the principal eigenvectors of A. This motivates studying the loss attained by projecting onto the clean eigenbasis: 
+
+ℓproj = EE PU bAP ⊤ 
+
+> U
+
+− A 2
+
+> F
+
+(23) The following lemma shows that this projection strictly reduces the loss, since it removes the components of the noise caused by the eigenbasis rotating outside of the initial subspace. 
+
+Lemma 2 (Projection improves denoising) . Projecting onto the principal eigenbasis of the original graph strictly reduces the loss, i.e., 
+
+ℓproj < ℓ basis (24) Of course, when denoising we do not have access to the clean adjacency matrix A, only to bA. The softmax denoiser softmax (α bA) can therefore be viewed as an approximate projection: when bA is close to A, applying softmax with sufficiently large α should produce something close to PU . The gap between ℓsoft (α) and ℓproj depends on the choice of α: for very small or very large α the gap is large, but the following theorem shows that there exist intermediate choices of α for which the gap is smaller than the improvement gained by projection i.e., ℓbasis − ℓproj , which in turn means that the softmax denoiser strictly improves upon ℓbasis .
+
+Theorem 3. Assume that the noise is sufficiently small, i.e., E ∥E∥ 2
+
+> F
+
+ ≪ min 
+
+
+
+1, m2 
+
+> log 2k
+
+
+
+. Then, there exists α⋆ > 0 such that we have: 
+
+ℓsoft (α⋆) − ℓproj < ℓ basis − ℓproj (25) 
+
+## 4 Experiments 
+
+Our experiments serve three purposes. We first demonstrate that replacing the standard linear query– key projections with graph convolutional attention improves graph denoising, with the per-dataset improvement tracking the spectral diversity predicted by Theorem 1. We then establish that these denoising gains carry over to generative diffusion. Finally, we show that combining our variant with R-PEARL matches vanilla DiGress generative performance while removing its expensive spectral node features resulting in faster inference. 
+
+4.1 Models and Baselines 
+
+As a baseline in both denoising and generative experiments, we use a standard graph transformer consisting of multiple layers of multi-head self-attention. The input tokens are positional encodings only — specifically, the top k eigenvectors of the noisy adjacency matrix. Given a noisy adjacency 
+
+eA ∈ Rn×n the denoiser predicts adjacency logits bA ∈ Rn×n in a stack of L multi-head attention blocks; the logits bA are produced by a learned linear combination of the final block’s per-head attention scores. See Appendix B.3.1 for the full description. We compare this baseline, which we refer to as Graph Transformer (GT), to a variant which differs only in the Query and Key projections inside each block. 
+
+Graph Transformer (GT): 
+
+Q(ℓ) = X(ℓ)W (ℓ) 
+
+> Q
+
+, K(ℓ) = X(ℓ)W (ℓ) 
+
+> K
+
+. (26) 
+
+Graph Convolutional Attention Transformer (GCAT): 
+
+Q(ℓ) = 
+
+> P−1
+
+X
+
+> p=0
+
+A p X(ℓ) H(ℓ)
+
+> Q,p
+
+, K(ℓ) = 
+
+> P−1
+
+X
+
+> p=0
+
+A p X(ℓ) H(ℓ)
+
+> K,p
+
+. (27) 7For GCAT, the queries and keys become learnable polynomials of the noisy adjacency of order P ,allowing two nodes to attend on the basis of their P -hop neighborhoods in the adjacency A.
+
+DiGress and Spectral Variants. In order to validate the merit of GCA on a more recent graph diffusion baseline, we use DiGress. We also study the effect of incorporating spectral information explicitly into the architecture via 2 ablations: we replace the attention Q, K projections with 1) a 
+
+spectral attention layer realised by a polynomial filter in the noisy Laplacian eigenvalues and 2) a 
+
+graph convolutional attention layer realised by polynomial filters in the adjacency itself i.e., the same construction used in GCAT above, now applied to the DiGress backbone while keeping the rest of the recipe unchanged. See Appendix B.3.4 for architectural details. Independently of the attention variant, we also replace DiGress’s eigendecomposition-based node features with R-PEARL, the random-feature variant of the PEARL positional encoding [ 16 ]. R-PEARL learns positional encodings that are simultaneously expressive, stable, and scalable by processing a random noise signal with a GNN. Crucially, this lets us sidestep the instability and expense of directly computing eigenvectors on large graphs. See Appendix B.3.3 for details. 
+
+4.2 Datasets 
+
+We use a mix of real benchmark graph datasets from PyTorch Geometric’s TUDataset collection, the SPECTRE stochastic block model (SBM) benchmark of [ 27 ], and synthetic SBMs sampled with controllable block-size heterogeneity. All graphs are treated as undirected and unattributed: we keep only the adjacency structure and discard any node or edge labels supplied by the source dataset. 
+
+Synthetic Datasets. We construct synthetic SBM datasets with controllable graph diversity. Each graph has n = 200 nodes, with block count sampled uniformly from K ∈ { 2, 3, 4} and maximum block sizes of 50 and 60 . Block-size heterogeneity is governed by a Dirichlet concentration α ∈{0.1, 1.0, 10 .0}; larger α yields more homogeneous block sizes and thus less diversity across graphs. 
+
+Real Datasets. We use five collections of variable-size unattributed graphs, all from TUDataset except DEEZER-EGO-NETS. PROTEINS [ 3 ] has 1,113 protein-structure graphs (up to 620 nodes) with secondary-structure elements as nodes. ENZYMES [ 3] has 600 enzyme tertiary-structure graphs (up to 126 nodes) across six EC classes. IMDB-BINARY [ 48 ] provides 1,000 movie co-appearance ego networks (up to 136 nodes, small and dense), and COLLAB [ 48 ] provides 5,000 
+
+scientific-collaboration ego networks from three physics communities (up to 492 nodes, heavy-tailed). DEEZER-EGO-NETS [ 36 ] contains 9,629 Deezer user ego networks with mutual-friendship edges (up to 363 nodes). 
+
+4.3 Denoising Experiments 
+
+For our denoising experiments, we sample clean graphs from the training set, add noise to the adjacency matrix, and then pass the noisy adjacency as input to the denoising model. We then train to minimize the loss between the model’s prediction and the original noiseless graph; the validation loss we report throughout is this reconstruction error against the clean adjacency over graphs sampled from a validation subset not used in training. The noising process is discrete, similar to [ 44 ], wherein each edge is flipped with some probability ε, independently from the other edges. The probability ε,which determines the noise level, is sampled for each graph in the batch from a list of values ranging from 0.05 to 0.5.As we observe in Figure 1c, GCAT has improved denoising performance compared to the GT baseline consistently across all the datasets, as evidenced by the lower validation loss. Figures 1a and 1b show the corresponding qualitative comparison on ENZYMES and SPECTRE, where GCAT’s reconstructions more faithfully recover the structure of the original graph than GT’s. Furthermore, Figure 1c shows that the margin of improvement for each dataset is strongly correlated with the estimated spectral diversity of the dataset, which is in line with our expectation from Theorem 1. This validates the idea that our proposed spectral diversity metric is indeed a strong predictor of the improvement gained by utilizing spectral information directly in the attention mechanism. We approximate the spectral diversity using a KNN approach detailed in Appendix B.5 to estimate 
+
+E[B | eΛk].8(a) ENZYMES dataset (b) SPECTRE dataset (c) Diversity vs Improvement 
+
+Figure 1: Quantitative and Qualitative Denoising comparison of GT and GCAT. 
+
+4.4 Generative Experiments 
+
+We evaluate the GCAT architecture in two generative settings. (1) Our main setting mirrors the denoising experiments and our theoretical results: we use the same diffusion training and inference pipeline as DiGress [ 44 ], but with the GT or GCAT architecture as the denoiser. (2) We addition-ally integrate GCAT into the full DiGress recipe, keeping all architecture, hyperparameters, and implementation details as in the published code base — except training steps, which we cap at 88k for SPECTRE-SBM and 300k for ENZYMES (from the published 550k) due to computational and time constraints. MMDs are evaluated every 4,400 optimiser steps for SPECTRE-SBM, matching upstream’s 100 -epoch × sample-every-4 cadence, and every 75 ,000 for ENZYMES.                                                                                                                   
+
+> Dataset Recon LogP ↑NLL ↓Spec MMD ↓Clust MMD ↓Deg MMD ↓Orbit MMD ↓
+> SBM ( α= 0 .1)-101.76 532.35 0.0346 0.0233 0.0496 0.0433
+> -30.37 505.94 0.0214 0.0257 0.0268 0.0416
+> SBM ( α= 1 .0)-112.70 576.67 0.0721 0.0157 0.0954 0.0240
+> -31.66 544.44 0.0247 0.0163 0.0135 0.0220
+> SBM ( α= 10 )-70.31 565.66 0.0562 0.0166 0.0047 0.1233
+> -30.88 548.21 0.0186 0.0156 0.0025 0.0495
+> SPECTRE -1925.37 5044.54 0.0172 0.0743 0.0151 0.1405 -1024.65 4885.99 0.0801 0.0718 0.0075 0.1553 ENZYMES -182.88 530.31 0.0502 0.0478 0.0956 0.0541 -28.26 424.79 0.0458 0.0431 0.0458 0.2692 PROTEINS -354.86 968.25 0.0885 0.0993 0.1949 0.0616
+> -122.28 838.50 0.0310 0.0514 0.0257 0.0331
+> IMDB -55.13 275.21 0.1249 0.3591 0.1405 0.3800 -13.39 208.99 0.0278 0.2608 0.0319 0.4133 COLLAB -1489.94 3588.22 0.1465 0.0270 0.1337 0.2144 -1189.15 3136.62 0.3429 0.3399 0.3593 0.9954 DEEZER -177.88 502.30 0.0147 0.0226 0.0235 0.3136 -49.26 414.70 0.0289 0.0568 0.0370 0.5548
+
+Table 1: Comparison of generation metrics between GT (white rows) and GCAT (grey rows). Bold marks the better value within each pair. ↑/↓ indicate higher/lower is better. 
+
+GCAT vs GT Results. As the results in Table 1 show, the gains in denoising loss translate to uniform improvement in logP and NLL across datasets, when using GCAT in generative diffusion. With the exception of COLLAB and DEEZER, these improved training metrics typically also translate to 9improved structural metrics in the generated samples. This improvement can also qualitatively be seen in generated graphs when compared to reference graphs from the datasets in Figure 2. Two-Community SBM Graphs ( α = 10 ) Deezer Ego Net Graphs 
+
+Figure 2: Top: Reference graphs sampled from the dataset, Middle: Graphs generated using with GCAT, Bottom: Graphs generated using GT, Left: two-community SBM graphs, and Right: and ego-network graphs. 
+
+DiGress Results. We evaluate on SPECTRE-SBM [ 27 ] and ENZYMES [ 3], two standard literature benchmarks. On SPECTRE-SBM we follow the protocol of DiGress [ 44 ]: the fixture contains 200 graphs of up to 200 nodes drawn from a 2–5-community stochastic block model. On ENZYMES we follow HiGen [ 17 ]. Following HiGen, we report raw MMD 2 on the degree, clustering-coefficient, orbit-count, and normalised-Laplacian-spectrum distributions. Each evaluation samples 40 graphs on both datasets. We observe that the variants leveraging spectral and graph convolutional attention roughly achieve parity with vanilla DiGress in generation quality as measured by MMDs, including when using R-PEARL instead of the eigen-decomposition based features. This gives some evidence that it is indeed sufficient to incorporate the spectral information via GCA + R-PEARL, and expensive eigen-decomposition is not required. Full numbers and qualitative samples are in Appendix B.1; per-metric training trajectories in Table 8, Appendix B.4. Crucially, we see in Table 2 that this parity comes with a noticeable speedup in inference (up to 
+
+19% for the PEARL + GCA variant on SBM) from eliminating the node feature computation and eigendecomposition cost. Because wall-clock time here is dominated by whether an eigendecomposi-tion is computed per step, the payoff scales with graph size: on the larger SBM graphs ( nmax =200 )all R-PEARL variants are faster, whereas on the small ENZYMES graphs ( nmax =126 ) the fixed overhead of the random-feature GNN can swamp the saving (e.g. PEARL is +14% ). This suggests that as graph size grows, using our variant with R-PEARL and Graph Convolutional attention could potentially lead to even larger gains in inference time without sacrificing generation quality.                
+
+> Dataset Variant Params Inference vs base SBM ( nmax =200 )DiGress (eigh) 7.1M —PEARL 7.2M -6% PEARL + GCA 11.9M -19%
+> ENZYMES ( nmax =126 )DiGress (eigh) 7.1M —PEARL 7.2M +14% PEARL + GCA 11.9M -14%
+
+Table 2: Inference-cycle wall time relative to vanilla DiGress (negative % = faster). Inference-cycle time is wall-clock-derived per validation cycle (sampling + scoring + I/O). Params are total model parameters. 10 5 Conclusions 
+
+We studied graph denoising from a spectral perspective and used this view to clarify why attention-based architectures such as DiGress can perform well in graph denoising and diffusion. Our analysis shows that standard linear attention is fundamentally limited under a denoising objective, since it can only learn an average spectral denoising rule over the training distribution, which becomes suboptimal when graphs exhibit heterogeneous spectra. In contrast, for graph distributions with community-like spectra and sufficiently high spectral diversity, attention mechanisms that adapt to the noisy input spectrum can implement an optimal shrinkage-like estimator, thereby provably improving over estimators that are agnostic to the observed spectrum. We formalized this ideal through Spectral Attention, identified spectral diversity as the quantity governing its advantage, and proposed Graph Convolutional Attention (GCA) as a practical permutation-equivariant realization based on graph-filtered query and key projections. In the SBM regime, we showed that GCA asymptotically matches the ideal spectral mechanism, while the softmax nonlinearity can provide additional denoising by approximately projecting noisy eigenvectors onto the clean eigenspace. Empirically, the theory is reflected in practice: replacing standard attention with GCA consistently improves graph denoising across synthetic and real datasets, and the gains scale with spectral diversity. The same phenomenon transfers to diffusion models, where preserving this shrinkage-style capacity makes it possible to remove costly spectral node features while remaining competitive, as in the DiGress ablations, and to improve performance on suitable datasets by explicitly incorporating this inductive bias. Overall, our results suggest that spectral adaptation is a key ingredient for effective graph denoising and generative diffusion, and provide both a theoretical explanation and a practical architectural principle for designing stronger graph diffusion models. 11 References 
+
+[1] F. Benaych-Georges and R. R. Nadakuditi. The eigenvalues and eigenvectors of finite, low rank perturbations of large random matrices, 2010. [2] D. Bo, C. Shi, L. Wang, and R. Liao. Specformer: Spectral graph neural networks meet transformers. arXiv preprint arXiv:2303.01028 , 2023. [3] K. M. Borgwardt, C. S. Ong, S. Schönauer, S. V. N. Vishwanathan, A. J. Smola, and H.-P. Kriegel. Protein function prediction via graph kernels. In Proceedings of the Thirteenth International Conference on Intelligent Systems for Molecular Biology (ISMB) , pages 47–56, 2005. [4] E. Dai, W. Jin, H. Liu, and S. Wang. Towards robust graph neural networks for noisy graphs with sparse labels. In Proceedings of the fifteenth ACM international conference on web search and data mining , pages 181–191, 2022. [5] H. Deng and B. Liu. Gadpn: Graph adaptive denoising and perturbation networks via singular value decomposition. arXiv preprint arXiv:2601.08230 , 2026. [6] V. P. Dwivedi and X. Bresson. A generalization of transformer networks to graphs, 2021. [7] B. Fatemi, L. El Asri, and S. M. Kazemi. Slaps: Self-supervision improves structure learning for graph neural networks. Advances in Neural Information Processing Systems , 34:22667–22681, 2021. [8] S. Feizi, D. Marbach, M. Médard, and M. Kellis. Network deconvolution as a general method to distinguish direct dependencies in networks. Nature biotechnology , 31(8):726–733, 2013. [9] H. R. Frost. Denoising deterministic networks using iterative fourier transforms. arXiv preprint arXiv:2602.00790 , 2026. [10] A. Garg. Graph transformers without positional encodings. arXiv preprint arXiv:2401.17791 ,2024. [11] R. He, K. Gopinath, C. Desrosiers, and H. Lombaert. Spectral graph transformer networks for brain surface parcellation. In 2020 IEEE 17th International Symposium on Biomedical Imaging (ISBI) , pages 372–376. IEEE, 2020. [12] W. Jin, Y. Ma, X. Liu, X. Tang, S. Wang, and J. Tang. Graph structure learning for robust graph neural networks. In Proceedings of the 26th ACM SIGKDD international conference on knowledge discovery & data mining , pages 66–74, 2020. [13] J. Jo, D. Kim, and S. J. Hwang. Graph generation with diffusion mixture. arXiv preprint arXiv:2302.03596 , 2023. [14] J. Jo, S. Lee, and S. J. Hwang. Score-based generative modeling of graphs via the system of stochastic differential equations. In International conference on machine learning , pages 10362–10383. PMLR, 2022. [15] N. Josephs, W. Li, and E. D. Kolaczyk. Network recovery from unlabeled noisy samples. In 
+
+2021 55th Asilomar Conference on Signals, Systems, and Computers , pages 1268–1273. IEEE, 2021. [16] C. I. Kanatsoulis, E. Choi, S. Jegelka, J. Leskovec, and A. Ribeiro. Learning efficient positional encodings with graph neural networks. arXiv preprint arXiv:2502.01122 , 2025. [17] M. Karami. HiGen: Hierarchical graph generative networks. In Advances in Neural Information Processing Systems (NeurIPS) , 2023. [18] D. Kreuzer, D. Beaini, W. Hamilton, V. Létourneau, and P. Tossou. Rethinking graph transform-ers with spectral attention. Advances in neural information processing systems , 34:21618–21629, 2021. 12 [19] J. Li, M. Liu, H. Zhang, P. Wang, Y. Wen, L. Pan, and H. Cheng. Mask-gvae: Blind denoising graphs via partition. In Proceedings of the Web Conference 2021 , pages 3688–3698, 2021. [20] R. Liao, Y. Li, Y. Song, S. Wang, W. L. Hamilton, D. Duvenaud, R. Urtasun, and R. S. Zemel. Efficient graph generation with graph recurrent attention networks. In Advances in Neural Information Processing Systems (NeurIPS) , volume 32, pages 4257–4267, 2019. [21] D. Lim, J. Robinson, L. Zhao, T. Smidt, S. Sra, H. Maron, and S. Jegelka. Sign and basis invariant networks for spectral graph representation learning. arXiv preprint arXiv:2202.13013 ,2022. [22] Y. Liu, C. Du, T. Pang, C. Li, M. Lin, and W. Chen. Graph diffusion policy optimization. In 
+
+Advances in Neural Information Processing Systems (NeurIPS) , 2024. [23] J. Luo, Q. Sun, H. Yuan, X. Fu, and J. Li. Robust graph learning against adversarial evasion attacks via prior-free diffusion-based structure purification. In Proceedings of the ACM on Web Conference 2025 , pages 2098–2110, 2025. [24] H. Lyu, Y. H. Kureh, J. Vendrow, and M. A. Porter. Learning low-rank latent mesoscale structures in networks. Nature Communications , 15(1):224, 2024. [25] J. Ma, M. He, and Z. Wei. Polyformer: Scalable node-wise filters via polynomial graph transformer. In Proceedings of the 30th ACM SIGKDD conference on knowledge discovery and data mining , pages 2118–2129, 2024. [26] F. Marcoccia, C. Adjih, and P. Mühlethaler. Netdiff: Deep graph denoising diffusion for ad hoc network topology generation. arXiv preprint arXiv:2410.08238 , 2024. [27] K. Martinkus, A. Loukas, N. Perraudin, and R. Wattenhofer. SPECTRE: Spectral conditioning helps to overcome the expressivity limits of one-shot graph generators. In Proceedings of the 39th International Conference on Machine Learning (ICML) , volume 162 of Proceedings of Machine Learning Research , pages 15159–15179. PMLR, 2022. [28] P. Milanfar. A tour of modern image filtering: New insights and methods, both practical and theoretical. IEEE signal processing magazine , 30(1):106–128, 2012. [29] P. Milanfar and M. Delbracio. Denoising: a powerful building block for imaging, inverse prob-lems and machine learning. Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering Sciences , 383(2299), 2025. [30] A. Q. Nichol and P. Dhariwal. Improved denoising diffusion probabilistic models. In Pro-ceedings of the 38th International Conference on Machine Learning (ICML) , volume 139 of 
+
+Proceedings of Machine Learning Research , pages 8162–8171. PMLR, 2021. [31] Z. Pengmei and Z. Li. Technical report: The graph spectral token–enhancing graph transformers with spectral information. arXiv preprint arXiv:2404.05604 , 2024. [32] Y. Qin, M. Madeira, D. Thanou, and P. Frossard. Defog: Discrete flow matching for graph generation. arXiv preprint arXiv:2410.04263 , 2024. [33] S. Rey, V. Tenorio, S. Rozada, L. Martino, and A. G. Marques. Overparametrized deep encoder-decoder schemes for inputs and outputs defined over graphs. In 2020 28th European Signal Processing Conference (EUSIPCO) , pages 855–859. IEEE, 2021. [34] S. Rey, V. M. Tenorio, and A. G. Marqués. Robust graph filter identification and graph denoising from signal observations. IEEE Transactions on Signal Processing , 71:3651–3666, 2023. [35] M. Rigotti, N. Thumiger, and T. Frick. Gist: Gauge-invariant spectral transformers for scalable graph neural operators. arXiv preprint arXiv:2603.16849 , 2026. [36] B. Rozemberczki and R. Sarkar. Characteristic functions on graphs: Birds of a feather, from statistical descriptors to parametric models. In Proceedings of the 29th ACM International Conference on Information and Knowledge Management (CIKM) , pages 1325–1334. ACM, 2020. 13 [37] W. Rudin. Principles of Mathematical Analysis . McGraw-Hill, 3rd edition, 1976. [38] S. Segarra, A. G. Marques, G. Mateos, and A. Ribeiro. Network topology inference from spectral templates. IEEE Transactions on Signal and Information Processing over Networks ,3(3):467–483, 2017. [39] J. Song, C. Meng, and S. Ermon. Denoising diffusion implicit models. arXiv preprint arXiv:2010.02502 , 2020. [40] Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon, and B. Poole. Score-based generative modeling through stochastic differential equations. arXiv preprint arXiv:2011.13456 ,2020. [41] V. M. Tenorio, S. Rey, and A. G. Marques. Robust graph neural network based on graph denoising. In 2023 57th Asilomar Conference on Signals, Systems, and Computers , pages 578–582. IEEE, 2023. [42] V. M. Tenorio, S. Rey, and A. G. Marques. Blind deconvolution of sparse graph signals in the presence of perturbations. In ICASSP 2024-2024 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 9406–9410. IEEE, 2024. [43] P. Trivedi, R. Rossi, D. Arbour, T. Yu, F. Dernoncourt, S. Kim, N. Lipka, N. Park, N. K. Ahmed, and D. Koutra. Leveraging graph diffusion models for network refinement tasks. arXiv preprint arXiv:2311.17856 , 2023. [44] C. Vignac, I. Krawczuk, A. Siraudin, B. Wang, V. Cevher, and P. Frossard. Digress: Discrete denoising diffusion for graph generation. arXiv preprint arXiv:2209.14734 , 2022. [45] H. Wang, Z. Qin, Z. Sun, Q. Yang, and J. Shao. Unsupervised graph denoising via feature-driven matrix factorization. Information Sciences , 661:120156, 2024. [46] Y.-J. Wu, E. Levina, and J. Zhu. Generalized linear models with low rank effects for network data. arXiv preprint arXiv:1705.06772 , 2017. [47] H. Xu, L. Xiang, J. Yu, A. Cao, and X. Wang. Speedup robust graph structure learning with low-rank information. In Proceedings of the 30th ACM International Conference on Information & Knowledge Management , pages 2241–2250, 2021. [48] P. Yanardag and S. V. N. Vishwanathan. Deep graph kernels. In Proceedings of the 21st ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD) , pages 1365–1374. ACM, 2015. [49] T. Yang, J. Meng, M. Zhou, Y. Yang, Y. Wang, X. Li, and Y. Tong. You can’t ignore either: Unifying structure and feature denoising for robust graph learning. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management , pages 4178–4182, 2024. [50] J. You, R. Ying, X. Ren, W. L. Hamilton, and J. Leskovec. GraphRNN: Generating realistic graphs with deep auto-regressive models. In Proceedings of the 35th International Conference on Machine Learning (ICML) , volume 80 of Proceedings of Machine Learning Research , pages 5694–5703. PMLR, 2018. [51] B. Zhou, R. Li, X. Zheng, Y. G. Wang, and J. Gao. Graph denoising with framelet regularizers. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(12):7606–7617, 2024. 14 Supplementary Materials for 
+
+# “Understanding Graph Denoising” 
+
+## A Limitations and Future Directions 
+
+Expanding the scope of the experiments to more graph benchmark datasets, both real and synthetic could potentially help further validate the merit of GCA and illuminate its potential failure modes. Furthermore, the exact role of R-PEARL (and in general other types of positional encodings that could be used instead of eigenvectors) can be explored further both theoretically and in practice. Studying the interaction between R-PEARL embeddings and the GCA architecture is a promising direction. On the theoretical side, parts of our analysis are limited to Stochastic Block Models. Considering families of graphs in future work could further strengthen the theoretical message ad our understanding of graph denoising and diffusion. Finally, our empirical comparisons on SOTA graph diffusion is limited in number of training seeds, dataset variety and hyperparameter ablations. More computational resources and time is required to make these results more statistically meaningful and the results should therefore be seen as exploratory evidence, and cannot support definitive conclusions. 
+
+## B Experimental Details and Additional Results 
+
+B.1 DiGress generative ablation results 
+
+The headline numbers and generated samples for the DiGress ablation panel referenced in Section 4 are reproduced below. Table 3 reports the best per-metric value per variant within the per-panel-minimum step horizon (88k for SPECTRE-SBM, 300k for ENZYMES); Figure 3 shows reference graphs alongside generated samples from the upstream DiGress baseline and the R-PEARL + GCAT variant. Hyperparameters, optimisation, and evaluation cadence shared across these runs are docu-mented in Appendix B.3.4.                                                    
+
+> Dataset Variant Spec MMD 2↓Clust MMD 2↓Deg MMD 2↓Orbit MMD 2↓SBM acc. ↑
+> SPECTRE-SBM DiGress (baseline) 0.2102 0.1306 0.1803 0.0909 0.5625
+> DiGress + R-PEARL 0.2102 0.1297 0.1813 0.0991 0.5312 DiGress + R-PEARL + Spec. Attn. 0.2088 0.1303 0.2001 0.0948 0.4062 DiGress + R-PEARL + GCAT 0.2081 0.1292 0.1833 0.0962 0.2500 ENZYMES DiGress (baseline) 0.1960 0.1042 0.1803 0.1056 —DiGress + R-PEARL 0.1881 0.0967 0.1814 0.0971 —DiGress + R-PEARL + Spec. Attn. 0.1876 0.0974 0.1852 0.1332 —DiGress + R-PEARL + GCAT 0.1993 0.0981 0.1924 0.2384 —
+
+Table 3: DiGress ablations across the four viable variants over training steps up to 88k (SPECTRE-SBM) / 300k (ENZYMES), following HiGen [ 17 ] in reporting the best value per metric across all logged validation cycles for each run. Bold marks the best value per dataset × metric. 
+
+B.2 Datasets 
+
+We evaluate on a mix of real benchmark graphs drawn from PyTorch Geometric’s TUDataset 
+
+collection, the SPECTRE stochastic block model (SBM) benchmark [ 27 ], and synthetic SBMs sam-pled with controllable block-size heterogeneity. All graphs are treated as undirected and unattributed: we keep only the adjacency structure and discard any node or edge labels supplied by the source dataset. Unless stated otherwise, we use a 70 /10 /20 train/validation/test split with a fixed seed. 
+
+B.2.1 Real datasets 
+
+We use five collections of variable-size unattributed graphs. 15 SPECTRE-SBM ENZYMES 
+
+Figure 3: Top: Reference graphs from the dataset, Middle: Generated with the DiGress + R-PEARL + GCAT variant. Bottom: Generated with DiGress baseline. • PROTEINS [ 3 ], from TUDataset: 1 113 protein-structure graphs in which nodes are secondary-structure elements connected when they are neighbours in the amino-acid se-quence or in 3D space. Graph size ranges up to 620 nodes, with most graphs in the few-tens to low-hundreds range. • ENZYMES [3 ], from TUDataset: 600 enzyme tertiary-structure graphs spanning the six EC top-level classes. Graph size ranges up to 126 nodes, typically ≈ 30 –60 nodes per graph. • IMDB-BINARY [48 ], from TUDataset: 1 000 movie-collaboration ego networks in which nodes are actors/actresses and edges connect those that appeared together in a film. Graph size ranges up to 136 nodes with a strongly skewed distribution toward smaller, dense ego networks. • COLLAB [48 ], from TUDataset: 5 000 scientific-collaboration ego networks built from three physics communities. Graph size ranges up to 492 nodes, with heavy-tailed size and degree distributions. • DEEZER-EGO-NETS [ 36 ]: 9 629 ego networks of Deezer users, with edges representing mutual-friend relationships in the ego’s neighbourhood. Graph size ranges up to 363 nodes; the distribution is dominated by ego networks of a few dozen nodes. In all five cases we drop the original node and edge attributes and predict the binary adjacency only. This matches the unconditional graph-generation setting used in prior work [ 50 , 20 , 44 ]. Splits use the PyG-default ordering with a fixed seed of 42 and a 70 /10 /20 train/val/test ratio. 
+
+B.2.2 SPECTRE SBM benchmark 
+
+We additionally use the SBM benchmark released with the SPECTRE evaluation suite [ 27 ] and adopted as the canonical SBM evaluation setting by DiGress [ 44 ]. The fixture contains 200 SBM graphs generated with 2–5 communities of variable size, intra-block edge probability pintra ≈ 0.30 ,and inter-block edge probability pinter ≈ 0.005 ; node counts range over 44 ≤ n ≤ 187 . We use the upstream 128 /32 /40 train/val/test split ( torch.randperm(200) with seed 0) so that our results are byte-comparable with published DiGress numbers. Quantitative evaluation reports the SPECTRE-style maximum mean discrepancy (MMD) over degree, clustering, and orbit-count distributions, plus the SBM-likelihood Wald-test accuracy whose null distribution uses the same (pintra , p inter )
+
+parameters. 
+
+B.2.3 Synthetic SBMs with controllable block-size heterogeneity 
+
+To probe how each method handles community structure under controlled conditions, we generate synthetic SBM datasets at two graph sizes, n = 100 and n = 200 (presets sbm_n100 , sbm_n200 ). Block counts are sampled uniformly from K ∈ { 2, 3, 4}, with maximum block sizes of 50 and 60 
+
+respectively. Edge probabilities default to pintra = 1 .0 and pinter = 0 .0 (i.e. disjoint cliques), but can be varied along ranges to expose the model to a spectrum of community contrast. 16 The key controlled axis is block-size heterogeneity , governed by a Dirichlet concentration parameter 
+
+α (in code: graph_config.block_size_alpha ). For each synthetic graph we sample a block-size partition 
+
+(s1, . . . , s K ) ∼ n · Dirichlet( α, . . . , α ), (28) rounded to integers summing to n, with a minimum block size of one. The concentration α smoothly interpolates between two regimes: small α (e.g. α → 0+) concentrates mass on a single block and produces strongly unbalanced communities, while large α (e.g. α ≫ 1) flattens the simplex and recovers near-equal-sized blocks (the limit α → ∞ matches the equal-partition baseline). This single knob lets us study how generative models behave under increasing block-size imbalance while holding n, K, and (pintra , p inter ) fixed. We sweep α over a logarithmic grid in the experiments of Section 4. Block sizes are re-sampled per graph; intra- and inter-block edges are then drawn independently from Bernoulli( pintra ) and Bernoulli( pinter ) as in the standard SBM definition. 
+
+B.3 Architectural details B.3.1 Graph Transformer and Graph Convolutional Attention Transformer Shared pipeline. We extract the top-k eigenvectors V ∈ Rn×k of A and lift them to the model dimension d:
+
+X(0) = V W in , Win ∈ Rk×d. (29) Each of the first L−1 blocks applies a residual multi-head attention update with h heads of dimension 
+
+dk = dv = d/h :
+
+X(ℓ+1) = LN 
+
+
+
+X(ℓ) + MHA (ℓ) A, X (ℓ)
+
+, ℓ = 0 , . . . , L − 2, (30) where, given queries, keys, and values Q(ℓ), K (ℓ), V (ℓ), each head computes 
+
+S(ℓ) 
+
+> i
+
+= Q(ℓ) 
+
+> i
+
+K(ℓ)
+
+> i
+> ⊤
+
+√dk
+
+, Attn (ℓ) 
+
+> i
+
+= softmax  S(ℓ)
+
+> i
+
+ V (ℓ) 
+
+> i
+
+, i = 1 , . . . , h, (31) The final block produces no node features; its per-head scores S(L−1) ∈ Rh×n×n are mixed into the edge logits by a learned linear combination, 
+
+bA =
+
+> h
+
+X
+
+> i=1
+
+wi S(L−1)  
+
+> i
+
++ b, w ∈ Rh. (32) The two models differ only in the Q/K projections inside each block. 
+
+Graph Transformer 
+
+Q(ℓ) = X(ℓ)W (ℓ) 
+
+> Q
+
+, K(ℓ) = X(ℓ)W (ℓ) 
+
+> K
+
+. (33) 
+
+Graph Convolutional Transformer 
+
+Q(ℓ) = LN  
+
+> P−1
+
+X
+
+> p=0
+
+A p X(ℓ) W (ℓ)
+
+> Q,p
+
+!
+
+, K(ℓ) = LN  
+
+> P−1
+
+X
+
+> p=0
+
+A p X(ℓ) W (ℓ)
+
+> K,p
+
+!
+
+. (34) The queries and keys become learnable polynomials of the noisy adjacency, allowing two nodes to attend on the basis of their P -hop neighborhoods in A.
+
+B.3.2 Generative Experiments with GT and GCAT Denoisers 
+
+The setup is similar to the one described in B.3.4. The hyperparameters specific to these runs are provided in Table 4. 17 Table 4: Hyperparameters shared across all GCAT and GT runs in our generative experiments                                            
+
+> Block Setting Value
+> Architecture model class GT/GCAT embedding source top-keigenvectors embedding dimension k16
+> depth L3
+> model width dmodel 128
+> attention heads 8
+> dropout 0.0
+> graph-conv filter taps 2
+> timestep conditioning none (time-unconditional) Diffusion forward process categorical noise schedule cosine-iDDPM [30] timesteps T500
+> limit distribution empirical marginal of train loader sampler ancestral Optimisation optimiser AdamW with AMSGrad learning rate 2×10 −4
+> weight decay 10 −12
+> LR scheduler none gradient clipping none EMA none loss categorical CE + VLB, λE= 5
+> Evaluation val-loss cadence every 1,000 steps sample/MMD cadence once at end of training samples per generative eval 128
+> clustering kernel σ0.1
+
+B.3.3 R-PEARL 
+
+The encoder samples s = 32 standard Gaussian features per node, propagates them through three message-passing layers over the symmetrically normalised adjacency D−1/2 eAD −1/2, and projects the result to a dPEARL = 16 -dimensional per-node embedding. Each message-passing layer applies a two-layer MLP with ReLU activation, hidden width 64 , and LayerNorm, adding a residual connection where input and output widths match. The resulting embedding is concatenated to per-node cycle counts at lengths 3, 4, 5 to form the per-node features; per graph we keep the normalised graph size 
+
+nvalid /n max and cycle counts at lengths 3, 4, 5, 6. Total widths ∆( dX , d E , d y ) = (3 + dPEARL , 0, 5) ,compared with (6 , 0, 11) for DiGress’s eigendecomposition path. To make evaluation deterministic, we fix the eval-time features to a single seeded Gaussian draw of shape (1 , n max , s ), shared across each evaluation batch. Training continues to draw fresh features per forward pass, so the model sees the full R-PEARL feature distribution during optimisation; at evaluation we therefore report one specific R-PEARL realisation rather than a Monte Carlo average over draws. 
+
+B.3.4 DiGress and variants 
+
+Our generative DiGress runs reproduce the upstream SPECTRE-SBM recipe of DiGress [ 44 ] and cross-validate against the publicly available SBM checkpoint shipped with GDPO [ 22 ], which was retrained from the upstream recipe verbatim and provides an independent set of weights for sanity checks. 
+
+Architecture. The denoiser is the upstream DiGress XEy graph transformer: a stack of L = 8 
+
+blocks that jointly update node features X, edge features E, and a global vector y, with FiLM-style cross-modulation between the three streams. Hidden widths are dX = 256 , dE = 64 , dy = 64 with 8
+
+attention heads, point-wise feed-forward widths (dff X , d ff E , d ff y ) = (256 , 64 , 2048) for SPECTRE-SBM and (256 , 64 , 256) for ENZYMES, input/output MLP widths (128 , 64 , 128) , and a learned timestep channel concatenated to y. We use the K = 1 abstract-node convention (one node class, two edge classes) for both datasets. The SPECTRE-SBM choice dff y = 2048 matches the actual shape of the GDPO SBM checkpoint, which was trained at this width despite the value 256 recorded in 18 Vignac’s published config; we adopt the checkpoint’s shape so the released weights remain loadable into our model. ENZYMES, where no comparable checkpoint is released, uses Vignac’s dff y = 256 .
+
+Structural augmentation. For the vanilla DiGress runs we follow upstream DiGress in augmenting the inputs with hand-crafted structural features. Per node, we concatenate cycle counts at lengths 
+
+3, 4, 5 (scaled by 1/10 and clipped at 1), an indicator that the node does not lie in the largest connected component, and the two lowest non-trivial eigenvectors of the noisy graph Laplacian evaluated at the node. Per graph, we add the normalised graph size nvalid /n max , cycle counts at lengths 3, 4, 5, 6 (also scaled and clipped), the number of connected components, and the five lowest non-trivial Laplacian eigenvalues. Total feature widths ∆( dX , d E , d y ) = (6 , 0, 11) . Cycle counts are computed from powers of the binary noisy adjacency; the spectral channels require an eigendecomposition of the noisy Laplacian at every diffusion step. The R-PEARL alternative described in Section B.3.3 drops the spectral channels and replaces them with the R-PEARL embedding. 
+
+Diffusion process. A categorical forward process with the IDDPM cosine schedule [ 30 ] on T =1000 steps and an empirical-marginal limit distribution measured from the training loader at setup. We use the unmodified IDDPM cosine schedule (DiGress’s edge-class-dependent variant for molecular datasets is not used here, since SBM and ENZYMES are binary-edge graphs). The reverse process predicts class probabilities at each step; sampling is ancestral. 
+
+Optimisation. AdamW with learning rate 2 × 10 −4, weight decay 10 −12 , AMSGrad enabled, no learning-rate scheduler, no gradient clipping, and no EMA. The training loss is categorical cross-entropy with edge weight λE = 5 on top of the standard variational lower bound. Seed 666 
+
+matches the GDPO retrain so the run lands in a basin comparable to the released checkpoint; Vignac’s repository defaults to seed 0. Batch size is 12 , and the published 128 /32 /40 train/validation/test split of the 200-graph SPECTRE fixture matches the upstream byte-for-byte. 
+
+Schedule. 5.5 × 10 5 optimiser steps. Upstream specifies 50 ,000 epochs at batch size 12 on 128 
+
+training graphs, equivalent to ≈ 5.5 × 10 5 steps; we adopt the step-based form. Reported runs reach ≈ 88 k steps for SPECTRE-SBM and ≈ 300 k for ENZYMES under our compute budget (Section 4). Validation and full sampling/MMD evaluation share a step-based gate: every 4,400 steps for SPECTRE-SBM (matching upstream Vignac’s 100 -epoch validation × sample-every-4 cadence) and every 75 ,000 steps for ENZYMES (panel-calibrated for evaluation cost). Each evaluation samples 
+
+40 graphs at clustering kernel σ = 0 .1.
+
+Variants. We sweep two architectural axes: the input-augmentation choice (DiGress’s structural augmentation above or the R-PEARL embeddings of Section B.3.3) and the attention-projection choice. The first attention-side replacement substitutes Q/K/V with polynomial spectral filters in the noisy Laplacian eigenvalues using kspec = 16 eigenpairs and three polynomial taps. The second replaces Q/K/V with three-tap polynomials in the adjacency itself, run in two normalisations: the symmetrically normalised adjacency D−1/2AD −1/2 and the raw adjacency A. Of the six combinations on this 2 × 4 grid (two augmentations × four projection choices), five are evaluated; the cross of DiGress’s structural augmentation with the graph-convolution attention is not currently run. 
+
+Per-step wall-clock. Table 7 reports the mean per-step optimiser wall-clock time logged by each post-fix run. The relative cost depends strongly on graph size: on the n = 200 SPECTRE-SBM fixture the O(n3) Laplacian eigendecomposition that DiGress’s structural augmentation performs at every diffusion step dominates, and replacing it with R-PEARL gives a ∼5% per-step speedup; on ENZYMES, where graphs typically have ≤ 60 nodes, the eigendecomposition is cheap, the R-PEARL message-passing fixed cost is not amortised, and every R-PEARL variant is slower per step than the DiGress baseline. 
+
+B.4 Additional DiGress results 
+
+Table 3 in the main body reports the per-metric best across validation cycles up to the per-panel minimum step (88k for SPECTRE-SBM, 300k for ENZYMES) so longer-running variants do not gain extra “best” attempts. Table 8 below removes that cap and instead annotates each best with the optimiser step at which it occurred (as a superscript), so the trajectory of each metric across training is visible at a glance. 19 Table 5: Hyperparameters shared across all DiGress runs in our generative experiments. Datasets only differ at the points marked in Table 6. 
+
+Block Setting Value 
+
+Architecture depth L 8
+
+hidden widths (dX , d E , d y ) (256 , 64 , 64) 
+
+attention heads 8
+
+input/output MLP widths (X, E, y ) (128 , 64 , 128) 
+
+input/output class dims (CX , C E , C y ) (1 , 2, 0) 
+
+timestep injection t/T ∈ [0 , 1] appended to y
+
+Diffusion forward process categorical noise schedule cosine [30] timesteps T 1,000 
+
+limit distribution empirical marginal of train loader sampler ancestral Optimisation optimiser AdamW with AMSGrad learning rate 2 × 10 −4
+
+weight decay 10 −12 
+
+LR scheduler none gradient clipping none EMA none loss categorical CE + VLB, λE = 5 
+
+Schedule total optimiser steps (target) 5.5 × 10 5
+
+reached: SPECTRE-SBM / ENZYMES ≈ 88 k / ≈ 300 kval + sample/MMD cadence (SPECTRE-SBM) every 4,400 steps val + sample/MMD cadence (ENZYMES) every 75 ,000 steps samples per evaluation 40 
+
+clustering kernel σ 0.1
+
+Data batch size 12 
+
+seed 666 (matches GDPO) 
+
+Table 6: Settings that differ across the attention-projection ablations and the two datasets. The input-augmentation axis (DiGress’s structural augmentation versus R-PEARL) is described separately in Section B.3.3 and combines with each row of the attention table.                                
+
+> Attention-projection ablations Variant Q/K/Vprojection Polynomial taps
+> Linear attention linear —Spectral attention polynomial in eΛ(kspec = 16 eigenpairs of eA)3
+> Graph-conv attention (normalised) polynomial in D−1/2AD −1/23
+> Graph-conv attention (raw) polynomial in A3
+> Dataset-specific overrides Setting SPECTRE-SBM ENZYMES
+> dff y2048 (matches GDPO checkpoint) 256 (Vignac default)
+> nmax 200 126
+> Train/val/test split 128 /32 /40 on the published 200 -graph fixture 70 /10 /20 percentage split with fixed seed
+
+On SPECTRE-SBM, MMDs and the SBM-accuracy Wald test peak at different points along training. Most MMD bests sit in the first ≈ 22 –88 k optimiser steps; the SBM accuracy of three of the four variants only peaks at 88 –110 k. The R-PEARL + GCAT variant illustrates the asymmetry: best spectral MMD by step 44 k but best SBM accuracy at step 110 k. The pattern is suggestive rather than universal – the vanilla DiGress run reaches its best clustering MMD only at 110 k, and pearl + spectral attention peaks SBM accuracy at 44 k. We read the table as evidence that MMD-style sample quality and Wald-test community structure are not perfectly co-monotone in training, and leave a more careful longitudinal analysis to future work. 20 Dataset Variant nsteps Mean (s) Median (s) Speedup vs vignac SPECTRE-SBM DiGress (baseline) 2254 0.5184 0.5127 —DiGress + R-PEARL 2372 0.4937 0.4857 +4.8% DiGress + R-PEARL + Spec. Attn. 2200 0.5345 0.5277 -3.1% DiGress + R-PEARL + GCAT 2390 0.4933 0.4875 +4.8% ENZYMES DiGress (baseline) 9977 0.1218 0.1068 —DiGress + R-PEARL 7404 0.1647 0.1498 -35.2% DiGress + R-PEARL + Spec. Attn. 6207 0.1962 0.1813 -61.1% DiGress + R-PEARL + GCAT 8768 0.1391 0.1277 -14.2% 
+
+Table 7: Per-step optimiser wall-clock time for the four DiGress variants on each dataset, computed as the mean and median of impl-perf/train/step_time_s over all logged training steps in the run. “Speedup vs vignac” is (tvignac − tvariant )/t vignac ; negative values mean the variant is slower than the DiGress baseline. Validation-step wall-clock is not logged separately in our runs and is therefore omitted.                                                    
+
+> Dataset Variant Spec MMD 2↓Clust MMD 2↓Deg MMD 2↓Orbit MMD 2↓SBM acc. ↑
+> SPECTRE-SBM DiGress (baseline) 0.2102 (22 k)0.1292 (110 k)0.1803 (88 k)0.0909 (22 k)0.6250 (110 k)
+> DiGress + R-PEARL 0.2102 (44 k)0.1297 (66 k)0.1813 (22 k)0.0991 (88 k)0.5312 (88 k)
+> DiGress + R-PEARL + Spec. Attn. 0.2088 (88 k)0.1303 (44 k)0.2001 (44 k)0.0948 (88 k)0.4062 (44 k)
+> DiGress + R-PEARL + GCAT 0.2081 (44 k)0.1292 (88 k)0.1833 (44 k)0.0962 (66 k)0.3750 (110 k)
+> ENZYMES DiGress (baseline) 0.1960 (150 k)0.0961 (375 k)0.1803 (150 k)0.1037 (375 k)—DiGress + R-PEARL 0.1881 (150 k)0.0967 (75 k)0.1814 (225 k)0.0971 (300 k)—DiGress + R-PEARL + Spec. Attn. 0.1876 (225 k)0.0974 (75 k)0.1852 (225 k)0.1332 (150 k)—DiGress + R-PEARL + GCAT 0.1993 (225 k)0.0981 (75 k)0.1818 (375 k)0.1171 (375 k)—
+
+Table 8: DiGress ablations, best per metric across all logged validation cycles for each post-fix run, with the optimiser step at which the best was achieved as a superscript ( (step )). No panel-minimum cap is applied here (contrast Table 3), so each variant is scored over its full training horizon. The annotation exposes when each metric peaks during training. Bold marks the best value per dataset ×
+
+metric. 
+
+B.5 Spectral diversity metric 
+
+We estimate the improvement-gap surrogate of Theorem 1 non-parametrically and report it on a normalised scale that supports cross-dataset comparison. The estimand, the plug-in estimator that approximates it from a finite sample, the frame-alignment step that makes the cross-graph average meaningful, the bias floor introduced by the plug-in, and the permutation-null calibration that removes it are detailed below. 
+
+Population estimand. For each graph i in a dataset, let Ai be its clean adjacency, eAi = Ai + Ei
+
+a noisy observation, and ( bVk,i , eΛk,i ) the noisy top-k eigenpair of eAi. Define Bi = bV ⊤
+
+> k,i
+
+Ai bVk,i , the clean adjacency expressed in the noisy top-k eigenbasis. Theorem 1 identifies the gap between linear-and spectral-attention losses with g = E∥E[B | eΛk] − E[B]∥2 
+
+> F
+
+, the variance of the optimal spectral predictor f ⋆(eΛk) = E[B | eΛk]. Dividing by the total variance tr(Cov B) = E∥B − E[B]∥2 
+
+> F
+
+yields the fraction of variance explained, 
+
+FVE = g
+
+tr(Cov B) ∈ [0 , 1] , (35) which by the law of total variance equals the R2 of f ⋆ when used to predict B from eΛk — equiv-alently, the relative loss improvement of optimal spectral attention over optimal linear attention (Propositions 1–2). 
+
+Plug-in estimator. The population quantities f ⋆, g, and tr(Cov B) are inaccessible; we replace each by a finite-sample plug-in. Given N graphs with paired observations {(Bi, eΛk,i )}Ni=1 , we estimate the optimal predictor by kNN regression on the noisy eigenvalues, 
+
+bBi = 1
+
+m
+
+X
+
+> j∈N m(i)
+
+Bj , (36) 21 where Nm(i) is the set of m graphs other than i whose eigenvalue vectors are closest to eΛk,i in Euclidean distance. The plug-in estimates of g and the total variance use the same sample, 
+
+bg = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥ bBi − ¯B∥2 
+
+> F
+
+, \tr(Cov B) = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥Bi − ¯B∥2 
+
+> F
+
+, (37) with ¯B = 1
+
+> N
+
+P 
+
+> i
+
+Bi. The sample-level statistic is their ratio 
+
+[FVE = bg
+
+\tr(Cov B)
+
+. (38) The estimator is non-parametric: no analytic form for f ⋆ is assumed. 
+
+Frame alignment. The matrix Bi is not invariant to the gauge of bVk,i : replacing bVk,i by bVk,i Qi for any Qi ∈ O(k) maps Bi → Q⊤ 
+
+> i
+
+BiQi. Averaging matrices across different per-graph frames adds incommensurable quantities and inflates bg, because Qi is partly predictable from eΛk,i (both derive from the same noisy decomposition). We therefore align every bVk,i via orthogonal Procrustes against a single dataset-wide reference frame, the extrinsic Grassmannian mean of the clean top-k eigenbases (top-k left singular vectors of the stacked clean eigenvector blocks). With one common frame, the residual rotation cannot co-vary with eΛk, and the convention-artefact channel that would otherwise feed a spurious signal into the estimator closes. 
+
+Bias floor. Under the null B ⊥ eΛk, the neighbours Nm(i) are effectively a random subsample of the Bj , so Var( bBi) ≈ Var( B)/m and [FVE acquires a floor 
+
+E[FVE B ⊥ eΛk
+
+ ≈ 1
+
+m − 1
+
+N − 1 . (39) For (m, N ) = (10 , 200) this is approximately 0.095 . Comparing [FVE directly to zero is therefore uninformative. 
+
+Permutation-null calibration. We estimate the bias floor on each dataset by shuffling the condi-tioning vectors with a uniformly random permutation π and recomputing the same plug-in ratio, 
+
+[FVE null = [FVE  {(Bi, eΛk,π (i))}. (40) The shuffle preserves both marginals and breaks only the joint, so its expectation matches the kNN bias to leading order. The reported quantity is the calibrated margin [FVE real − [FVE null , computed per seed before averaging across seeds (paired differencing reduces variance because real and null share the same kNN bias). We require this margin to exceed 0.10 and [FVE null to remain below 0.30 ;the latter rules out small-N regimes in which the estimator’s variance grows faster than the signal. 
+
+Hyperparameters. We use m = 10 neighbours and sweep k ∈ { 4, 8, 16 , 32 }. The bias-floor formula at N ≈ 200 gives [FVE null ≈ 0.10 , which is empirically observed across the eight datasets. Noise levels are ε ∈ { 0.01 , 0.05 , 0.1, 0.15 , 0.2}, matching the denoising-experiment grid. Five seeds are used for the paired margin and its standard error. The headline figure reports the Gaussian-noise condition at ε = 0 .1; the DiGress-noise variant produces the same qualitative ordering. 
+
+Cross-checks. Two estimator variants run alongside the kNN estimator. A binning estimator partitions graphs into quantile buckets of the spectral gap λ1 − λ2 and computes the classical between-group variance; it agrees with kNN when both are restricted to the 1-D feature, providing an independent estimate of the leading-eigenvalue contribution to the gap. A frame-invariant estimator replaces Bi with its orthogonal-conjugation invariants  tr( Bi), ∥Bi∥2 
+
+> F
+
+, sorted eigvals (Bi) and runs through the same kNN pipeline; the Procrustes-aligned and per-graph paths must agree on this target by construction. Both cross-checks track the headline ordering across the eight datasets in the study. 22 Datasets and results. We compute the calibrated FVE margin on a sweep of four synthetic stochastic block models with controlled diversity and four real graph benchmarks ( spectre_sbm ,
+
+enzymes , proteins , collab ). The synthetic-diversity result shown in Figure 1c is monotone across all k and replicates under both noise models; on the real benchmarks the calibrated margin exceeds the calibration threshold on seven of eight datasets, with the failure being the designed null control (the diversity = 0 synthetic SBM). 
+
+B.6 Compute resources Hardware overview. The denoising experiments of Section 4 (Figure 1) and the denoising-metric runs feeding Figure 1c were trained on a single workstation with two NVIDIA RTX A5000 GPUs (24 GB GDDR6 VRAM each), 64 physical / 128 logical CPU cores, and ≈ 270 GB host RAM; each run is a single-GPU job. The DiGress generative experiments (Tables 3 and 7) were trained on Modal (modal.com) using its fast GPU tier, which provisions a single NVIDIA A100 ( 40 GB HBM2) per container with ≈ 32 GB host RAM. The spectral-diversity FVE estimation (Appendix B.5) is CPU-only and runs on a local workstation; the full sweep (8 datasets × 5 seeds × 2 frame modes × 2noise types × 5 noise levels × 4 estimators × 4 values of k × real/null) completes in ≈ 60 minutes. 
+
+Wall-clock and total compute (reported runs). The denoising panel (W&B projects 
+
+graph-denoising-final-2 and graph-denoising-final-3 , 127 runs total) ran in median 
+
+≈ 1.6 minutes and at most ≈ 32 minutes per run, for a cumulative budget of ≈ 6 single-GPU-hours on the RTX A5000s. The eight reported DiGress configurations (four variants × two datasets) each accumulated ≈ 17 .8 h of Modal A100 wall-clock at the data freeze, with preempt-resume across the 24 h container timeout, reaching ≈ 110 k– 120 k optimiser steps on SPECTRE-SBM and 
+
+≈ 310 k– 500 k on ENZYMES (the ENZYMES graphs are an order of magnitude smaller in node count, so the per-step cost is correspondingly smaller; see Table 7). Cumulatively the eight DiGress runs consume ≈ 142 single-A100-hours. 
+
+Discarded compute. Initial exploration and iteration until the GDPO baseline was matched amounted to an additional ≈ 370 single-A100-hours, with no further details. 
+
+## C Proofs 
+
+C.1 Proof of Theorem 2 
+
+Proof. We first show that for a given graph A, B := eU ⊤A eU tends to a deterministic matrix as 
+
+n → ∞ . We begin by writing B as: 
+
+B = eU ⊤A eU = eU ⊤U ΛU ⊤ eU (41) Consider that A is low rank therefore we can write: 
+
+A =
+
+> r
+
+X
+
+> i=1
+
+λiuiu⊤ 
+
+> i
+
+(42) Thus we have: 
+
+Bij =
+
+> r
+
+X
+
+> l=1
+
+λl(eu⊤ 
+
+> i
+
+ul)( eu⊤ 
+
+> j
+
+ul) (43) According to Lemma 3 we have: 
+
+lim  
+
+> n→∞
+
+Bii = lim 
+
+> n→∞
+> r
+
+X
+
+> l=1
+
+λl|eu⊤ 
+
+> i
+
+ul|2 = λi lim  
+
+> n→∞
+
+|eu⊤ 
+
+> i
+
+ui|2 +
+
+> r
+
+X 
+
+> l=1 ,l ̸=i
+
+λl lim  
+
+> n→∞
+
+|eu⊤ 
+
+> i
+
+ul|2 (44) The sum over l̸ = i tends to zero almost surely, thus we have: 
+
+lim  
+
+> n→∞
+
+Bii = λiα(λi) = λi(1 − σ2
+
+λ2
+
+> i
+
+) = λi − σ2
+
+λi
+
+(45) 23 for the off-diagonal elements we have: 
+
+lim  
+
+> n→∞
+
+Bij = lim 
+
+> n→∞
+> r
+
+X
+
+> l=1
+
+λl(eu⊤ 
+
+> i
+
+ul)( eu⊤ 
+
+> j
+
+ul) = 0 , (46) where since i̸ = j, one of the inner products will almost surely tend to zero regardless of the value of 
+
+l.So, in summary we have for a given fixed graph A, B tends to a deterministic matrix as n → ∞ :
+
+lim  
+
+> n→∞
+
+B = α(Λ) (47) Furthermore, from Lemma 3 we have the deterministic relationship between the noisy and clean eigenvalues: 
+
+ρ(λi) = eλi = λi + σ2
+
+λi
+
+(48) Thus we have: 
+
+λi =
+
+eλi +
+
+qeλ2 
+
+> i
+
+− 4σ2
+
+2 (49) Finally we can write: 
+
+α(λi) = α
+
+ eλi +
+
+qeλ2 
+
+> i
+
+− 4σ2
+
+2
+
+ = 1 − σ2
+
+ eλi+
+
+√eλ2 
+
+> i−4σ2
+> 2
+
+2 =
+
+qeλ2 
+
+> i
+
+− 4σ2 (50) Finally we define the function ηout (·) as: 
+
+ηout (eλ) = 
+
+(p eλ2 − 4σ2 if eλ > 2σ
+
+0 if eλ ≤ 2σ (51) Thus in the limit almost surely we have: 
+
+lim  
+
+> n→∞
+
+B = ηout (eΛ) (52) The following is a restatement of Theorem 2.1 and Theorem 2.2 from [1]. 
+
+Lemma 3 (Leading-order overlap for spiked Wigner) . Let Wn be an n × n real symmetric (or complex Hermitian) Wigner matrix with i.i.d. entries (up to symmetry) satisfying E[Wij ] = 0 and 
+
+E[W 2 
+
+> ij
+
+] = σ2/n for i̸ = j, with finite fourth moment. The empirical spectral distribution of Wn
+
+converges almost surely to the semicircle law on [−2σ, 2σ], with edge b = 2 σ and Stieltjes transform 
+
+g(z) := 
+
+Z 1
+
+z − x dμ sc (x) = z − √z2 − 4σ2
+
+2σ2 , z ∈ R, |z| > 2σ, (53) 
+
+where the branch of the square root is chosen so that g(z) → 0 as z → ∞ .Let An be a deterministic (or random, independent of Wn) symmetric matrix of fixed rank r, with spectral decomposition 
+
+An =
+
+> r
+
+X
+
+> i=1
+
+λi uiu⊤ 
+
+> i
+
+= U ΛU ⊤, (54) 
+
+where λ1 > λ 2 > · · · > λ r > 0 are fixed (distinct) and u1, . . . , u r ∈ Rn are orthonormal. (Negative spikes are handled symmetrically.) Define the perturbed matrix eAn := Wn + An, and let eλ1 ≥ eλ2 ≥ · · · ≥ eλn be its eigenvalues with corresponding orthonormal eigenvectors eu1, . . . , eun.Let r+ ∈ { 0, 1, . . . , r } denote the number of supercritical spikes, i.e., the number of indices i with 
+
+λi > σ . Then the following hold almost surely as n → ∞ :
+
+24 (i) Outlier eigenvalue locations. For each i ∈ { 1, . . . , r +},
+
+eλia.s. 
+
+−−→ ρ(λi) := λi + σ2
+
+λi
+
+= g−1(1 /λ i), (55) 
+
+and ρ(λi) > 2σ. For i > r +, eλi → 2σ.(ii) Eigenvector overlap — diagonal. For each i ∈ { 1, . . . , r +},
+
+|⟨ eui, u i⟩| 2 a.s. 
+
+−−→ α(λi) := −1
+
+λ2 
+
+> i
+
+g′(ρ(λi)) = 1 − σ2
+
+λ2
+
+> i
+
+. (56) 
+
+(iii) Eigenvector overlap — cross terms. For i, j ∈ { 1, . . . , r +} with i̸ = j,
+
+⟨eui, u j ⟩ a.s. 
+
+−−→ 0. (57) 
+
+C.2 Proof of Lemma 1 
+
+We start by setting K−1X
+
+> l=0
+
+eΛlH(l) 
+
+> Q
+
+= I.
+
+This choice is feasible, for instance by taking H(0)  
+
+> Q
+
+= I and H(l) 
+
+> Q
+
+= 0 for all l ≥ 1. Next, choose each H(l) 
+
+> K
+
+to be a constant diagonal matrix, i.e., H(l) 
+
+> K
+
+= h(l) 
+
+> k
+
+I. Under these choices, Eq. (14) reduces to the spectral filter 
+
+f (U ) = U
+
+> L−1
+
+X
+
+> l=0
+
+h(l) 
+
+> k
+
+Λl
+
+!⊤
+
+U ⊤.
+
+Since Λ is diagonal, the matrix L−1X
+
+> l=0
+
+h(l) 
+
+> k
+
+Λl
+
+acts independently on each eigenvalue. Equivalently, it implements the pointwise polynomial filter 
+
+w(λ) = 
+
+> L−1
+
+X
+
+> l=0
+
+h(l) 
+
+> k
+
+λl.
+
+It remains to show that such a polynomial filter can approximate ηout . Although ηout is not analytic at the thresholds λ = ±2σ, it is continuous on any compact interval [a, b ] ⊂ R. Therefore, by the Weierstrass approximation theorem [37], for every ε > 0 there exists a real polynomial P such that 
+
+sup 
+
+> λ∈[a,b ]
+
+|P (λ) − ηout (λ)| < ε. 
+
+Writing 
+
+P (λ) = 
+
+> L−1
+
+X
+
+> l=0
+
+h(l) 
+
+> k
+
+λl
+
+for sufficiently large L, we obtain a choice of coefficients {h(l) 
+
+> k
+
+}L−1 
+
+> l=0
+
+such that the corresponding graph filter approximates ηout uniformly on [a, b ]. This completes the proof. 
+
+C.3 Proof of Proposition 1 
+
+We begin by expanding the loss using the fact that ∥M ∥2 
+
+> F
+
+= tr( M ⊤M ):
+
+ℓ(W ) = E tr 
+
+h
+
+( eU W eU ⊤)2 − 2A eU W eU ⊤ + A2i
+
+(58) Further, using eU ⊤ eU = I and the cyclic property of trace: 25 • tr[( eU W eU ⊤)2] = tr[ eU W 2 eU ⊤] = tr[ W 2]
+
+• tr[ A eU W eU ⊤] = tr[ W eU ⊤A eU ]
+
+So the loss reduces to: 
+
+ℓ(W ) = E tr( W 2) − 2 tr( W B ) + tr( A2) , where B = eU ⊤A eU (59) which we can write as: 
+
+ℓ(W ) = E tr( W 2) − 2 tr( W B ) + tr( B2) + tr( A2 − B2) (60) 
+
+ℓ(W ) = E
+
+h
+
+∥W − B∥2 
+
+> F
+
++ ∥A∥2 
+
+> F
+
+− ∥ B∥2
+
+> F
+
+i
+
+(61) The minimization reduces to: 
+
+W ∗ = argmin 
+
+> W
+
+E
+
+h
+
+∥W − B∥2
+
+> F
+
+i
+
+= EA, E [B] (62) Define c := E
+
+h
+
+∥A∥2 
+
+> F
+
+− ∥ B∥2
+
+> F
+
+i
+
+. Then the minimum achievable loss is: 
+
+ℓLA := ℓ(W ∗) = E
+
+h
+
+∥E[B] − B∥2
+
+> F
+
+i
+
++ c = tr(Cov(vec( B))) + c (63) 
+
+C.4 Proof of Proposition 2 
+
+ℓ(f ) = E
+
+eU g (eΛ) eU ⊤ − A 2
+
+> F
+
+
+
+(64) Similarly to the linear case, we can write the loss as: 
+
+ℓ(f ) = E
+
+
+
+g(eΛ) − B 2
+
+> F
+
++ ∥A∥2 
+
+> F
+
+− ∥ B∥2
+
+> F
+
+
+
+(65) The minimization reduces to: 
+
+g∗(·) = argmin 
+
+> g
+
+E
+
+
+
+g(eΛ) − B 2
+
+> F
+
+
+
+(66) Apply the tower property (law of iterated expectations): 
+
+E
+
+h
+
+∥g(eΛ) − B∥2
+
+> F
+
+i
+
+= EeΛ
+
+h
+
+E
+
+h
+
+∥g(eΛ) − B∥2 
+
+> F
+
+eΛ
+
+ii 
+
+(67) Since g(eΛ) is deterministic given eΛ, the inner conditional expectation is a pointwise squared-error problem for each realization of eΛ. The minimizer of E[∥c − B∥2 
+
+> F
+
+| eΛ] over a constant c is the conditional mean: 
+
+g∗(eΛ) = E
+
+h
+
+B eΛ
+
+i
+
+= E
+
+h eU ⊤A eU eΛ
+
+i
+
+(68) In contrast to the minimizer in the linear attention class which was the unconditional mean W ∗ =
+
+E[B],with spectral attention the minimizer is g∗(eΛ) = E[B | eΛ] , i.e., the conditional mean given the noisy eigenvalues. Then the minimum achievable loss becomes: 
+
+ℓ⋆ 
+
+> SA
+
+:= ℓ(g⋆) = EA, E
+
+h
+
+∥B − E[B | eΛ] ∥2
+
+> F
+
+i
+
++ c (69) 
+
+⇒ ℓ⋆ 
+
+> SA
+
+= EeΛ
+
+EB|eΛ
+
+h
+
+∥B − E[B | eΛ] ∥2
+
+> F
+
+i| {z }
+
+> tr
+
+(Cov(vec( B)|eΛ) )
+
+ + c (70) 26 C.5 Proof of Theorem 1 
+
+By the law of total variance: 
+
+Cov(vec( B)) = EeΛ
+
+h
+
+Cov(vec( B) | eΛ) 
+
+i
+
++ Cov( E[vec( B) | eΛ]) (71) Taking the trace of both sides, we have: 
+
+ℓ⋆ 
+
+> LA
+
+= ℓ⋆ 
+
+> SA
+
++ tr(Cov( E[vec( B) | eΛ])) (72) Thus, the improvement is: 
+
+ℓ⋆ 
+
+> LA
+
+− ℓ⋆ 
+
+> SA
+
+= tr(Cov( E[vec( B) | eΛ])) (73) which can also be written as: 
+
+ℓ⋆ 
+
+> LA
+
+− ℓ⋆ 
+
+> SA
+
+= E
+
+
+
+E[B | eΛ] − E[B] 2
+
+> F
+
+
+
+(74) 
+
+C.6 Proof of Lemma 2 
+
+Proof. We work in the equal block case: mℓ = m for all ℓ, n = km , λmax = m. Write eUk =
+
+UkR + U⊥S where U⊥ ∈ Rn×(n−k) collects the eigenvectors orthogonal to the principal eigenspace, 
+
+R ∈ Rk×k, S ∈ R(n−k)×k, and R⊤R + S⊤S = Ik (orthonormality of eUk). The matrix S measures the eigenvector leakage out of the true principal eigenspace. We first characterize ℓbasis and ℓproj in terms of S.
+
+Characterization of ℓbasis . Recall that 
+
+ℓbasis = EE bA − A 2
+
+> F
+
+. (75) In the equal block case Λk = mI k, so 
+
+bA − A = m( eUk eU ⊤ 
+
+> k
+
+− UkU ⊤ 
+
+> k
+
+) = m( eP − PU ) (76) where eP = eUk eU ⊤ 
+
+> k
+
+is the projector onto the noisy principal eigenspace. Substituting eUk = UkR +
+
+U⊥S and using U ⊤ 
+
+> k
+
+Uk = Ik, U ⊤ 
+
+> k
+
+U⊥ = 0 , U ⊤⊥ U⊥ = In−k, we expand 
+
+eUk eU ⊤ 
+
+> k
+
+= UkRR ⊤U ⊤ 
+
+> k
+
++ UkRS ⊤U ⊤⊥ + U⊥SR ⊤U ⊤ 
+
+> k
+
++ U⊥SS ⊤U ⊤⊥ , (77) and therefore 
+
+eP − PU = Uk(RR ⊤ − Ik)U ⊤ 
+
+> k
+
++ UkRS ⊤U ⊤⊥ + U⊥SR ⊤U ⊤ 
+
+> k
+
++ U⊥SS ⊤U ⊤⊥ . (78) The four terms in (78) are mutually Frobenius-orthogonal, since their row and column spaces lie in either range( Uk) or range( U⊥), which are orthogonal. Hence 
+
+∥ eP − PU ∥2 
+
+> F
+
+= ∥RR ⊤ − Ik∥2 
+
+> F
+
++ 2 ∥RS ⊤∥2 
+
+> F
+
++ ∥SS ⊤∥2 
+
+> F
+
+. (79) Using R⊤R = Ik − S⊤S and the cyclic property of the trace, 
+
+∥RR ⊤ − Ik∥2 
+
+> F
+
+= tr(( R⊤R)2) − 2 tr( R⊤R) + k = ∥S⊤S∥2 
+
+> F
+
+, (80) 
+
+∥RS ⊤∥2 
+
+> F
+
+= tr( R⊤R S ⊤S) = tr(( Ik − S⊤S) S⊤S) = ∥S∥2 
+
+> F
+
+− ∥ S⊤S∥2 
+
+> F
+
+, (81) Substituting into (79) gives 
+
+∥ eP − PU ∥2 
+
+> F
+
+= 2 ∥S∥2 
+
+> F
+
+. (82) Taking expectations, 
+
+ℓbasis = m2 E
+
+h
+
+∥ eP − PU ∥2
+
+> F
+
+i
+
+= 2 m2 E ∥S∥2
+
+> F
+
+ (83) 27 Characterization of ℓproj . The projected estimator is PU bAP ⊤ 
+
+> U
+
+with PU = UkU ⊤ 
+
+> k
+
+. Since bA =
+
+m eUk eU ⊤ 
+
+> k
+
+and U ⊤ 
+
+> k
+
+eUk = R,
+
+PU bAP ⊤ 
+
+> U
+
+= m U k(U ⊤ 
+
+> k
+
+eUk)( eU ⊤ 
+
+> k
+
+Uk)U ⊤ 
+
+> k
+
+= m U kRR ⊤U ⊤ 
+
+> k
+
+. (84) The clean matrix is A = m U kU ⊤ 
+
+> k
+
+= Uk(mI k)U ⊤ 
+
+> k
+
+, so 
+
+PU bAP ⊤ 
+
+> U
+
+− A = m U k(RR ⊤ − Ik)U ⊤ 
+
+> k
+
+. (85) Since Uk has orthonormal columns, 
+
+∥PU bAP ⊤ 
+
+> U
+
+− A∥2 
+
+> F
+
+= m2 ∥RR ⊤ − Ik∥2 
+
+> F
+
+= m2 ∥S⊤S∥2 
+
+> F
+
+, (86) where the last equality is (80). Taking expectations, 
+
+ℓproj = m2 E ∥S⊤S∥2
+
+> F
+
+ . (87) 
+
+The Improvement. Combining (83) and (87), 
+
+∆ℓproj = ℓbasis − ℓproj = m2 E2∥S∥2 
+
+> F
+
+− ∥ S⊤S∥2
+
+> F
+
+ . (88) Since R⊤R + S⊤S = Ik with R⊤R ⪰ 0, we have S⊤S ⪯ Ik, so all eigenvalues of S⊤S lie in [0 , 1] .Letting s1, . . . , s k ∈ [0 , 1] denote these eigenvalues, 
+
+2∥S∥2 
+
+> F
+
+− ∥ S⊤S∥2 
+
+> F
+
+=
+
+> k
+
+X
+
+> i=1
+
+si(2 − si) ≥
+
+> k
+
+X
+
+> i=1
+
+si = ∥S∥2 
+
+> F
+
+, (89) and thus we have 
+
+∆ℓproj ≥ m2 E ∥S∥2
+
+> F
+
+ > 0. (90) Therefore, projecting onto the true principal eigenspace strictly decreases the denoising loss which concludes the proof. 
+
+C.7 Proof of Theorem 3 
+
+Proof. Let E(α) = sm( α bA) − PU and λmax = max i mi = ∥ bA∥2. Then we have: 
+
+f ( bA; α) − A = ( PU + E) bA (PU + E)⊤ − A
+
+= ( PU bAP ⊤ 
+
+> U
+
+− A)
+
+| {z }
+
+> δ0
+
++ E bAP ⊤ 
+
+> U
+
++ PU bAE ⊤ + E bAE ⊤
+
+| {z }
+
+> δ1
+
+(91) where we used PU AP ⊤ 
+
+> U
+
+= UkU ⊤ 
+
+> k
+
+(UkΛkU ⊤ 
+
+> k
+
+)UkU ⊤ 
+
+> k
+
+= UkΛkU ⊤ 
+
+> k
+
+= A, so that PU bAP ⊤ 
+
+> U
+
+− A =
+
+PU ( bA − A)P ⊤ 
+
+> U
+
+= δ0. Expanding the squared Frobenius norm: 
+
+∥f ( bA; α) − A∥2 
+
+> F
+
+= ∥δ0∥2 
+
+> F
+
++ 2 ⟨δ0, δ 1⟩F + ∥δ1∥2 
+
+> F
+
+(92) Taking expectations and noting E[∥δ0∥2 
+
+> F
+
+] = ℓproj gives (93). 
+
+ℓ(α) = ℓproj + 2 E[⟨δ0, δ 1⟩F ] + E∥δ1∥2
+
+> F
+
+ (93) Applying Cauchy–Schwarz to the cross term: 
+
+|E[⟨δ0, δ 1⟩F ]| ≤ E[∥δ0∥F ∥δ1∥F ] ≤
+
+q
+
+E[∥δ0∥2 
+
+> F
+
+]
+
+q
+
+E[∥δ1∥2 
+
+> F
+
+] = pℓproj 
+
+q
+
+E[∥δ1∥2 
+
+> F
+
+] (94) Thus we have: 
+
+ℓ(α) ≤ ℓproj + 2 pℓproj 
+
+q
+
+E[∥δ1∥2 
+
+> F
+
+] + E∥δ1∥2
+
+> F
+
+ (95) It remains to bound E[∥δ1∥2 
+
+> F
+
+] and show that: 
+
+2pℓproj 
+
+q
+
+E[∥δ1∥2 
+
+> F
+
+] + E∥δ1∥2
+
+> F
+
+ < ℓ basis − ℓproj (96) 
+
+Bounding E[∥δ1∥2 
+
+> F
+
+].
+
+28 Since bA = eUkΛk eU ⊤ 
+
+> k
+
+and PU = UkU ⊤ 
+
+> k
+
+, denoting Ω = eU ⊤ 
+
+> k
+
+Uk ∈ Rk×k (which satisfies ∥Ω∥2 ≤ 1), every term in δ1 factors through E eUk:
+
+E bAP ⊤ 
+
+> U
+
+= ( E eUk) Λ k Ω U ⊤ 
+
+> k
+
+, (97) 
+
+PU bAE ⊤ = Uk Ω⊤Λk (E eUk)⊤, (98) 
+
+E bAE ⊤ = ( E eUk) Λ k (E eUk)⊤. (99) Therefore, by sub-multiplicativity: 
+
+∥δ1∥F ≤ λmax 
+
+
+
+2∥E eUk∥F + ∥E eUk∥2
+
+> F
+
+
+
+(100) Now we turn to bounding ∥E eUk∥F .
+
+Bounding ∥E eUk∥F . Write eUk = Uk + ∆ Uk. Then we have: 
+
+∥E eUk∥F = ∥E(Uk + ∆ Uk)∥F = ∥EU k∥F + ∥E∆Uk∥F (101) The Following Lemma allows us to bound ∥E∆Uk∥F :
+
+Lemma 4 (Bound on EU k). Define η = ∥ bA − A∥∞ := max i,j | bAij − Aij | and γ = 1 − 2η. Assume 
+
+γ > 0 (i.e., the noise is small enough that in-block and cross-block entries of bA are separated). Then 
+
+∥EU k∥2 
+
+> F
+
+≤ e−2αγ kX
+
+> ℓ=1
+
+ (n − mℓ)2
+
+m2
+
+> ℓ
+
++ mℓ
+
+X 
+
+> ℓ′̸=ℓ
+
+1
+
+mℓ′
+
+ . (102) 
+
+In the equal block case ( mℓ = m, n = km ), this simplifies to 
+
+∥EU k∥F ≤ k√k − 1 e−αγ . (103) Using Lemma 4 we can write in the equal block case: 
+
+∥E eUk∥F ≤ k√k − 1 e−αγ + ∥E∆Uk∥F (104) Now we will write the LHS and RHS of the inequality (96) up to leading order in ∥S∥F .
+
+RHS of (96) to leading order. From Lemma 2 we recall, 
+
+ℓbasis = 2 m2E ∥S∥2
+
+> F
+
+ , ℓproj = m2 E ∥S⊤S∥2
+
+> F
+
+ . (105) Since the eigenvalues of S⊤S lie in [0 , 1] , ∥S⊤S∥2 
+
+> F
+
+≤ ∥ S∥4 
+
+> F
+
+. Hence, to leading order in ∥S∥F ,
+
+ℓbasis − ℓproj = 2 m2 E ∥S∥2
+
+> F
+
+ + O E∥S∥4
+
+> F
+
+ . (106) 
+
+LHS of (96) to leading order. We first bound ∥E eUk∥F . Decompose E = E1 + E2 with 
+
+E1 = sm( αA ) − PU , E2 = sm( α bA) − sm( αA ). (107) 
+
+E1 is deterministic (independent of noise) and captures the finite-α bias of the softmax; a direct calculation shows ∥E1∥F = O(√n e −α), decaying exponentially in α. The noise term E2 is controlled by the following Lemma (See Section C.7.2 for proof). 
+
+Lemma 5 (Linearized softmax bound) . In the equal-block case, to leading order in ∥S∥F ,
+
+∥E2∥F ≤ √2 α ∥S∥F + O(∥S∥2 
+
+> F
+
+). (108) Since ∥E1∥F decays exponentially in α (and is dominated by ∥E2∥F for αγ ≫ log k and ∥S∥F > 0), 
+
+∥E∥F ≤ ∥ E1∥F + ∥E2∥F = √2 α ∥S∥F + O(∥S∥2 
+
+> F
+
+). (109) 29 Furthermore, ∥∆Uk∥F = ∥S∥F + O(∥S∥2 
+
+> F
+
+) to leading order (the within-eigenspace component 
+
+∥R − Ik∥F is O(∥S∥2 
+
+> F
+
+)). Substituting into (104), 
+
+∥E eUk∥F ≤ k√k − 1 e−αγ + √2 α∥S∥2 
+
+> F
+
++ o(∥S∥2 
+
+> F
+
+). (110) Assume αγ ≫ log k so the exponential term is negligible; then 
+
+∥E eUk∥F = √2 α∥S∥2 
+
+> F
+
++ o(∥S∥2 
+
+> F
+
+), (111) and the quadratic term ∥E eUk∥2 
+
+> F
+
+= O(∥S∥4 
+
+> F
+
+) is higher order. Plugging into (100) with λmax = m,
+
+∥δ1∥F ≤ m
+
+
+
+2∥E eUk∥F + ∥E eUk∥2
+
+> F
+
+
+
+= 2 √2 mα ∥S∥2 
+
+> F
+
++ o(∥S∥2 
+
+> F
+
+), (112) so 
+
+E∥δ1∥2 
+
+> F
+
+≤ 8m2α2 E∥S∥4 
+
+> F
+
++ o E∥S∥4
+
+> F
+
+ . (113) Since pℓproj ≤ mpE∥S∥4 
+
+> F
+
+(using ∥S⊤S∥2 
+
+> F
+
+≤ ∥ S∥4 
+
+> F
+
+), the cross term satisfies 
+
+2pℓproj 
+
+q
+
+E∥δ1∥2 
+
+> F
+
+≤ 4√2 m2α E∥S∥4 
+
+> F
+
++ o E∥S∥4
+
+> F
+
+ . (114) Combining, LHS of (96) ≤ m2α
+
+
+
+4√2 + 8 α
+
+
+
+E∥S∥4 
+
+> F
+
++ o E∥S∥4
+
+> F
+
+ . (115) 
+
+Resulting condition. Combining (106) and (115), the bound (96) holds to leading order whenever 
+
+α
+
+
+
+4√2 + 8 α
+
+ E∥S∥4
+
+> F
+
+E [∥S∥2 
+
+> F
+
+] < 2. (116) Denote β := 2 E ∥S∥2
+
+> F
+
+
+
+E∥S∥4
+
+> F
+
+. Then the condition (116) becomes 
+
+α
+
+
+
+4√2 + 8 α
+
+
+
+< β. (117) Solving the quadratic 8α2 + 4 √2 α − β = 0 , the condition holds for α ∈ (0 , α +) where 
+
+α+ =
+
+√24
+
+
+
+−1 + p1 + β
+
+
+
+. (118) 
+
+Compatibility of the two conditions on α. The proof so far rests on two conditions on the parameter α:
+
+(A) α ∈ (0 , α +), so that the LHS leading-order bound (115) is dominated by the RHS leading-order bound (106) (this is the bound (117)). 
+
+(B) αγ ≫ log k, so that the exponential term k√k − 1 e−αγ in (104) is negligible compared to the noise term. These conditions pull in opposite directions: (A) caps α from above, while (B) requires α to grow at least like log k. To show that they can be met simultaneously, we make the following assumption on the noise. 
+
+Assumption 2. There exists s such that ∥S∥F ≤ s almost surely, with 
+
+s ≪ min 
+
+ 1
+
+m , 1log k
+
+
+
+. (119) Note that η = ∥ bA − A∥∞ is not an independent quantity: by the entry-wise bound ∥M ∥∞ ≤ ∥ M ∥F
+
+together with ∥ bA − A∥F = m√2∥S∥F from (83), 
+
+η ≤ ∥ bA − A∥F = m√2 ∥S∥F ≤ m√2 s. (120) 30 Therefore Assumption 2 caps both ∥S∥F and η. The two bounds in (119) will turn out to control γ
+
+(via η ≲ ms ) and the exponential term (via αγ ≳ 1/s ), making (A) and (B) compatible. 
+
+Lower bound on α+. Since ∥S∥2 
+
+> F
+
+≤ s2 a.s., we have the pointwise bound ∥S∥4 
+
+> F
+
+≤ s2 ∥S∥2 
+
+> F
+
+. Taking expectations, 
+
+E∥S∥4 
+
+> F
+
+≤ s2 E∥S∥2 
+
+> F
+
+=⇒ β = 2 E∥S∥2
+
+> F
+
+E∥S∥4
+
+> F
+
+≥ 2
+
+s2 . (121) Since = α+ = √24 (√1 + β − 1) is monotone increasing in β we can write: 
+
+α+ ≥ √24
+
+p 1 + 2 /s 2 − 1
+
+
+
+≥ √24
+
+ √2 
+
+> s
+
+− 1
+
+
+
+= 12s − √24 , (122) where we used p1 + 2 /s 2 ≥ √2/s . Thus the cap α+ is at least of order 1/s , which is large under Assumption 2. 
+
+Lower bound on γ. Combining γ = 1 − 2η with (120), 
+
+γ ≥ 1 − 2m√2 s. (123) The condition ms ≪ 1 from Assumption 2 ensures 2m√2 s ≤ 1/2 for s small enough, hence 
+
+γ ≥ 1/2.
+
+Choosing α⋆ to satisfy both (A) and (B). Set α⋆ := 14s . We verify each condition: • Condition (A): α⋆ < α +. By (122) this reduces to 14s < 12s − √24 , i.e., s < 1√2 , which is automatic since s ≪ 1/ log k.• Condition (B): α⋆γ ≫ log k. By (123), once ms ≪ 1 so that γ ≥ 1/2 we have, 
+
+α⋆γ ≥ 14s · 12 = 18s ≫ log k, (124) where the last step uses s ≪ 1/ log k.This is precisely why both parts of (119) are needed: ms ≪ 1 guarantees γ stays bounded away from 
+
+0, and s log k ≪ 1 then makes α⋆γ large compared to log k. Hence α⋆ lies in (0 , α +) and makes the exponential term in (104) negligible, so all the leading-order bounds derived in the proof apply at 
+
+α = α⋆.
+
+Conclusion. At α = α⋆, the condition (117) holds strictly, which by (115) and (106) is equivalent to the gap bound (96). Therefore 
+
+ϵ(α⋆) = ℓsoft (α⋆) − ℓproj < ℓ basis − ℓproj = ∆ ℓproj , (125) proving the theorem. 
+
+Translation to the noise scale. We close by translating Assumption 2 into a condition on the adjacency-level noise E := eA − A. In the equal-block case the spectral gap of A between the k-th principal eigenvalue and the trivial part of the spectrum equals ∆ = m. By the Davis–Kahan theorem (in sin Θ form), 
+
+∥S∥F ≤ ∥P⊥ E Vk∥F
+
+∆ ≤ ∥E∥ F
+
+m . (126) Squaring and taking expectations, 
+
+σ2 = E∥S∥2 
+
+> F
+
+≤ E∥E∥ 2
+
+> F
+
+m2 . (127) Translating the two parts of (119) (with s2 scaling like E∥E∥ 2 
+
+> F
+
+:= σ2, assuming concentration of 
+
+∥S∥2 
+
+> F
+
+around its mean): • s ≪ 1/m becomes σ2 ≪ 1/m 2, i.e., E∥E∥ 2 
+
+> F
+
+≪ 1.31 • s ≪ 1/ log k becomes σ2 ≪ 1/ log 2 k, i.e., E∥E∥ 2 
+
+> F
+
+≪ m2/ log 2 k.Combining, Assumption 2 holds provided 
+
+E∥E∥ 2 
+
+> F
+
+≪ min 
+
+
+
+1, m2
+
+log 2 k
+
+
+
+. (128) which is the assumption stated in the theorem. For independent edge flips with probability p, E[E2 
+
+> ij
+
+] = p(1 − p) for each entry, so E∥E∥ 2 
+
+> F
+
+=
+
+n(n − 1) p(1 − p) ≈ n2p. Substituting and using n = km ,
+
+p ≪ min 
+
+ 1
+
+n2 , 1
+
+k2 log 2 k
+
+
+
+. (129) 
+
+C.7.1 Proof of Lemma 4 
+
+Proof. We bound (Eu ℓ)i separately for i in-block ( i ∈ Bℓ) and cross-block ( i ∈ Bℓ′ , ℓ ′̸ = ℓ). Write 
+
+S = sm( α bA) = PU + E and Zi = Pnj′=1 eα bAij ′ for the softmax normalizer. 
+
+Case 1: i ∈ Bℓ. Since P 
+
+> j
+
+Eij = 0 and (PU )ij = 0 for j / ∈ Bℓ:
+
+X
+
+> j∈Bℓ
+
+Eij = − X
+
+> j / ∈Bℓ
+
+Eij = − X
+
+> j / ∈Bℓ
+
+Sij . (130) For j / ∈ Bℓ: bAij ≤ η (cross-block), so eα bAij ≤ eαη . For j′ ∈ Bℓ: bAij ′ ≥ 1 − η (same-block), so 
+
+Zi ≥ mℓ eα(1 −η). Therefore 
+
+X
+
+> j∈Bℓ
+
+Eij ≤ (n − mℓ) eαη 
+
+mℓ eα(1 −η) = n − mℓ
+
+mℓ
+
+e−αγ (131) and |(Ev ℓ)i| ≤ n−mℓ
+
+> m3/2
+> ℓ
+
+e−αγ .
+
+Case 2: i ∈ Bℓ′ , ℓ ′̸ = ℓ. Now (PU )ij = 0 for all j ∈ Bℓ, so P 
+
+> j∈Bℓ
+
+Eij = P 
+
+> j∈Bℓ
+
+Sij . For j ∈ Bℓ:
+
+bAij ≤ η (cross-block relative to i). For j′ ∈ Bℓ′ : Zi ≥ mℓ′ eα(1 −η). Thus 
+
+X
+
+> j∈Bℓ
+
+Sij ≤ mℓ eαη 
+
+mℓ′ eα(1 −η) = mℓ
+
+mℓ′
+
+e−αγ (132) and |(Ev ℓ)i| ≤ √mℓ 
+
+> mℓ′
+
+e−αγ .
+
+Combining. We have 
+
+∥Ev ℓ∥2 = X
+
+> i∈Bℓ
+
+(Ev ℓ)2 
+
+> i
+
++ X 
+
+> ℓ′̸=ℓ
+
+X
+
+> i∈Bℓ′
+
+(Ev ℓ)2 
+
+> i
+
+≤ e−2αγ 
+
+ (n − mℓ)2
+
+m2
+
+> ℓ
+
++ mℓ
+
+X 
+
+> ℓ′̸=ℓ
+
+1
+
+mℓ′
+
+ . (133) Summing over ℓ = 1 , . . . , k gives (102). Setting mℓ = m and n = km yields (103). 
+
+C.7.2 Proof of Lemma 5 
+
+Proof. Let σ : Rn → Rn denote the row-wise softmax with Jacobian J(x) = diag( σ(x)) −
+
+σ(x)σ(x)⊤. For row i ∈ Bℓ of A, σ(αA i, :) = a 1Bℓ + b 1Bcℓ with a = 1 /(m + ( n − m)e−α)
+
+and b = a e −α. The eigenvalues of J(αA i, :) are 0 (on 1), a (multiplicity m − 1, on sum-zero perturbations within Bℓ), b (multiplicity n − m − 1, on sum-zero perturbations within Bcℓ ), and nab 
+
+(on span {(n − m)1Bℓ − m 1Bcℓ }). For α ≥ 0, a ≥ b and a ≥ nab , so 
+
+∥J(αA i, :)∥2 = a ≤ 1 
+
+> m
+
+. (134) 32 Taylor-expanding σ around αA i, : row-wise (the second-order remainder is controlled by the uniformly bounded Hessian of softmax), squaring, and summing over rows, 
+
+∥E2∥2 
+
+> F
+
+≤ α2 max  
+
+> i
+
+∥J(αA i, :)∥22 ·∥ bA−A∥2 
+
+> F
+
++O(∥ bA−A∥4 
+
+> F
+
+) ≤ α2 
+
+> m2
+
+∥ bA−A∥2 
+
+> F
+
++O(∥S∥4 
+
+> F
+
+). (135) The claim follows from ∥ bA − A∥F = m√2∥S∥F in (83). 
+
+C.8 Edge-flipping noise 
+
+For Digress noise, we consider the edge-flipping model where eAij = Aij with prob. 1 − ε and 
+
+eAij = 1 − Aij with prob. ε, so that eA = A + E1 with E1 = eA − A. A direct computation gives 
+
+E[ eA | A] = (1 − 2ε)A + ε11 ⊤, hence 
+
+eA = (1 − 2ε)A + ε11 ⊤ + Ξ , (136) where Ξ := eA − E[ eA | A] has zero mean independent entries and is thus a Wigner-type matrix. 
+
+## D Related Work 
+
+D.1 Optimization-based graph denoising 
+
+A large body of work formulates graph denoising as a model-based inverse problem in which the clean graph is obtained as the minimizer of a cost regularized by hand-crafted structural priors, with no learned mapping involved. From a network-statistics angle, [ 8] invert in closed form a convolutional model of direct and indirect edge effects, while [ 46 , 15 ] recover a clean adjacency under Type-I/II edge errors, low-rank parameter matrices, or unlabeled noisy samples, respectively. Within the graph signal processing (GSP) framework, the topology is denoised jointly with a process defined on it: [ 38 ] recover a graph shift operator from possibly corrupted spectral templates, and [ 33 , 34 , 42 ] progressively extend this idea to robust filter identification and blind deconvolution under joint perturbations of inputs, filter, and topology. A third and particularly influential family exploits the low-rank, sparse, and smooth nature of real-world graphs, with Pro-GNN [ 12 ] as the canonical formulation and a number of follow-ups [ 47 , 51 , 45 ] that improve scalability and avoid over-smoothing through truncated-SVD reparametrizations, framelet regularizers, or feature-driven matrix factorization. Related approaches obtain the clean graph from low-rank motifs [ 24 ] or via iterative Fourier thresholding of the adjacency [ 9 ]; in the same spirit, [ 41 ] extends the Pro-GNN-style joint optimization by replacing its low-rank and sparsity priors with a GSP-style denoising regularizer that is alternated with gradient updates of the downstream GNN. 
+
+D.2 Graph denoising via learned estimators 
+
+A complementary family of methods abandons the optimization viewpoint altogether and instead trains a parametric mapping from a noisy graph to a clean one, so that denoising amounts to a forward pass through a neural network rather than the solution of an instance-specific inverse problem. The first group of such methods uses the learned denoiser as a component of, or a preprocessing for, a downstream GNN. GADPN [ 5 ] performs the denoising step itself with a non-learned rank-adaptive SVD whose rank is chosen by Bayesian optimization, and feeds the cleaned adjacency to a standard GNN classifier. UGD [ 49 ] couples a non-parametric high-order proximity score for edge pruning with a GCN-based graph autoencoder that reconstructs corrupted features, and alternates between the two. RS-GNN [ 4] parametrizes the denoiser as an MLP edge predictor that re-weights the adjacency from pairs of node features and is trained jointly with a downstream GCN, while SLAPS [ 7] pairs an MLP-kNN graph generator with a separate GNN denoising autoencoder that recovers masked features through the learned structure. A second group places the parametric denoiser at the core of a denoising diffusion or flow-matching model, where a forward process gradually corrupts a clean graph and the learned denoiser is applied iteratively to invert it. Mask-GVAE [ 19 ] is the earliest of these, with a partition-based GCN variational autoencoder that performs blind denoising without paired supervision. GDSS [ 14 ] parametrizes the score of a system of SDEs over node features and adjacency with a graph convolution / graph transformer backbone, while DiGress [ 44 ] introduces a discrete diffusion in which a graph transformer is trained to predict the clean graph from a noisy input 33 at every step; GruM [ 13 ] and DeFoG [ 32 ] reuse essentially the same graph transformer architecture but replace the noise-prediction objective by, respectively, endpoint prediction in a diffusion mixture and discrete flow matching. NetDiff [ 26 ] augments the DiGress-style graph transformer with cross-attentive modulation tokens to enforce global topological constraints in ad-hoc network generation, DiffSP [ 23 ] repurposes such graph diffusion models as adversarial structure purifiers on top of a GCN classifier, and SGDM [ 43 ] operates at the subgraph level and is in fact backbone-agnostic, instantiated on top of DiGress, GDSS or EDGE. 
+
+D.3 Spectral graph transformers 
+
+A line of research orthogonal to standard message-passing GNNs builds graph neural architectures by routing the spectrum of the graph Laplacian through Transformer-style modules. The earliest works inject the spectrum as input features. SpGAT [ 11 ] first constructs spectral node features from the graph Laplacian eigenvectors and eigenvalues with an MLP on top. These features are then used as input for a GCN, which performs node-wise classification by assigning a label to each surface vertex. SAN [ 18 ] constructs spectral positional features from the graph Laplacian spectrum and adds them to the node features. These enriched features are then processed by a fully connected Transformer. The Graph Transformer of [ 6] is an earlier instance of this same template, using truncated Laplacian eigenvectors directly as a positional encoding for a sparse-attention Transformer. This idea of using spectral information as feature is also investigated in [ 31 ] by processing Laplacian eigenvalues with an MLP and usesing the result to initialize the Transformer’s global [CLS] token, with the resulting architecture still being a graph Transformer. A second sub-line removes the eigenvector ambiguities (sign flips, basis rotations within an eigenspace) before they reach the Transformer. SignNet and BasisNet [ 21 ] are parametric encoders that produce sign- and basis-invariant embeddings of the eigenvectors, and are routinely plugged in as the positional-encoding module of a downstream graph Transformer. GIST [ 35 ] addresses the same problem from a different angle: it builds random spectral features by feeding Gaussian noise through a precomputed graph filter, and then uses the inner product matrix of the resulting features as a reweighting mechanism. Specifically, the architecture is a Transformer whose attention scores are reweighted by this spectral inner product matrix. A third sub-line uses the Transformer not as a pose-processing module of the spectrum but as the parametrization of a graph filter itself. Specformer [ 2] learns a graph filter by feeding the graph eigenvalues into a Transformer, which produces frequency responses, and then converts those responses back into a graph operator using the eigenvectors. This learned operator is then used as the propagation layer inside a GNN, so the rest of the model behaves like a graph neural network for prediction. PolyFormer [ 25 ] avoids eigendecomposition altogether by representing each node with a sequence of polynomial-basis tokens of the Laplacian, and then learning a node-wise filter through self-attention over those tokens. Eigenformer [ 10 ] pushes this idea further by dispensing with explicit positional encodings and instead designing a spectrum-aware attention mechanism whose biases depend directly on the Laplacian spectrum, so that the Transformer block itself acts as a learnable spectral operator. 34

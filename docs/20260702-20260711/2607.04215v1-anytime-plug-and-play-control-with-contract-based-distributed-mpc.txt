@@ -1,0 +1,1127 @@
+Title: Anytime Plug-and-Play Control with Contract-Based Distributed MPC
+
+URL Source: https://arxiv.org/pdf/2607.04215v1
+
+Published Time: Tue, 07 Jul 2026 02:20:27 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> 1
+
+# Anytime Plug-and-Play Control with Contract-Based Distributed MPC 
+
+Sabrina Bodmer, Danilo Saccani, Melanie N. Zeilinger, Andrea Carron 
+
+Fig. 1: Simulation and hardware experiments conducted using up to eight small-scale race cars on a figure eight track. 
+
+Abstract —A central challenge in many mobile multi-robot applications is that communication topologies are inherently time-varying. Agents may enter or exit the net-work and such changes cannot generally be restricted a pri-ori. This work introduces a distributed multi-agent control algorithm based on local communication that supports any-time agent joining and leaving the communication network without centralized coordination. The method scales effi-ciently with the number of agents by relying on a distance-based neighbor definition and on contracts derived from predicted trajectories. The resulting contract constraints guarantee collision avoidance and constraint satisfaction. We validate the proposed method in an autonomous multi-agent driving scenario, demonstrating effective collision avoidance in high-speed, dynamic environments with agents moving in opposite directions, in both simulated and real-world experiments. 
+
+Index Terms —Predictive control for nonlinear systems, Distributed Control, Autonomous robots, Collision Avoid-ance Supplementary Material/Videos : anytime-plug-and-play. github.io 
+
+This research has been supported by the Swiss National Science Foundation under the NCCR Automation (grant 51NF40 225155). S. Bodmer, A. Carron and M.N. Zeilinger are with the Institute for Dynamic Systems and Control, ETH Zurich, Switzerland. (email 
+
+{sabodmer,carrona,mzeilinger }@ethz.ch) 
+
+D. Saccani is with the Institute of Mechanical Engineering, ´ Ecole Polytechnique F´ ed´ erale de Lausanne (EPFL), CH-1015 Lausanne, Switzerland. (email: danilo.saccani@epfl.ch )
+
+I. I NTRODUCTION 
+
+# AS multi-agent robotic systems, including drones and autonomous vehicles, are increasingly being deployd in real-world applications, efficient and safe coordination among agents has become a critical require-ment [1].Model Predictive Control (MPC) is a popular framework for multi-agent coordination [2], [3]. Still, centralized MPC suffers from poor scalability due to cubic computational growth [4] and its reliance on global information and global communication. To overcome these limitations, distributed MPC (DMPC) approaches allow each agent to solve a local problem while ex-changing limited information, such as predicted trajec-tories [5], planned inputs [6], or abstract contracts [7], with neighboring agents over a communication graph [8]. This improves scalability and preserves privacy, but the ability of agents to coordinate effectively depends strongly on how the communication network changes over time. The way networks evolve can be catego-rized into three common types: 1) fixed, with constant agents and communication, 2) time-varying, with con-stant agents but changing neighbors, 3) plug-and-play (PnP), where agents, neighbors, and communication can all change dynamically [7], [9]–[11]. PnP networks can be further divided into request-based, where agents may enter or leave upon approval of the entire or part of 
+
+> arXiv:2607.04215v1 [math.OC] 5 Jul 2026 2
+
+the network [10], [11], and anytime, where agents may enter or leave the network at any time without the other agents’ approval. The former suits systems with tightly coupled dynamics, such as power grids [10], [11]. At the same time, the latter reflects settings such as mobile robots, where dynamics are decoupled but constraints and communication depend on position. In such environments, controllers must ensure safe opera-tion despite arbitrary changes in the network topology. Most distributed MPC methods address fixed or PnP with request-based topologies, but fall short in anytime PnP scenarios, where unpredictable join/leave events occur without coordination. To the best of our knowledge, no approach explicitly guarantees safety under these conditions. 
+
+Contributions: This paper makes three main con-tributions. First, we propose a distributed model pre-dictive control (MPC) framework that guarantees col-lision avoidance and constraint satisfaction under PnP operations without approval from other agents (anytime PnP). The key tools are time-varying cells and safety envelopes, enabling fully decoupled collision-avoidance constraints via a contract-based mechanism. Second, we show how to augment the safety-guaranteed framework for a given autonomous driving example, preserving guarantees while enabling aggressive maneuvers. Third, we validate the approach in high-fidelity simulation and real-world experiments with six to eight autonomous race cars on a figure-eight track, demonstrating appli-cability in high-speed, dynamic settings with frequent topology changes. 
+
+Related works: When the communication network is fixed, distributed optimization methods such as dual as-cent [12], [13] and Alternating Direction Method of Mul-tipliers (ADMM) [14], [15] are widely used to coordinate local subproblems. These approaches are well-suited for sparse couplings but often need many iterations and are biased toward linear or convex formulations, which limits real-time use [16], [17]. Plug-and-play MPC for linear dynamics addresses the fixed network issue, supporting modularity and request-based PnP op-erations [10], [11]. Coalitional MPC extends this idea by allowing agents to merge or split coalitions to improve performance, but is typically restricted to linear set-tings and requires nontrivial coordination overhead [18], [19]. For nonlinear dynamics, distributed optimization methods such as Augmented Lagrangian Alternating Direction Inexact Newton (ALADIN) [20] or distributed Sequential Quadratic Programming (SQP)/ADMM [21], [22] have been proposed. While they extend beyond linear settings, they usually rely on a centralized coor-dinator [23] or require many communications/iterations to converge. In addition, these methods are inher-ently iterative, requiring repeated neighbor exchanges (or sequential, order-dependent updates) within each MPC step to coordinate coupled constraints [24], [25]. Application-driven approaches demonstrate partial plug-and-play capabilities: for example, hierarchical nonlinear MPC in buildings [26] supports adding or removing devices and rooms, but depends on centralized layers and application-specific guarantees, whereas distributed non-linear MPC (NMPC) frameworks [27] enable runtime inclusion/removal of agents in smart grid applications, but without formal guarantees. To reduce the computa-tional and coordination load of distributed optimization algorithms, non-iterative distributed MPC variants have been explored. These approaches exchange predicted trajectories and adapt constraints [5], introduce consis-tency sets [28], or apply contracts and reachable sets for coupling [7]. However, their guarantees are tied to fixed networks, hard to compute robust invariant sets, and can block agents from joining or leaving to preserve feasi-bility. Beyond MPC-centric designs, other coordination schemes have been investigated: priority-based order-ing [29], game-theoretic approaches [30]–[32], traffic-specific rules [33]–[35], Voronoi-based collision avoid-ance [36]–[38], and CBF-based safety certificates [39], [40]. Learning-based approaches have also been widely investigated for multi-agent control. However, since our focus is on methods that provide formal guarantees on safety, feasibility, and stability, we do not review this line of work in detail. Finally, safety-verification approaches can process request-based plug-and-play operations, but result in conservative behavior [41], [42]. In contrast, our contract-based DMPC targets fully distributed, anytime plug-and-play with neighbor-only communication and formal recursive feasibility and safety guarantees. A category-wise comparison, covering assumptions, com-munication requirements, and guarantees, is deferred to the discussion Section VI and summarized in Table I. 
+
+Notation: Throughout the paper, we denote by R the set of real numbers, by N the set of non-negative integers and by Nba = {n ∈ N | a ≤ n ≤ b}. The zero vector in 
+
+Rn is denoted by 0. The discrete-time index is denoted by t ∈ N, with sampling time Ts. We denote by xk|t
+
+the value of a variable at time t + k predicted at time 
+
+t. More generally, for agent-indexed quantities we write 
+
+xi,k |t, and for horizon-indexed collections we use the shorthand PN +1  
+
+> i,t
+
+= {P i, 0|t, . . . , Pi,N |t}, or alternatively 
+
+P0: Ni,t when the starting and ending indices are important. For c ∈ Rn and ϵ > 0, we define the open ball of radius 
+
+ϵ centered at c as Bϵ(c) := {x ∈ Rn : ∥x − c∥ < ϵ }.When c = 0, we simply write Bϵ. The sum of two sets 
+
+A, B ⊆ Rn, denoted as A⊕B , is {a+b | a ∈ A , b ∈ B} 
+
+while A ⊖ B is {x ∈ Rn | x + b ∈ A , ∀b ∈ B} .Finally, given a finite set N , we denote its cardinality by |N | . When considering finite horizon optimal control problems (FHOCP), the length of the horizon is denoted 3
+
+by N and each step along the horizon by k ∈ NN 
+
+> 0
+
+.II. P ROBLEM DESCRIPTION 
+
+In this section we introduce the system setup, define the communication capabilities among agents, and state the control problem. We further consider the necessary safety-related requirements and resulting problem for-mulation. 
+
+A. System setup 
+
+We consider a finite population of mobile robotic agents indexed by the set M. Each agent i ∈ M is described by non-linear dynamics 
+
+xi(t + 1) = fi(xi(t), u i(t)) , (1) 
+
+pi(t) = Cixi(t), (2) where xi ∈ Rni , u i ∈ Rmi describe the state and input of the system and fi : Rni × Rmi → Rni . The position of the agent pi ∈ R3 is defined as a subset of the states, where Ci ∈ R3×ni is an appropriate selection matrix. The agent is assumed to have a volume, and the position of the agent refers to its center of mass. The agent can be approximated by a ball, Bϵ/ 2 representing the physical encumbrance of the agent. The system is subject to local state and input constraints for each agent: 
+
+xi(t) ∈ X i, (3) 
+
+ui(t) ∈ U i, ∀i ∈ M , ∀t ≥ 0. (4) Let us consider, without loss of generality, that pi(t) is at the top of the state vector xi(t) and introduce the operator ϕ(pi) = [ p⊤ 
+
+> i
+
+, 0, . . . , 0] ⊤ ∈ Rni that generates a vector of the dimension of xi(t) with first entry, corresponding to the position pi of the i-th agent. 
+
+Assumption 1. The agents’ dynamics (1) are position invariant, i.e. ∀pj ∈ R3, xi(t), ui(t), fi(xi(t) + 
+
+ϕ(pj ), u i(t)) = xi(t + 1) + ϕ(pj ).
+
+Furthermore, the system is subject to coupling con-straints to enforce collision avoidance among agents, 
+
+h(xi(t), x j (t)) ≥ 0, ∀i, j ∈ M , i̸ = j, ∀t ≥ 0.
+
+(5) To streamline the exposition, we assume symmetric agents and that constraint (5) can be expressed as 
+
+h(xi(t), x j (t)) = ∥pi(t) − pj (t)∥ − ϵ. (6) 
+
+Remark 1. Extensions to arbitrary agent geometries can be done by considering a suitable metric that includes the orientation in addition to the position for collision avoidance. B. Communication 
+
+The communication set defines the physical range in space within which an agent can communicate with its neighbors. We assume homogeneous communication, meaning that all agents have the same communication capabilities. This assumption is not strictly required, and a similar strategy to the one presented in this work could be adopted, with suitable modifications, in the heterogeneous case, however this is omitted for clarity. The communication set R(pi) ⊂ R3 is a non-empty closed convex set centered at the current position of the agent pi. For simplicity, this set is under-approximated by a centrally symmetric polytope centered at the agent’s current position pi,
+
+R(pi) := {ξ ∈ R3 : A(ξ − pi) ≤ b}, (7) for suitable matrices A ∈ Rnc×3 and b ∈ Rnc chosen such that R(03) is centrally symmetric. Thus, if the po-sition of an agent j ∈ M , lies within the communication set of agent i, then j is considered a neighbor of i and bidirectional communication is established. As an example, consider the case where two agents can communicate if the Euclidean distance between them is less than or equal to a given radius r.
+
+∥pi − pj ∥ ≤ r. (8) In this case, the communication set can be represented by any polytopic under-approximation of a ball with radius r, centered at each agent’s position. A proper design of R should account for factors such as transmis-sion power, receiver sensitivity, antenna characteristics, operating frequency, environmental conditions, line-of-sight availability, or interference - a detailed definition is application-specific and beyond the scope of this paper. An equivalent representation of the set of neighboring agents can be obtained using the intersection of two sets centered at the current positions of the agents. Specifically, agents i and j are neighbors if the following holds: ¯R(pi) ∩ ¯R(pj )̸ = ∅, (9) where ¯R(pi) is defined as a tightened version of R(pi),such that: 
+
+¯R(pi) := {ξ ∈ R3 : A(ξ − pi) ≤ b
+
+2 }, (10) and we assume that the tightened communication region contains the physical encumbrance of the agent, i.e., 
+
+Bϵ/ 2 ⊆ ¯R(03). Therefore, the set of neighbors of agent 
+
+i at time t is 
+
+Ni(t) = {j ∈ M \ { i} : ¯R(pi(t)) ∩ ¯R(pj (t)) ̸ = ∅} .
+
+(11) For ease of readability, the time dependency of Ni(t) is omitted when not crucial. 4
+
+The neighbor sets induce a time-varying undirected communication graph, where an edge is present between agents i and j if and only if j ∈ N i(t). In the considered anytime plug-and-play setting, this graph may change arbitrarily over time as agents move, enter, or leave the communication range. Since the proposed method is formulated entirely in terms of local neighbor sets, no explicit graph-level construction is needed in the remainder of the paper. 
+
+C. Problem formulation 
+
+We are now in a position to state the problem we aim to solve. 
+
+Problem 1. Consider a set of agents M, where each agent is governed by the non-linear dynamics (1) and subject to state and input constraints (3) , (4) . Neighbors are determined according to (11) , leading to a time-varying plug-and-play communication topology that de-pends on the agents’ positions. We aim to design a dis-tributed control strategy that relies solely on neighbor-to-neighbor communication, ensures collision avoidance among agents (5) , and allows each agent to minimize its own local objective. 
+
+At each time-step t this objective can be cast as the centralized FHOCP 
+
+min xi, 0|t,...,x i,N |t,ui, 0|t,...,u i,N −1|t,
+
+> ∀i∈M
+
+X 
+
+> i∈M
+> N−1
+
+X
+
+> k=0
+
+Ji(xi,k |t, u i,k |t) (12a) 
+
+subject to xi, 0|t = xi(t), (12b) 
+
+xi,k +1 |t = fi(xi,k |t, u i,k |t), (12c) 
+
+xi,k |t ∈ X i, (12d) 
+
+ui,k |t ∈ U i, (12e) 
+
+h(xi,k |t, x j,k |t) ≥ 0, (12f) 
+
+∀i ∈ M , ∀j ∈ M \ { i},
+
+where dynamics (12c) and input constraints (12e) are im-posed for all k ∈ NN −10 , while the state constraints (12d) and collision-avoidance constraints (12f) are imposed for all k ∈ NN 
+
+> 0
+
+. The first control action of the optimal input sequence is applied in a receding-horizon fashion, 
+
+ui(t) = u∗
+
+> i, 0|t
+
+. (13) 
+
+Remark 2. For simplicity, the exposition is restricted to a finite population of agents. This ensures that the centralized problem is well posed and keeps the notation compact. However, since the proposed construction and the corresponding feasibility and safety arguments are local and rely only on neighbor-to-neighbor interactions, the framework extends naturally to countably infinite locally finite populations, i.e., populations satisfying 
+
+|N i(t)| < ∞ for all i ∈ M and t ∈ N.
+
+III. A NYTIME PLUG -AND -P LAY MPC To solve Problem 1, we propose a distributed receding-horizon strategy that can be solved locally by each agent using only neighbor-to-neighbor communi-cation. While the cost (12a) and the local state/input constraints (12d)–(12e) are separable across agents, the collision-avoidance constraint (12f) couples the opti-mization variables of different agents. Our goal is there-fore to replace this coupled constraint by local contracts 
+
+that can be constructed from one exchange of predicted trajectories with the current neighbors and will be de-tailed in the following. At each time t, the neighbor set Ni(t) is computed from the current positions and kept fixed while solving the FHOCP at time t. Based on this frozen neighbor set, agent i builds a contract 
+
+Ci,t :=  PN +1  
+
+> i,t
+
+, ENi
+
+, (14) where PN +1  
+
+> i,t
+
+is a collection of time-varying cells used to separate the current neighbors, and ENi is a collection of safety envelopes used to preserve recursive feasibil-ity and robustness with respect to topology changes. These two ingredients allow one to derive a distributed contract-based local FHOCP, inspired by the centralized reference problem (12), with only one exchange of predicted trajectories per time step. 
+
+A. Contract ingredients 1) Cells: Cells are stage-wise convex regions com-puted from the predicted trajectories exchanged with the 
+
+current neighbors. Their role is to ensure collision-free trajectories between neighbors. Collision avoidance with agents that are not current neighbors will be handled through awareness sets in the next subsection. 
+
+Definition 1. A cell for agent i at prediction step k and time t is a convex subset of the admissible position space 
+
+Pi,k |t ⊆ { pi = Cixi | xi ∈ X i}. (15) 
+
+The set of cells assigned to agent i over a horizon of length N is 
+
+PN +1  
+
+> i,t
+
+= {P i, 0|t, . . . , Pi,N |t}. (16) 
+
+A collection of cells {P N +1  
+
+> i,t
+
+}i∈M is said to be admis-sible at time t if, for all i ∈ M , all j ∈ N i(t), and all 
+
+k ∈ NN 
+
+> 0
+
+,
+
+Pi,k |t ⊕ B ϵ/ 2 ∩ P j,k |t ⊕ B ϵ/ 2 = ∅. (17) Each local control problem then enforces the cell-membership constraint 
+
+pi,k |t ∈ P i,k |t, ∀k ∈ NN 
+
+> 0
+
+. (18) 5(a)  (b) 
+
+(c) 
+
+Fig. 2: Consider two neighboring agents i (purple car) and j (blue car). (a) Visualization of the communication set ¯R(pi) (gray circle) and awareness set A(pi) ( purple circle) for agent i. (b) Visualization of the safety envelopes Ej,k , ∀k ∈ NN −10
+
+( blue dashed squares), which constrain the one-step prediction, thereby resulting in the edge of the awareness set not being reached in less than N steps. (c) Visualization of the cells for agents i and j at stage N − 1 along the horizon ( blue and purple lines respectively) and the resulting contracts Ci,N −1|t and Cj,N −1|t ( purple and blue cut-off squares). . 
+
+Fig. 3: Cells: Visualization of partitioning, consisting of cells, of multiple agents over the horizon. Each agent is associated with a different color. The colored points indicate the position of an agent at a given step k along the horizon. The respective hyperplanes are given as the shaded polytopes in the same color. The cells are constructed via a Voronoi-type partition; see Section IV. Therefore, they change as the predicted positions of the agents change. 
+
+The next proposition states the basic role of cells: if neighboring agents remain inside cells, then they remain collision-free. 
+
+Proposition 1. Suppose that, at time t, each agent 
+
+i ∈ M is assigned a collection of cells PN +1  
+
+> i,t
+
+such that the family {P N +1  
+
+> i,t
+
+}i∈M is admissible in the sense of Definition 1, and that the predicted positions satisfy (18) .Then, for every i ∈ M , every j ∈ N i(t), and every 
+
+k ∈ NN 
+
+> 0
+
+,
+
+h(xi,k |t, x j,k |t) ≥ 0. (19) The proof is given in the Appendix A. The following converse result shows that, whenever collision-free trajectories are given, there exists an ad-missible collection of cells containing them. 
+
+Lemma 1. Consider a time instant t and predicted positions pi,k |t ∈ { Cixi | xi ∈ X i}, for all i ∈ M and 
+
+k ∈ NN 
+
+> 0
+
+. Assume that, for every i ∈ M , every j ∈ N i(t),and every k ∈ NN 
+
+> 0
+
+,
+
+h(xi,k |t, x j,k |t) ≥ 0. (20) 
+
+Then there exists a family of cells {P N +1  
+
+> i,t
+
+}i∈M admis-sible in the sense of Definition 1 such that 
+
+pi,k |t ∈ P i,k |t, ∀i ∈ M , ∀k ∈ NN 
+
+> 0
+
+. (21) The proof can be found in Appendix B. 
+
+2) Awareness sets and safety envelopes: Cells are sufficient to separate the current neighbors, but by them-selves they do not address topology changes. To this end, we introduce an auxiliary set that captures the region in which an agent may become aware of other agents. 
+
+Definition 2. The awareness set of agent i is 
+
+A(pi) := ¯R(pi) ⊖ B ϵ/ 2, (22) 
+
+where Bϵ/ 2 accounts for the physical size of the agent and is centered at the origin. 
+
+The awareness set is a tightened version of the com-munication set ¯R(pi) that accounts for the physical size of the agent. Since it is obtained by subtracting the body shape centered at the origin from the translated communication set, it remains centered at the current position of the agent. The awareness set represents the region around agent i in which another agent can be detected sufficiently early to become a neighbor before a collision can occur. Since A(pi) is a tightened version 6
+
+Fig. 4: Visualization of the loss of feasibility when the shifted solution is used as a candidate trajectory. The current position of the agent at time t is shown by the black circle pi, 0|t. The planned trajectory is shown in black, and the awareness set 
+
+A(pi, 0|t) at time t is shown as the blue dashed circle. At the next time step t + 1 , the solution is shifted, and the awareness set is centered at the shifted current position pi, 1|t. The tail of the shifted trajectory is no longer contained in the shifted awareness set (red) and is therefore not feasible. 
+
+of the communication set, any agent inside A(pi) is necessarily within the communication range of agent i.We next describe a pairwise safety property for agents that are not neighbors at the current time. 
+
+Proposition 2. Consider two distinct agents i, j ∈ M 
+
+and a time instant t such that j / ∈ N i(t). If the predicted trajectories satisfy 
+
+pi,k |t ∈ A (pi, 0|t), pj,k |t ∈ A (pj, 0|t), ∀k ∈ NN 
+
+> 0
+
+,
+
+(23) 
+
+then h(xi,k |t, x j,k |t) ≥ 0, ∀k ∈ NN 
+
+> 0
+
+.
+
+The proof is given in the Appendix C. While (23) guarantees pairwise collision avoidance at the current time for non-neighboring agents, it is in general not preserved after shifting the solution by one time step. The reason is that the awareness set is centered at the current position and therefore shifts from one time step to the next. As a consequence, the tail of a previously feasible trajectory may leave the shifted awareness set. This issue is illustrated in Figure 4. To ensure that feasibility is preserved after shifting the solution by one time step, we do not constrain the whole trajectory to remain in a fixed awareness set. Instead, we constrain the successive increments of the predicted positions using safety envelopes , which are scaled-down copies of the awareness set. Their cumulative effect guarantees that the predicted trajectory remains inside the awareness set. 
+
+Definition 3. A safety envelope for agent i is a sequence of convex sets 
+
+ENi = {E i, 0, . . . , Ei,N −1},
+
+where each set is defined as 
+
+Ei,k = αi,k A(03), αi,k ≥ 0, ∀k ∈ NN −10 . (24) 
+
+The coefficients αi,k are chosen such that 
+
+αi,k ≥ αi,k +1 , 
+
+> N−1
+
+X
+
+> k=0
+
+αi,k ≤ 1. (25) 
+
+Consequently,  
+
+> N−1
+
+M
+
+> k=0
+
+Ei,k ⊆ A (03). (26) The safety-envelope constraint is then imposed as 
+
+pi,k +1 |t − pi,k |t ∈ E i,k , ∀k ∈ NN −10 . (27) The next proposition states the key implication of the safety-envelope constraint: if the successive position increments satisfy (27), then the whole predicted tra-jectory, and every shifted tail of it, remains inside the corresponding awareness set. 
+
+Proposition 3. Consider an agent i and its predicted position trajectory 
+
+τ 0: Ni,t = {pi, 0|t, . . . , p i,N |t}.
+
+If (27) holds, then the trajectory is contained in the awareness set centered at its initial point, i.e., 
+
+τ 0: Ni,t ⊆ A (pi, 0|t), (28) 
+
+and, more generally, for every ℓ ∈ NN −10 ,
+
+τ ℓ:Ni,t := {pi,ℓ |t, . . . , p i,N |t} ⊆ A (pi,ℓ |t). (29) The proof can be found in Appendix D. Figure 5 illustrates how (27) ensures that the trajectory 
+
+τ 0: Ni,t remains inside the awareness set while preserving a feasible shifted solution. The final FHOCP formulation as well as a theoretical analysis are provided in the following section. 
+
+B. Local formulation and theoretical analysis 
+
+Using the local contract (14), we derive one local contract-based FHOCP per agent, inspired by the cen-tralized reference problem (12). For a fixed agent i, solve 
+
+min xi, 0|t,...,x i,N |t,ui, 0|t,...,u i,N −1|t, 
+
+> ¯xi|t,¯ui|t
+> N−1
+
+X
+
+> k=0
+
+Ji(xi,k |t, u i,k |t) (30a) subject to xi, 0|t = xi(t), (30b) 
+
+xi,k +1 |t = fi(xi,k |t, u i,k |t), (30c) 
+
+pi,k |t = Cixi,k |t, (30d) 
+
+(xi,k |t, u i,k |t) ∈ X i × U i, (30e) 
+
+pi,k |t ∈ P i,k |t, (30f) 
+
+∆pi,k |t ∈ E i,k , (30g) 
+
+xi,N |t = ¯ xi|t, (30h) 
+
+¯xi|t = fi(¯ xi|t, ¯ui|t), (30i) 
+
+(¯ xi|t, ¯ui|t) ∈ X i × U i (30j) 7(a)  (b)  (c)  (d) 
+
+Fig. 5: Example of a set of safety envelopes that fulfill Definition 3. (a) The safety envelopes ( smaller purple circles) are a scaled-down version of the awareness set A(pi, 0|t) ( large blue circle) , renv = αk · raware , and (b) the scaling factors sum up to 1. The safety envelopes ( Ei,k , ∀k ∈ NN −10 ) ensure the trajectory τ 0: Ni,t ( sequence of black points) does not reach the edge of the awareness set A(pi, 0|t) in less than N steps. (c) Visualization of how the one-step constraint results in feasible shifted solution. The current position of the agent at time t is shown as the black point indicated by pi, 0|t. The planned trajectory is given in black and the awareness set at time t as the blue shaded area. The safety envelope for the first step is shown in purple. 
+
+(d) At the next time step t + 1 , the solution is shifted, and the awareness set is now centered around the predicted next step (black point pi, 1|t). The shifted trajectory (black) is still contained in the awareness set and, therefore, a feasible solution. 
+
+The constraints (30c), (30e), and (30g) are imposed for all k ∈ NN −10 , while (30d) and (30f) are imposed for all 
+
+k ∈ NN 
+
+> 0
+
+. Moreover, ∆pi,k |t := pi,k +1 |t − pi,k |t, for all 
+
+k ∈ NN −10 .The terminal equality constraint (30h) is imposed to an admissible equilibrium selected online by the optimizer. Because of Assumption 1, this equilibrium is not tied to a fixed spatial location: the optimizer may select any admissible equilibrium compatible with the local con-straints, the terminal cell-membership constraint already contained in (30f) for k = N , and the terminal increment constraint contained in (30g) for k = N − 1.
+
+Remark 3. We adopt a terminal equality constraint because it yields a simple and transparent recursive-feasibility argument in the anytime plug-and-play setting. A more general formulation would replace (30h) by a time-varying terminal set and a local terminal controller. This would allow more flexibility, but such a terminal set would need to remain compatible with the time-varying cells, the safety envelopes, and the changing neighbor sets, making its computation significantly more involved. We leave this extension to future work. 
+
+Theorem 1. Assume that problem (30) is feasible at time t = 0 , and that at each time t the cells PN +1 
+
+> i,t
+
+satisfy Definition 1, while the safety envelopes ENi satisfy Definition 3. Then problem (30) is recursively feasible. Moreover, the resulting closed-loop system satisfies the local state and input constraints and the collision-avoidance constraint (6) for all t ≥ 0, even under anytime plug-and-play changes of the network topology. Proof. We prove recursive feasibility by constructing, from any feasible optimal solution of (30) at time t, a feasible candidate solution at time t + 1 . Let 
+
+X∗ 
+
+> i|t
+
+= {x∗
+
+> i, 0|t
+
+, . . . , x ∗ 
+
+> i,N |t
+
+},U ∗ 
+
+> i|t
+
+= {u∗
+
+> i, 0|t
+
+, . . . , u ∗ 
+
+> i,N −1|t
+
+},
+
+be the optimal state and input sequences at time t, and let (¯ x∗
+
+> i|t
+
+, ¯u∗
+
+> i|t
+
+) be the corresponding terminal equilibrium. Define the candidate solution at time t + 1 as 
+
+ˆxi,k |t+1 := x∗
+
+> i,k +1 |t
+
+, k ∈ NN −10 , ˆxi,N |t+1 := ¯ x∗
+
+> i|t
+
+,
+
+ˆui,k |t+1 := u∗
+
+> i,k +1 |t
+
+, k ∈ NN −20 , ˆui,N −1|t+1 := ¯ u∗
+
+> i|t
+
+,
+
+ˆ¯xi|t+1 := ¯ x∗
+
+> i|t
+
+, ˆ¯ui|t+1 := ¯ u∗
+
+> i|t
+
+.
+
+The initial condition is satisfied because 
+
+ˆxi, 0|t+1 = x∗ 
+
+> i, 1|t
+
+= xi(t + 1) ,
+
+and the dynamics hold by construction together with (30i). Since the solution at time t is feasible, the local state/input constraints and the terminal constraints (30e)–(30j) are also satisfied by the candidate solution. It remains to verify the contract constraints. 
+
+Safety envelopes: for every k ∈ NN −20 ,
+
+ˆpi,k +1 |t+1 −ˆpi,k |t+1 = p∗
+
+> i,k +2 |t
+
+−p∗ 
+
+> i,k +1 |t
+
+∈ E i,k +1 ⊆ E i,k ,
+
+where the last inclusion follows from Definition 3. For the last increment, 
+
+ˆpi,N |t+1 − ˆpi,N −1|t+1 = ¯ p∗ 
+
+> i|t
+
+− p∗  
+
+> i,N |t
+
+= 03 ∈ E i,N −1,
+
+where the equality follows from (30h). Hence (30g) holds at time t + 1 .Moreover, since the optimal trajectory at time t is feasible, Proposition 3 yields 
+
+p∗ 
+
+> i,k |t
+
+∈ A (p∗
+
+> i, 0|t
+
+), ∀k ∈ NN 
+
+> 0
+
+.
+
+This fact will be used below for newly appearing neigh-bors. 
+
+Cells: Fix an agent i and partition the neighbors at time t + 1 into 
+
+N 0 
+
+> i
+
+:= Ni(t) ∩ N i(t + 1) , N − 
+
+> i
+
+:= Ni(t) \ N i(t + 1) ,
+
+N + 
+
+> i
+
+:= Ni(t + 1) \ N i(t).8
+
+Consider first j ∈ N 0 
+
+> i
+
+, i.e., neighbors that remain neighbors. For every k ∈ NN −10 ,
+
+ˆpi,k |t+1 = p∗ 
+
+> i,k +1 |t
+
+∈ P i,k +1 |t,
+
+ˆpj,k |t+1 = p∗ 
+
+> j,k +1 |t
+
+∈ P j,k +1 |t,
+
+and the compatibility of the cells at time t implies that these shifted positions are collision-free. At the last stage, 
+
+ˆpi,N |t+1 = p∗  
+
+> i,N |t
+
+= ¯ p∗ 
+
+> i|t
+
+∈ P i,N |t,
+
+ˆpj,N |t+1 = p∗  
+
+> j,N |t
+
+= ¯ p∗ 
+
+> j|t
+
+∈ P j,N |t,
+
+again by (30h). Hence the shifted candidate remains separated from all neighbors in N 0 
+
+> i
+
+.For every j ∈ N − 
+
+> i
+
+, the corresponding pairwise cell constraint is removed at time t + 1 , so no additional argument is needed. It remains to consider j ∈ N + 
+
+> i
+
+, i.e., newly appearing neighbors. Since j /∈ Ni(t) and since the optimal trajectory at time t is feasible, Proposition 3 gives 
+
+ˆpi,k |t+1 = p∗ 
+
+> i,k +1 |t
+
+∈ A (p∗
+
+> i, 0|t
+
+), ∀k ∈ NN −10 ,
+
+ˆpj,k |t+1 = p∗ 
+
+> j,k +1 |t
+
+∈ A (p∗
+
+> j, 0|t
+
+), ∀k ∈ NN −10 .
+
+Moreover, by (30h), 
+
+ˆpi,N |t+1 = ¯ p∗ 
+
+> i|t
+
+= p∗  
+
+> i,N |t
+
+∈ A (p∗
+
+> i, 0|t
+
+),
+
+ˆpj,N |t+1 = ¯ p∗ 
+
+> j|t
+
+= p∗  
+
+> j,N |t
+
+∈ A (p∗
+
+> j, 0|t
+
+),
+
+where the last inclusion again follows from Proposi-tion 3 applied to the feasible optimal trajectories at time t. Since j / ∈ N i(t), it follows from the definition of the neighbor set and of the awareness sets that 
+
+A(p∗
+
+> i, 0|t
+
+) ∩ A (p∗
+
+> j, 0|t
+
+) = ∅. Hence, the shifted candidate positions belong stage-wise to two disjoint awareness sets. Therefore, the shifted candidate trajectories satisfy the assumptions of Proposition 2, with awareness sets centered at the positions at time t. By Proposition 2, the corresponding candidate positions are collision-free for all k ∈ NN 
+
+> 0
+
+.Thus, for every pair of agents that are neighbors at time t + 1 , the corresponding candidate positions are collision-free for all k ∈ NN 
+
+> 0
+
+. Therefore, applying Lemma 1 to the full family of candidate positions at time t + 1 yields the existence of a compatible family of cells {P N +1 
+
+> i,t +1
+
+}i∈M such that ˆpi,k |t+1 ∈ Pi,k |t+1 ,
+
+∀i ∈ M, ∀k ∈ NN 
+
+> 0
+
+. Hence, the candidate solution satisfies (30f) at time t + 1 .We have therefore shown that the candidate solution is feasible for (30) at time t + 1 , and recursive feasibility follows by induction from feasibility at t = 0 .Since the applied input is always the first element of a feasible solution, the local state and input constraints hold for all t ≥ 0. Moreover, collision avoidance fol-lows from Proposition 1 for current neighbors and from 
+
+Algorithm 1 Anytime Plug-and-Play MPC executed by agent i
+
+Given a feasible initialization at t = 0 , including a feasible planned trajectory τ 0: Ni, 0
+
+Choose ENi such that Definition 3 holds Apply u∗
+
+> i, 0|0
+
+for t = 1 , 2, . . . do for each j ∈ N i(t) do 
+
+Send τ 0: Ni,t −1 to agent j
+
+Receive τ 0: Nj,t −1 from agent j
+
+end for 
+
+Compute PN +1  
+
+> i,t
+
+such that Definition 1 holds Solve (30) with PN +1  
+
+> i,t
+
+and ENi
+
+Store the resulting planned position trajectory τ 0: Ni,t 
+
+Apply u∗
+
+> i, 0|t
+
+end for 
+
+Proposition 2 together with Proposition 3 for agents that are not neighbors at the current time. Thus, (6) holds for all t ≥ 0.
+
+C. Algorithm 
+
+The full online procedure executed by each agent is summarized in Algorithm 1. We assume a feasible initialization at time t = 0 , i.e., each agent has a feasible local solution and an associated planned position trajec-tory; for example, all agents may initially be at standstill in different locations. In the considered application, the information exchanged among neighbors is the planned position trajectory τ 0: Ni,t := {pi, 0|t, . . . , p i,N |t}, which is sufficient to construct the local cells, since the collision-avoidance contracts are defined in the position space. At each time step, agent i receives from its current neighbors the trajectories planned at the previous step, computes the cells accordingly, solves its local FHOCP, applies the first control input, and stores the new planned trajectory for the next communication round. A practical construction of cells and safety envelopes is given in Section IV. A discussion, together with simulation and hardware results for Algorithm 1, is provided in Section V. IV. A PPLICATION TO AUTONOMOUS DRIVING 
+
+We demonstrate the effectiveness of the Anytime Plug-and-Play algorithm in a multi-agent autonomous driving scenario with a finite fleet of miniature race cars (agents) indexed by i ∈ M = {1, . . . , M }. Each agent is modeled using the dynamic bicycle model [43], with state and input vectors 
+
+xi = pi,x pi,y γi vi,x vi,y ωi
+
+ ∈ Rnx ,ui = δi Ti
+
+ ∈ Rnu ,
+
+where (pi,x , p i,y ) is the position, γi the heading, 
+
+(vi,x , v i,y ) the body-frame velocities, and ωi the angular 9
+
+velocity. The control inputs are the steering angle δi
+
+and torque Ti. The agents race on a figure-eight track, where the intersection provides a realistic challenge by requiring collision avoidance and creating overtaking opportunities. 
+
+A. Anytime Plug-and-Play Multi-Trajectory model pre-dictive contouring control (mt-MPCC) 
+
+The proposed Anytime PnP MPC controller (30) provides collision avoidance guarantees and constraint satisfaction; however, it does not yet define a specific metric for highly dynamical autonomous driving per-formance. To address this, we augment the Anytime PnP MPC as a multi-trajectory MPC [44], where we optimize over two coupled trajectories per agent i: 1) a safe trajectory, denoted with the superscript ( s) that implements the Anytime PnP MPC formulation (30), and 2) an exploitation trajectory, denoted with the superscript (e) that implements an MPCC controller [45] focusing on high speed reference tracking without considering other agents. Both trajectories share the same first control in-put. Hence, the applied control action coincides with the one of the safe trajectory, and the recursive-feasibility, collision-avoidance, and constraint-satisfaction proper-ties established for (30) are retained. We modify the classic MPCC cost function by augmenting it with a yaw-alignment term ϵϕ = ϕ − ϕref , which promotes consistency with the track orientation. This modification allows for reduced contouring penalties, enabling over-taking maneuvers while avoiding unstable behavior. The resulting Anytime PnP multi-trajectory MPCC optimization problem for agent i is 
+
+min     
+
+> xs,e i, 0|t,...,x s,e i,N |t,us,e i, 0|t,...,u s,e i,N −1|t,
+> ¯xsi|t,¯usi|t
+> N−1
+
+X
+
+> k=0
+
+Ji
+
+
+
+xs,e i,k |t, u s,e i,k |t, ¯xsi|t
+
+
+
+(31a) subject to xsi, 0|t = xei, 0|t = xi(t), (31b) 
+
+usi, 0|t = uei, 0|t, (31c) 
+
+xs,e i,k +1 |t = fi(xs,e i,k |t, u s,e i,k |t), (31d) 
+
+xs,e i,k |t ∈ X i, (31e) 
+
+us,e i,k |t ∈ U i, (31f) 
+
+psi,k |t = Cixsi,k |t, (31g) 
+
+psi,k |t ∈ P i,k |t, (31h) 
+
+∆psi,k |t ∈ E i,k , (31i) 
+
+xsi,N |t = ¯ xsi|t, (31j) 
+
+¯xsi|t = fi(¯ xsi|t, ¯usi|t), (31k) 
+
+(¯ xsi|t, ¯usi|t) ∈ X i × U i (31l) The constraints (31d), (31f), and (31i) are imposed for all k ∈ NN −10 , while (31e), (31g), and (31h) are imposed for all k ∈ NN 
+
+> 0
+
+. Moreover, ∆psi,k |t := psi,k +1 |t −
+
+psi,k |t, ∀k ∈ NN −10 , and, by (31j), one has psi,N |t =
+
+Ci ¯xsi|t. The input constraints (31f) are polytopic, and the state constraints (31e) capture both physical limits and track boundaries, which can be formulated polytopically. Collision-avoidance constraints (31h)–(31i), as well as the terminal conditions (31j)–(31l), are enforced exclu-sively on the safe trajectory. Because the safe trajectory satisfies the same structural constraints as (30), it inherits the recursive-feasibility and safety properties of the proposed Anytime PnP MPC scheme. The exploitation trajectory is used only to improve performance, while the shared first-input constraint (31c) ensures that the closed-loop control action remains safety certified [44]. 
+
+B. Anytime Plug-and-Play Ingredient Design 
+
+In this section, we discuss how the cells and safety envelopes introduced in Definition 1 and Definition 3 can be designed, such that Proposition 1 and Proposition 3 hold. 
+
+1) Cells: The cells PN +1  
+
+> i,t
+
+as defined in Definition 1 can be implemented as separating hyperplanes based on Voronoi partitioning [36]. The separating hyperplane between agents i and j at prediction step k is defined as: 
+
+α(i,j )(k|t) · p ≤ β(i,j )(k|t) − ϵ(i,j )
+
+2 , (32) where p = px py
+
+ and the hyperplane parameters are given by 
+
+α(i,j )(k|t) =
+
+ pj, (k|t) − pi, (k|t)
+
+|| pj, (k|t) − pi, (k|t)|| 
+
+T
+
+, (33) 
+
+β(i,j )(k|t) = α(i,j )(k|t) · pi, (k|t) + pj, (k|t)
+
+2 . (34) Here, pi, (k|t) and pj, (k|t) denote the positions of agents 
+
+i and j at the k-th prediction step. The superscript (i,j) indicates that the hyperplane is computed by agent 
+
+i with respect to agent j. Unlike classical Voronoi partitioning, where the separating hyperplane is located at the midpoint between the two agents, a safety margin 
+
+ϵ(i,j ) is incorporated to ensure a minimum required sepa-ration. This margin satisfies ϵ(i,j ) ≤ ∥ pi, (k|t) − pj, (k|t)∥,thus ensuring collision avoidance when considering the volume of the agents. In practice, particularly in highly dynamical driv-ing scenarios, the use of such hyperplanes can restrict overtaking maneuvers. When two agents travel in the same direction, the resulting hyperplane becomes ap-proximately perpendicular to their direction of motion. To alleviate this limitation and promote more nat-ural overtaking behavior, we modify the hyperplane orientation. As shown in Figure 6a, the hyperplanes 10 
+
+are deliberately tilted to create more space along the overtaking lane. For the figure-eight track used in our experiments, the orientation of the hyperplane is further adapted based on local track curvature. This strategy encourages overtaking along the inner side of a curve, as depicted in Figure 6b. 
+
+(a) (b)       
+
+> Fig. 6: (a) Hyperplane angle: Angling the hyperplane between neighboring agents results in less conservative behavior in regard to overtaking maneuvers. The hyperplane (red) at a 45 ◦angle to the direction of movement (purple/blue arrows) between two agents reduces the difficulty of take-over maneu-vers. The blue and purple hyperplanes account for a safety margin. (b) Hyperplane angle based on track: The angle of the hyperplane between neighboring agents depends on the curvature of the track. The hyperplane (red) at a 45 ◦angle in a left turn. The blue and purple hyperplanes account for a safety margin.
+
+2) Safety Envelope Design: We design the safety envelopes as squares resulting in four hyperplane con-straints per stage per agent. Higher dimensional poly-topes (hexagons) were evaluated as well, but showed no significant improvement in simulation. As stated in Definition 3, the N safety envelopes are defined as a scaled awareness set, where the scalars αi,k are non-increasing along the prediction horizon, and sum up to one. not sure if it’s very clear what α is here now that we removed the equations? The scalars αi,k and the shape of the safety envelopes are considered tuning parameters. In the following, we present three possible implementations: 1) Uniform safety envelopes: Consider the square under-approximation of the awareness set. By scal-ing this under-approximation by the length of hori-zon N , uniform safety envelopes are created. 2) Continuously decreasing safety envelopes : The safety envelope size monotonically decreases along the horizon. 3) 13 vs. 23 safety envelopes: The first 13 of the safety envelopes sum to one half of the awareness-set size, while the remaining 23 sum to the other half, i.e.,  
+
+> N−1
+
+X
+
+> k=0
+
+αi,k =   
+
+> ⌊N−13⌋
+
+X
+
+> k=0
+
+αi,k 
+
+| {z } 
+
+> =12
+
++ 
+
+> N−1
+
+X   
+
+> k=⌊N−13⌋+1
+
+αi,k 
+
+| {z } 
+
+> =12
+
+= 1 
+
+with 
+
+αi,k =
+
+
+
+12  ⌊ N −13 ⌋ + 1  , if k ≤ ⌊ N −13 ⌋,
+
+12  N − ⌊ N −13 ⌋ − 1 , otherwise .
+
+The 13 vs. 23 safety envelopes resulted in improved speed compared to the uniform and continuously decreasing safety envelopes. V. S IMULATION AND HARDWARE EXPERIMENTS 
+
+We use the CRS software framework [43], [46] to im-plement the approach proposed in Section IV. We run the computations on an Intel Core i9-13900KS CPU (base frequency 3.20 GHz) and 48 GB of RAM. We employ acados [47] using SQP-RTI as the MPC solver due to its capability to handle time-varying constraints efficiently. The MPC is run with a horizon length of 15 and at a sampling time of 20Hz. The CRS framework enables real-time communication between the local machine and the on-board microcontrollers and sensors via WiFi. State estimation is performed using the framework’s built-in Extended Kalman Filter (EKF), and global pose information is provided by an external motion capture system 1.
+
+A. Simulation Experiments 
+
+Simulations are conducted with up to eight agents operating on the figure-eight track. Agents are randomly initialized along the track, with a subset configured to race in the opposite direction to simulate head-on interactions. Figure 7 and 8 illustrate representative scenarios ob-served during simulation experiments involving eight agents. The reference path is given as the centerline (orange), while the predicted safe and exploitation trajec-tories are shown as green and blue dotted lines, respec-tively. Figure 8 further illustrates the safety envelopes (shown in red). Note that they are larger at the beginning and become smaller towards the end of the horizon, this is due to the choice of the 13 vs. 23 safety envelope, described in Section IV-B2. In the following, we analyze three scenarios emerging in simulation. 
+
+1) Overtaking maneuver: Consider two agents trav-eling in the same direction but at different speeds. We refer to the faster agent passing the slower agent as a 
+
+overtaking maneuver . Figure 8 illustrates how the faster agent (purple) passes the slower agent (green) on the inner side, due to the curvature-dependent angling of the hyperplane.                 
+
+> 1https://www.qualisys.com/cameras/arqus/ 11
+> Fig. 7: The colored dots denote the predicted positions along the MPC horizon associated with the safe (green) and exploitation (blue) trajectories.The purple bubble highlights an oncoming traffic scenario. The yellow agent moves off the centerline in order to avoid collisions with the oncoming green and blue agents. Initially, only the safe trajectory (green) diverts (see the yellow car in the purple circle of the upper image) from the centerline-reference, as the collision avoidance constraint persists, the exploitation trajectory adapts as well (1-3). The blue bubble highlights an intersection scenario. The red agent approaches a busy intersection. As the blue and green agents cross the intersection (1) - (3), the red agent slows down and diverts from the centerline reference in order to remain collision-free. Once the area is clear, the red agent speeds up again (4).
+> Fig. 8: Simulation experiment - Take over: The purple agent overtakes the green agent on the inner rim of the curve, due to the 45 deg curve-dependent hyperplane angle. The green box highlights the progression (from left to right) of the simulation, focusing on the green and purple agents. The red boxes represent the safety envelopes that constrain the successive position increments along the prediction horizon.
+
+2) Intersection: The blue-highlighted section of Fig-ure 7 highlights one of the main difficulties with a figure eight track - the intersection. The green agent is forced to swerve in order to avoid colliding with the orange agent. 
+
+3) Oncoming traffic: With an increasing number of agents on the figure eight track, avoiding oncom-ing traffic becomes increasingly difficult. The purple-highlighted section of Figure 7 highlights that multiple cars need to avoid one another simultaneously. 
+
+B. Hardware Experiments 
+
+The proposed method is deployed on physical minia-ture race cars to validate its real-time performance and robustness. The experimental platform consists of custom-built 1/28th scale RC vehicles, as described in [46]. Hardware experiments are conducted with be-tween two and six agents operating on a figure-eight track. To evaluate the method under challenging in-teraction scenarios, some experiments feature agents driving in opposite directions, thereby inducing frequent oncoming traffic situations. Constraints are softened to ensure feasibility under real-world disturbances and un-certainties. Figure 9 illustrates a challenging scenario in which multiple agents simultaneously approach the intersec-tion of the figure-eight track. One agent, highlighted with a red circle, is emphasized to showcase its be-havior during this high-density interaction. The driving direction of each agent is indicated by white arrows. Notably, the highlighted agent successfully navigates through the intersection, demonstrating the effectiveness of the proposed method in resolving complex multi-agent interactions without collisions. A quantitative evaluation of the six-agent experiment is presented in Figure 10. Figure 10a shows the minimum pairwise distance be-tween any two agents throughout the experiment. The dashed line indicates the prescribed safety distance, below which a constraint violation occurs. We observe from the plot that collisions are avoided throughout the experiment, thereby ensuring safe operation. Figure 10b shows the number of neighboring agents a given agent has throughout the experiment. We note that the number of neighbors often varies over time, motivating the need for the proposed scheme that remains safe under a time-varying number of neighbors. The hardware experiments demonstrate the real-world feasibility of the algorithm 1,allowing for fast, dynamical driving in multi-agent setups with collision avoidance.   
+
+> 1Hardware examples: anytime-plug-and-play.github.io/. 12
+> Fig. 9: Hardware experiment: Each agent is highlighted with a different color, and its corresponding direction is illustrated by the same colored vector. Five agents approach the intersection at the same time and safely navigate through it.
+
+(a) 
+
+(b)     
+
+> Fig. 10: (a) Minimal distance between any two agents through-out the duration of the experiment. The dashed line indicates the minimal distance (determined by the size of the agents) required, to avoid collisions. (b) Number of neighbors a given agent has throughout the experiment. The experiment was conducted using 6 agents, making the maximum number of neighbors 5.
+
+VI. D ISCUSSION AND LIMITATIONS 
+
+Prior distributed approaches often rely on central-ized coordination, static topologies, fixed priorities, or request-based plug-and-play, limiting their applicability in robotic settings. In the following, we organize these methods into three categories: (i) approaches that in-troduce a global coordination among agents [29], [48], (ii) approaches that introduce additional constraints to guarantee safety [5], [7], [28], and (iii) traffic-specific methods [33]–[35] (e.g., merging or overtaking). Game-theoretic approaches have also been proposed for multi-agent coordination, but since they address strategic in-teractions rather than safety-certified contract-based dis-tributed MPC, we do not compare them directly with the proposed framework. We compare the considered approaches in terms of their assumptions, communica-tion requirements, and safety/feasibility guarantees with the proposed anytime plug-and-play formulation. Table I summarizes the key differences. 
+
+A. Global Coordination 
+
+A common strategy for collision avoidance in dis-tributed multi-agent systems is to impose a global co-ordination structure. In [29], agents are assigned pri-orities and solve their optimization problems sequen-tially while considering higher-priority solutions, but this requires global knowledge. Similarly, [48] employs leader–follower formation control, where the leader acts as a central coordinator. While this ensures collision-free formations, it relies on a fixed hierarchy and com-munication network. The approach in [49] proposes a Sequential Quadratic Programming (SQP)-based for-mulation, where a central node manages intersections by collecting locally optimized time slots from vehi-13 
+
+TABLE I: Comparison of approaches and their assumptions                                                                                            
+
+> As introduced by [8]
+> Approach Distributed Nonlinear Dynamics Plug-and-Play Safety Guarantees Non-cooperative Non-Iterative Non-Sequential
+> Global Coord.  Priority-based [29] ✓✓××✓××
+> Leader-Follower [48] ✓✓×××✓×
+> Distributed SQP [49] partially ✓×✓✓✓✓
+> Constraint-based
+> Safety Tube [5] ✓×××✓✓✓
+> Consistency Constraint [28] ✓✓×✓✓✓✓
+> Contract Constraint [7] ✓✓request-based ✓✓✓✓
+> ECBF [39] ✓✓×✓✓✓✓
+> CBF-induced QP [40] ✓✓×✓✓✓✓
+> Anytime Plug-and-Play (ours) ✓✓✓✓✓✓anytime ✓✓✓✓✓✓✓✓✓✓✓✓
+> Traffic App.  Assisting Take-Over Maneuver [33] ✓×request-based ××✓×
+> Bidirectional Mixed-Traffic Take-Over [34] ✓×anytime ××✓×
+> Highway Merging [35] ×✓n/a ××✓✓
+
+cles and distributing them as initialization for local MPC problems. Although these methods provide strong guarantees, they depend on centralized coordination or tight communication loops, which limits their flexibility in plug-and-play scenarios. Relatedly, [50] propose a hierarchical RL-NMPC planner for strategic autonomous racing, but it assumes fixed opponents and restrictive prediction/perfect tracking, effectively relying on global scene awareness rather than plug-and-play, graph-based local coordination. 
+
+B. Additional Constraints 
+
+Another strategy for guaranteeing collision avoidance is to add constraints to local optimization problems. The proposed work falls in this category. In [5], [7], contracts define sets that are guaranteed to contain trajectories of coupling variables, ensuring recursive feasibility through additional constraints. This enables plug-and-play operation [7], but feasibility checks may still block plug-in or plug-out requests. Similarly, [28] constructs consistency sets around reference trajectories and iteratively adjusts them until terminal and constraint requirements are satisfied. However, since these sets are not updated at every optimization step, they cannot handle dynamic network changes. Overall, while such methods provide distributed collision avoidance through contract or consistency mechanisms, they do not sup-port anytime plug-and-play operation. A related line of work employs control barrier functions (CBFs). For example, [39] uses exponential CBFs based on relative state estimates, while [40] formulates CBF-induced QPs with auxiliary shared variables. Both approaches provide strong safety guarantees but assume full-state informa-tion or connected communication graphs, making them unsuitable for scenarios with variable agent participation. 
+
+C. Traffic Scenarios 
+
+Obstacle avoidance has been widely studied in traffic settings, where vehicles are treated as dynamic obstacles. Many works focus on merging and overtaking maneu-vers [33]–[35]. In [34], vehicle-to-vehicle communica-tion is used to estimate oncoming traffic, combining autonomous and human-driven vehicles modeled via car dynamics. Similarly, [33] considers multi-vehicle overtaking with shared information about traffic and in-tended maneuvers. While effective for overtaking, these approaches rely on communication among all involved vehicles and do not generalize to broader multi-agent scenarios or provide safety guarantees. Highway merging is addressed in [35], where a central unit assigns priori-ties to determine merge sequences. Although successful for this setting, the reliance on priority assignments and centralized coordination limits general applicability. Overall, traffic-specific approaches address well-defined scenarios but often assume cooperation, central coor-dination, or do not focus on formal safety guarantees, restricting their use in general distributed multi-agent systems. 
+
+D. Discussion and Limitations 
+
+While these alternatives offer valuable insights and benefits in specific contexts, it is important to stress that a direct comparison is not entirely fair. Each framework is tailored to a different trade-off between optimality, feasibility, decentralization, and flexibility, rendering di-rect comparisons difficult. The proposed method targets settings where real-time operation, distributed implemen-tation, and agents joining or leaving the network dy-namically are essential, and achieves a favorable balance within these objectives. Despite promising results, some limitations merit further investigation. Safety envelopes, while enabling decoupled collision avoidance, introduce conservatism by limiting per-step progress. Adaptive envelope tuning, potentially via learning-based methods, could better balance safety and performance. Moreover, although the framework relies only on neighbor-to-neighbor communication, it still requires information ex-change. Moving toward communication-free distributed 14 
+
+architectures remains an open and compelling research direction. VII. C ONCLUSION 
+
+This work introduced a distributed control frame-work for multi-agent systems that guarantees collision-free operation with anytime plug-and-play capability. By decoupling collision avoidance constraints through cells and safety envelopes, the method enables fully distributed execution without centralized coordination. We established recursive feasibility, proving safe anytime PnP operations, and validated the approach in simulation and hardware experiments. To our knowledge, this is the first distributed collision-avoidance framework that avoids request-based or pre-negotiated plug-and-play, laying the groundwork for scalable, flexible multi-agent applications with formal safety guarantees. APPENDIX 
+
+A. Proof of Proposition 1 
+
+The claim follows directly from Definition 1. Indeed, if 
+
+pi,k |t ∈ P i,k |t, pj,k |t ∈ P j,k |t,
+
+and the inflated cells are disjoint as in (17), then the two positions must satisfy ∥pi,k |t − pj,k |t∥ ≥ ϵ and using (6), it follows that h(xi,k |t, x j,k |t) ≥ 0.
+
+B. Proof of Lemma 1 
+
+For each agent i ∈ M and each prediction step k ∈
+
+NN 
+
+> 0
+
+, define 
+
+Pi,k |t := {pi,k |t}.
+
+Each set is convex and, by assumption, is contained in the admissible position space {Cixi | xi ∈ X i}.Now fix any i ∈ M , any j ∈ N i(t), and any k ∈ NN 
+
+> 0
+
+.Since 
+
+h(xi,k |t, x j,k |t) ≥ 0,
+
+by (6) we have 
+
+∥pi,k |t − pj,k |t∥ ≥ ϵ. 
+
+Therefore, 
+
+ {pi,k |t} ⊕ B ϵ/ 2
+
+ ∩  {pj,k |t} ⊕ B ϵ/ 2
+
+ = ∅,
+
+because Bϵ/ 2 is an open ball. Hence (17) holds, and the resulting family of cells is compatible. 
+
+C. Proof of Proposition 2 
+
+Since j / ∈ N i(t), by (11) it holds that 
+
+¯R(pi, 0|t) ∩ ¯R(pj, 0|t) = ∅.
+
+If (23) holds, then, for every k ∈ NN 
+
+> 0
+
+,
+
+pi,k |t + Bϵ/ 2 ⊆ ¯R(pi, 0|t), pj,k |t + Bϵ/ 2 ⊆ ¯R(pj, 0|t).
+
+Hence these two balls are disjoint, and therefore 
+
+∥pi,k |t − pj,k |t∥ ≥ ϵ, ∀k ∈ NN 
+
+> 0
+
+.
+
+Using (6), the claim follows. 
+
+D. Proof of Proposition 3 
+
+We first prove (28). For every m ∈ NN 
+
+> 1
+
+,
+
+pi,m |t − pi, 0|t =
+
+> m−1
+
+X
+
+> k=0
+
+ pi,k +1 |t − pi,k |t
+
+ ∈
+
+> m−1
+
+M
+
+> k=0
+
+Ei,k ,
+
+where the inclusion follows from (27). Hence, 
+
+pi,m |t − pi, 0|t ∈
+
+> m−1
+
+M
+
+> k=0
+
+Ei,k ⊆ 
+
+> N−1
+
+M
+
+> k=0
+
+Ei,k ⊆ A (03),
+
+by (26). Therefore, 
+
+pi,m |t ∈ A (03) + pi, 0|t = A(pi, 0|t).
+
+Since also pi, 0|t ∈ A (pi, 0|t), (28) follows. To prove (29), fix any ℓ ∈ NN −10 and any m ∈ NNℓ+1 .Then 
+
+pi,m |t − pi,ℓ |t =
+
+> m−1
+
+X
+
+> k=ℓ
+
+ pi,k +1 |t − pi,k |t
+
+
+
+∈
+
+> m−1
+
+M
+
+> k=ℓ
+
+Ei,k ⊆ 
+
+> N−1
+
+M
+
+> k=0
+
+Ei,k ⊆ A (03).
+
+Therefore, pi,m |t ∈ A (03)+ pi,ℓ |t = A(pi,ℓ |t). Since also 
+
+pi,ℓ |t ∈ A (pi,ℓ |t), (29) follows. REFERENCES [1] S. A. Bagloee, M. Tavana, M. Asadi, and T. Oliver, “Au-tonomous vehicles: challenges, opportunities, and future implica-tions for transportation policies,” Journal of modern transporta-tion , vol. 24, no. 4, pp. 284–303, 2016. [2] L. Riegger, M. Carlander, N. Lidander, N. Murgovski, and J. Sj¨ oberg, “Centralized mpc for autonomous intersection cross-ing,” in 2016 IEEE 19th International Conference on Intelligent Transportation Systems (ITSC) , 2016, pp. 1372–1377. [3] K. Hajar, A. Hably, S. Bacha, A. Elrafhi, and Z. Obeid, “An application of a centralized model predictive control on micro-grids,” in 2016 IEEE Electrical Power and Energy Conference (EPEC) , 2016, pp. 1–6. [4] J. R. D. Frejo and E. F. Camacho, “Global versus local mpc algo-rithms in freeway traffic control with ramp metering and variable speed limits,” IEEE Transactions on Intelligent Transportation Systems , vol. 13, no. 4, pp. 1556–1565, 2012. [5] M. Farina and R. Scattolini, “Distributed predictive control: A non-cooperative algorithm with neighbor-to-neighbor communi-cation for linear systems,” Automatica , vol. 48, no. 6, pp. 1088– 1096, 2012. 15 
+
+[6] B. T. Stewart, A. N. Venkat, J. B. Rawlings, S. J. Wright, and G. Pannocchia, “Cooperative distributed model predictive control,” Systems & Control Letters , vol. 59, no. 8, pp. 460–469, 2010. [7] S. Lucia, M. K¨ ogel, and R. Findeisen, “Contract-based predictive control of distributed systems with plug and play capabilities,” vol. 48, 09 2015. [8] R. Scattolini, “Architectures for distributed and hierarchical model predictive control – a review,” Journal of Process Control ,vol. 19, no. 5, pp. 723–731, 2009. [9] D. Saccani, L. Fagiano, M. N. Zeilinger, and A. Carron, “Model predictive control for multi-agent systems under limited commu-nication and time-varying network topology,” in 2023 62nd IEEE Conference on Decision and Control (CDC) . IEEE, 2023, pp. 3764–3769. [10] M. Zeilinger, Y. Pu, S. Riverso, G. Ferrari-Trecate, and C. Jones, “Plug and play distributed model predictive control based on dis-tributed invariance and optimization,” in 52nd IEEE Conference on Decision and Control , 2013, pp. 5770–5776. [11] S. Riverso, M. Farina, and G. Ferrari-Trecate, “Plug-and-play model predictive control based on robust control invariant sets,” 
+
+Automatica , vol. 50, no. 8, pp. 2179–2186, 2014. [12] P. Giselsson, “Improved fast dual gradient methods for embedded model predictive control,” IFAC Proceedings Volumes , vol. 47, no. 3, pp. 2303–2309, 2014, 19th IFAC World Congress. [13] I. Necoara and V. Nedelcu, “Rate analysis of inexact dual first-order methods application to dual decomposition,” IEEE Transactions on Automatic Control , vol. 59, no. 5, pp. 1232– 1243, 2014. [14] S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein, Dis-tributed Optimization and Statistical Learning via the Alternating Direction Method of Multipliers , 2011. [15] F. Rey, P. Hokayem, and J. Lygeros, “Admm for exploiting structure in mpc problems,” IEEE Transactions on Automatic Control , vol. 66, no. 5, pp. 2076–2086, 2021. [16] C. Conte, T. Summers, M. N. Zeilinger, M. Morari, and C. N. Jones, “Computational aspects of distributed optimization in model predictive control,” in 2012 IEEE 51st IEEE Conference on Decision and Control (CDC) , 2012, pp. 6819–6824. [17] J. K¨ ohler, M. A. M¨ uller, and F. Allg¨ ower, “Distributed model predictive control—recursive feasibility under inexact dual opti-mization,” Automatica , vol. 102, pp. 1–9, 2019. [18] E. Masero, P. R. Baldivieso-Monasterios, J. M. Maestre, and P. A. Trodden, “Robust coalitional model predictive control with plug-and-play capabilities,” Automatica , vol. 153, p. 111053, 2023. [19] A. Maxim, O. Pauca, and C. F. Caruntu, “Coalitional distributed model predictive control strategy with switching topologies for multi-agent systems,” Electronics , vol. 13, no. 4, p. 792, 2024. [20] P. Chanfreut, J. M. Maestre, D. Krishnamoorthy, and E. F. Ca-macho, “Aladin-based distributed model predictive control with dynamic partitioning: An application to solar parabolic trough plants,” in 2023 62nd IEEE Conference on Decision and Control (CDC) , 2023, pp. 8376–8381. [21] G. Stomberg, R. Schwan, A. Grillo, C. N. Jones, and T. Faulwasser, “Cooperative distributed model predictive control for embedded systems: Experiments with hovercraft formations,” in 2025 IEEE International Conference on Robotics and Automa-tion (ICRA) . IEEE, 2025, pp. 11 377–11 383. [22] A. Carron, D. Saccani, L. Fagiano, and M. N. Zeilinger, “Multi-agent distributed model predictive control with connectivity constraint,” IFAC-PapersOnLine , vol. 56, no. 2, pp. 3806–3811, 2023. [23] R. Hult, M. Zanon, S. Gros, and P. Falcone, “Optimal co-ordination of automated vehicles at intersections: Theory and experiments,” IEEE Transactions on Control Systems Technology ,vol. 27, no. 6, pp. 2510–2525, 2019. [24] A. Richards, K.-V. Ling, and J. Maciejowski, “Robust mul-tiplexed model predictive control,” in 2007 European Control Conference (ECC) , 2007, pp. 441–446. [25] A. Richards and J. P. How, “Robust distributed model predictive control,” International Journal of Control , vol. 80, no. 9, pp. 1517–1531, 2007. [Online]. Available: https: //doi.org/10.1080/00207170701491070 [26] C. Wang, B. Wang, and F. You, “Demand response for residential buildings using hierarchical nonlinear model predictive control for plug-and-play,” Applied Energy , vol. 369, p. 123581, 2024. [27] D. Burk, A. V¨ olz, and K. Graichen, “A modular framework for distributed model predictive control of nonlinear continuous-time systems (grampc-d),” Optimization and Engineering , vol. 23, no. 2, pp. 771–795, 2022. [28] A. Wiltz, F. Chen, and D. V. Dimarogonas, “A consistency constraint-based approach to coupled state constraints in dis-tributed model predictive control,” in 2022 IEEE 61st Conference on Decision and Control (CDC) . IEEE, 2022, pp. 3959–3964. [29] B. Alrifaee, F. Hesseler, and D. Abel, “Coordinated non-cooperative distributed model predictive control for decoupled systems using graphs,” vol. 49, 09 2016, pp. 216–221. [30] A. Censi, S. Bolognani, J. G. Zilly, S. Sadat Mousavi, and E. Frazzoli, “Today me, tomorrow thee: Efficient resource allo-cation in competitive settings using karma games,” in 2019 IEEE Intelligent Transportation Systems Conference (ITSC) , 2019, pp. 686–693. [31] G. Fieni, M.-P. Neumann, A. Zanardi, A. Cerofolini, and C. H. Onder, “Game-theoretic energy management strategies with in-teracting agents in formula 1,” IEEE Transactions on Vehicular Technology , 2025. [32] A. Liniger and J. Lygeros, “A noncooperative game approach to autonomous racing,” IEEE Transactions on Control Systems Technology , vol. 28, no. 3, pp. 884–897, 2019. [33] C. Cara, A. Groza, S. Zaporojan, and I. Calmicov, “Assisting drivers during overtaking using car-2-car communication and multi-agent systems,” in 2016 IEEE 12th International Confer-ence on Intelligent Computer Communication and Processing (ICCP) , 2016, pp. 293–299. [34] F. M. Tariq, N. Suriyarachchi, C. Mavridis, and J. S. Baras, “Cooperative bidirectional mixed-traffic overtaking,” in 2022 IEEE 25th International Conference on Intelligent Transportation Systems (ITSC) , 2022, pp. 2494–2501. [35] N. Suriyarachchi, F. M. Tariq, C. Mavridis, and J. S. Baras, “Real-time priority-based cooperative highway merging for heteroge-neous autonomous traffic,” in 2021 IEEE International Intelligent Transportation Systems Conference (ITSC) , 2021, pp. 2019– 2026. [36] S. V. Rakovi´ c, S. Zhang, L. Dai, Y. Hao, and Y. Xia, “Convex model predictive control for collision avoidance,” IET Control Theory & Applications , vol. 15, no. 9, pp. 1270–1285, 2021. [37] C. E. Luis, M. Vukosavljev, and A. P. Schoellig, “Online tra-jectory generation with distributed model predictive control for multi-robot motion planning,” IEEE Robotics and Automation Letters , vol. 5, no. 2, p. 604–611, Apr. 2020. [38] E. Soria, F. Schiano, and D. Floreano, “Distributed predictive drone swarms in cluttered environments,” IEEE Robotics and Automation Letters , vol. 7, no. 1, pp. 73–80, 2022. [39] M. Goarin, G. Li, A. Saviolo, and G. Loianno, “Decentralized nonlinear model predictive control for safe collision avoidance in quadrotor teams with limited detection range,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) .IEEE, 2025, pp. 5387–5393. [40] X. Tan and D. V. Dimarogonas, “Distributed implementation of control barrier functions for multi-agent systems,” IEEE Control Systems Letters , vol. 6, pp. 1879–1884, 2022. [41] A. Carron, K. P. Wabersich, and M. N. Zeilinger, “Plug-and-play distributed safety verification for linear control systems with bounded uncertainties,” IEEE Transactions on Control of Network Systems , vol. 8, no. 3, pp. 1501–1512, 2021. [42] J. Ohnemus, A. Didier, A. Aboudonia, A. Carron, and M. N. Zeilinger, “Distributed predictive control barrier functions: To-wards scalable safety certification in modular multi-agent sys-tems,” arXiv preprint arXiv:2603.29560 , 2026. [43] S. Bodmer, L. Vogel, S. Muntwiler, A. Hansson, T. Bodewig, J. Wahlen, M. N. Zeilinger, and A. Carron, “Optimization-based system identification and moving horizon estimation using low-16 
+
+cost sensors for a miniature car-like robot,” in 2024 IEEE 63rd Conference on Decision and Control (CDC) . IEEE, 2024, pp. 8465–8472. [44] D. Saccani, L. Cecchin, and L. Fagiano, “Multitrajectory model predictive control for safe uav navigation in an unknown en-vironment,” IEEE Transactions on Control Systems Technology ,vol. 31, no. 5, pp. 1982–1997, 2022. [45] T. Faulwasser, B. Kern, and R. Findeisen, “Model predictive path-following for constrained nonlinear systems,” in Proceedings of the 48h IEEE Conference on Decision and Control (CDC) held jointly with 2009 28th Chinese Control Conference . IEEE, 2009, pp. 8642–8647. [46] A. Carron, S. Bodmer, L. Vogel, R. Zurbr¨ ugg, D. Helm, R. Rick-enbach, S. Muntwiler, J. Sieber, and M. N. Zeilinger, “Chronos and crs: Design of a miniature car-like robot and a software framework for single and multi-agent robotics and control,” in 
+
+2023 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, May 2023. [47] R. Verschueren, G. Frison, D. Kouzoupis, J. Frey, N. van Duijkeren, A. Zanelli, B. Novoselnik, T. Albin, R. Quirynen, and M. Diehl, “acados – a modular open-source framework for fast embedded optimal control,” Mathematical Programming Computation , 2021. [48] P. Roque, S. Heshmati-Alamdari, A. Nikou, and D. V. Dimarog-onas, “Decentralized formation control for multiple quadro-tors under unidirectional communication constraints,” IFAC-PapersOnLine , vol. 53, no. 2, pp. 3156–3161, 2020, 21st IFAC World Congress. [49] R. Hult, M. Zanon, G. Frison, S. Gros, and P. Falcone, “Ex-perimental validation of a semi-distributed sequential quadratic programming method for optimal coordination of automated vehicles at intersections,” Optimal Control Applications and Methods , vol. 41, no. 4, pp. 1068–1096, 2020. [50] R. Reiter, J. Hoffmann, J. Boedecker, and M. Diehl, “A hier-archical approach for strategic motion planning in autonomous racing,” in 2023 European Control Conference (ECC) , 2023, pp. 1–8. 
+
+Sabrina Bodmer received her bachelor’s de-gree in electrical engineering in 2021 and her master’s degree in robotics, systems, and control in 2025, from ETH Z¨ urich, Switzer-land. She is currently working toward a Ph.D. degree in mechanical engineering at the ETH Z¨ urich as well. Her research interests include the areas of multi-agent and distributed con-trol, as well as learning-based control. 
+
+Danilo Saccani received the Ph.D. degree in Control Engineering from Politecnico di Mi-lano, Italy, in 2023. Since 2023, he has been a Postdoctoral Researcher at EPFL, Switzer-land. His research interests include model-ing, optimization, and control of dynamical systems, with a focus on distributed control, model predictive control, neural network-based control, and autonomous vehicles. 
+
+Melanie N. Zeilinger is an Associate Pro-fessor at ETH Zurich, Switzerland. She re-ceived the Diploma degree in engineering cybernetics from the University of Stuttgart, Germany, in 2006, and the Ph.D. degree with honors in electrical engineering from ETH Zurich, Switzerland, in 2011. From 2011 to 2012 she was a Postdoctoral Fellow with the Ecole Polytechnique Federale de Lausanne (EPFL), Switzerland. She was a Marie Curie Fellow and Postdoctoral Researcher with the Max Planck Institute for Intelligent Systems, Tubingen, Germany until 2015 and with the Department of Electrical Engineering and Computer Sciences at the University of California at Berkeley, CA, USA, from 2012 to 2014. From 2018 to 2019 she was a professor at the University of Freiburg, Germany. Her current research interests include safe learning-based control, as well as distributed control and optimization, with applications to robotics and human-in-the loop control. 
+
+Andrea Carron received his Ph.D. in control engineering from the University of Padova in 2016. He is a Senior Scientist at ETH Zurich and previously held a postdoctoral position with the Intelligent Control Systems Group. He has also been a Visiting Researcher at UC Riverside, the Max Planck Institute, and UC Santa Barbara. His research interests include safe learning, learning-based control, multi-agent systems, and robotics.

@@ -1,0 +1,283 @@
+Title: UA-ChatDev: Uncertainty-Aware Multi-Agent Collaboration for Reliable Software Development
+
+URL Source: https://arxiv.org/pdf/2607.02186v1
+
+Published Time: Fri, 03 Jul 2026 01:07:55 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# UA-ChatDev: Uncertainty-Aware Multi-Agent Collaboration for Reliable Software Development 
+
+Temitayo Olamilekan Ogunsusi, Lijun Qian, and Xishuang Dong 
+
+Department of Electrical and Computer Engineering Prairie View A&M University, Prairie View, TX 77446, USA Email: togunsusi@pvamu.edu, liqian@pvamu.edu, xidong@pvamu.edu 
+
+Abstract —Software development is a complex task that demands cooperation among agents with diverse roles. Large language models (LLMs) have enabled autonomous multi-agent software development frameworks that leverage role-based collaboration to automate requirements analysis, coding, testing, and refine-ment. However, existing approaches typically assume that inter-mediate agent outputs are equally reliable, leaving them vulnera-ble to hallucination propagation, where incorrect decisions gener-ated in early development phases are transferred to downstream agents and negatively impact final software quality. To address this challenge, we propose UA-ChatDev, an uncertainty-aware multi-agent software development framework that integrates uncertainty quantification into agent interactions. It introduces a lightweight uncertainty estimation mechanism based on token-level log probabilities to assess the confidence of agent responses and employs phase-aware threshold calibration to selectively trigger retrieval-based verification when uncertainty exceeds acceptable levels. Extensive experiments on the SRDD benchmark demonstrate that UA-ChatDev consistently outperforms existing single-agent and multi-agent software development frameworks across completeness, executability, consistency, and overall quality metrics. Further ablation studies and communication analyses verify that uncertainty-aware interactions enhance code execution reliability. 
+
+Keywords –Agentic AI, Large Language Models, Software De-velopment. Uncertainty Measurement; 
+
+I. INTRODUCTION 
+
+Software development is a complex, multi-phase engineer-ing discipline encompassing requirements analysis, architec-tural design, implementation, code review, testing, and main-tenance [1], [2]. Traditional software development processes rely heavily on human expertise throughout each stage, making them time-consuming and susceptible to bottlenecks as system complexity continues to increase [2], [3]. Test-debug cycles alone can account for up to 50% of project costs [4], while the semantic gap between natural-language requirements and correct, executable code requires reasoning over ambiguity, context, and domain knowledge-capabilities that conventional rule-based tools often struggle to provide [5], [6]. Recent advances in large language models (LLMs) have demonstrated significant potential for automating various software develop-ment tasks [1], [2], thereby alleviating these challenges and improving development efficiency [7], [3]. LLMs have demonstrated strong capabilities in role-playing, following multi-turn instructions, and generating pro-grams from natural-language descriptions [2], [7], enabling autonomous multi-agent frameworks for software develop-ment through structured collaboration among specialized LLM agents [2], [8]. For example, MetaGPT [9] assigns roles such as product manager, architect, engineer, and tester to automate the software development lifecycle, while ChatDev [10] organizes LLM-based agents (e.g., CEO, CTO, programmer, reviewer, and tester) into a virtual software company for collaborative development. Qiu et al. [11] introduces a benchmark for assessing LLM agents on long-context software engineering workflows involving large codebases and multi-step interac-tions, and Rontogiannis et al. [12] evaluates interactive LLM agents on multi-requirement software engineering tasks. Although LLM-based multi-agent systems have made sig-nificant progress in automating software development, re-ducing development costs, and mitigating semantic gaps through collaboration among multiple specialized agents, cur-rent frameworks often assume that each agent’s output is reliable without explicitly modeling uncertainty [9], [10], [11], [12]. This limitation can lead to hallucination propagation, where incorrect requirements interpretation, architectural de-cisions, code generation, API usage, or test cases produced by one agent may be accepted and propagated by downstream agents. For example, a requirement analysis agent may misun-derstand user needs, a coding agent may generate non-existent libraries or insecure implementations, and a testing agent may fail to detect hidden defects due to insufficient context. Uncer-tainty measurement enables agents to identify low-confidence decisions, trigger additional verification, request feedback from other agents, and allocate computational resources to high-risk tasks, thereby improving the reliability and efficiency of collaborative software development. This study proposes UA-ChatDev, an uncertainty-aware multi-agent software development framework that integrates uncertainty quantification into agent interactions to improve the reliability of LLM-based software generation. It introduces a lightweight uncertainty module that estimates response confi-dence using token-level log probabilities and detects unreliable intermediate outputs before they propagate across development phases. A task-specific threshold calibration strategy enables adaptive retrieval augmentation for uncertain responses, reduc-ing hallucination propagation while preserving the efficiency of collaborative agent workflows. We conduct comprehensive experiments on the SRDD benchmark to evaluate the effec-tiveness of uncertainty quantification in multi-agent software development. The results demonstrate that the proposed frame-work consistently outperforms existing agent-based approaches                        
+
+> arXiv:2607.02186v1 [cs.AI] 2 Jul 2026 Design Coding Testing
+> Design Coding Code Complete Code Review Testing
+> Phases Subtasks
+> CEO CTO CTO Reviewer Tester
+> Instructor
+> CTO Programmer Programmer Programmer
+> Assistant
+> Chat Chain {task} {ideas} {Code} {Code} {Code}
+> Programmer
+> {Code} No Yes Yes Yes Yes
+> Uncertainty
+> Check
+> Web Retrieval
+> No
+> Uncertainty
+> Check
+> No
+> Uncertainty
+> Check
+> No
+> Uncertainty
+> Check
+> Web Retrieval Web Retrieval Web Retrieval
+
+Figure 1: Illustration of the proposed method workflow that integrates ChatDev with uncertainty quantification. Given an initial task requirement, software agents collaborate through multi-turn communication following a chain-structured workflow. During each agent interaction between subtasks, an uncertainty quantification module monitors the generated response. If the uncertainty score u exceeds the phase-specific threshold τϕ (Yes branch), web retrieval is triggered to augment the available context before the agent proceeds with the response. Otherwise, when u ≤ τϕ (No branch), the interaction continues through the standard workflow and advances to the next subtask. across completeness, executability, consistency, and overall quality metrics, with particularly significant improvements in code execution reliability. Ablation studies and communication analyses further validate that uncertainty-aware interactions enhance agent coordination, reduce unreliable intermediate outputs, and improve the robustness of LLM-based software generation. Our contributions are summarized below: 
+
+• We propose UA-ChatDev, an uncertainty-aware exten-sion of the ChatDev multi-agent software development framework that integrates uncertainty quantification into agent-to-agent interactions. Unlike existing multi-agent LLM systems for software development that assume generated responses are equally reliable, UA-ChatDev continuously evaluates the confidence of intermediate agent outputs during design, coding, and testing phases. 
+
+• We introduce a lightweight uncertainty quantification mechanism based on token-level log probabilities and task-specific threshold calibration to the software de-velopment automation. The uncertainty module esti-mates the reliability of each agent response, compares it with a calibrated phase-aware threshold, and se-lectively triggers external knowledge retrieval when uncertainty exceeds the acceptable level. 
+
+• We conduct comprehensive experiments on the SRDD benchmark to evaluate the effectiveness of uncertainty quantification in multi-agent software development, demonstrating consistent improvements over exist-ing agent-based approaches across completeness, ex-ecutability, consistency, and overall quality. Ablation studies and communication analyses further verify that uncertainty-aware interactions enhance code execution reliability. II. METHODOLOGY 
+
+We introduce UA-ChatDev, a reliable framework that ex-tends the ChatDev pipeline [10] by incorporating uncertainty quantification into agent interactions across subtasks. Unlike conventional approaches that treat LLM-generated responses with uniform confidence, UA-ChatDev introduces an uncer-tainty module that intercepts agent communications between subtasks, estimates the response uncertainty based on the model’s token-level log probabilities, compares the resulting uncertainty score against a calibrated phase-specific threshold, and triggers external knowledge retrieval when the response is considered unreliable. This section presents the overall work-flow of the proposed framework, the uncertainty quantification mechanism, and the threshold calibration strategy. 
+
+A. Workflow of Multi-Agent Software Development 
+
+The proposed framework builds upon the ChatDev pipeline [10] as shown in Figure 1, which organizes soft-ware development as a collaborative process among multiple specialized agents. Given an initial task requirement, the system decomposes the development process into a sequence of structured phases, including design, coding, and testing. Each phase consists of multiple subtasks that are completed through interactions among role-specific agents. Given an initial user requirement R, the software develop-ment process is modeled as a sequence of development phases: 
+
+P = {PD , P C , P T }, (1) where PD , PC , and PT denote the design, coding, and testing phases, respectively. Each phase consists of a set of role-playing agents A = {a1, a 2, . . . , a n} that collaborate through structured communication to generate and refine soft-ware artifacts. For each phase Pϕ, agents communicate through a multi-turn dialogue chain. Given the input context Xi of subtask i,the response generated by agent ai is formulated as: 
+
+mi = f (ai, X i, M <i ), (2) where mi denotes the response generated by agent ai, and 
+
+M<i represents the preceding conversation history. The com-plete communication sequence within a phase is represented as: 
+
+Mϕ = {m1, m 2, . . . , m k}, (3) which enables agents to exchange information and collab-oratively complete the assigned subtask. After completing a subtask, the generated response is transformed into an intermediate software: 
+
+ri = g(mi, X i), (4) where ri contains the decisions, generated contents, and task-specific information produced by subtask i. It enables downstream agents to continue the development process based on previous results. In the design phase, the CEO agent and CTO agent col-laborate to transform the initial requirement R into a software design: 
+
+D = fϕD (R, M D ; ACEO , A CTO ). (5) The design D contains the architectural decisions and im-plementation specifications that guide subsequent development activities. During the coding phase, the CTO agent coordinates with programmer agents to transform the design specification into executable code: 
+
+C = fϕC (D, M C ; ACTO , A Prog ). (6) This phase consists of multiple implementation subtasks, such as code generation and code completion. Programmer agents iteratively exchange responses and refine intermediate code artifacts. After implementation, the testing phase evaluates the gen-erated software: 
+
+T = fϕT (C, M T ; AReview , A Test ). (7) The reviewer agent inspects the generated code to identify potential defects, while the tester agent validates software functionality through test execution. The detected issues are transmitted back to programmer agents as feedback to allow programmer agents to revise and improve the implementation: 
+
+C∗ = frepair (C, T ; AProg ). (8) Therefore, the overall software development workflow can be formulated as R → D → C → T → C∗, where each stage progressively transforms the requirement into a refined software solution through multi-agent collaboration and response transmission across subtasks. Throughout the entire workflow, agents communicate through a structured chat chain, where the output of one subtask serves as the input for the next subtask, enabling progressive refinement from requirements to a final software solution. 
+
+B. Uncertainty Quantification 
+
+Treating agent outputs as inherently reliable can potentially lead to hallucination propagation, where incorrect requirement interpretations, architectural decisions, code generation, API usage, or test cases produced by one agent are accepted and propagated by downstream agents. To address this issue, we introduce a module of uncertainty quantification between sub-stasks based on single-inference uncertainty estimation [13] to evaluate the reliability of intermediate software artifacts before they are propagated to downstream agents. This design reduces computational overhead while preserving the efficiency of multi-agent collaboration by avoiding unnecessary checks on every intermediate communication. By focusing on critical transition points, the framework can detect potential errors early and trigger targeted knowledge retrieval to improve the reliability of generated outputs. Given a response ri comprising n tokens with log-probabilities {p1, . . . , p n}, we apply temperature-scaled soft-max to obtain probability estimates for the token k by 
+
+zk = exp( pk/t )
+
+P 
+
+> j
+
+exp( pj /t ) , (9) where the temperature t = 1 .0 by default. Afterwards, we employ the average below to quantify the response uncertainty. 
+
+u = − log Avg (z1, . . . , z n). (10) Specifically, for single-token responses such as yes/no planning decisions, no softmax is applied and uncertainty reduces to u = |p1|, the absolute value of the top-1 token’s log-probability. An important practical distinction arises between propri-etary and open-source LLM backends. Proprietary APIs such as OpenAI expose token log-probabilities directly in com-pletion response. On contrary, open-source models such as Gemma 2 9B [14] and Qwen2.5-Coder 7B [15], loaded locally via the HuggingFace Transformers library [16], do not expose log-probabilities by default. To obtain the required probability signal, we retain the full unnormalized score tensor for every generated token. Per-token log-probabilities are then derived by applying log-softmax over the vocabulary dimension: 
+
+pk = log exp( sk)
+
+P 
+
+> v
+
+exp( sv ) (11) where si is the raw logit for token i and the sum runs over all vocabulary entries. For efficiency, only the top-k log-probabilities per token position are retained and passed to the uncertainty estimator. C. Uncertainty Threshold 
+
+A single global threshold is insufficient because various subtasks generate responses of widely varying length. For instance, code review comments span dozens of lines while de-sign acknowledgements are often a single sentence. Applying a threshold for one subtask to another will systematically misfire, either suppressing retrieval where it is needed or triggering it where it is not. Given a set of historical development log files in each subtask, we extract all uncertainty values from responses whose downstream code passed the subsequent subtask, la-belled correct . We sort these values and compute the (1 − α)
+
+quantile as the subtask threshold: 
+
+τϕ = Q1−α
+
+ {u : response in the subtask is correct } (12) We use α = 0 .10 , corresponding to the 90th percentile. When fewer than 50 correct responses are available for a subtask, the procedure falls back to a global default τ = 0 .5.III. EXPERIMENTS 
+
+A. Dataset 
+
+We validate the proposed framework on the Software Requirement Description Dataset (SRDD) [10], which contains 1,200 natural language software tasks spanning five categories: Education, Work, Life, Game, and Creation. Each category includes 240 tasks, further organized into 40 subcategories with 30 tasks per subcategory. The dataset covers a wide range of scenarios, from simple utility programs to complex inter-active applications, providing a comprehensive benchmark for evaluating software generation quality across diverse domains. 
+
+B. Implementation and Baselines 
+
+We employ two open-source LLMs, Gemma 2 9B [14] and Qwen2.5-Coder 7B [15], to implement our proposed framework, with the temperature parameter set to 0.2. The framework consists of five development subtasks spanning three phases (Design, Coding, and Testing), allows a maxi-mum of ten communication rounds per subtask, and enables communicative dehallucination during Code Completion, Code Review, and Testing. In addition, we select three state-of-the-art (SOTA) LLM-based software development agents, GPT-Engineer[17], MetaGPT[18], and ChatDev [10], as baseline systems for per-formance comparison. GPT-Engineer represents a single-agent software generation paradigm, where an LLM autonomously transforms user requirements into executable code through iterative prompting. MetaGPT extends this paradigm by in-troducing a multi-agent framework with predefined software engineering roles, such as product manager, architect, engineer, and tester, enabling structured collaboration throughout the development lifecycle. ChatDev further advances multi-agent software development by organizing agents into a simulated software company and facilitating communication among spe-cialized roles for requirements analysis, design, implementa-tion, and testing. These baselines cover representative single-agent and multi-agent approaches, allowing us to evaluate whether uncertainty-aware agent collaboration can improve the reliability and quality of LLM-driven software generation. 
+
+C. Evaluation Metrics 
+
+We employ four metrics [10] to comprehensively evaluate the software generation performance. Completeness (C) is a binary metric that indicates whether the generated code is fully implemented without any unimplemented placeholders or incomplete components. Executability (E) is a binary metric that measures whether the generated code can successfully run to completion without runtime errors. Consistency (K)evaluates the semantic alignment between the task requirement and the generated implementation by measuring the cosine similarity between their CodeBERT [19] embeddings. Finally, Overall Quality (Q) is defined as the product of Completeness, Executability, and Consistency, requiring the generated soft-ware to simultaneously satisfy implementation completeness, successful execution, and semantic correctness. 
+
+D. Results and Discussions 
+
+TABLE I: Performance comparison of the proposed framework with existing agent-based software development systems on the SRDD benchmark. = single-agent; © = multi-agent.                              
+
+> System Paradigm CEKQ
+> GPT-Engineer [17] 0.502 0.358 0.789 0.142 MetaGPT [18] ©0.483 0.415 0.760 0.152 ChatDev [10] ©0.560 0.880 0.802 0.395 Ours (Gemma 2) ©0.767 0.840 0.929 0.596 Ours (Qwen 2.5) ©0.818 0.859 0.927 0.649
+
+1) Overall Performance Analysis: As shown in Table I, the results demonstrate that UA-ChatDev consistently outperforms existing agent-based software development systems on the SRDD benchmark across all evaluation metrics. Compared with SOTA models including GPT-Engineer, MetaGPT, and ChatDev, UA-ChatDev (ours) achieves the highest Overall Quality (Q), reaching 0.649 with Qwen 2.5 and 0.596 with Gemma 2, compared with 0.395 for ChatDev. This improve-ment indicates that incorporating the uncertainty quantification mechanism into agent collaboration substantially enhances the reliability of LLM-based software generation. Moreover, UA-ChatDev (ours) achieves significant im-provements in other metrics, including Completeness (C), Executability (E), and Consistency (K), highlighting the ef-fectiveness of uncertainty-guided interaction. For instance, compared with ChatDev, UA-ChatDev improves Completeness from 0.560 to 0.818 and Consistency from 0.802 to 0.927. These improvements suggest that uncertainty quantification helps detect unreliable intermediate outputs, enables adaptive refinement, and reduces the propagation of incomplete code across different software development phases. Lastly, the consistent improvements across different LLM backbones with Gemma and Qwen demonstrate that UA-ChatDev (ours) provides a model-agnostic reliability enhance-ment for multi-agent software development. Unlike existing multi-agent frameworks that often assume all agent-generated responses are equally trustworthy, UA-ChatDev (ours) explic-itly models response confidence through uncertainty quantifi-cation and performs targeted intervention when uncertainty is high. This uncertainty-aware multi-agent framework improves software generation quality, as well as preserves the advantages of agent-based development workflows. TABLE II: Comparison of software generation efficiency and complexity across different agent-based software development frameworks. #Tokens (number of tokens used), #Files (number of code files generated), and #Lines (total lines of code across all files) in the software generation process.                          
+
+> Method Duration (s) #Tokens #Files #Lines
+> GPT-Engineer 15.6000 7182.5333 3.9475 70.2041 MetaGPT 154.0000 29278.6510 4.4233 153.3000 ChatDev 148.2148 22949.4450 4.3900 144.3450 Ours (Gemma 2) 279.9430 35725.2688 4.0327 118.0042 Ours (Qwen 2.5) 305.5272 40490.1821 5.6433 168.0769
+
+Additionally, results in Table II indicates that UA-ChatDev introduces additional refinement and verification steps, which may increase generation complexity depending on the un-derlying LLM backbone. While UA-ChatDev with Qwen 2.5 produces more extensive software artifacts than ChatDev, the Gemma 2 variant generates fewer files and lines of code, suggesting that uncertainty-aware quantification primarily im-proves reliability through quality-oriented refinement rather than simply increasing output size. Nevertheless, the additional uncertainty quantification and adaptive intervention mecha-nisms introduce computational overhead in terms of generation time ( Duration ) and token consumption ( #Tokens ). TABLE III: Ablation study on the impact of uncertainty quantification. Full model refers to UA-ChatDev with the uncertainty quantification mechanism, while w/o Uncertainty indicates the variant without uncertainty quantification.                        
+
+> LLMs Condition CEKQ
+> Gemma 2 w/o Uncertainty 0.758 0.794 0.914 0.557 Full Model 0.767 0.840 0.929 0.596
+> Qwen 2.5 w/o Uncertainty 0.807 0.779 0.926 0.578 Full Model 0.818 0.859 0.927 0.649
+
+2) Ablation Study: This section examines the impact of uncertainty quantification. Results in Table III demonstrates that uncertainty quantification plays a critical role in improving the reliability of multi-agent software development. Compared with the variant without uncertainty quantification, Full Model consistently achieves better performance across all evaluation metrics (C, E, K, and Q) for both backbone LLMs, including Gemma 2 and Qwen 2.5. This indicates that incorporating un-certainty estimation into agent interactions effectively improve the overall quality of generated software artifacts. Additionally, the improvements are particularly signifi-cant in execution (E) and quality (Q) metrics, suggesting that uncertainty-aware communication enables agents to make more reliable decisions before passing information to down-stream phases. For example, Full Model with Qwen 2.5 improves from 0.779 to 0.859 in execution and from 0.578 to 0.649 in quality after introducing uncertainty quantification. These results confirm that uncertainty quantification enables more robust reasoning, validation, and refinement of interme-diate solutions. 
+
+Figure 2: Utterance distribution of agent communications throughout the entire development process. 
+
+3) Communication Analysis: This section aims to analyze the content of agent communications to understand linguistic effects. First, Figure 2 presents the utterance distribution across the development process. Overall development (top plot: communication categories) shows that agent communication covers a wide range of software engineering activities, with the largest portions involving Data Management (31.89%), UI & UX (27.02%), and Customization (11.72%). This indicates that multi-agent software development requires extensive coordina-tion not only for implementation but also for understanding requirements, organizing data, and adapting system function-alities. Although categories such as security, integration, and performance account for smaller proportions, they may still introduce critical risks because mistakes in these stages can negatively impact the final software quality. The programming language distribution (middle plot) demonstrates that agent communication is primarily focused on Programming Language-related interactions (65.31%), while Natural Language communication contributes 34.69%. This suggests that agents frequently exchange technical information related to code generation, implementation, and debugging. At the same time, the significant proportion of natural language interactions reflects the challenge of translating ambiguous user requirements into precise software specifications. The coding workflow distribution (bottom plot) further Input Input Input Input Input Output Output Output Output Output 
+
+Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments 
+
+Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice 
+
+Class Not Used Class Not Used Class Not Used Class Not Used Class Not Used 
+
+Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented 
+
+Methods Not Called Methods Not Called Methods Not Called Methods Not Called Methods Not Called 
+
+Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments 
+
+Missing Comments Missing Comments Missing Comments Missing Comments Missing Comments 
+
+Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling 
+
+Missing Files Missing Files Missing Files Missing Files Missing Files 
+
+Missing Imports Missing Imports Missing Imports Missing Imports Missing Imports 
+
+Missing Initialization Missing Initialization Missing Initialization Missing Initialization Missing Initialization 
+
+Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported 
+
+No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions 
+
+Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases 
+
+Others Others Others Others Others 
+
+Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments 
+
+Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice 
+
+Class Not Used Class Not Used Class Not Used Class Not Used Class Not Used 
+
+Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented 
+
+Methods Not Called Methods Not Called Methods Not Called Methods Not Called Methods Not Called 
+
+Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments 
+
+Missing Comments Missing Comments Missing Comments Missing Comments Missing Comments 
+
+Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling 
+
+Missing Files Missing Files Missing Files Missing Files Missing Files 
+
+Missing Imports Missing Imports Missing Imports Missing Imports Missing Imports 
+
+Missing Initialization Missing Initialization Missing Initialization Missing Initialization Missing Initialization 
+
+Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported 
+
+No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions 
+
+Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases 
+
+Others Others Others Others Others 
+
+Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments Calling without Correct Arguments 
+
+Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice Class Defined Twice 
+
+Class Not Used Class Not Used Class Not Used Class Not Used Class Not Used 
+
+Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented Method Not Implemented 
+
+Methods Not Called Methods Not Called Methods Not Called Methods Not Called Methods Not Called 
+
+Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments Missing Code Segments 
+
+Missing Comments Missing Comments Missing Comments Missing Comments Missing Comments 
+
+Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling Missing Exception Handling 
+
+Missing Files Missing Files Missing Files Missing Files Missing Files 
+
+Missing Imports Missing Imports Missing Imports Missing Imports Missing Imports 
+
+Missing Initialization Missing Initialization Missing Initialization Missing Initialization Missing Initialization 
+
+Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported Modules Not Imported 
+
+No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions No Further Suggestions 
+
+Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases Not Handle Cases 
+
+Others Others Others Others Others 
+
+Review Suggestions Across Rounds Figure 3: Illustration of the distribution of suggestions made by a reviewer agent during a multi-round reviewing process, where each sector in the chart represents a different category of suggestion. reveals that Code Review dominates the coding-related interac-tions (59.73%), followed by Coding (19.37%), Code Complete (10.94%), and System Testing (9.96%). The high proportion of code review activities suggests that agent collaboration involves continuous validation and refinement of generated artifacts rather than simple code generation. This observation supports the role of uncertainty quantification in improving software reliability by helping agents detect low-confidence outputs, prioritize verification efforts, and reduce error propa-gation throughout the development lifecycle. Second, Figure 3 demonstrates the effectiveness of uncertainty-aware reviewer agents in improving the reliability of multi-round software review. The reviewer agents identify various implementation-level issues, such as Missing Imports ,
+
+Missing Files , and Not Handel Cases which directly affect whether generated programs can successfully execute, which is aligned with the observations in Table III. By incorporating uncertainty estimation into agent interactions, the system can recognize low-confidence code generation decisions and trig-ger additional verification or refinement before producing the final artifact. The persistence of execution-related defect categories across review rounds indicates that these issues require iterative validation rather than simple detection. For example, Calling without Correct Arguments may not always be resolved in a single step because it requires understanding the relationship between generated functions, interfaces, and program logic. The uncertainty-aware mechanism helps agents allocate ad-ditional reasoning and verification effort to ambiguous code components, reducing the likelihood that uncertain implemen-tations are propagated into the final executable program. Third, Figure 4 illustrates the evolution of generated code execution outcomes across multiple testing rounds via the uncertainty-aware multi-agent system. The error transitions reveal that uncertainty quantification helps agents address different sources of execution failures, including SyntaxError ,
+
+ImportError , TypeError , and ValueError . These failures often arise from incorrect program structures, missing de-pendencies, or inconsistent function interactions. Instead of accepting generated code based only on surface-level correct-ness, uncertainty-aware agents use execution feedback to locate potentially unreliable components and iteratively revise them, improving the probability of successful execution. IV. RELATED WORK 
+
+Multi-agent frameworks have emerged as a compelling approach to automating software development by distribut-ing the cognitive load of complex engineering tasks across specialised LLM instances. For instance, GPT-Engineer [17] provides a simpler, single-agent alternative demonstrating the feasibility of one-step repository generation. MetaGPT [18] assigns fixed roles with standardized operating procedures, achieving high structural coverage but lacking adaptive dia-logue. GameGPT [20] focuses on the multi-agent approach for game development. ChatDev [10] introduced the chat-Input Input Input Input Input 
+
+> Output Output Output Output Output
+> AttributeError AttributeError AttributeError AttributeError AttributeError
+> EOFError EOFError EOFError EOFError EOFError
+> ImportError ImportError ImportError ImportError ImportError
+> IndentationError IndentationError IndentationError IndentationError IndentationError
+> NameError NameError NameError NameError NameError
+> Others Others Others Others Others
+> RuntimeError RuntimeError RuntimeError RuntimeError RuntimeError
+> Success Success Success Success Success
+> SyntaxError SyntaxError SyntaxError SyntaxError SyntaxError
+> TclError TclError TclError TclError TclError
+> TypeError TypeError TypeError TypeError TypeError
+> AttributeError AttributeError AttributeError AttributeError AttributeError
+> ImportError ImportError ImportError ImportError ImportError
+> IndentationError IndentationError IndentationError IndentationError IndentationError
+> NameError NameError NameError NameError NameError
+> Others Others Others Others Others
+> RuntimeError RuntimeError RuntimeError RuntimeError RuntimeError
+> Success Success Success Success Success
+> SyntaxError SyntaxError SyntaxError SyntaxError SyntaxError
+> TclError TclError TclError TclError TclError
+> TypeError TypeError TypeError TypeError TypeError
+> ValueError ValueError ValueError ValueError ValueError
+> AttributeError AttributeError AttributeError AttributeError AttributeError
+> ImportError ImportError ImportError ImportError ImportError
+> IndentationError IndentationError IndentationError IndentationError IndentationError
+> NameError NameError NameError NameError NameError
+> Others Others Others Others Others
+> RuntimeError RuntimeError RuntimeError RuntimeError RuntimeError
+> Success Success Success Success Success
+> SyntaxError SyntaxError SyntaxError SyntaxError SyntaxError
+> TclError TclError TclError TclError TclError
+> TypeError TypeError TypeError TypeError TypeError
+> ValueError ValueError ValueError ValueError ValueError
+
+Test Error Progression Across Rounds Figure 4: Diagram of the progression of iterations in a multi-round testing process, where each colored column represents a dialogue round, showcasing the evolution of the solution through successive stages of testing. chain paradigm for role-playing LLM agents in software development, the framework our work extends. Beyond commercial LLMs, open-source code-centric LLMs have emerged as effective foundations for automated software engineering tasks. For example, CodeGen[21] ex-plores multi-turn program synthesis, showing that itera-tive interaction improves the quality of generated programs. CodeLlama[22] adapts LLaMA 2 for software engineering through large-scale code pre-training and infilling-based ob-jectives, supporting diverse code completion and generation scenarios. CodeGemma [23] enhances the Gemma family with code-specific training strategies and instruction tuning, achiev-ing strong results on widely adopted benchmarks including HumanEval and MBPP. Meanwhile, recent studies have explored uncertainty es-timation and uncertainty-aware mechanisms to improve the reliability of LLMs. For example, Malinin and Gales [24] establish entropy-based uncertainty estimation for autoregres-sive models. Kuhn et al. [25] introduce semantic entropy to account for paraphrase equivalence in free-form answers. Yang et al. [26] apply uncertainty-aware in-context learning to improve reliability. FLARE [27] uses token probabilities to trigger retrieval mid-generation. UALA [13] synthesizes these into a complete agent framework. Although these approaches have made significant progress toward automating software development through LLM-based agent systems, they have not fully explored the role of uncer-tainty quantification in agent interactions and how unreliable intermediate outputs may propagate across different develop-ment phases. Existing frameworks typically assume that agent-generated responses are equally reliable and focus primarily on improving collaboration strategies, task decomposition, and role specialization. Moreover, recent studies on retrieval-augmented generation (RAG) have been applied to code generation primarily for API documentation retrieval [28] and repository-level context aug-mentation [29]. In contrast, our uncertainty-triggered retrieval mechanism can be viewed as a form of selective RAG, where rather than retrieving external knowledge for every generation request, it activates retrieval only when the model’s uncertainty indicates insufficient internal knowledge. This strategy reduces unnecessary retrieval overhead while preserving quality im-provements for scenarios where additional information is most beneficial. V. CONCLUSION AND FUTURE WORK 
+
+This paper presents UA-ChatDev, an uncertainty-aware multi-agent software development framework that integrates uncertainty quantification into agent interactions to improve the reliability of LLM-generated software. By estimating the confidence of intermediate agent outputs and applying phase-aware uncertainty calibration, UA-ChatDev enables adaptive verification and reduces the propagation of unreliable deci-sions throughout the software development lifecycle. Exten-sive experiments on the SRDD benchmark demonstrate that UA-ChatDev consistently outperforms existing agent-based software development approaches, with notable improvements in code execution reliability, completeness, consistency, and overall quality. These findings highlight the importance of uncertainty-aware collaboration for building robust, trustwor-thy, and scalable LLM-driven software engineering systems. In the future, we plan to explore selective retrieval strate-gies that fetch concise summaries rather than full document snippets, which potentially reduces the token overhead of triggered interventions without sacrificing the quality benefit. Second, per-phase uncertainty budgeting would allow the framework to concentrate retrieval in the phases, such as Code Review and Testing, where it yields the greatest return, rather than applying a uniform policy across the pipeline. Third, extending UN-ChatDev to multi-model agent teams, where different roles are served by different LLMs, would allow specialized models to be paired with targeted uncertainty thresholds calibrated to their individual generation character-istics. ACKNOWLEDGMENT 
+
+This research work is partially supported by the U.S. NSF under award number 2235731, 2323419, 24018601 and by the Army Research Office (ARO) under cooperative agreement W911NF-24-2-0133. The views and conclusions contained in this document are those of the authors and should not be in-terpreted as representing the official policies, either expressed or implied, of NSF or ARO or the U.S. Government. The U.S. Government is authorized to reproduce and distribute reprints for Government purposes notwithstanding any copy-right notation herein. Additionally, the authors acknowledge the use of AI-based tools, such as ChatGPT, for assistance in editing, grammar enhancement, and spelling checks during the preparation of this manuscript. REFERENCES [1] J. Wang, Y. Huang, C. Chen, Z. Liu, S. Wang, and Q. Wang, “Software testing with large language models: Survey, landscape, and vision,” IEEE Transactions on Software Engineering, vol. 50, no. 4, 2024, pp. 911–936. [2] X. Hou, Y. Zhao, Y. Liu, Z. Yang, K. Wang, L. Li, X. Luo, D. Lo, J. Grundy, and H. Wang, “Large language models for software engi-neering: A systematic literature review,” ACM Transactions on Software Engineering and Methodology, vol. 33, no. 8, 2024, pp. 1–79. [3] Y. Zhang, Y. Xie, S. Li, K. Liu, C. Wang, Z. Jia, X. Huang, J. Song, C. Luo, Z. Zheng, R. Xu, Y. Liu, S. Zheng, and X. Liao, “Unseen horizons: Unveiling the real capability of LLM code generation beyond the familiar,” in Proceedings of the IEEE/ACM 47th International Conference on Software Engineering (ICSE). IEEE/ACM, 2025, pp. 604–615. [4] B. Boehm, V. R. Basili et al., “Software defect reduction top 10 list,” Foundations of empirical software engineering: the legacy of Victor R. Basili, vol. 426, no. 37, 2005, pp. 426–431. [5] X. Lian, S. Wang, J. Ma, X. Tan, F. Liu, L. Shi, C. Gao, and L. Zhang, “Imperfect code generation: Uncovering weaknesses in automatic code generation by large language models,” in Proceedings of the IEEE/ACM 46th International Conference on Software Engineering: Companion Proceedings (ICSE-Companion). IEEE/ACM, 2024. [6] Z. Wang, Z. Zhou, D. Song, Y. Huang, S. Chen, L. Ma, and T. Zhang, “Towards understanding the characteristics of code gener-ation errors made by large language models,” in Proceedings of the IEEE/ACM 47th International Conference on Software Engineering (ICSE). IEEE/ACM, 2025, pp. 2587–2599. [7] X. Du, M. Liu, K. Wang, H. Wang, J. Liu, Y. Chen, J. Feng, C. Sha, X. Peng, and Y. Lou, “Evaluating large language models in class-level code generation,” in Proceedings of the IEEE/ACM 46th International Conference on Software Engineering (ICSE). IEEE/ACM, 2024, pp. 982–994. [8] J. He, C. Treude, and D. Lo, “Llm-based multi-agent systems for software engineering: Literature review, vision, and the road ahead,” ACM Transactions on Software Engineering and Methodology, vol. 34, no. 5, 2025, pp. 1–30. [9] S. Hong, M. Zhuge, J. Chen, X. Zheng, Y. Cheng, J. Wang, C. Zhang, S. Yau, Z. Lin, L. Zhou et al., “Metagpt: Meta programming for a multi-agent collaborative framework,” in International Conference on Learning Representations, vol. 2024, 2024, pp. 23 247–23 275. [10] C. Qian, W. Liu, H. Liu, N. Chen, Y. Dang, J. Li, C. Yang, W. Chen, Y. Su, X. Cong et al., “Chatdev: Communicative agents for software development,” in Proceedings of the 62nd annual meeting of the association for computational linguistics (volume 1: Long papers), 2024, pp. 15 174–15 186. [11] J. Qiu, Z. Liu, Z. Liu, R. Murthy, J. Zhang, H. Chen, S. Wang, M. Zhu, L. Yang, J. Tan et al., “Locobench-agent: An interactive benchmark for llm agents in long-context software engineering,” arXiv preprint arXiv:2511.13998, 2025. [12] D. Rontogiannis, M. Peyrard, N. Baldwin, M. Josifoski, R. West, and D. Gunopulos, “Interactive evaluation of large language models for multi-requirement software engineering tasks,” in Proceedings of the AAAI Conference on Artificial Intelligence, vol. 40, no. 39, 2026, pp. 32 843–32 850. [13] J. Han, W. Buntine, and E. Shareghi, “Towards uncertainty-aware language agent,” in Findings of the Association for Computational Linguistics: ACL 2024, 2024, pp. 6662–6685. [14] G. Team, M. Riviere, S. Pathak, P. G. Sessa, C. Hardin, S. Bhupatiraju, L. Hussenot, T. Mesnard, B. Shahriari, A. Ramé et al., “Gemma 2: Improving open language models at a practical size,” arXiv preprint arXiv:2408.00118, 2024. [15] B. Hui, J. Yang, Z. Cui, J. Yang, D. Liu, L. Zhang, T. Liu, J. Zhang, B. Yu, K. Lu et al., “Qwen2. 5-coder technical report,” arXiv preprint arXiv:2409.12186, 2024. [16] T. Wolf, L. Debut, V. Sanh, J. Chaumond, C. Delangue, A. Moi, P. Cistac, T. Rault, R. Louf, M. Funtowicz et al., “Transformers: State-of-the-art natural language processing,” in Proceedings of the 2020 conference on empirical methods in natural language processing: system demonstrations, 2020, pp. 38–45. [17] A. Osika, “GPT-Engineer: Specify what you want it to build, the AI asks for clarification, and then builds it,” https://github.com/ gpt-engineer-org/gpt-engineer, 2023. [18] S. Hong, M. Zhuge, J. Chen, X. Zheng, Y. Cheng, J. Wang, C. Zhang, Z. Wang, S. K. S. Yau, Z. Lin et al., “Metagpt: Meta programming for a multi-agent collaborative framework,” in The twelfth international conference on learning representations, 2023. [19] Z. Feng, D. Guo, D. Tang, N. Duan, X. Feng, M. Gong, L. Shou, B. Qin, T. Liu, D. Jiang et al., “Codebert: A pre-trained model for programming and natural languages,” in Findings of the Association for Computational Linguistics: EMNLP 2020, 2020, pp. 1536–1547. [20] D. Chen, H. Wang, Y. Huo, Y. Li, and H. Zhang, “Gamegpt: Multi-agent collaborative framework for game development,” arXiv preprint arXiv:2310.08067, 2023. [21] E. Nijkamp, B. Pang, H. Hayashi, L. Tu, H. Wang, Y. Zhou, S. Savarese, and C. Xiong, “Codegen: An open large language model for code with multi-turn program synthesis,” arXiv preprint arXiv:2203.13474, 2022. [22] B. Roziere, J. Gehring, F. Gloeckle, S. Sootla, I. Gat, X. E. Tan, Y. Adi, J. Liu, R. Sauvestre, T. Remez et al., “Code llama: Open foundation models for code,” arXiv preprint arXiv:2308.12950, 2023. [23] C. Team, H. Zhao, J. Hui, J. Howland, N. Nguyen, S. Zuo, A. Hu, C. A. Choquette-Choo, J. Shen, J. Kelley et al., “Codegemma: Open code models based on gemma,” arXiv preprint arXiv:2406.11409, 2024. [24] A. Malinin and M. Gales, “Uncertainty estimation in autoregressive structured prediction,” arXiv preprint arXiv:2002.07650, 2020. [25] L. Kuhn, Y. Gal, and S. Farquhar, “Semantic uncertainty: Linguistic invariances for uncertainty estimation in natural language generation,” arXiv preprint arXiv:2302.09664, 2023. [26] Y. Yang, H. Li, Y. Wang, and Y. Wang, “Improving the reliability of large language models by leveraging uncertainty-aware in-context learning,” arXiv preprint arXiv:2310.04782, 2023. [27] Z. Jiang, F. F. Xu, L. Gao, Z. Sun, Q. Liu, J. Dwivedi-Yu, Y. Yang, J. Callan, and G. Neubig, “Active retrieval augmented generation,” in Proceedings of the 2023 conference on empirical methods in natural language processing, 2023, pp. 7969–7992. [28] S. G. Patil, T. Zhang, X. Wang, and J. E. Gonzalez, “Gorilla: Large language model connected with massive apis,” Advances in Neural Information Processing Systems, vol. 37, 2024, pp. 126 544–126 565. [29] M. Chen, J. Tworek, H. Jun, Q. Yuan, H. P. D. O. Pinto, J. Kaplan, H. Edwards, Y. Burda, N. Joseph, G. Brockman et al., “Evaluating large language models trained on code,” arXiv preprint arXiv:2107.03374, 2021.
