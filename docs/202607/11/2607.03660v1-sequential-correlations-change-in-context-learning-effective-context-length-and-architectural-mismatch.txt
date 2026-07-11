@@ -1,0 +1,3292 @@
+Title: Sequential Correlations Change In-Context Learning: Effective Context Length and Architectural Mismatch
+
+URL Source: https://arxiv.org/pdf/2607.03660v1
+
+Published Time: Tue, 07 Jul 2026 01:50:10 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Sequential Correlations Change In-Context Learning: Effective Context Length and Architectural Mismatch 
+
+Mary Letey maryletey@fas.harvard.edu John A. Paulson School of Engineering and Applied Sciences, Harvard University Kempner Institute for the Study of Natural and Artificial Intelligence, Harvard University 
+
+Yue M. Lu yuelu@seas.harvard.edu John A. Paulson School of Engineering and Applied Sciences, Harvard University 
+
+Cengiz Pehlevan ∗ cpehlevan@seas.harvard.edu John A. Paulson School of Engineering and Applied Sciences, Harvard University Kempner Institute for the Study of Natural and Artificial Intelligence, Harvard University 
+
+Jacob Zavatone-Veth ∗ jzavatoneveth@fas.harvard.edu Society of Fellows and Center for Brain Science, Harvard University 
+
+## Abstract 
+
+Modern sequence models have a striking capacity for in-context learning (ICL); they can perform new tasks based only on examples given in the prompt. Understanding how this ability emerges requires theory that captures important properties of natural data. Linear regression has served as a useful sandbox for ICL theory, but existing work has largely focused on prompts with independent examples. In this work, we extend this setting to sequentially correlated data, a basic feature of real sequences. We present a solvable model based on linear attention and test our predictions on realistic transformer architectures. We identify two distinct effects: First, when the query token is independent of the context, within-context correlations induce an effective context length: correlated prompts behave like shorter i.i.d. prompts. Second, when the query is also correlated with its context, test error is reduced, particularly for softmax attention when compared to linear attention. These results suggest that correlated prompts alter not only the effective sample size of in-context learning, but also which attention architectures are best matched to the task. 
+
+## 1 Introduction 
+
+In-context learning (ICL) is an important and useful capability of modern sequence models (Brown et al., 2020; Von Oswald et al., 2023; Wei et al., 2022a). In this setting, a model performs a task implicitly from few examples without parameter updates. Regression has been a useful toy setting for studying how sequence models can achieve this ability. In-context regression requires a model to predict the label of a final query based on a prompt of input-output examples. The appeal of this setup is that it is simple enough to admit explicit analyses, yet rich enough to differentiate architectures and learning mechanisms (Akyürek et al., 2023; Von Oswald et al., 2023; Zhang et al., 2023; Lu et al., 2025; Zhang et al., 2024b; Oko et al., 2024; Vasudeva et al., 2025; Letey et al., 2026b). A standard simplifying assumption in the in-context regression literature is that the examples within a prompt are independent. This assumption is analytically convenient, but not reflective of real datasets (Shannon, 1948). This has prompted the study of sequential correlations in other, non-regression in-context   
+
+> ∗CP and JZ-V jointly supervised this work. Code is available at https://github.com/Pehlevan-Group/sequential-correlations-in-context-regression .A previous version of this work was presented at the 4 th Workshop on High-dimensional Learning Dynamics (HiLD) at ICML 2026 (Letey et al., 2026a).
+
+1                                 
+
+> arXiv:2607.03660v1 [stat.ML] 4 Jul 2026 012345678910
+> Correlation length
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> 1.1
+> ICL Test Loss
+> Reduced-Parameter linear attention
+> 012345678910
+> Correlation length
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Full-Parameter linear attention
+> 012345678910
+> Correlation length
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Softmax attention with MLP
+> Correlated tokens + independent query Correlated tokens + correlated query Effective context length Theory
+
+Figure 1: ICL test loss against token correlation strength for three attention architectures. We highlight two findings. (1) ICL performance on correlated data with an independent query (purple) is well approximated by uncorrelated data at an effective context length (blue) given by Eq. (1). (2) When the query token is equivalently correlated with its corresponding context (green), ICL error is reduced in all models as they utilise this correlation for inference. These predictions are made from our theory curves (dashed) derived for reduced-parameter linear attention. Experimental details given in Appendix A. data settings, including Markov chains and dynamical systems (Edelman et al., 2024; Nichani et al., 2024; Cole et al., 2025; Park et al., 2025). For the regression setting, the effects of sequential correlations have yet to be analysed. We know that sequential correlations matter even for classical ridge regression, where they change the asymptotic risk and invalidate estimators designed for i.i.d. data (Atanasov et al., 2025). Thus, it is natural to ask how sequential correlations affect in-context regression, particularly as attention architectures were designed to operate on structured sequences (Vaswani et al., 2017). In this work, we study a solvable model of in-context linear regression with sequentially correlated tokens. We begin from a reduced linear-attention model analysed in prior works (Zhang et al., 2024a; Wu et al., 2024; Lu et al., 2025; Letey et al., 2026b; Bordelon et al., 2025), and perturb the usual i.i.d. setup by introducing a sequence correlation kernel for the context tokens, together with an optional correlation between the test query and the preceding context. This gives a controlled setting in which we can separate the effects of correlations within the context, and correlations between the query and the context. Figure 1 summarises our findings. First, when correlations are confined to the context and the query remains independent, their effect is equivalent to an effective context-length reduction: correlated prompts behave like shorter i.i.d. prompts. Second, when the query token is correlated with its preceding context, ICL error decreases substantially, because the model can exploit this extra statistical structure to improve inference. Third, these correlated settings reveal an architectural mismatch: when additional query-dependent statistics enter, the performance gap between attention architectures (linear versus softmax in Figure 1) widens sharply. An additional technical contribution is that we identify a regime in which strong sequential correlations lead to the breakdown of the high-dimensional treatment originally formulated in Lu et al. (2025). When correlations persist on a length scale that grows with the context length, the effective number of independent examples may no longer scale proportionally with dimension, and the moments of the linear attention estimator need not concentrate. 
+
+Related Works 
+
+Here we summarise key empirical and theoretical results from previous studies of in-context learning. The techniques and data structures considered in these past works motivate our study of in-context regression with sequential correlations. 
+
+ICL in practice. Early works showed that language models demonstrate an ability to learn new tasks, without weight updates, given a few examples provided “in context” (Radford et al., 2019; Brown et al., 2020; Chowdhery et al., 2022; Touvron et al., 2023; Achiam et al., 2023; Bubeck et al., 2023). These phenomena 2seemed to emerge with scale (Wei et al., 2022a; 2023) and to be robust to task complexity (Wei et al., 2022b; DeepSeek-AI et al., 2025). These observations led to much interest in understanding ICL (Dong et al., 2024), particularly regarding the question of how unknown tasks are solved at test time. Many empirical works attempted to answer this question, focusing on mechanisms (Von Oswald et al., 2023; Li et al., 2024a; Akyürek et al., 2023; Akyürek et al., 2024; Kirsch et al., 2024; Olsson et al., 2022; Tong & Pehlevan, 2025; Li et al., 2024b) and data structures (Bietti et al., 2023; Chan et al., 2022; Raventós et al., 2023; Garg et al., 2022; Liu et al., 2025; Singh et al., 2023; Goddard et al., 2025; Liu et al., 2024; Vasudeva et al., 2025; Todd et al., 2026) that enable ICL. 
+
+ICL in theory. Recent theoretical works have sought to answer similar questions about in-context learning, specifically, what algorithms could it be implementing, and what is the effect of data on its performance? Simple models, such as one- or two-layer networks and linear attention, have proven particularly useful testbeds for understanding what happens at inference time (Chandra et al., 2024; Fu et al., 2023; Shen et al., 2025; Gozeten et al., 2025; Mahankali et al., 2023; Barnfield et al., 2026; Ahn et al., 2023; Zhang et al., 2025; Demir & Dogan, 2025). In particular, many theoretical works have been able to show through constructive approaches that transformers or simple architectures are able to implement general algorithms, such as gradient descent, to solve tasks in-context (Bai et al., 2023; Reddy, 2024; Elmoznino et al., 2025; Lee et al., 2025; Zhang et al., 2023). On the dataset side, many theoretical works have explicitly considered sequential structures, such as dynamical systems (Li et al., 2023; Cole et al., 2025) and Markov chains (Edelman et al., 2024; Park et al., 2025; Nichani et al., 2024), in addition to more complex synthetic tasks (Tao et al., 2025; He et al., 2024; Ye et al., 2026; Cole et al., 2026). 
+
+ICL in regression. Moving away from complex, reasoning, and language-like tasks, regression has been a very rewarding sandbox for ICL research. By considering simpler functions, stronger results such as sample sufficiency (Oko et al., 2024), gradient descent-like behaviour (Wu et al., 2024; Zhang et al., 2024a;b; Bordelon et al., 2025; Fu et al., 2024), and even finite-sample error formulas (Lu et al., 2025; Letey et al., 2026b), can be derived. This work builds on these to clearly understand the effect of sequential correlations on in-context learning of linear regression, as a probe of how different architectures are affected by such correlations. 
+
+## 2 Theory and Data Setup 
+
+In-context linear regression. We study a correlated-token version of the solvable linear-regression ICL model induced by a reduced linear-attention block, studied by Lu et al. (2025); Zhang et al. (2023). Acontext consists of a sequence {x1, y 1, . . . , xℓ, y ℓ, xtest } with 
+
+ya = x⊤ 
+
+> a
+
+w + εa, ytest = x⊤
+
+> test
+
+w + εtest ,
+
+for task vector w ∈ Rd, and independent Gaussian noise ε ∼ N (0 , ρI ℓ), ε test ∼ N (0 , ρ ). The goal is for the model’s output on this sequence to be close to ytest , thus performing the correct regression inference given examples in the context. Throughout, we write X ∈ Rℓ×d for the matrix whose ath row is x⊤ 
+
+> a
+
+.
+
+Sequential correlations. We model sequential structure within the context as linear dependence between the tokens, following previous work in the ridge regression setting (Atanasov et al., 2025; Moniri & Hassani, 2025). Under this model, the mean-zero Gaussian tokens x1 , . . . , xℓ have second moments given by 
+
+E[xax⊤ 
+
+> b
+
+] = Kab Id/d, E[xtest x⊤ 
+
+> a
+
+] = ktest aId/d 
+
+i.e. , K ∈ Rℓ×ℓ controls correlations across context positions, and the feature-feature covariance is given by Id/d . The case of independently sampled tokens is described by K = Iℓ. The query correlations are controlled by ktest ∈ Rℓ which specifies how strongly the query is coupled to each preceding context token; for an independent query, ktest = 0.
+
+Correlation summaries and correlation length. We normalise such that tr( K) = ℓ. The theory depends on K and ktest through the summary statistics 
+
+k0 := k⊤
+
+> test
+
+ktest , k1 := k⊤
+
+> test
+
+Kktest , k2 := tr (K2)/ℓ. 
+
+3For general K and ktest , we can think of k0, k 1, k 2 as measures of token correlation strength. The quantity 
+
+k2 is a bulk measure of context correlations: under our chosen normalisation tr( K) = ℓ, it is minimised by the uncorrelated case K = Iℓ, where k2 = 1 , and increases as the spectrum of K becomes more anisotropic or concentrated. The query-dependent quantity k0 measures the overall strength of the direct query-context coupling, while the mixed quantity k1 measures how strongly that query-correlation profile is amplified by the correlated structure of the context itself. These quantities become more intuitive if we take a specific kernel as an example: the exponential kernel 
+
+Kab = exp( −| a − b|/ξ ) and ktest a = exp( −(ℓ + 1 − a)/ξ ). Because K and ktest only depend on distances 
+
+between tokens, the natural parameter of correlation “strength” is correlation length ξ. This case provides an intuitive sandbox, as the ICL summary statistics above are directly related to the correlation length by 
+
+k2, k 0 ≈ ξ, k 1 ≈ ξ2. We thus choose to use the exponential kernel for the experiments in all figures, and save a more detailed analysis with non-exponential kernels to future work. 
+
+Reduced linear-attention predictor. Following prior work on linear attention, the next-token prediction for ytest made by linear attention can be well-approximated by 
+
+ˆytest := tr (ΓH⊤), Γ ∈ Rd×(d+1) , H := xtest 
+
+[ dℓ (Xw + ε)⊤X 1 
+
+> ℓ
+
+(Xw + ε)⊤(Xw + ε)] .
+
+The parameter matrix Γ here is defined in terms of components of the value, key, and query matrices from full-parameter linear attention. This is the predictor that we will study in the theory, and is the “reduced model” referred to on the leftmost panel of Figure 1. Given a training batch of n sequences, corresponding to n such data matrices H for the reduced model, the optimal parameters and corresponding test loss can be written as 
+
+Γ∗ =
+
+(
+
+nd λI d(d+1) +
+
+> n
+
+∑
+
+> μ=1
+
+Hμ ⊗ Hμ
+
+)−1 n∑
+
+> μ=1
+
+yμ
+
+> test
+
+Hμ , EICL (Γ ∗) = E[( ynew test − ⟨ Hnew , Γ∗⟩)2].
+
+High-dimensional scaling. We study the matrix Γ∗, and functions of it, in a high-dimensional limit using random-matrix techniques as in Lu et al. (2025). We work in the standard proportional regime, where 
+
+d → ∞ with ℓ ∝ d. We assume the task signal remains identifiable, e.g. w⊤w = Θ( d).10 0 10 1 10 2 10 3 10 4                        
+
+> Correlation length
+> 10 0
+> ICL error
+> n<d2
+> 10 010 110 210 310 4
+> Correlation length
+> n>d2
+> Theory
+> k1,k2=(1)
+> k1,k2=o( )
+> k2=o( ), k1=O( )
+> k2=( ), k1=O( )
+
+Figure 2: Simulations of EICL (Γ ∗) for several scaling regimes, compared with theory (Prop. 1). We analytically study the case of weak cor-relations with respect to context length ℓ:for the computation of theory curves we take k2, k 0, k 1 = Θ ℓ(1) . We do not study stronger correlations in this work, corre-sponding to cases such as k2 = o(ℓ) or 
+
+k2 ∝ ℓ, and do not attempt to charac-terise all of the ways in which the the-ory’s predictions break down. In stronger-correlation regimes, concentration of the parameter matrix Γ∗ and its correspond-ing ICL error can fail (see Figure 2), and a full characterisation is left for future work, with some further discussion in Section 3 and Appendix D. 
+
+## 3 Effective in-context sample size 
+
+Working in the proportional limit described above, we can analyse the random parameter matrix Γ∗. The full result is given in Appendix E. We present its first implication. 4Effective context length formula 
+
+Consider tokens x1, . . . , xℓ that are weakly correlated, i.e . k2 = Θ(1) , and an independent query xtest ,
+
+i.e . ktest = 0. Then the correlated-ICL performance at context length ℓ matches the uncorrelated-ICL performance at the lower effective context length 
+
+ℓeff := 1 + ρk2 + ρ ℓ, (1) where by Jensen’s inequality k2 = tr (K2)/ℓ ≥ (tr( K)/ℓ )2 = 1 , so ℓeff ≤ ℓ. 
+
+Eq (1) makes precise how sequential correlations reduce the usable information content of the prompt. Since 
+
+k2 increases as the context covariance becomes more anisotropic, stronger or more persistent correlations decrease the effective context length ℓeff . For stationary kernels, where k2 grows with the correlation scale, this recovers the intuitive statement that longer-ranged correlations make fewer context examples effectively independent. The simplicity of the resulting formula is itself notable: the reduction depends linearly on the single scalar k2, rather than on the full spectrum of K. This contrasts with classical correlated linear regres-sion, where test error typically depends more delicately on the spectrum, and sometimes the eigenvectors, of the design covariance. Eq (1) also hints why the strongly-correlated regime is analytically difficult. Our theory here assumes that the correlation summary k2 remains Θ(1) as ℓ, d → ∞ with ℓ ∝ d. But once correlations persist across more and more of the context, we instead have either k2 = o(ℓ) or k2 ∝ ℓ. In this regime, ℓeff no longer scales proportionally with ℓ, but remains only o(ℓ) or Θ(1) respectively. Thus, even as the nominal context length increases, we are no longer in the standard linear-regression regime where samples are proportional to dimension. We discuss this further in Appendix D, as these regimes are where the standard high-dimensional concentration underlying our asymptotic analysis may break down. 
+
+## 4 Gain from query correlations 0 1 2 3 4 5 6 7 8 9 10 
+
+> Correlation length
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> query
+> Theory
+> Softmax
+> Reduced LA
+> Softmax+MLP
+> Full LA
+> Softmax+MLP x4
+
+Figure 3: Query effects depend on architecture. We now turn to the second effect in Figure 1: cor-relations between the test query and its preceding context can provide additional predictive signal and thus reduce the ICL error. To isolate this contribu-tion, define the query-correlation gain as 
+
+∆query := LICL (ℓ, k 2 ; ktest = 0) −L ICL (ℓ, k 2, k 0, k 1),
+
+namely, the reduction in ICL error obtained by in-troducing query-context correlations while holding the bulk context kernel K fixed. Here LICL denotes the ICL error of a model (not necessarily linear at-tention) on this correlated linear regression task. In Figure 3, we find that ∆query is nonnegative (up to finite-sample fluctuations) and vanishes in the un-correlated case K = Iℓ. Thus, unlike bulk context correlations, which reduce effective sample size and hurt ICL performance, query correlations provide additional predictive signal that can in principle be exploited for inference. In our theory, this effect is controlled not only by the bulk statistic k2, but also by the query-dependent summaries k0 and k1, which increase with stronger correlations. The resulting closed-form expression for 
+
+∆query is substantially more complicated than the effective-sample law in eq. (1); we therefore omit it from 5the main text. Empirically, ∆query is relatively modest for linear-attention architectures but much larger for architectures that use softmax attention. This suggests that softmax attention is better matched to sequential inference, as it can form query-dependent weights over the most informative tokens rather than compressing correlations into the second-order summaries available to linear attention. 
+
+## 5 Conclusion 
+
+This work is a first step toward a theory of ICL for structured, sequential data. By separating bulk context correlations from query-context correlations, we show that prompt structure can affect ICL in two qualita-tively different ways: bulk context correlations reduce effective sample size, while query-context correlations provide useful signal for inference, highlighting an architectural mismatch between linear and softmax at-tention. The latter effect is especially important: softmax attention appears to have a distinctive ability to exploit sequential information, which is not captured by the linear-attention theory. Developing theory that explains this advantage, and extending it beyond linear regression to richer sequential and dynamical tasks, will be necessary for understanding ICL in more realistic data regimes. 
+
+## Acknowledgements 
+
+M.L. is supported by a Graduate Fellowship from the Kempner Institute for the Study of Natural and Artificial Intelligence. Y.M.L. gratefully acknowledges support from a Harvard College Professorship, the Harvard FAS Dean’s Fund for Promising Scholarship, and DARPA grant DIAL-FP-038. C.P. was supported by an NSF CAREER Award (IIS-2239780), DARPA grants DIAL-FP-038 and AIQ-HR00112520041, the Simons Collaboration on the Physics of Learning and Neural Computation, and the William F. Milton Fund from Harvard University. J.Z.-V. was supported by a Junior Fellowship from the Harvard Society of Fellows. This work has been made possible in part by a gift from the Chan Zuckerberg Initiative Foundation to establish the Kempner Institute for the Study of Natural and Artificial Intelligence. 6References 
+
+Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. Kwangjun Ahn, Xiang Cheng, Hadi Daneshmand, and Suvrit Sra. Transformers learn to implement precon-ditioned gradient descent for in-context learning, 2023. Ekin Akyürek, Dale Schuurmans, Jacob Andreas, Tengyu Ma, and Denny Zhou. What learning algorithm is in-context learning? investigations with linear models. In The Eleventh International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=0g0X4H8yN4I .Ekin Akyürek, Bailin Wang, Yoon Kim, and Jacob Andreas. In-context language learning: Architectures and algorithms, 2024. URL https://arxiv.org/abs/2401.12973 .Alexander Atanasov, Jacob A Zavatone-Veth, and Cengiz Pehlevan. Risk and cross validation in ridge regression with correlated samples. In Forty-second International Conference on Machine Learning , 2025. URL https://openreview.net/forum?id=GMwKpJ9TiR .Yu Bai, Fan Chen, Huan Wang, Caiming Xiong, and Song Mei. Transformers as statisticians: Provable in-context learning with in-context algorithm selection. In A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (eds.), Advances in Neural Information Processing Systems , volume 36, pp. 57125–57211. Curran Associates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/ paper/2023/file/b2e63e36c57e153b9015fece2352a9f9-Paper-Conference.pdf .Nicholas Barnfield, Subhabrata Sen, and Pragya Sur. Multi-layer cross-attention is provably optimal for multi-modal in-context learning, 2026. URL https://arxiv.org/abs/2602.04872 .Alberto Bietti, Vivien Cabannes, Diane Bouchacourt, Herve Jegou, and Leon Bottou. Birth of a trans-former: A memory viewpoint. In A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (eds.), Advances in Neural Information Processing Systems , volume 36, pp. 1560–1588. Cur-ran Associates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/file/ 0561738a239a995c8cd2ef0e50cfa4fd-Paper-Conference.pdf .Blake Bordelon, Mary I. Letey, and Cengiz Pehlevan. Theory of scaling laws for in-context regression: Depth, width, context and time, 2025. URL https://arxiv.org/abs/2510.01098 .Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, et al. Language models are few-shot learners. 
+
+Advances in neural information processing systems , 33:1877–1901, 2020. Sébastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz, Ece Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, Harsha Nori, Hamid Palangi, Marco Tulio Ribeiro, and Yi Zhang. Sparks of artificial general intelligence: Early experiments with gpt-4, 2023. URL https: //arxiv.org/abs/2303.12712 .Stephanie C. Y. Chan, Adam Santoro, Andrew K. Lampinen, Jane X. Wang, Aaditya Singh, Pierre H. Richemond, Jay McClelland, and Felix Hill. Data distributional properties drive emergent in-context learning in transformers, 2022. Pritam Chandra, Tanmay Kumar Sinha, Kabir Ahuja, Ankit Garg, and Navin Goyal. Towards analyzing self-attention via linear neural network, 2024. URL https://openreview.net/forum?id=4fVuBf5HE9 .Aakanksha Chowdhery, Sharan Narang, Jacob Devlin, Maarten Bosma, Gaurav Mishra, Adam Roberts, Paul Barham, Hyung Won Chung, Charles Sutton, Sebastian Gehrmann, Parker Schuh, Kensen Shi, Sasha Tsvyashchenko, Joshua Maynez, Abhishek Rao, Parker Barnes, Yi Tay, Noam Shazeer, Vinodkumar Prabhakaran, Emily Reif, Nan Du, Ben Hutchinson, Reiner Pope, James Bradbury, Jacob Austin, Michael Isard, Guy Gur-Ari, Pengcheng Yin, Toju Duke, Anselm Levskaya, Sanjay Ghemawat, Sunipa Dev, Henryk 7Michalewski, Xavier Garcia, Vedant Misra, Kevin Robinson, Liam Fedus, Denny Zhou, Daphne Ippolito, David Luan, Hyeontaek Lim, Barret Zoph, Alexander Spiridonov, Ryan Sepassi, David Dohan, Shivani Agrawal, Mark Omernick, Andrew M. Dai, Thanumalayan Sankaranarayana Pillai, Marie Pellat, Aitor Lewkowycz, Erica Moreira, Rewon Child, Oleksandr Polozov, Katherine Lee, Zongwei Zhou, Xuezhi Wang, Brennan Saeta, Mark Diaz, Orhan Firat, Michele Catasta, Jason Wei, Kathy Meier-Hellstern, Douglas Eck, Jeff Dean, Slav Petrov, and Noah Fiedel. Palm: Scaling language modeling with pathways, 2022. URL https://arxiv.org/abs/2204.02311 .Frank Cole, Yulong Lu, Tianhao Zhang, and Yuxuan Zhao. In-context learning of linear dynamical systems with transformers: Error bounds and depth-separation, 2025. URL https://arxiv.org/abs/2502.08136 .Frank Cole, Dixi Wang, Yineng Chen, Yulong Lu, and Rongjie Lai. In-context operator learning on the space of probability measures, 2026. URL https://arxiv.org/abs/2601.09979 .DeepSeek-AI, Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, Xiaokang Zhang, Xingkai Yu, Yu Wu, Z. F. Wu, Zhibin Gou, Zhihong Shao, Zhuoshu Li, Ziyi Gao, Aixin Liu, Bing Xue, Bingxuan Wang, Bochao Wu, Bei Feng, Chengda Lu, Chenggang Zhao, Chengqi Deng, Chenyu Zhang, Chong Ruan, Damai Dai, Deli Chen, Dongjie Ji, Erhang Li, Fangyun Lin, Fucong Dai, Fuli Luo, Guangbo Hao, Guanting Chen, Guowei Li, H. Zhang, Han Bao, Hanwei Xu, Haocheng Wang, Honghui Ding, Huajian Xin, Huazuo Gao, Hui Qu, Hui Li, Jianzhong Guo, Jiashi Li, Jiawei Wang, Jingchang Chen, Jingyang Yuan, Junjie Qiu, Junlong Li, J. L. Cai, Jiaqi Ni, Jian Liang, Jin Chen, Kai Dong, Kai Hu, Kaige Gao, Kang Guan, Kexin Huang, Kuai Yu, Lean Wang, Lecong Zhang, Liang Zhao, Litong Wang, Liyue Zhang, Lei Xu, Leyi Xia, Mingchuan Zhang, Minghua Zhang, Minghui Tang, Meng Li, Miaojun Wang, Mingming Li, Ning Tian, Panpan Huang, Peng Zhang, Qiancheng Wang, Qinyu Chen, Qiushi Du, Ruiqi Ge, Ruisong Zhang, Ruizhe Pan, Runji Wang, R. J. Chen, R. L. Jin, Ruyi Chen, Shanghao Lu, Shangyan Zhou, Shanhuang Chen, Shengfeng Ye, Shiyu Wang, Shuiping Yu, Shunfeng Zhou, Shuting Pan, S. S. Li, Shuang Zhou, Shaoqing Wu, Shengfeng Ye, Tao Yun, Tian Pei, Tianyu Sun, T. Wang, Wangding Zeng, Wanjia Zhao, Wen Liu, Wenfeng Liang, Wenjun Gao, Wenqin Yu, Wentao Zhang, W. L. Xiao, Wei An, Xiaodong Liu, Xiaohan Wang, Xiaokang Chen, Xiaotao Nie, Xin Cheng, Xin Liu, Xin Xie, Xingchao Liu, Xinyu Yang, Xinyuan Li, Xuecheng Su, Xuheng Lin, X. Q. Li, Xiangyue Jin, Xiaojin Shen, Xiaosha Chen, Xiaowen Sun, Xiaoxiang Wang, Xinnan Song, Xinyi Zhou, Xianzu Wang, Xinxia Shan, Y. K. Li, Y. Q. Wang, Y. X. Wei, Yang Zhang, Yanhong Xu, Yao Li, Yao Zhao, Yaofeng Sun, Yaohui Wang, Yi Yu, Yichao Zhang, Yifan Shi, Yiliang Xiong, Ying He, Yishi Piao, Yisong Wang, Yixuan Tan, Yiyang Ma, Yiyuan Liu, Yongqiang Guo, Yuan Ou, Yuduan Wang, Yue Gong, Yuheng Zou, Yujia He, Yunfan Xiong, Yuxiang Luo, Yuxiang You, Yuxuan Liu, Yuyang Zhou, Y. X. Zhu, Yanhong Xu, Yanping Huang, Yaohui Li, Yi Zheng, Yuchen Zhu, Yunxian Ma, Ying Tang, Yukun Zha, Yuting Yan, Z. Z. Ren, Zehui Ren, Zhangli Sha, Zhe Fu, Zhean Xu, Zhenda Xie, Zhengyan Zhang, Zhewen Hao, Zhicheng Ma, Zhigang Yan, Zhiyu Wu, Zihui Gu, Zijia Zhu, Zijun Liu, Zilin Li, Ziwei Xie, Ziyang Song, Zizheng Pan, Zhen Huang, Zhipeng Xu, Zhongyu Zhang, and Zhen Zhang. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv , 2025. URL https://arxiv.org/abs/2501.12948 .Samet Demir and Zafer Dogan. How data mixing shapes in-context learning: Asymptotic equivalence for transformers with mlps. In D. Belgrave, C. Zhang, H. Lin, R. Pascanu, P. Koniusz, M. Ghassemi, and N. Chen (eds.), Advances in Neural Information Processing Systems , volume 38, pp. 119346–119376. Cur-ran Associates, Inc., 2025. URL https://proceedings.neurips.cc/paper_files/paper/2025/file/ ad184b4e096284a55cf66e1d4eeb29df-Paper-Conference.pdf .Qingxiu Dong, Lei Li, Damai Dai, Ce Zheng, Jingyuan Ma, Rui Li, Heming Xia, Jingjing Xu, Zhiyong Wu, Tianyu Liu, Baobao Chang, Xu Sun, Lei Li, and Zhifang Sui. A survey on in-context learning, 2024. URL 
+
+https://arxiv.org/abs/2301.00234 .Benjamin L. Edelman, Ezra Edelman, Surbhi Goel, Eran Malach, and Nikolaos Tsilivis. The evolution of statistical induction heads: In-context learning markov chains, 2024. URL https://arxiv.org/abs/ 2402.11004 .8Eric Elmoznino, Tom Marty, Tejas Kasetty, Leo Gagnon, Sarthak Mittal, Mahan Fathi, Dhanya Sridhar, and Guillaume Lajoie. In-context learning and occam’s razor, 2025. URL https://arxiv.org/abs/2410. 14086 .Deqing Fu, Tian-Qi Chen, Robin Jia, and Vatsal Sharan. Transformers learn higher-order optimization methods for in-context learning: A study with linear models, 2023. Deqing Fu, Tian-Qi Chen, Robin Jia, and Vatsal Sharan. Transformers learn to achieve second-order con-vergence rates for in-context linear regression, 2024. URL https://arxiv.org/abs/2310.17086 .Shivam Garg, Dimitris Tsipras, Percy Liang, and Gregory Valiant. What can transformers learn in-context? a case study of simple function classes. In Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho (eds.), Advances in Neural Information Processing Systems , 2022. URL https://openreview.net/ forum?id=flNZJ2eOet .Chase Goddard, Lindsay M. Smith, Vudtiwat Ngampruetikorn, and David J. Schwab. When can in-context learning generalize out of task distribution?, 2025. URL https://arxiv.org/abs/2506.05574 .Halil Alperen Gozeten, M. Emrullah Ildiz, Xuechen Zhang, Mahdi Soltanolkotabi, Marco Mondelli, and Samet Oymak. Test-time training provably improves transformers as in-context learners, 2025. URL 
+
+https://arxiv.org/abs/2503.11842 .Tianyu He, Darshil Doshi, Aritra Das, and Andrey Gromov. Learning to grok: Emergence of in-context learning and skill composition in modular arithmetic tasks. In A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang (eds.), Advances in Neu-ral Information Processing Systems , volume 37, pp. 13244–13273. Curran Associates, Inc., 2024. doi: 10.52202/079017-0422. URL https://proceedings.neurips.cc/paper_files/paper/2024/file/ 17d60fef592086d1a5cb136f1946df59-Paper-Conference.pdf .Louis Kirsch, James Harrison, Jascha Sohl-Dickstein, and Luke Metz. General-purpose in-context learning by meta-learning transformers, 2024. Jin Hwa Lee, Andrew Kyle Lampinen, Aaditya K Singh, and Andrew M Saxe. Distinct computations emerge from compositional curricula in in-context learning. In Workshop on Spurious Correlation and Shortcut Learning: Foundations and Solutions , 2025. URL https://openreview.net/forum?id=oo5TNikeJl .Mary Letey, Yue M. Lu, Cengiz Pehlevan, and Jacob A Zavatone-Veth. Sequential correlations change in-context learning: Effective context length and architectural mismatch. In High-dimensional Learning Dynamics 2026 , 2026a. URL https://openreview.net/forum?id=AYprbQxAbI .Mary Letey, Jacob A Zavatone-Veth, Yue M. Lu, and Cengiz Pehlevan. Pretrain-test task alignment governs generalization in in-context learning. In The Fourteenth International Conference on Learning Represen-tations , 2026b. URL https://openreview.net/forum?id=KZLeg0MQ2r .Jiaoda Li, Yifan Hou, Mrinmaya Sachan, and Ryan Cotterell. What do language models learn in context? the structured task hypothesis, 2024a. URL https://arxiv.org/abs/2406.04216 .Yingcong Li, M. Emrullah Ildiz, Dimitris Papailiopoulos, and Samet Oymak. Transformers as algorithms: Generalization and stability in in-context learning, 2023. Yingcong Li, Ankit Singh Rawat, and Samet Oymak. Fine-grained analysis of in-context linear estimation: Data, architecture, and beyond. In A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang (eds.), Advances in Neural Information Processing Systems , volume 37, pp. 138324–138364. Curran Associates, Inc., 2024b. URL https://proceedings.neurips.cc/paper_files/paper/2024/ file/f9dc462382fef56d58279e75de2438f3-Paper-Conference.pdf .Binwen Liu, Peiyu Xu, Quan Yuan, and Yihong Chen. Probing in-context learning: Impact of task complexity and model architecture on generalization and efficiency, 2025. URL https://arxiv.org/abs/2505.06475 .9Toni J.b. Liu, Nicolas Boulle, Raphaël Sarfati, and Christopher Earls. Llms learn governing principles of dynamical systems, revealing an in-context neural scaling law. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pp. 15097–15117. Association for Computational Lin-guistics, 2024. doi: 10.18653/v1/2024.emnlp-main.842. URL http://dx.doi.org/10.18653/v1/2024. emnlp-main.842 .Yue M. Lu, Mary Letey, Jacob A. Zavatone-Veth, Anindita Maiti, and Cengiz Pehlevan. Asymptotic theory of in-context learning by linear attention. Proceedings of the National Academy of Sciences , 122(28): e2502599122, 2025. doi: 10.1073/pnas.2502599122. URL https://www.pnas.org/doi/abs/10.1073/ pnas.2502599122 .Arvind Mahankali, Tatsunori B. Hashimoto, and Tengyu Ma. One step of gradient descent is provably the optimal in-context learner with one layer of linear self-attention, 2023. URL https://arxiv.org/abs/ 2307.03576 .Behrad Moniri and Hamed Hassani. Asymptotics of linear regression with linearly dependent data. In Necmiye Ozay, Laura Balzano, Dimitra Panagou, and Alessandro Abate (eds.), Proceedings of the 7th Annual Learning for Dynamics & Control Conference , volume 283 of Proceedings of Machine Learning Research , pp. 72–85. PMLR, 04–06 Jun 2025. URL https://proceedings.mlr.press/v283/moniri25a. html .Eshaan Nichani, Alex Damian, and Jason D. Lee. How transformers learn causal structure with gradient descent. In Ruslan Salakhutdinov, Zico Kolter, Katherine Heller, Adrian Weller, Nuria Oliver, Jonathan Scarlett, and Felix Berkenkamp (eds.), Proceedings of the 41st International Conference on Machine Learn-ing , volume 235 of Proceedings of Machine Learning Research , pp. 38018–38070. PMLR, 21–27 Jul 2024. URL https://proceedings.mlr.press/v235/nichani24a.html .Kazusato Oko, Yujin Song, Taiji Suzuki, and Denny Wu. Pretrained transformer efficiently learns low-dimensional target functions in-context, 2024. URL https://arxiv.org/abs/2411.02544 .Catherine Olsson, Nelson Elhage, Neel Nanda, Nicholas Joseph, Nova DasSarma, Tom Henighan, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, Dawn Drain, Deep Ganguli, Zac Hatfield-Dodds, Danny Hernandez, Scott Johnston, Andy Jones, Jackson Kernion, Liane Lovitt, Kamal Ndousse, Dario Amodei, Tom Brown, Jack Clark, Jared Kaplan, Sam McCandlish, and Chris Olah. In-context learning and induction heads. Transformer Circuits Thread , 2022. URL https://transformer-circuits.pub/ 2022/in-context-learning-and-induction-heads/index.html .Core Francisco Park, Ekdeep Singh Lubana, Itamar Pres, and Hidenori Tanaka. Competition dynamics shape algorithmic phases of in-context learning, 2025. URL https://arxiv.org/abs/2412.01003 .Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Allan Raventós, Mansheej Paul, Feng Chen, and Surya Ganguli. Pretraining task diversity and the emergence of non-bayesian in-context learning for regression. In A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (eds.), Advances in Neural Information Processing Systems , volume 36, pp. 14228–14246. Curran Associates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/ paper/2023/file/2e10b2c2e1aa4f8083c37dfe269873f8-Paper-Conference.pdf .Gautam Reddy. The mechanistic basis of data dependence and abrupt learning in an in-context clas-sification task. In The Twelfth International Conference on Learning Representations , 2024. URL 
+
+https://openreview.net/forum?id=aN4Jf6Cx69 .C. E. Shannon. A mathematical theory of communication. The Bell System Technical Journal , 27(3): 379–423, 1948. doi: 10.1002/j.1538-7305.1948.tb01338.x. Zhaiming Shen, Alexander Hsu, Rongjie Lai, and Wenjing Liao. Understanding in-context learning on structured manifolds: Bridging attention to kernel methods, 2025. URL https://arxiv.org/abs/2506. 10959 .10 Aaditya K. Singh, Stephanie C. Y. Chan, Ted Moskovitz, Erin Grant, Andrew M. Saxe, and Felix Hill. The transient nature of emergent in-context learning in transformers, 2023. Tao Tao, Darshil Doshi, Dayal Singh Kalra, Tianyu He, and Maissam Barkeshli. (how) can transformers predict pseudo-random numbers?, 2025. URL https://arxiv.org/abs/2502.10390 .Eric Todd, Jannik Brinkmann, Rohit Gandikota, and David Bau. In-context algebra, 2026. URL https: //arxiv.org/abs/2512.16902 .William L. Tong and Cengiz Pehlevan. MLPs learn in-context on regression and classification tasks. In The Thirteenth International Conference on Learning Representations , 2025. URL https://openreview.net/ forum?id=MbX0t1rUlp .Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 , 2023. Bhavya Vasudeva, Deqing Fu, Tianyi Zhou, Elliott Kau, Youqi Huang, and Vatsal Sharan. Transformers learn low sensitivity functions: Investigations and implications. In International Conference on Learning Representations , volume 2025, pp. 3565–3594, 2025. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. Johannes Von Oswald, Eyvind Niklasson, Ettore Randazzo, João Sacramento, Alexander Mordvintsev, An-drey Zhmoginov, and Max Vladymyrov. Transformers learn in-context by gradient descent. In An-dreas Krause, Emma Brunskill, Kyunghyun Cho, Barbara Engelhardt, Sivan Sabato, and Jonathan Scarlett (eds.), Proceedings of the 40th International Conference on Machine Learning , volume 202 of 
+
+Proceedings of Machine Learning Research , pp. 35151–35174. PMLR, 23–29 Jul 2023. URL https: //proceedings.mlr.press/v202/von-oswald23a.html .Jason Wei, Yi Tay, Rishi Bommasani, Colin Raffel, Barret Zoph, Sebastian Borgeaud, Dani Yogatama, Maarten Bosma, Denny Zhou, Donald Metzler, Ed H. Chi, Tatsunori Hashimoto, Oriol Vinyals, Percy Liang, Jeff Dean, and William Fedus. Emergent abilities of large language models. Transactions on Ma-chine Learning Research , 2022a. ISSN 2835-8856. URL https://openreview.net/forum?id=yzkSU5zdwD .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Ed H. Chi, Quoc Le, and Denny Zhou. Chain of thought prompting elicits reasoning in large language models. CoRR , abs/2201.11903, 2022b. URL 
+
+https://arxiv.org/abs/2201.11903 .Jerry Wei, Jason Wei, Yi Tay, Dustin Tran, Albert Webson, Yifeng Lu, Xinyun Chen, Hanxiao Liu, Da Huang, Denny Zhou, and Tengyu Ma. Larger language models do in-context learning differently, 2023. URL https://arxiv.org/abs/2303.03846 .Jingfeng Wu, Difan Zou, Zixiang Chen, Vladimir Braverman, Quanquan Gu, and Peter Bartlett. How many pretraining tasks are needed for in-context learning of linear regression? In The Twelfth International Conference on Learning Representations , 2024. URL https://openreview.net/forum?id=vSh5ePa0ph .Qilin Ye, Deqing Fu, Robin Jia, and Vatsal Sharan. Transformers provably learn algorithmic solutions for graph connectivity, but only with the right data, 2026. URL https://arxiv.org/abs/2510.19753 .Ruiqi Zhang, Spencer Frei, and Peter L. Bartlett. Trained transformers learn linear models in-context. Jour-nal of Machine Learning Research , 25(49):1–55, 2024a. URL http://jmlr.org/papers/v25/23-1042. html .Ruiqi Zhang, Jingfeng Wu, and Peter L. Bartlett. In-context learning of a linear transformer block: Benefits of the mlp component and one-step gd initialization, 2024b. 11 Yedi Zhang, Aaditya K. Singh, Peter E. Latham, and Andrew Saxe. Training dynamics of in-context learning in linear attention, 2025. URL https://arxiv.org/abs/2501.16265 .Yufeng Zhang, Fengzhuo Zhang, Zhuoran Yang, and Zhaoran Wang. What and how does in-context learning learn? bayesian model averaging, parameterization, and generalization, 2023. URL https://arxiv.org/ abs/2305.19420 .12 A Experimental details 
+
+The data structure follows the Section 2 setup. For all experiments we choose a stationary kernel, i.e. ,distance-dependent correlations, given by 
+
+Kab := exp( −| a − b|/ξ ). (2) Here the correlation length ξ is manifestly part of the definition of K; when ξ = 0 , K = Iℓ. This definition is convenient due to the clarity of its correlation length parameter, as well as the fact that our Gaussian model with this kernel is equivalent to an AR(1) process which allows for efficient sampling. When query correlations are present, i.e. , ktest ̸ = 0, we choose matching structure 
+
+(ktest )a := exp( −| ℓ + 1 − a|/ξ ). (3) This parameter ξ is what is referred to on the x-axes of all figures. 
+
+Data parameters. A batch of data contains sequences of length ℓ with one query each. We train in an offline manner with n total sequences. Each sequence is defined by a task vector w. As in Lu et al. (2025); Letey et al. (2026b); Raventós et al. (2023), the total number of task vectors in the pretraining batch may differ from n. The total number of unique task vectors in the batch is called k, and each unique vector is sampled i.i.d. from N (0, I d). For all experiments, we take 
+
+d = 32 , n = 4096 = 4 d2 , ℓ = 128 = 4 d , k = 320 = 10 d
+
+matching the asymptotic scalings of these variables derived in Lu et al. (2025). We take label noise ρ = 0 .01 .
+
+Architecture details. The experiments train sequence models on the above linear regression sequence data with sequentially correlated inputs. The architectures considered include softmax-only layers, soft-max+MLP transformer-like architectures, and pure linear attention. Note that we distinguish between the reduced model (where the optimal solution is given directly by Γ∗) from trainable fully-parameterised linear attention. Softmax models embed inputs into width d + 1 with a dedicated label channel, initialise input em-beddings with scale proportional to √(d + 1) , initialise query/key maps on the input channels, and initialise value/output maps to primarily use the label channel with small Gaussian noise. MLP blocks use GELU and are initialised close to zero. Linear-attention models operate directly on concatenated (xi, y i) tokens of dimension d+1, with query/key/value matrices initialised near identity. Models are trained by minimising mean-squared error on the held-out query label only. Optimisation uses Optax AdamW-style updates with weight decay lamb ; the total number of gradient steps is set to some fixed T (large enough to reach training loss convergence), but we employ early stopping and report the test loss of the best checkpointed model. We use a linear learning-rate warmup from 0 to max_lr over the first 10% of training, with learning rate remaining constant after warmup. We use exponential moving average weights for evaluation. Minibatching is used to divide the full dataset of n sequences; we find that smaller batch sizes perform better for softmax attention architectures. Figures 1 and 3 show mean best-test loss over different seeds, where seeds control train data batch, testing samples, and batch divisions. A summary of our training hyperparameters is 
+
+max_lr = 0 .001 , lamb = 0 .0001 , T = 10000 , batch size = 64 = 2 d, # seeds = 5 .
+
+## B Detailed setup 
+
+Here we reiterate the data and model setup given in the main document with more details. We leave the token design matrix general, i.e. ,
+
+xa ∼K N (0 , Σ/d )
+
+where the sample-sample correlations are given by positive semi-definite K as 
+
+EX [Xai Xbj ] = 1
+
+d Kab Σij for a, b ∈ [ℓ] and i, j ∈ [d]. (4) 13 The label noise we take to be sequentially uncorrelated 
+
+ε ∼ N (0 , ρI ℓ+1 ) independent of all X and xtest .
+
+The query xtest may be correlated with the contexts as 
+
+E[xtest |X] = X⊤m , Var (xtest |X) = 1
+
+d (1 − k−1)Σ 
+
+for 
+
+m ≡ K−1ktest ∈ Rℓ , k−1 ≡ k⊤
+
+> test
+
+K−1ktest ≤ 1.
+
+This is equivalent to sampling, as in eq. (4), using ℓ + 1 × ℓ + 1 positive-semidefinite correlation kernel 
+
+Kquery =
+
+[ K ktest 
+
+k⊤ 
+
+> test
+
+1
+
+]
+
+.
+
+As a final note, this entire data setup is equivalent to 
+
+X = 1
+
+√d
+
+√KZ √Σ , Zsi ∼i.i.d. N (0 , 1) .
+
+B.1 Notation and Assumptions 
+
+We will consider a standard high-dimensional proportional limit, as in (Letey et al., 2026b; Lu et al., 2025). The context length scales as 
+
+α ≡ ℓd = Θ d,ℓ (1) .
+
+The usual high-dimensional assumptions on Σ are such that 
+
+tr(Σ) , tr (Σww ⊤) = Θ( d).
+
+These are a succinct summary of conditions on both Σ and w. The first condition tr(Σ) = Θ( d) ensures that there is reasonable signal to estimate in the tokens; note that after this section we will always assume 
+
+Σ = Id. The second condition tr (Σww ⊤) = Θ( d) is equivalent to ∥w∥2 = Θ( d) ensuring that there is enough recoverable task signal. Given these assumptions, everything will be written in normalised Θd(1) quantities 
+
+tr[Σ] := 1
+
+d tr(Σ) , tr [Σww ⊤] := 1
+
+d tr (Σww ⊤).
+
+These need to be extended to assumptions about K. We will take 
+
+tr[ K] = 1
+
+ℓ tr( K) = 1 
+
+The final thing to reason about is the contributions from K2 and from ktest . This is where the notion of “correlation length” captured in K and ktest becomes important, as the terms 
+
+tr (K2) , k−1 ≡ k⊤
+
+> test
+
+K−1ktest , k0 ≡ k⊤
+
+> test
+
+ktest , k1 ≡ k⊤
+
+> test
+
+Kktest 
+
+will appear in the computation. 
+
+Example: the exponential kernel It is often convenient and natural to choose K to be PSD and Toeplitz, i.e. ,
+
+Kst = c(|s − t|).
+
+This means the correlations between xs and xt are stationary: they only depend on their relative distance in the sequence. A particularly nice example of such a matrix is one with 
+
+c(τ ) = exp( −τ /ξ ).
+
+As we’ve seen from Figure 2, there are various cases that may occur. 14 • Finite correlations: ξ = Θ ℓ(1) . Then k0, k 1, k 2 = Θ(1) .
+
+• Subleading correlations: Have ξ = o(ℓ). If ξ2 = o(ℓ), then k0, k 1, k 2 = o(ℓ); else, have k0, k 2 = o(ℓ),
+
+k1 = O(ℓ).
+
+• Proportional correlations: ξ ∝ ℓ. Then k0, k 2 = Θ( ℓ), k1 = Θ( ℓ2).
+
+## C Population loss 
+
+We will consider linear features 
+
+y = Xw + ε , ytest = x⊤
+
+> test
+
+w + N (0 , ρ ).
+
+For each such sequence of X, y, xtest , y test , define a data matrix 
+
+H = xtest 
+
+[ dℓ (Xw + ε)⊤X 1 
+
+> ℓ
+
+(Xw + ε)⊤(Xw + ε)] ∈ Rd×(d+1) .
+
+The predictor we will use for ytest is given by 
+
+ˆytest = ⟨Γ, H ⟩ = tr (ΓH⊤)
+
+for parameters Γ ∈ Rd×(d+1) . Before we consider ICL error at optimal parameters Γ∗, we can compute a population formula for 
+
+EICL (Γ) = Enew data 
+
+[
+
+(ynew test − ⟨ Γ, H new ⟩)2]
+
+.
+
+This formula will be different depending on which asymptotic treatment of k2, k 0, k 1 we are considering. 
+
+Notation. We will use the convention of row-wise vectorisation, and so have Vec (vu ⊤) = v ⊗ u ∈ Rdim (v)×dim (u) , Vec (vu ⊤)Vec (vu ⊤)⊤ = ( vv ⊤) ⊗ (uu ⊤)
+
+Lemma 1. Suppose we have weak correlations, i.e., k2, k 0, k 1 = Θ(1) . For w ∼ N (0, C ), writing tr[ C] = tr( C)/d , with 
+
+ρ1 ≡ tr[ C] + ρ , ρ2 ≡ k2 tr[ C] + ρ
+
+have population ICL risk 
+
+EICL (Γ) = ρ + tr[ C] − 2 1
+
+d tr (ΓA⊤) + 1
+
+d tr (ΓBΓ⊤) + 1
+
+d2 tr (T vec(Γ) vec(Γ) ⊤) (5) 
+
+for 
+
+A ≡ [C + 1 
+
+> α
+
+k0 tr[ C]Id 0] , B ≡
+
+[C + ρ2 
+
+> α
+
+Id 00 ρ21
+
+]
+
+T ≡ k1 tr[ C] + ρk 0
+
+α2 vec ([ I 0]) vec ([ I 0]) ⊤
+
++ k0
+
+α
+
+(
+
+vec ([ I 0]) vec ([ C 0]) ⊤ + vec ([ C 0]) vec ([ I 0]) ⊤)
+
+## D Breakdown of the high-dimensional analysis for strong correlations 
+
+In the subsequent appendices (starting with Appendix E), we will use random-matrix-theoretic techniques to derive an asymptotically-precise formula for EICL (Γ ∗) in the high-dimensional limit. This analysis hinges on our ability to derive what are known as deterministic equivalents for the high-dimensional behaviour of random matrices related to the optimal parameter matrix Γ∗ of our reduced linear attention model. Before we embark on the analysis, in this Appendix we derive a condition on the correlations K that is necessary for the random matrix analysis to go through as in Lu et al. (2025). This condition is violated when the 15 correlations are strong, which shows that this approach does not obviously extend to the strong correlation regime. We recall from Lu et al. (2025) that we can write the optimal parameter matrix in vectorized form as 
+
+vec(Γ ∗) = 
+
+(
+
+nd λI d(d+1) +
+
+> n
+
+∑
+
+> μ=1
+
+vec( Hμ) ⊗ vec( Hμ)
+
+)−1 n∑
+
+> μ=1
+
+yμ 
+
+> test
+
+vec( Hμ). (6) Starting from this formula, a key ingredient of the high-dimensional analysis is (as we will see in the sequel), the assumption that quadratic forms 
+
+vec( Hμ)⊤G vec( Hμ), (7) for G a possibly-random matrix that is independent of Hμ, concentrate to their expectations in the high-dimensional limit. To gain some insight into whether this assumption is justified, we consider the test case 
+
+G = I, which corresponds to considering the norms ∥ vec( Hμ)∥2. If the norms do not concentrate, then for the class of matrices G that appear in the computation, neither should the more general quadratic forms. To determine when the norms concentrate, suppress the index μ ∈ [n], and recall that we have 
+
+H = xtest 
+
+[ dℓ (Xw + ε)⊤X 1 
+
+> ℓ
+
+(Xw + ε)⊤(Xw + ε)] .
+
+We will simplify our analysis here, as our goal is to focus on intuition, by ignoring the noise terms given by 
+
+ε; these do not affect the argument. Thus we write 
+
+vec( H) = v ⊗ xtest + ignored noise contribution where 
+
+v =
+
+[ dℓ X⊤Xw 
+
+> 1
+> ℓ
+
+w⊤X⊤Xw
+
+]
+
+.
+
+We thus have that 
+
+1
+
+d2 ∥ vec( H)∥2 = 1
+
+d2 ∥xtest ∥2∥v∥2
+
+= 1
+
+d2 ∥xtest ∥2
+
+( d2
+
+ℓ2 w⊤X⊤XX ⊤Xw + 1
+
+ℓ2 (w⊤X⊤Xw)2
+
+)
+
+> d
+
+=
+
+(
+
+1
+
+d m⊤K1/2ZZ ⊤K1/2m + 2 
+
+√1 − k−1
+
+d z⊤Z⊤K1/2m + 1 − k−1
+
+d ∥mz∥2
+
+)
+
+×
+
+( 1
+
+d2ℓ2 w⊤Z⊤KZZ ⊤KZ w + 1
+
+d4ℓ2 (w⊤Z⊤KZ w)2
+
+)
+
+,
+
+where d
+
+= means equivalent in distribution. Here Z is an ℓ × d matrix with i.i.d. N (0 , 1) entries and 
+
+z ∼ N (0 , I d) for the query (independent of Z). Upon analysis of each of these terms, which we omit for brevity, we find that the problematic term is 
+
+1
+
+d2ℓ2 w⊤Z⊤KZZ ⊤KZ w d
+
+= ∥w∥2(Z⊤KZZ ⊤KZ )11 
+
+> d
+
+= ∥w∥2
+
+d
+
+1
+
+ℓ2
+
+> ℓ
+
+∑
+
+> a,b =1
+
+κaκbZa1Zb1
+
+1
+
+d
+
+> d
+
+∑
+
+> i=1
+
+Zai Zbi 
+
+= ∥w∥2
+
+d
+
+1
+
+d
+
+(
+
+1
+
+ℓ
+
+> ℓ
+
+∑
+
+> a=1
+
+κaZ2
+
+> a1
+
+)2
+
++ ∥w∥2
+
+d
+
+1
+
+ℓ2
+
+> ℓ
+
+∑
+
+> a,b =1
+
+κaκbZa1Zb1
+
+1
+
+d
+
+> d
+
+∑
+
+> i=2
+
+Zai Zbi .
+
+We have arrived at this expression by exploiting the fact that the distribution of the matrix Z is invariant under both left and right rotation to perform two changes of basis: (1) we let K have orthogonal eigende-composition K = O diag (κ1, . . . , κ ℓ) O⊤, and (2) we choose a basis such that w = ( ∥w∥, 0, . . . , 0) ⊤.16 Now we must analyse this expression to provide a condition on K, specifically its eigenvalues κ1, . . . , κ ℓ,for when this term does or does not concentrate. We focus on the second term in the sum, supposing for simplicity that ∥w∥2/d = 1 :
+
+A := 1
+
+ℓ2
+
+> ℓ
+
+∑
+
+> a,b =1
+
+κaκbZa1Zb1
+
+1
+
+d
+
+> d
+
+∑
+
+> i=2
+
+Zai Zbi .
+
+It has moments given by 
+
+E[A] = d − 1
+
+d
+
+1
+
+ℓ2
+
+> ℓ
+
+∑
+
+> a=1
+
+κ2 
+
+> a
+
+,
+
+var [A] = 2
+
+ℓ4d2 (d − 1) 
+
+( ℓ∑
+
+> a=1
+
+κ2
+
+> a
+
+)2
+
++ 2
+
+ℓ4d2 (d2 − 1) 
+
+> ℓ
+
+∑
+
+> a=1
+
+κ4 
+
+> a
+
+,
+
+and so the square of the coefficient of variation of A is therefore var [A]
+
+E[A]2 = 2 
+
+ 1
+
+d − 1 + d2 − 1(d − 1) 2
+
+∑ℓa=1 κ4
+
+> a
+
+(∑ℓa=1 κ2
+
+> a
+
+)2
+
+
+
+= 2[1 + O(d−1)] 
+
+∑ℓa=1 κ4
+
+> a
+
+(∑ℓa=1 κ2
+
+> a
+
+)2 + O(d−1).
+
+We now notice that the K-dependence here 
+
+∑ℓa=1 κ4
+
+> a
+
+(∑ℓa=1 κ2
+
+> a
+
+)2 = tr (K4)
+
+tr( K2)2
+
+looks like some sort of participation ratio. Indeed if K = Iℓ (uncorrelated case, we know this concentrates) then tr (K4)
+
+tr( K2)2 = 1
+
+ℓ → 0,
+
+while if K = 11 ⊤ (maximally correlated case, here x1 = . . . = xℓ) then 
+
+tr (K4)
+
+tr( K2)2 = 1 .
+
+In the maximally-correlated case K = 11 ⊤, we see that A = Z211 1
+
+> d
+
+∑di=2 Z21i tends in distribution to a 
+
+χ2 random variable with 1 degree of freedom (as 1
+
+> d
+
+∑di=2 Z21i → 1 almost surely), which clearly does not concentrate. This gives us an intuitive heuristic for concentration of ∥ vec( H)∥ :
+
+Necessary condition for concentration 
+
+Quadratic forms in vec( H) converge to a deterministic high-dimensional limit only if 
+
+tr (K4)
+
+tr( K2)2 → 0. (8) For the exponential case Kab = exp( −| a − b|/ξ ), we can estimate 
+
+tr (K4)
+
+tr( K2)2 ∼ ξℓ
+
+17 at large ℓ, which gives the condition we expected. We see that for correlations that persist on the same order as the context length, we do not have concentration of vec( H), and thus we do not have concentration of 
+
+EICL (Γ ∗). An extension of great interest to us would be to analyse this nonconcentration for a wider range of K choices, e.g. how does this participation ratio behave for other non-exponential (or even non-Toeplitz) choices of K?
+
+Remark. It is worth noting that the case of k2 = o(ℓ) does not violate this condition (8). Yet, the formula we shall derive will assume that k2 = Θ(1) . This might potentially be too restrictive of an assumption; indeed Figure 2 shows great match between simulation and our theory curve, so long as k1 = o(ℓ) as well. We choose to study the k0, k 1, k 2 = Θ(1) branch only as this is the branch where the test matrices A, B, T
+
+defined in Lemma 1 have order 1 entries. Indeed, under numerical investigation, this population loss formula appears to be accurate for the k0, k 1, k 2 = o(ℓ) case. However, we choose not to study this branch in this work due to the elements of A, B, T becoming extensive in ℓ.
+
+## E Asymptotic formula for ICL error in the weak-correlations case 
+
+Here we present a deterministic formula for EICL (Γ ∗) in the weak-correlations case. Again, the optimal parameters are given by eq. (6). The explicit ridge λ is a parameter that adds regularisation to this solution; it is common to take the ridgeless limit λ → 0 in similar works. Here we have n sample sequences, giving n different Hμ ∈ Rd×(d+1) data embeddings, where the sequence length is of course ℓ + 1 (ℓ main tokens and one query). We will also introduce a new parameter k that controls the number of regression task vectors w that define the labels in these sequences. The phenomenology surrounding k is not discussed in this work for space reasons, but we include it to best match previous work on this model for consistency (Lu et al., 2025; Letey et al., 2026b; Raventós et al., 2023). We sample k
+
+task vectors wj ∼i.i.d. N (0, I d) and these k vectors are distributed uniformly across the n sequences. This serves to limit the “task diversity” of the training batch, allowing us to judge how much of the true task distribution N (0, I d) the model is truly learning in-context. We consider the same asymptotic treatment as derived in Lu et al. (2025), namely d → ∞ with 
+
+α := ℓd , τ := nd2 , κ := kd
+
+all taken to be Θ(1) as d → ∞ .An important quantity to define is the Stieltjes transform of the task sample covariance. This will be given by 
+
+Mκ(z) := lim 
+
+> d→∞ ,k =κd
+
+1
+
+d tr 
+
+ 1
+
+k
+
+> k
+
+∑
+
+> j=1
+
+wj w⊤ 
+
+> j
+
++ zI d
+
+
+
+> −1
+
+ (9) We will also use 
+
+M′
+
+> κ
+
+(z) := ddz Mκ(z).
+
+These quantities will appear throughout our formula. The explicit ridge parameter λ will be modulated by the fact that we have finite samples, and will appear in our formula through an effective ridge defined implicitly by 
+
+˜λMκ
+
+(˜λ + ρ2
+
+α
+
+)
+
++ λτ 
+
+˜λ = 1 − τ
+
+We will sometimes write M := Mκ(σ), M′ := M′
+
+> κ
+
+(σ) for shorthand, where 
+
+σ = ˜λ + ρ2
+
+α , ˜σ = σ − k0
+
+α .
+
+18 Finally, we are only considering the case where the sequential correlations defined by K, ktest are sufficiently weak, i.e. ,
+
+k2 := 1
+
+ℓ tr (K2), k0 := k⊤
+
+> test
+
+ktest , k1 := k⊤
+
+> test
+
+Kktest 
+
+are all Θ(1) as d, ℓ → ∞ . These terms will appear in the constants 
+
+ρ1 ≡ 1 + ρ , ρ2 ≡ k2 + ρ , ϕ1 ≡ 1
+
+α2 (k1 + ρk 0) , ϕ2 ≡ 1
+
+α k0.
+
+We present the main formula below. All proofs are given in subsequent sections. 
+
+Proposition 1. Consider isotropic tokens and tasks, i.e., Σ = Id = C, with sequential correlations in the tokens given by PSD K ∈ Rℓ×ℓ and ktest ∈ Rℓ for k⊤
+
+> test
+
+K−1ktest ≤ 1. We then have that ICL error for a model defined by Γ∗ concentrates as d → ∞ in the above limit, i.e., 
+
+EICL (Γ ∗) ≃ ecorr ICL (α, κ, τ, ρ, k 0, k 1, k 2)
+
+for 
+
+ecorr ICL (α, κ, τ, ρ, k 0, k 1, k 2) = euncorr ICL 
+
+( 1 + ρk2 + ρ α, κ, τ, ρ 
+
+)
+
++ equery (α, κ, τ, ρ, k 0, k 1, k 2)
+
+where 
+
+equery = −2ϕ2 + qquery (M + ˜λM′) + ϕ2(2 σ − ϕ2)M′ + 2 ϕ2 ˜σM
+
++ m⊤ 
+
+> 2
+
+S⊤M S m2 − 2m⊤ 
+
+> 2
+
+Sm3 + 2(1 + ϕ2)m⊤ 
+
+> 1
+
+Sm2 + ( ϕ1 + 2 ϕ2) (1 − ˜σM − m⊤ 
+
+> 1
+
+Sm2
+
+)2
+
++ ρ2
+
+α
+
+[
+
+qquery (M + ˜λM′) + ϕ2(2 σ − ϕ2)M′ + m⊤ 
+
+> 2
+
+S⊤M S m2 − 2m⊤ 
+
+> 2
+
+Sm3 + 2 ϕ2M
+
+]
+
+.
+
+for 
+
+m1 =
+
+[ M
+
+ϕ2(1 − σM)
+
+]
+
+, m2 =
+
+[ 1 − ˜σM
+
+ϕ2(1 − ˜σ + σ˜σM)
+
+]
+
+, m3 =
+
+[ M + ˜ σM′
+
+ϕ2(1 − σM − ˜σM − σ˜σM′)
+
+]
+
+M =
+
+[ −M ′ ϕ2(M + σM′)
+
+ϕ2(M + σM′) ϕ22(1 − 2σM − σ2M′)
+
+]
+
+, S =
+
+[ M 1 + ϕ2(1 − σM)1 + ϕ2(1 − σM) −ϕ1 + ϕ22(1 − σ + σ2M)
+
+]−1
+
+qquery = 2 k0
+
+> α
+
+(˜λ(M + σM′) + (1 − 2σM)) + k20
+
+> α2
+
+(M − ˜λM′) + m⊤ 
+
+> 2
+
+Sm2 − ˜λ(−2m⊤ 
+
+> 2
+
+Sm3 + m⊤ 
+
+> 2
+
+S⊤M S m2
+
+)
+
+τ − (1 − 2˜λM − ˜λ2M′) .
+
+## F Proofs of Population Averages 
+
+We begin for necessary ytest , H averages needed for terms in the population loss formula in Lemma 1. 
+
+A language model was used at various stages of these proofs to help with the Wick expansions of the 6th order moments in terms of traces. All expressions were subsequently carefully verified by the authors both analytically and numerically. 
+
+Lemma 2. Suppose we have k2, k 0, k 1 = Θ(1) i.e., weak correlations. Write v = Σ w. Then we have 
+
+E[y2test ] = tr [Σww ⊤] + ρ
+
+E[ytest H] ≈ 1
+
+d
+
+[vv ⊤ + 1 
+
+> α
+
+k0 tr [Σww ⊤]Σ (tr [Σww ⊤] + ρ)v]
+
+E[vec( H)vec( H)⊤] ≈ 1
+
+d Σ ⊗
+
+[vv ⊤ + (k2 tr [Σww ⊤] + ρ)Σ/α (tr [Σww ⊤] + ρ)v(tr [Σww ⊤] + ρ)v⊤ (tr [Σww ⊤] + ρ))2
+
+]
+
++ 1
+
+d2 X
+
+19 for d(d + 1) × d(d + 1) tensor X given by 
+
+X = 1
+
+α2
+
+(
+
+k1 tr[Σ W ] + ρk 0
+
+)
+
+vec ([ Σ 0]) vec ([ Σ 0]) ⊤
+
++ k0
+
+α
+
+(
+
+vec ([ Σ 0]) vec ([ S (tr [Σww ⊤] + ρ)v]) ⊤
+
++ vec ([ S (tr [Σww ⊤] + ρ)v]) vec ([ Σ 0]) ⊤)
+
+.
+
+The “ ≈” means subleading terms in ℓ, d are neglected. Proof. Let’s go term by term. Label-label term. Conditioning on X, we have 
+
+E[xtest x⊤ 
+
+> test
+
+| X] = 1
+
+d (1 − k−1)Σ + ( X⊤m)( X⊤m)⊤
+
+and so 
+
+E[y2test ] = E[tr (xtest x⊤
+
+> test
+
+ww ⊤) + ρ]= 1
+
+d (1 − k−1)EX
+
+[tr (Σww ⊤)] + EX
+
+[tr ((X⊤m)( X⊤m)⊤ww ⊤)] + ρ
+
+= (1 − k−1 + k−1) tr [Σww ⊤] + ρ. 
+
+Label-feature term. For 
+
+b = X⊤(Xw + ε) , c = ( Xw + ε)⊤(Xw + ε)
+
+we have 
+
+ytest H = xtest (x⊤
+
+> test
+
+w + εtest ) [ dℓ b⊤ 1 
+
+> ℓ
+
+c]
+
+and so 
+
+E[ytest H] = 1
+
+d (1 − k−1)Σ w
+
+[ dℓ EX [b] 
+
+> 1
+> ℓ
+
+EX [c]
+
+]⊤
+
++ [ dℓ EX [( X⊤m)( X⊤m)⊤w b ⊤] 1 
+
+> ℓ
+
+EX [( X⊤m)( X⊤m)⊤w c]]
+
+Have 
+
+dℓ EX [b] = tr[ K]v
+
+1
+
+ℓ EX [c] = tr[ K] tr [Σww ⊤] + ρdℓ EX [( X⊤m)( X⊤m)⊤wb ⊤] = 1
+
+d · 1
+
+ℓ (k−1 tr( K) + k0)vv ⊤ + 1
+
+d · 1
+
+ℓ k0 tr (Σww ⊤)Σ
+
+≈ 1
+
+d ·
+
+(
+
+k−1 tr[ K]vv ⊤ + 1
+
+α k0 tr [Σww ⊤]Σ
+
+)
+
+1
+
+ℓ EX [( X⊤m)( X⊤m)⊤w c] = 1
+
+d · ρk −1v + 1
+
+d · k−1 tr[ K] tr [Σww ⊤]v + 2
+
+d2
+
+k0
+
+ℓ vv ⊤w
+
+≈ 1
+
+d · k−1
+
+(tr[ K] tr [Σww ⊤] + ρ)v
+
+Combining gives 
+
+E[ytest H] = 1
+
+d
+
+[tr[ K]vv ⊤ + 1 
+
+> α
+
+k0 tr [Σww ⊤]Σ ρ1v]
+
+20 Feature-feature term Using b, c as above we can write more easily Vec (H)Vec (H)⊤ = ( xtest x⊤
+
+> test
+
+) ⊗
+
+([ dℓ b 
+
+> 1
+> ℓ
+
+c
+
+] [ dℓ b 
+
+> 1
+> ℓ
+
+c
+
+]⊤)
+
+Taking conditional expectation over xtest for fixed X, our expression simplifies as 
+
+E[Vec( H)Vec( H)⊤] = 1
+
+d (1 − k−1)Σ ⊗ EX,ϵ 
+
+[uu ⊤] + EX,ϵ 
+
+[(X⊤m)( X⊤m)⊤ ⊗ (uu ⊤)] .
+
+where I’m writing u⊤ = [ dℓ b⊤ 1 
+
+> ℓ
+
+c] for convenience. Now let’s start with the E[uu ⊤] term. We have 
+
+E[bb ⊤] = E[X⊤Xww ⊤X⊤X] + E[X⊤εε ⊤X]= 1
+
+d2
+
+(
+
+tr (K2) + tr( K)2)
+
+Σww ⊤Σ + 1
+
+d2 tr (K2) tr (Σww ⊤)Σ + 1
+
+d ρ tr( K)Σ 
+
+E[cb] = E[w⊤X⊤XwX⊤Xw] + 2 E[ε⊤XwX ⊤ε] + E[ε⊤εX⊤Xw]=
+
+( 1
+
+d2
+
+(
+
+tr( K)2 + 2 tr (K2))
+
+tr (Σww ⊤) + 1
+
+d ρ(ℓ + 2) tr( K)
+
+)
+
+Σw
+
+E[c2] = E[w⊤X⊤Xww ⊤X⊤Xw] + 2 E[w⊤X⊤Xwε ⊤ε] + 4 E[w⊤X⊤εε ⊤Xw] + E[ε⊤εε ⊤ε]= 1
+
+d2
+
+(
+
+tr( K)2 + 2 tr (K2))
+
+tr (Σww ⊤)2 + 1
+
+d ρ(2 ℓ + 4) tr( K) tr (Σww ⊤) + ρ2(ℓ2 + 2 ℓ).
+
+This simplifies as 
+
+d2
+
+ℓ2 E[bb ⊤] ≈ tr[ K]2(Σ w)(Σ w)⊤ + 1
+
+α
+
+(ρ tr[ K] + tr [K2] tr[Σ W ])Σ
+
+dℓ2 E[cb] ≈ tr[ K](tr[ K] tr[Σ W ] + ρ)Σ w
+
+1
+
+ℓ2 E[c2] ≈ (ρ + tr[ K] tr[Σ W ]) 2
+
+upon making the above high-dimensional assumptions. For the higher order term, 
+
+E [(X⊤m)( X⊤m)⊤ ⊗ (uu ⊤)] =
+
+[ d2 
+
+> ℓ2
+
+E[( X⊤m)( X⊤m)⊤ ⊗ bb T ] dℓ2 E[( X⊤m)( X⊤m)⊤ ⊗ cb] 
+
+> dℓ2
+
+E[( X⊤m)( X⊤m)⊤ ⊗ cbT ] 1 
+
+> ℓ2
+
+E[( X⊤m)( X⊤m)⊤ ⊗ c2]
+
+]
+
+Write 
+
+v := Σ w, S := vv ⊤ , k−1 ≡ tr( KM ) = k⊤
+
+> test
+
+K−1ktest , k0 ≡ k⊤
+
+> test
+
+ktest , k1 ≡ k⊤
+
+> test
+
+Kktest 
+
+For large ℓ, d and the chosen high-dimensional assumptions, the Isserlis expansion gives 
+
+d2
+
+ℓ2 E
+
+[((X⊤m)( X⊤m)⊤) ⊗ (bb ⊤)
+
+]
+
+> (I,i ),(J,j )
+
+≈ 1
+
+d k−1
+
+(
+
+ΣIJ Sij tr[ K]2 + 1
+
+α
+
+(tr[Σ W ] tr [K2] + ρ tr[ K])ΣIJ Σij 
+
+)
+
++ 1
+
+d2 X(I,i )( J,j )
+
+with 
+
+X(I,i )( J,j ) ≡ 1
+
+α2 k1 tr[Σ W ]Σ Ii ΣJj + 1
+
+α tr[ K]k0(Σ Ii SJj + Σ Jj SIi ) + ρ 1
+
+α2 k0ΣIi ΣJj 
+
+= 1
+
+α2 (k1 tr[Σ W ] + ρk 0)Σ Ii ΣJj + 1
+
+α k0 tr[ K](Σ Ii SJj + Σ Jj SIi ).
+
+21 Now for the second term, 
+
+E[( X⊤m)( X⊤m)⊤ ⊗ cb](I,i ),J = E[c(X⊤m)I (X⊤m)J bi]= E[( Xsk wk + εs)( Xsn wn + εs)XtI XpJ Mtp Xqi (Xqj wj + εq )] = Mtp Wkn wj E[Xsk Xsn XtI XpJ Xqi Xqj ] + ( ℓ + 2) ρM tp wj E[XtI XpJ Xqi Xqj ]
+
+Expanding all the Wick terms gives 
+
+dℓ2 E
+
+[((X⊤m)( X⊤m)⊤) ⊗ (cb )
+
+]
+
+> (I,i ),J
+
+≈ 1
+
+d k−1(tr[Σ W ] + ρ)Σ IJ vi + 1
+
+d2 X(I,i )( J,d +1) 
+
+where 
+
+X(I,i )( J,d +1) ≡ 1
+
+α k0(tr[Σ W ] + ρ)Σ Ii vJ .
+
+Finally, the last term gives 
+
+1
+
+ℓ2 E
+
+[
+
+(( X⊤m)( X⊤m)) ⊗ c2]
+
+> IJ
+
+≈ 1
+
+d k−1(tr[Σ W ] + ρ)2ΣIJ 
+
+Gathering everything together gives the required formula. 22 G Proof of Proposition 1 
+
+This entire section is an extended calculation that serves as a complete proof of the deterministic formula for 
+
+EICL (Γ ∗) given in Proposition 1. The methodology in this section is to analyse the random object Γ∗, which contains randomness through the particular training batch (Hμ, y μ
+
+> test
+
+)nμ=1 , as a resolvent of a larger random matrix, and the necessary tr (ΓA⊤) and tr (Γ⊤BΓ) terms as traces of a resolvent against deterministic test matrices. Throughout this entire section we will take Σ = Id.This section will be relatively light on detail as the full calculation setup can be found in both Lu et al. (2025) and Letey et al. (2026b). For a more rigorous analysis, with error terms bounded properly, see Lu et al. (2025); here we will simply write ≈ when terms can be dropped due to the negligibility in high dimensions. We care about the MSE loss (computed by Theorem 1) for the optimal parameters vec (Γ ∗) = 
+
+(
+
+nd λI +
+
+> n
+
+∑
+
+> μ=1
+
+vec (Hμ)vec (Hμ)⊤
+
+)−1 n∑
+
+> μ=1
+
+yμ
+
+> test
+
+vec (Hμ) (10) for μ ∈ [n] denoting the index for the n training sample sequences. Define 
+
+zμ =
+
+[ yμ
+
+> test
+
+/d 
+
+vec( Hμ)/√d
+
+]
+
+∈ Rd(d+1)+1 
+
+and construct extended resolvent 
+
+Gext (π) = 1
+
+∑ 
+
+> μ∈[n]
+
+zμz⊤ 
+
+> μ
+
++ πB ext + τ λI . (11) for some test matrix Bext ∈ R(d(d+1)+1) ×(d(d+1)+1) .It’s important to note that even though we’re studying sequentially-correlated data, the vectors zμs are still independent of each other. We can thus apply the “leave-one-out” or cavity method here over the μ index. We end up with ∑
+
+> μ∈[n]
+
+11 + z⊤ 
+
+> μ
+
+G[μ]ext zμ
+
+G[μ]ext zμz⊤ 
+
+> μ
+
++ Gext (πB ext + τ λI ) = I. (12) For fixed task wμ we can apply Lemma 2 to compute 
+
+EX, xtest ,ε[zz ⊤] = 1
+
+d2 Υ( w)
+
+for 
+
+Υ( w) ≡
+
+[ tr [ww ⊤] + ρ 1√d vec ([ ww ⊤ + 1 
+
+> α
+
+k0 tr [ww ⊤]Id ρ1(w)w])  
+
+> 1√d
+
+vec ([ ww ⊤ + 1 
+
+> α
+
+k0 tr [ww ⊤]Id ρ1(w)w]) ⊤ Id ⊗ E(w) + 1 
+
+> d
+
+X (w)
+
+]
+
+where 
+
+E(w) ≡
+
+[ww ⊤ + ρ2(w)Id/α ρ1(w)w
+
+ρ1(w)w⊤ ρ1(w)2
+
+]
+
+, ρ1(w) = tr [ww ⊤] + ρ, ρ2(w) = tr [ww ⊤]k2 + ρ
+
+and d(d + 1) × d(d + 1) tensor 
+
+X (w) ≡ 1
+
+α2
+
+(tr [ww ⊤]k1 + ρk 0
+
+) vec ([ Id 0]) vec ([ Id 0]) ⊤
+
++ 1
+
+α k0
+
+(
+
+vec ([ Id 0]) vec ([ ww ⊤ 0]) ⊤ + vec ([ ww ⊤ 0]) vec ([ Id 0]) ⊤)
+
++ 1
+
+α ρ1(w)k0
+
+(
+
+vec ([ Id 0]) vec (we ⊤
+
+> d+1
+
+)⊤ + vec (we ⊤
+
+> d+1
+
+) vec ([ Id 0]) ⊤)
+
+.
+
+23 The quadratic form z⊤ 
+
+> μ
+
+G[μ]ext zμ concentrates for fixed tasks wμ (assuming weak correlations, so that the condition noted in Appendix D is not violated), so we have 
+
+z⊤ 
+
+> μ
+
+G[μ]ext zμ ≃ χμ(wμ) (13) where 
+
+χμ(wμ) ≡ 1
+
+d2 tr 
+
+(
+
+[Gμ
+
+> ext
+
+]\0 ·
+
+[
+
+I ⊗ E(wμ) + 1
+
+d X (wμ)
+
+]) 
+
+. (14) Replacing z⊤ 
+
+> μ
+
+G[μ]ext zμ in (12) with χμ(wμ) gives 
+
+∑
+
+> μ∈[n]
+
+11 + χμ(wμ) G[μ]ext zμz⊤ 
+
+> μ
+
++ Gext (πB ext + τ λI ) ≃ I . (15) In this equation we will also replace zμz⊤ 
+
+> μ
+
+with its conditional expectation over X, xtest , ε, giving 
+
+τn
+
+∑
+
+> μ∈[n]
+
+11 + χμ(wμ) G[μ]ext Υ( wμ) + Gext (πB ext + τ λI ) ≃ I (16) where recall τ = n/d 2.In high dimensions and for large n, there is negligible difference between ∑  
+
+> ν̸=μ
+
+and ∑
+
+> μ
+
+. Thus, we replace 
+
+Gμ 
+
+> ext
+
+by Gext , and χμ(wμ) by 
+
+χ(wμ) ≡ 1
+
+d2 tr 
+
+(
+
+[Gext ]\0 ·
+
+[
+
+I ⊗ E(wμ) + 1
+
+d X (wμ)
+
+]) 
+
+. (17) So finally we have the expression for Gext 
+
+Gext 
+
+ τn
+
+∑
+
+> μ∈[n]
+
+11 + χ(wμ) Υ( wμ) + πB ext + τ λI 
+
+ ≃ I . (18) 
+
+Exploit finiteness of training task set. So far we are summing over n task vectors, but really only n/k of these are unique. Thus, we can simplify (18) as 
+
+Gext 
+
+ τk
+
+∑
+
+> j∈[k]
+
+11 + χ(wj ) Υ( wj ) + πB ext + τ λI 
+
+ ≃ I . (19) We replace χ(wj ), which is self-averaging in wj , with its mean ̂
+
+χ ave ≡ 1
+
+k
+
+∑
+
+> j∈[k]
+
+χ(wj ). (20) To clean up the sums over the tasks w1, ... wk we use the fact that 
+
+1
+
+k
+
+∑
+
+> j∈[k]
+
+tr [wj w⊤
+
+> j
+
+] = tr[ Rtr ]1
+
+k
+
+∑
+
+> j∈[k]
+
+(ρ + tr [wj w⊤
+
+> j
+
+]) wj ≃ (ρ + tr[ Rtr ]) btr 
+
+1
+
+k
+
+∑
+
+> j∈[k]
+
+(ρ + tr [wj w⊤
+
+> j
+
+]) 2 ≃ (ρ + tr[ Rtr ]) 2
+
+24 for 
+
+btr ≡ 1
+
+k
+
+∑
+
+> j∈[k]
+
+wj , Rtr ≡ 1
+
+k
+
+∑
+
+> j∈[k]
+
+wj w⊤ 
+
+> j
+
+.
+
+We thus have that 
+
+1
+
+k
+
+∑
+
+> j∈[k]
+
+E(wj ) ≈ Btr ≡
+
+[Rtr + ρ2Id/α ρ1btr 
+
+ρ1b⊤ 
+
+> tr
+
+ρ21
+
+]
+
+1
+
+k
+
+∑
+
+> j∈[k]
+
+X (wj ) ≈ Φ
+
+for 
+
+Φ ≡ 1
+
+α2 (tr[ Rtr ]k1 + ρk 0) vec ([ Id 0]) vec ([ Id 0]) ⊤
+
++ 1
+
+α k0
+
+(
+
+vec ([ Id 0]) vec ([ Rtr 0]) ⊤ + vec ([ Rtr 0]) vec ([ Id 0]) ⊤)
+
++ 1
+
+α ρ1k0
+
+(
+
+vec ([ Id 0]) vec (btr e⊤
+
+> d+1
+
+)⊤ + vec (btr e⊤
+
+> d+1
+
+) vec ([ Id 0]) ⊤)
+
+where 
+
+ρ1 = tr[ Rtr ] + ρ , ρ2 = tr [K2] tr[ Rtr ] + ρ. 
+
+Finally, we have ̂
+
+χ ave = 1
+
+d2 tr 
+
+(
+
+[Gext ]\0 ·
+
+[
+
+I ⊗ Btr + 1
+
+d Φ
+
+]) 
+
+. (21) Thus, after averaging over X, xtest , ε in the extended resolvent Gext , we have a deterministic equivalent 
+
+Gext ≃ G ext (still depending on random task quantities Rtr , btr ) defined by self-consistent equations 
+
+[Gext ]\0 =
+
+( τ
+
+1 + χπ
+
+Id ⊗ Btr + 1
+
+dτ
+
+1 + χπ
+
+Φ + πΠ + τ λI d ⊗ Id+1 
+
+)−1
+
+(22) 
+
+χπ = 1
+
+d2 tr 
+
+(
+
+[Gext ]\0
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ
+
+)) 
+
+(23) where the full matrix is given by 
+
+Gext (π)−1 ≡ τ
+
+1 + χπ
+
+[
+
+ρ1 1√d vec ([ Rtr + 1 
+
+> α
+
+k0 tr[ Rtr ]Id ρ1btr 
+
+]) ⊤ 
+
+> 1√d
+
+vec ([ Rtr + 1 
+
+> α
+
+k0 tr[ Rtr ]Id ρ1btr 
+
+]) Id ⊗ Btr + 1 
+
+> d
+
+Φ
+
+]
+
++ πB ext + τ λI (24) 
+
+Note that up until this point, the results have matched the previous analysis from Lu et al. (2025) and Letey et al. (2026b) with the exception of ρ2 (depending on k2) and the low-rank term Φ (depending on k0 and k1). 
+
+The low-rank term is given by 
+
+Φ = ϕ11+1⊤ 
+
+> +
+
++ ϕ2(1 +r⊤ + r1⊤
+
+> +
+
+) + ϕ3(1 +μ⊤ + μ1⊤
+
+> +
+
+)= [1+ v] [ϕ1 11 0
+
+] [ 1⊤
+
+> +
+
+v⊤
+
+]
+
+= T ϕT ⊤
+
+for 
+
+1+ ≡ vec ([ Id 0]) , r ≡ vec ([ Rtr 0]) , μ ≡ vec (btr e⊤
+
+> d+1
+
+) , v ≡ vec ([ ϕ2Rtr ϕ3btr 
+
+]) 
+
+and 
+
+ϕ1 ≡ 1
+
+α2 (tr[ Rtr ]k1 + ρk 0) , ϕ2 ≡ 1
+
+α k0 , ϕ3 ≡ 1
+
+α (tr[ Rtr ] + ρ)k0.
+
+25 G.1 Effective ridge 
+
+The effective ridge will be ˜λ = λ(1 + χ0) where χ0 is defined as the solution to the implicit equations 
+
+[Gext ]\0 =
+
+( τ
+
+1 + χ0
+
+Id ⊗ Btr + 1
+
+dτ
+
+1 + χ0
+
+Φ + τ λI d ⊗ Id+1 
+
+)−1
+
+(25) 
+
+χ0 = 1
+
+d2 tr 
+
+(
+
+[Gext ]\0
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ
+
+)) 
+
+. (26) We can recast the above implicit equations using Woodbury, as 
+
+τ χ 0
+
+1 + χ0
+
+= 1
+
+d2 tr 
+
+(( 
+
+Id ⊗ F0 − 1
+
+d ΦC
+
+)( 
+
+Id ⊗ Btr + 1
+
+d Φ
+
+)) 
+
+(27) where 
+
+F0 = ( Btr + λ(1 + χ0)Id+1 )−1
+
+ΦC = ( Id ⊗ F0) [1+ v] S
+
+[1⊤
+
+> +
+
+v⊤
+
+]
+
+(Id ⊗ F0) for some 2 × 2 matrix S with Θ(1) elements. However, all the 1/d terms in (27) are subleading, e.g. 
+
+1
+
+d3 tr ((Id ⊗ F0)rr ⊤(Id ⊗ F0Btr )) = 1
+
+d3 tr( Rtr F0Btr F0Rtr ) = O
+
+( 1
+
+d2
+
+)
+
+and so we write 
+
+τ χ 0
+
+1 + χ0
+
+≈ 1
+
+d2 tr ( Id ⊗ F0Btr ) = tr [(Btr + ˜λI d+1 )−1Btr 
+
+]. (28) This can be simplified as 
+
+τ χ 0
+
+1 + χ0
+
+= 1 − λ(1 + χ0) tr 
+
+[
+
+(Btr + λ(1 + χ0)Id+1 )−1]
+
+≈ 1 − λ(1 + χ0) tr 
+
+[(
+
+Rtr +
+
+(
+
+λ(1 + χ0) + ρ2
+
+α
+
+)
+
+Id
+
+)−1]
+
+after ignoring the btr terms in Btr . This is where the Stieltjes transform of Rtr is first introduced: 
+
+Mκ(w) = lim 
+
+> d→∞ ,k →∞ ,k/d =κ
+
+1
+
+d tr 
+
+(
+
+(Rtr + wI d)−1)
+
+.
+
+Using this, we find the effective ridge self-consistency equation 
+
+˜λMκ
+
+(˜λ + ρ2
+
+α
+
+)
+
++ λτ 
+
+˜λ = 1 − τ (29) 
+
+G.2 Relating parameters to resolvent 
+
+Recall that vec (Γ ∗) = 
+
+(
+
+nd λI +
+
+> n
+
+∑
+
+> μ=1
+
+vec (Hμ)vec (Hμ)⊤
+
+)−1 n∑
+
+> μ=1
+
+yμ
+
+> test
+
+vec (Hμ)
+
+and so we have 
+
+Gext (0) = d
+
+[ 1
+
+> d
+
+∑
+
+> μ
+
+(yμ
+
+> test
+
+)2 + nd λ 1√d
+
+∑ 
+
+> μ
+
+yμ 
+
+> test
+
+vec( Hμ)⊤
+
+> 1√d
+
+∑ 
+
+> μ
+
+yμ 
+
+> test
+
+vec( Hμ) ∑ 
+
+> μ
+
+vec( Hμ) vec( Hμ)⊤ + nd λI 
+
+]−1
+
+26 Using that [a b⊤
+
+b D
+
+]−1
+
+=
+
+[ c −cq⊤
+
+−cq D−1 + cqq ⊤
+
+]
+
+, c = 1
+
+a − b⊤D−1b , q = D−1b
+
+we have a formula for Γ∗ in terms of Gext (0) as 
+
+√d
+
+e⊤ 
+
+> 1
+
+Gext (0) e1
+
+Gext (0) e1 =
+
+[ √d
+
+vec(Γ) ∗
+
+]
+
+Using our above formulas, we also have 
+
+√d
+
+e⊤ 
+
+> 1
+
+Gext (0) e1
+
+Gext (0) e1 =
+
+[ √d
+
+(Id ⊗ Btr + 1 
+
+> d
+
+Φ + ˜λI d(d+1) 
+
+)−1 vec ([ Rtr + k0 
+
+> α
+
+tr[ Rtr ]Id ρ1btr 
+
+]) ]
+
+and so 
+
+vec(Γ ∗) ≃ vec(Γ de ) ≡
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ + ˜λI d(d+1) 
+
+)−1
+
+vec ([ Rtr + k0 
+
+> α
+
+tr[ Rtr ]Id ρ1btr 
+
+]) = FΦg
+
+for 
+
+FΦ =
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ + ˜λI d(d+1) 
+
+)−1
+
+g = vec ([ Rtr + k0 
+
+> α
+
+tr[ Rtr ]Id ρ1btr 
+
+]) .
+
+This immediately gives the linear term in the MSE error expression as 
+
+tr [Γ∗A⊤] = 1
+
+d tr (Γ∗A⊤) = 1
+
+d tr (vec(Γ ∗) vec( A)⊤) ≃ 1
+
+d tr (vec(Γ de ) vec( A)⊤)
+
+where we will specifically use vec( A) = (1 + ϕ2)1 + from Lemma 1. For the quadratic terms we need to be a bit more careful, as the correct object to work with for high-dimensional equivalence is technically the components of G and not this linear representation of vec(Γ de ).
+
+This is what the parameterisation πB ext is for. Take 
+
+Bext =
+
+[0 00 Π
+
+]
+
+for some Π ∈ Rd(d+1) ×d(d+1) . Then ddπ
+
+1
+
+c(π) (π = 0) = 1
+
+d vec(Γ ∗)⊤Π vec(Γ ∗)
+
+where c(π) = e⊤ 
+
+> 1
+
+Gext (π)e1. We can safely replace 
+
+c(π) = e⊤ 
+
+> 1
+
+Gext (π)e1 ≃ e1Gext (π)e1.
+
+By Schur complement on Gext (π) we have 
+
+1
+
+e1Gext (π)e1
+
+= τ
+
+1 + χπ
+
+ρ1 + τ λ − 1
+
+dτ 2
+
+(1 + χπ )2 g⊤
+
+( τ
+
+1 + χπ
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ
+
+)
+
++ πΠ + τ λI 
+
+)−1
+
+g
+
+= τ
+
+1 + χπ
+
+ρ1 + τ λ − 1
+
+dτ
+
+1 + χπ
+
+g⊤
+
+(
+
+Id ⊗ Btr + 1
+
+d Φ + π 1 + χπ
+
+τ Π + λ(1 + χπ )I
+
+)−1
+
+g.
+
+Given the eventual MSE term we want from Lemma 1, we choose 
+
+Π = Id ⊗ B + 1
+
+d Ψ
+
+27 for 
+
+Ψ = [1+ vec ([ Id 0])] [ϕ1 ϕ2
+
+ϕ2 0
+
+] [ 1⊤
+
+> +
+
+vec ([ Id 0]) ⊤
+
+]
+
+= ( ϕ1 + 2 ϕ2)1 +1⊤
+
+> +
+
+.
+
+Using the same approximation as before, we will take 
+
+[Gext ]\0 = Id ⊗
+
+( τ
+
+1 + χπ
+
+Btr + πB + τ λI 
+
+)−1
+
++ 1
+
+d low rank terms from Φ and Ψ
+
+and approximate χπ as 
+
+χπ = tr 
+
+[( τ
+
+1 + χπ
+
+Btr + πB + τ λI 
+
+)−1
+
+Btr 
+
+]
+
+.
+
+As before, we find that 
+
+τ χ ′
+
+> 0
+
+(1 + χ0)2 = tr[ F0BF 0Btr ]tr[ F0Btr F0Btr ] − τ , F0 = ( Btr + ˜λI )−1.
+
+Thus, 
+
+1
+
+d vec(Γ ∗)⊤Π vec(Γ ∗) ≃ 1
+
+d vec(Γ de )⊤Π vec(Γ de ) − τ χ ′
+
+> 0
+
+(1 + χ0)2
+
+(
+
+ρ1 − 1
+
+d g⊤ vec(Γ de ) − ˜λ 1
+
+d vec(Γ de )⊤ vec(Γ de )
+
+)
+
+.
+
+Note that 
+
+vec(Γ de ) = ( Id ⊗ F0)g − 1
+
+d ΦC g
+
+Π = Id ⊗ Btest + 1
+
+d Ψ
+
+where 
+
+ΦC = (( Id ⊗ F0)T )
+
+[ M 1 + ϕ2(1 − σM)1 + ϕ2(1 − σM) −ϕ1 + ϕ22(1 − σ + σ2M)
+
+]−1
+
+(( Id ⊗ F0)T )⊤
+
+= ( Id ⊗ F0) [1+ ϕ2r + ϕ3μ] S
+
+[ 1⊤
+
+> +
+
+ϕ2r⊤ + ϕ3μ⊤
+
+]
+
+(Id ⊗ F0)
+
+This comes from expanding 
+
+F0 =
+
+[ F ff ⊤ f
+
+]
+
+1
+
+d
+
+
+
+1⊤
+
+> +
+
+r⊤
+
+μ⊤
+
+ [1+ r μ] =
+
+
+
+tr[ F ] tr[ F R tr ] tr [f b ⊤
+
+> tr
+
+]
+
+tr[ F R tr ] tr [F R 2tr 
+
+] tr [F f b ⊤
+
+> tr
+
+]
+
+tr [f b ⊤
+
+> tr
+
+] tr [F f b ⊤
+
+> tr
+
+] f tr [btr b⊤
+
+> tr
+
+]
+
+≃
+
+
+
+Mκ(σ) 1 − σMκ(σ) 01 − σMκ(σ) 1 − σ + σ2Mκ(σ) 00 0 0
+
+ , σ ≡ ρ2
+
+α + ˜λ. 
+
+As we can see, all the btr , f contributions are negligible compared to the resolvent (Rtr +σI d)−1 contributions. Using similar intuition, in the expansions of the linear and quadratic error terms, we will neglect the ρ1btr 
+
+component of g, as well as μ = vec( btr e⊤
+
+> d+1
+
+) in ΦC .
+
+Linear error term Following this, and writing the matrix component of g as 
+
+˜R = Rtr + k0
+
+α tr[ Rtr ]Id
+
+we have 
+
+1
+
+d vec( A)⊤ vec(Γ de ) = (1 + ϕ2) 1
+
+d
+
+(
+
+1⊤
+
+> +
+
+(I ⊗ F )g − 1
+
+d 1⊤
+
+> +
+
+ΦC g
+
+)
+
+≃ (1 + ϕ2)
+
+(
+
+tr [F ˜R] − [tr[ F ] ϕ2 tr[ F R tr ]] S
+
+[ tr [F ˜R]
+
+ϕ2 tr [Rtr F ˜R]]) 
+
+28 Quadratic error term Recall 
+
+B =
+
+[( 1 + ρ2
+
+> α
+
+)Id 00⊤ ρ21
+
+]
+
+, Ψ = ( ϕ1 + 2 ϕ2)1 +1⊤
+
+> +
+
+.
+
+Have 
+
+1
+
+d g⊤ vec(Γ de ) ≈ tr [ ˜RF ˜R] − [tr [ ˜RF ] ϕ2 tr [ ˜RF R tr 
+
+]] S
+
+[ tr [F ˜R]
+
+ϕ2 tr [Rtr F ˜R]]
+
+1
+
+d vec(Γ de )⊤ vec(Γ de ) ≈ tr [ ˜RF 2 ˜R] − 2 [tr [ ˜RF ] ϕ2 tr [ ˜RF R tr 
+
+]] S
+
+[ tr [F 2 ˜R]
+
+ϕ2 tr [Rtr F 2 ˜R]]
+
++ [tr [ ˜RF ] ϕ2 tr [ ˜RF R tr 
+
+]] S⊤
+
+[ tr [F 2] ϕ2 tr [F 2Rtr 
+
+]
+
+ϕ2 tr [F 2Rtr 
+
+] ϕ22 tr [Rtr F 2Rtr 
+
+]]
+
+S
+
+[ tr [F ˜R]
+
+ϕ2 tr [Rtr F ˜R]]
+
+1
+
+d vec(Γ de )⊤(Id ⊗ B) vec(Γ de ) ≈
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+· 1
+
+d vec(Γ de )⊤ vec(Γ de )1
+
+ϕ1 + 2 ϕ2
+
+1
+
+d2 vec(Γ de )⊤Ψ vec(Γ de ) ≈ tr [ ˜RF ]2 − 2 tr [ ˜RF ] [ tr[ F ] ϕ2 tr[ Rtr F ]] S
+
+[ tr [F ˜R]
+
+ϕ2 tr [Rtr F ˜R]]
+
++
+
+([tr[ F ] ϕ2 tr[ F R tr ]] S
+
+[ tr [F ˜R]
+
+ϕ2 tr [Rtr F ˜R]]) 2
+
+.
+
+The final step is to remember that F = ( Rtr + σ)−1 and ˜R = Rtr + k0Id/α and so we have the following dictionary of terms 
+
+tr[ F ] ≃ M κ(σ)tr[ F R tr ] ≃ 1 − σMκ(σ)tr [F ˜R] ≃ 1 − σMκ(σ) + k0
+
+α Mκ(σ)tr [F R tr ˜R] ≃ k0
+
+α (1 − σMκ(σ)) + 1 − σ + σ2Mκ(σ)tr [F ˜R ˜R] ≃
+
+( k0
+
+α
+
+)2
+
+Mκ(σ) + 2 k0
+
+α (1 − σMκ(σ))) + 1 − σ + σ2Mκ(σ)tr [F 2] ≃ −M ′
+
+> κ
+
+(σ)tr [F 2Rtr 
+
+] ≃ M κ(σ) + σM′
+
+> κ
+
+(σ)tr [F 2 ˜R] ≃ M κ(σ) + σM′
+
+> κ
+
+(σ) − k0
+
+α M′
+
+> κ
+
+(σ)tr [F 2Rtr Rtr 
+
+] ≃ 1 − 2σMκ(σ) − σ2M′
+
+> κ
+
+(σ)tr [F 2Rtr ˜R] ≃ 1 − 2σMκ(σ) − σ2M′
+
+> κ
+
+(σ) + k0
+
+α (Mκ(σ) + σM′
+
+> κ
+
+(σ)) tr [F 2 ˜R ˜R] ≃ 1 − 2σMκ(σ) − σ2M′
+
+> κ
+
+(σ) + 2 k0
+
+α (Mκ(σ) + σM′
+
+> κ
+
+(σ)) −
+
+( k0
+
+α
+
+)2
+
+M′
+
+> κ
+
+(σ)
+
+So finally, if we use some shorthand 
+
+˜σ = σ − k0
+
+α , m1 =
+
+[ M
+
+ϕ2(1 − σM)
+
+]
+
+, m2 =
+
+[ 1 − ˜σM
+
+ϕ2(1 − ˜σ + σ˜σM)
+
+]
+
+, m3 =
+
+[ M + ˜ σM′
+
+ϕ2(1 − σM − ˜σM − σ˜σM′)
+
+]
+
+M =
+
+[ −M ′ ϕ2(M + σM′)
+
+ϕ2(M + σM′) ϕ22(1 − 2σM − σ2M′)
+
+]
+
+29 and so 
+
+1
+
+d vec( A)⊤ vec(Γ de ) ≃ (1 + ϕ2)(1 − ˜σM − m⊤ 
+
+> 1
+
+Sm2
+
+)
+
+1
+
+d g⊤ vec(Γ de ) ≃ 1 + σ − 2˜ σ + ˜ σ2M − m⊤ 
+
+> 2
+
+Sm2
+
+1
+
+d vec(Γ de )⊤ vec(Γ de ) ≃ 1 − 2˜ σM − ˜σ2M′ − 2m⊤ 
+
+> 2
+
+Sm3 + m⊤ 
+
+> 2
+
+S⊤M S m2
+
+1
+
+d2 vec(Γ de )⊤Ψ vec(Γ de ) ≃ (ϕ1 + 2 ϕ2)((1 − ˜σM) − m⊤ 
+
+> 1
+
+Sm2
+
+)2
+
+with 
+
+c = τ χ ′
+
+> 0
+
+(1 + χ0)2 ≃ (1 + ρ2
+
+α ) M + ˜λM′
+
+1 − 2˜λM − ˜λ2M′ − τ .
+
+So finally, we have 
+
+eICL = (1 − c)ρ1 − 2(1 + ϕ2)(1 − ˜σM − m⊤ 
+
+> 1
+
+Sm2) + ( ϕ1 + 2 ϕ2)(1 − ˜σM − m1Sm2)2
+
++
+
+(
+
+1 + ρ2
+
+α + c˜λ
+
+)
+
+(1 − 2˜ σM − ˜σ2M′ − 2m⊤ 
+
+> 2
+
+Sm3 + m⊤ 
+
+> 2
+
+S⊤M S m2)+ c(1 + σ − 2˜ σ + ˜ σ2M − m⊤ 
+
+> 2
+
+Sm2)
+
+for 
+
+ρ1 ≡ 1 + ρ , ρ2 ≡ tr[ K2] + ρσ = ˜λ + ρ2
+
+α , ˜σ = σ − k0
+
+α , ˜λMκ
+
+(˜λ + ρ2
+
+α
+
+)
+
++ λτ 
+
+˜λ = 1 − τ , c = (1 + ρ2
+
+α ) M + ˜λM′
+
+1 − 2˜λM − ˜λ2M′ − τ
+
+m1 =
+
+[ M
+
+ϕ2(1 − σM)
+
+]
+
+, m2 =
+
+[ 1 − ˜σM
+
+ϕ2(1 − ˜σ + σ˜σM)
+
+]
+
+, m3 =
+
+[ M + ˜ σM′
+
+ϕ2(1 − σM − ˜σM − σ˜σM′)
+
+]
+
+M =
+
+[ −M ′ ϕ2(M + σM′)
+
+ϕ2(M + σM′) ϕ22(1 − 2σM − σ2M′)
+
+]
+
+, S =
+
+[ M 1 + ϕ2(1 − σM)1 + ϕ2(1 − σM) −ϕ1 + ϕ22(1 − σ + σ2M)
+
+]−1
+
+ϕ1 ≡ 1
+
+α2 (k1 + ρk 0) = ϕ1 , ϕ2 ≡ 1
+
+α k0 = ϕ2
+
+Sanity check . For K = Id have ρ1 = ρ2, σ = ˜ σ, ϕ1 = ϕ2 = ϕ1 = ϕ2 = 0 , and all m, S, M terms do not contribute. Get 
+
+eICL = 1 + ρ − 2(1 − σM) + 
+
+(
+
+1 + 1 + ρα
+
+)
+
+(1 − 2σM − σ2M′)
+
+− c(ρ + σ − σ2M − ˜λ(1 − 2σM − σ2M′)) = 1 + ρ − 2(1 − σM) + 
+
+(
+
+1 + 1 + ρα
+
+)
+
+(1 − 2σM − σ2M′) + 
+
+(
+
+1 + 1 + ρα
+
+)
+
+(M + ˜λM′)q
+
+= ρ + qM + ( ˜λq − σ2)M′ + 1 + ρα (1 − (q − 2σ)M + ( ˜λq − σ2)M′)
+
+as previously in Letey et al. (2026b). 30 G.3 Dependence on query terms 
+
+This formula can be cleaned up a fair bit by gathering terms that depend on k0, k 1 i.e. , the query correlation terms. First we write all the terms depending on c as 
+
+(−c)(ρ1 − ˜λ(1 − 2˜ σM − ˜σ2M′ − 2m⊤ 
+
+> 2
+
+Sm3 + m⊤ 
+
+> 2
+
+S⊤M S m2
+
+) − (1 + σ − 2˜ σ + ˜ σ2M − m⊤ 
+
+> 2
+
+Sm2
+
+)) 
+
+=
+
+(
+
+1 + ρ2
+
+α
+
+) M + ˜λM′
+
+τ − (1 − 2˜λM − ˜λ2M′)
+
+(ρ + σ − σ2M − ˜λ(1 − 2σM − σ2M′))
+
+−
+
+(
+
+1 + ρ2
+
+α
+
+) M + ˜λM′
+
+τ − (1 − 2˜λM − ˜λ2M′)
+
+(
+
+2 k0
+
+α
+
+(˜λ(M + σM′) + (1 − 2σM)) + k20
+
+α2
+
+(M − ˜λM′))
+
++
+
+(
+
+1 + ρ2
+
+α
+
+) M + ˜λM′
+
+τ − (1 − 2˜λM − ˜λ2M′)
+
+(m⊤ 
+
+> 2
+
+Sm2 − ˜λ(−2m⊤ 
+
+> 2
+
+Sm3 + m⊤ 
+
+> 2
+
+S⊤M S m2
+
+)) 
+
+=
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+(M + ˜λM′)( qold + qquery )
+
+and the remaining ICL error terms can be expressed as 
+
+ρ1 − 2(1 − σM) + 
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+(1 − 2σM − σ2M′)
+
+− k0
+
+α
+
+(
+
+2M − 2
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+(M + σM′)
+
+)
+
+− k20
+
+α2
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+M′
+
+− 2ϕ2(1 − ˜σM) + 2(1 + ϕ2)m⊤ 
+
+> 1
+
+Sm2
+
++
+
+(
+
+1 + ρ2
+
+α
+
+)
+
+(m⊤ 
+
+> 2
+
+S⊤M S m2 − 2m⊤ 
+
+> 2
+
+Sm3)+ ( ϕ1 + 2 ϕ2)(1 − ˜σM − m⊤ 
+
+> 1
+
+Sm2)2.
+
+Thus we can write 
+
+eICL (k0, k 1) = eICL (independent query ) − 2ϕ2 + qquery (M + ˜λM′) + ϕ2(2 σ − ϕ2)M′
+
++ m⊤ 
+
+> 2
+
+S⊤M S m2 − 2m⊤ 
+
+> 2
+
+Sm3 + 2 ϕ2 ˜σM + 2(1 + ϕ2)m⊤ 
+
+> 1
+
+Sm2
+
++ ( ϕ1 + 2 ϕ2) (1 − ˜σM − m⊤ 
+
+> 1
+
+Sm2
+
+)2
+
++ ρ2
+
+α
+
+[
+
+qquery (M + ˜λM′) + ϕ2(2 σ − ϕ2)M′ + m⊤ 
+
+> 2
+
+S⊤M S m2 − 2m⊤ 
+
+> 2
+
+Sm3 + 2 ϕ2M
+
+]
+
+.
+
+31

@@ -6,68 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-02 ~ 2026-07-11
-- 运行时间：2026-07-11 08:44:04 UTC
+- 最新运行日期：2026-07-11
+- 运行时间：2026-07-11 21:02:28 UTC
 - 运行状态：成功
-- 本次总论文数：16
-- 精读区：5
-- 速读区：11
+- 本次总论文数：11
+- 精读区：3
+- 速读区：8
 
 ### 今日简报（AI）
-今日聚焦分布式系统与多智能体协同，精读线性注意力架构与多智能体LLM耦合测量，速读不确定性感知开发工具及通信遗忘机制。推荐关注线性注意力跨层路由机制和多智能体LLM表征耦合测量，前者突破传统Transformer效率瓶颈，后者量化通信耦合效应。建议深入精读Linear Attention Architectures以理解机制设计，并参考BOUNDARY_SYNC优化多智能体系统通信策略。
-- 详情：[/20260702-20260711/README](/20260702-20260711/README)
+今日聚焦序列建模与分层搜索智能体，精读两篇高评分论文。  
+最值得关注：上下文学习中的有效长度与架构不匹配问题（9.0分），以及层级搜索代理中容量分配的关键影响（8.0分）。  
+建议优先精读上述两篇，后续可延伸至多智能体协同与智能城市安全应用（7.0分速读方向）。
+- 详情：[/202607/11/README](/202607/11/README)
 
 ### 精读区论文标签
-1. [Linear Attention Architectures: Mechanisms, Trade-offs, and Cross-Layer Routing](/20260702-20260711/2607.07953v1-linear-attention-architectures-mechanisms-trade-offs-and-cross-layer-routing)  
-   标签：评分：10.0/10、query:ma-la
-   evidence：直接研究线性注意力架构
-2. [BOUNDARY_SYNC: Measuring Communication-Induced Representational Coupling in Multi-Agent LLM Systems](/20260702-20260711/2607.01600v1-boundarysync-measuring-communication-induced-representational-coupling-in-multi-agent-llm-systems)  
+1. [Sequential Correlations Change In-Context Learning: Effective Context Length and Architectural Mismatch](/202607/11/2607.03660v1-sequential-correlations-change-in-context-learning-effective-context-length-and-architectural-mismatch)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：基于线性注意力的可解模型用于上下文学习
+2. [Think Big, Search Small: Where Capacity Matters in Hierarchical Search Agents?](/202607/11/2607.07548v1-think-big-search-small-where-capacity-matters-in-hierarchical-search-agents)  
    标签：评分：8.0/10、query:ma-la
-   evidence：直接测量多智能体LLM系统中通信导致的表示耦合
-3. [LLM Agents for Deliberative Collaboration: A Study on Joint Decision Making Under Partial Observability](/20260702-20260711/2607.06157v1-llm-agents-for-deliberative-collaboration-a-study-on-joint-decision-making-under-partial-observability)  
+   evidence：研究了层次搜索中多代理架构，包含分解和执行角色
+3. [Who Broke the System? Failure Localization in LLM-Based Multi-Agent Systems](/202607/11/2607.07989v1-who-broke-the-system-failure-localization-in-llm-based-multi-agent-systems)  
    标签：评分：8.0/10、query:ma-la
-   evidence：多智能体在部分可观察条件下通过沟通进行审慎协作
-4. [Graph Convolutional Attention: A Spectral Perspective on Graph Denoising and Diffusion](/20260702-20260711/2607.06546v1-graph-convolutional-attention-a-spectral-perspective-on-graph-denoising-and-diffusion)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：分析线性注意力在图去噪中的局限性，提出谱注意力
-5. [Uncertainty-gated selection for block-sparse attention](/20260702-20260711/2607.07724v1-uncertainty-gated-selection-for-block-sparse-attention)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：基于不确定性门控选择的块稀疏注意力实现高效扩展
+   evidence：多智能体交互动力学与故障定位
 
 ### 速读区论文标签
-1. [UA-ChatDev: Uncertainty-Aware Multi-Agent Collaboration for Reliable Software Development](/20260702-20260711/2607.02186v1-ua-chatdev-uncertainty-aware-multi-agent-collaboration-for-reliable-software-development)  
+1. [Swarm-Driven Multi-Agent Reasoning for Smart City Security](/202607/11/2607.03628v1-swarm-driven-multi-agent-reasoning-for-smart-city-security)  
    标签：评分：7.0/10、query:ma-la
-   evidence：不确定性感知的多智能体协作软件开发
-2. [MUTE: Return-Preserving Communication Unlearning for Efficient Multi-Agent Coordination](/20260702-20260711/2607.03473v1-mute-return-preserving-communication-unlearning-for-efficient-multi-agent-coordination)  
+   evidence：群体驱动的多智能体推理，涉及交互动力学
+2. [Multi-Robot Open Adaptive Teaming Across Unseen Environments, Partners, and Scales](/202607/11/2607.04972v1-multi-robot-open-adaptive-teaming-across-unseen-environments-partners-and-scales)  
    标签：评分：7.0/10、query:ma-la
-   evidence：值引导的消息遗忘减少多智能体通信
-3. [Anytime Plug-and-Play Control with Contract-Based Distributed MPC](/20260702-20260711/2607.04215v1-anytime-plug-and-play-control-with-contract-based-distributed-mpc)  
+   evidence：多机器人团队与自适应合作动力学
+3. [AgoraSim: A Hybrid Agent-Based Modeling Framework](/202607/11/2607.05999v1-agorasim-a-hybrid-agent-based-modeling-framework)  
    标签：评分：7.0/10、query:ma-la
-   evidence：支持智能体动态加入和离开的分布式多智能体控制
-4. [Regime-Conditional Stabilisation of LLM-Augmented Cooperative Multi-Agent Reinforcement Learning](/20260702-20260711/2607.04470v1-regime-conditional-stabilisation-of-llm-augmented-cooperative-multi-agent-reinforcement-learning)  
+   evidence：混合智能体建模框架，模拟交互动力学
+4. [Collective Intelligence with Foundation Models](/202607/11/2607.07729v1-collective-intelligence-with-foundation-models)  
    标签：评分：7.0/10、query:ma-la
-   evidence：基于LLM的合作多智能体强化学习
-5. [Integrated Altruistic and Fairness Preference Induces Advanced Mutual Cooperation in Sequential Social Dilemmas](/20260702-20260711/2607.04710v1-integrated-altruistic-and-fairness-preference-induces-advanced-mutual-cooperation-in-sequential-social-dilemmas)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：通过整合社会偏好实现多智能体在社会困境中的合作
-6. [Akashic: A Low-Overhead LLM Inference Service with MemAttention](/20260702-20260711/2607.05708v1-akashic-a-low-overhead-llm-inference-service-with-memattention)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：面向可扩展智能体注意力的MemAttention方法
-7. [OrchestrXR: A Multi-Agent System for Idea-to-Prototype XR Study Authoring](/20260702-20260711/2607.01588v1-orchestrxr-a-multi-agent-system-for-idea-to-prototype-xr-study-authoring)  
+   evidence：包含批评者和聚合者的多代理协作推理框架
+5. [Social Networks of LLM Agents](/202607/11/2607.03695v1-social-networks-of-llm-agents)  
    标签：评分：6.0/10、query:ma-la
-   evidence：多智能体人机协作工作流用于XR研究创作
-8. [Decision Protocols in Multi-Agent Large Language Model Conversations](/20260702-20260711/2607.05477v1-decision-protocols-in-multi-agent-large-language-model-conversations)  
+   evidence：多智能体社交网络动态与影响力传播
+6. [ProACT: Towards Breakdown-Aware Proactive Agent in Multi-User Collaboration](/202607/11/2607.03730v1-proact-towards-breakdown-aware-proactive-agent-in-multi-user-collaboration)  
    标签：评分：6.0/10、query:ma-la
-   evidence：多智能体对话中的决策协议与交互动力学
-9. [When Agents Go Rogue: Activation-Based Detection of Malicious Behaviors in Multi-Agent Systems](/20260702-20260711/2607.06807v1-when-agents-go-rogue-activation-based-detection-of-malicious-behaviors-in-multi-agent-systems)  
+   evidence：多用户协作中的主动智能体，涉及交互动力学
+7. [Beyond the Leaderboard: A Synthesis of Tool-Use, Planning, and Reasoning Failures in Large Language Model Agents](/202607/11/2607.05775v1-beyond-the-leaderboard-a-synthesis-of-tool-use-planning-and-reasoning-failures-in-large-language-model-agents)  
    标签：评分：6.0/10、query:ma-la
-   evidence：面向恶意行为检测的多智能体系统交互分析
-10. [Agent-Exploitation Affordances: From Basic to Complex Representation Patterns](/20260702-20260711/2607.07475v1-agent-exploitation-affordances-from-basic-to-complex-representation-patterns)  
+   evidence：综合了跨基准的多代理协调失败模式
+8. [StateFuse: Deterministic Conflict-Preserving Memory for Multi-Agent Systems](/202607/11/2607.05844v1-statefuse-deterministic-conflict-preserving-memory-for-multi-agent-systems)  
    标签：评分：6.0/10、query:ma-la
-   evidence：探索社交机器人多智能体情境中的协作可供性
-11. [What to Keep, What to Forget: A Rate--Distortion View of Memory Compaction in LLMs and Agents](/20260702-20260711/2607.08032v1-what-to-keep-what-to-forget-a-rate--distortion-view-of-memory-compaction-in-llms-and-agents)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：针对智能体可扩展注意力的记忆压缩方法
+   evidence：多智能体冲突保存内存，支持交互动力学
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,835 @@
+Title: Multi-Robot Open Adaptive Teaming Across Unseen Environments, Partners, and Scales
+
+URL Source: https://arxiv.org/pdf/2607.04972v1
+
+Published Time: Tue, 07 Jul 2026 02:57:50 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+## Multi-Robot Open Adaptive Teaming Across Unseen Environments, Partners, and Scales 
+
+Yang Li 1,* , Feng Xue 2, Fan Mo 3, Yunhao Liu 4, Jianhong Wang 5,Ying Wen 1, Qingrui Zhang 2, Shaoshuai Mou 6, Wei Pan 7,* 1Shanghai Jiao Tong University 2Sun Yat-sen University 3National University of Singapore 
+
+> 4
+
+Genisom AI 5University of Bristol 6Purdue University 7Newcastle University 
+
+> *
+
+Corresponding author: wei.pan2@newcastle.ac.uk, yang.li.cs@sjtu.edu.cn 
+
+Abstract —Deploying robot teams in the real world requires simultaneous adaptation to unseen environments, unknown part-ners, and varying team sizes, yet existing approaches often address these challenges in isolation under the closed-world as-sumption of fixed teammates. We formalize this as open adaptive multi-robot teaming and propose a hypergraphic-form game formulation that captures team-level cooperative relationships be-yond pairwise interactions, providing a principled foundation for coordination structure inference when team composition changes dynamically within episodes. Unlike graph neural network archi-tectures, this is a game-theoretic construct for modeling strategic interactions and payoff structures among agents. Building on this formulation, we develop the Hypergraphic Open-ended Learning Algorithm (HOLA), which progressively expands partner and environment diversity during training rather than optimizing for fixed configurations. Evaluated on cooperative pursuit with multi-drone and multi-quadruped platforms, HOLA outperforms all baselines across all three adaptability dimensions. Learned policies transfer directly to physical hardware without fine-tuning, with successful deployments on Crazyflie and Zsibot L1 platforms confirming robust real-world coordination in novel environments with unseen teammates. 
+
+Index Terms —open adaptive teaming, multi-robot collabo-ration, cooperative pursuit, multi-drone collaboration, multi-quadruped collaboration 
+
+I. I NTRODUCTION 
+
+Multi-robot systems are rapidly transitioning from con-trolled laboratory settings to unpredictable real-world en-vironments such as disaster zones, dynamic warehouses, and surveillance networks, where the fundamental assump-tions underlying conventional coordination mechanisms break down [1]–[3]. In these settings, robots cannot rely on familiar terrain, known teammates, or stable team configurations. A search-and-rescue drone may lose communication with its squad and must instantly coordinate with an unfamiliar ground unit; a warehouse robot must seamlessly integrate a newly deployed agent mid-task; a border patrol team must reorganize on-the-fly as units fail or reinforcements arrive. These scenar-ios share a common challenge that existing approaches fail to address: robots must simultaneously generalize across unseen environments, coordinate with unknown partners, and scale to varying team sizes—all in real time, without retraining. We formalise this challenge as the open adaptive multi-robot teaming problem. Fig. 1 contrasts the dominant learning paradigm with the open adaptive teaming challenge. Centralized training with Learner                
+
+> Learner
+> Evader
+> Evader
+> P1
+> P2
+> Training Phase
+> Traditional
+> CTDE
+> P3 P4
+> P5
+> Learner
+> Learner
+> Evader
+> Evader
+> Open Adaptive
+> Teaming
+> P1
+> P2
+> Learner
+> Learner Evader Evader
+> Test Phase: fixed team ,known
+> teammates ,seen environments
+> Test Phase: open team ,unknown teammates ,unseen environments
+> P6
+> Learner
+> Learner
+> Evader
+> Evader
+> After ksteps
+
+Fig. 1: Comparison of Traditional CTDE and Open Adaptive Teaming Paradigm. In conventional CTDE (top right), the test phase maintains a fixed team composition with known teammates in previously seen environments. In contrast, open adaptive teaming (bottom) presents significantly greater chal-lenges: agents must coordinate in open teams with unseen teammates and dynamic scale in unseen environments during online interaction. decentralized execution (CTDE) [4]–[6] trains a fixed set of agents jointly, allowing them to develop shared coordination conventions —implicit protocols for cooperation that emerge through co-training [7]. At deployment, CTDE assumes that the same agents operate together in environments similar to those seen during training (Fig. 1, top). This closed-world assumption has enabled impressive results in tasks from colli-sion avoidance [8] to formation control [9], but fundamen-tally limits real-world applicability. Open adaptive teaming breaks all three assumptions simultaneously (Fig. 1, bottom): the environment changes (novel layouts and obstacles), the partners are unknown (agents P3–P6 were never encountered during training), and team composition evolves dynamically within episodes rather than only across them—agents join or depart after k steps, requiring continuous re-coordination during task execution. In this setting, coordination conventions learned through co-training become liabilities rather than as-sets—robots must infer effective cooperation strategies on-the- 
+
+> arXiv:2607.04972v1 [cs.RO] 6 Jul 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+fly with partners whose behaviors they have never observed. Multi-agent learning in machine learning field has made sig-nificant progress on coordination challenges in simulation, in-cluding zero-shot coordination and ad hoc teamwork with un-seen partners [7], [10]–[12]. However, these advances rely on assumptions that do not hold in physical multi-robot systems: discrete action spaces, deterministic transitions, and stable communication. When deployed on real robots, where agents must contend with continuous dynamics, sensor noise, partial observability, and the possibility of communication loss or hardware failure, existing methods exhibit brittle performance. Domain randomization [13] has enabled robust sim-to-real transfer for single-robot control, yet extending this paradigm to multi-robot coordination introduces a fundamentally harder problem: the environment is no longer the only source of uncertainty, as teammate behaviors themselves become non-stationary and unpredictable. This interplay between environ-mental and social uncertainty creates theoretical challenges that cannot be addressed by straightforward extensions of existing frameworks, demanding new formulations tailored to the multi-robot setting. To address this challenge, we propose the Hypergraphic 
+
+Open-ended Learning Algorithm ( HOLA ), a unified frame-work for open adaptive multi-robot teaming. The core of our approach is a hypergraphic-form game formulation that captures dynamic, team-level cooperative relationships among agents. Unlike pairwise interaction models that decompose coordination into agent-agent edges, hypergraphs naturally represent higher-order dependencies where three or more robots must act jointly to achieve a subtask, such as co-operative manipulation, encirclement, or distributed sensing. Importantly, this formulation is a game-theoretic construct for modeling strategic interactions and payoff structures among agents, not a neural architecture based on graph neural net-works. This representation enables principled reasoning about how individual agents contribute to team performance across varying team compositions, providing a theoretically grounded mechanism for credit assignment in open teams. Building on this formulation, we develop an open-ended learning framework that progressively expands the diversity of training partners and environments, rather than optimizing for fixed team configurations. We evaluate HOLA on multi-robot pursuit, a canonical co-ordination task that requires real-time tracking and interception of dynamic evaders [1]. Pursuit serves as an ideal testbed for open adaptive teaming: effective capture strategies demand continuous adaptation to environmental geometry, teammate capabilities, and team configuration, making it a rigorous benchmark for all three dimensions of adaptability. Our eval-uation protocol systematically tests generalization along each dimension. For environmental generalization, we train on a fixed set of layouts and evaluate on unseen obstacle configu-rations. For partner adaptability, agents must coordinate zero-shot with teammates trained using different algorithms and reward structures. For team scalability, we vary the number of pursuers within episodes, requiring agents to maintain effective coordination as teammates join or depart. We compare HOLA against multi-agent reinforcement learning baselines (self-play, MAPPO [14]) and population-based training methods designed for zero-shot coordination (PBT [15], FCP [16]). Results demonstrate that HOLA consistently outperforms all baselines across the three generalization dimensions. Beyond simulation, we deploy learned policies directly onto physi-cal platforms, including multi-drone systems and quadruped robots, without policy fine-tuning. Successful real-world co-ordination with unseen teammates in novel environments val-idates the sim-to-real transferability of our approach. Our contributions are threefold:  
+
+> •
+
+We formalize the open adaptive multi-robot teaming problem, which requires simultaneous generalization across unseen environments, unknown partners, and vary-ing team sizes. We introduce a hypergraphic-form game representation that captures dynamic team-level coordi-nation structures, providing a theoretical foundation for learning in open teams.  
+
+> •
+
+We propose HOLA, a hypergraphic open-ended learning algorithm that integrates the hypergraphic game for-mulation with an adaptive training framework. HOLA progressively expands partner and environment diversity during training, enabling agents to develop robust co-ordination strategies without optimizing for fixed team configurations.  
+
+> •
+
+We validate HOLA through extensive simulations and real-world deployments on multi-drone and multi-quadruped platforms. Results confirm that learned poli-cies generalize across all three dimensions simultane-ously, achieving robust coordination in novel environ-ments, with unseen teammates, and under dynamic team compositions. The remainder of this paper is organized as follows. Sec-tion II surveys related work on multi-robot pursuit and open adaptive teaming. Section III introduces the mathematical preliminaries and problem formulation. Section IV-B presents the proposed hypergraphic open-ended learning algorithm and its theoretical foundations. Section V describes the experi-mental setup, and Section VI reports the results. Section VII concludes the paper with a discussion of limitations and future directions. II. R ELATED WORK 
+
+a) Multi-robot pursuit: Multi-robot pursuit represents a fundamental challenge in cooperative robotics, where multiple agents must coordinate to capture or intercept one or more evaders. Existing approaches can be categorized into three main paradigms: rule-based heuristic methods, differential game theoretical methods, and learning-based methods. Rule-based heuristic methods are primarily inspired by biologi-cal hunting behaviors observed in nature. These approaches typically employ artificial attractive and repulsive forces to coordinate pursuit actions [17]–[19]. For instance, Janosov et al. [20] designed predictive attraction forces, obstacle repulsive forces, and teammate repulsive forces to achieve encirclement. Similarly, Pierson et al. [21] proposed a Voronoi tessellation-based method suitable for ground vehicle coordination. While computationally efficient, these manually designed rules are JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+limited by the designer’s observations and experiences, re-stricting their applicability to complex, dynamic scenarios. Differential game theoretical methods formulate pursuit as an optimisation problem, deriving theoretically optimal strate-gies through game-theoretic analysis [22]–[25]. Hayoun et al. [25] modelled two-on-one pursuit as a zero-sum game and obtained analytical solutions. Kothari et al. [24] con-sidered pursuers and evaders as nonholonomic systems and employed model predictive control to minimise the evader’s safe zone. These methods maximise utility functions based on the Hamilton-Jacobi-Bellman equation but require precise state transition models. Consequently, their performance degrades significantly under environmental uncertainty and model in-accuracies. Learning-based methods have emerged to address the limitations of rule-based and game-theoretic approaches by learning cooperative pursuit strategies from data [26]– [29]. De Souza et al. [29] employed curriculum learning and parameter sharing to train agents that approach, decelerate, and surround evaders—exhibiting emergent intelligent behaviors similar to biological hunting. Zhang et al. [30] introduced at-tention mechanisms to enhance agent-environment interaction, demonstrating scalability in 100-on-100 pursuit scenarios. Recent work has begun exploring generalization capabilities in pursuit-evasion problems. Zhang et al. [2] integrated rule-based strategies into reinforcement learning to improve data efficiency and generalization across environments. DualCL [31] enhanced capture strategies through progressive param-eter adjustment and diverse scenario generation for zero-shot transfer to unseen environments. Chen et al. [32] developed a deep reinforcement learning approach enabling UAVs to perform online planning in unknown environments under partial observability and dynamic constraints. However, these approaches primarily address environmental adaptability while assuming fixed team compositions with known teammate policies. In contrast, our work tackles the broader challenge of open adaptive teaming, enabling robots to coordinate ef-fectively with unknown partners across varying team scales without prior knowledge of teammates or task scenarios. 
+
+b) Open adaptive teaming: Three research paradigms address coordination with previously unseen teammates: ad hoc teamwork, zero-shot coordination, and dynamic team composition. Stone et al. [11] formalized ad hoc teamwork as collaboration without pre-coordination, with subsequent work developing algorithms for teammate modeling [33], graph-based architectures for dynamic team composition [34], and cooperative game-theoretic frameworks [35], [36]. Unlike ad hoc teamwork which allows for online adaptation, ZSC requires agents to coordinate effectively at first contact without any prior interaction. Foundational approaches include Other-Play [7], which exploits environmental symmetries, and Off-Belief Learning [37], which trains grounded policies invariant to training randomness. Population-based methods [16], [38]– [40] have proven particularly effective, training against diverse partners or checkpoints to improve generalization. Dynamic team composition research focuses on handling variable team sizes through entity-based representations [41], transformer architectures [42], and curriculum learning [43], [44]. However, while these paradigms have advanced coordi-nation theory, they predominantly address individual dimen-sions of adaptability in isolation, leaving the challenge of simultaneous multi-dimensional adaptation unresolved. More critically, existing approaches lack a unified framework inte-grating partner adaptation, environmental generalization, and team scalability. Furthermore, most advances in open adaptive teaming remain confined to video game benchmarks (Hanabi, Overcooked, StarCraft) with limited real-world robotic vali-dation [2], [32], creating a substantial gap between coordina-tion theory and practical deployment. In contrast, our work establishes a principled framework for open adaptive teaming in multi-robot systems that unifies all three dimensions of adaptability within a single coherent approach. III. P RELIMINARIES AND PROBLEM FORMULATION 
+
+We first establish the mathematical preliminaries underlying our approach, then formally define the multi-robot open adap-tive teaming problem with its key challenges and requirements. 
+
+A. Preliminaries a) Normal-form Game.: A normal-form game G =(N, {Si}|N |
+
+> i=1
+
+, {ui}|N |
+
+> i=1
+
+) comprises a finite set of players N ,indexed by i ∈ { 1, 2, . . . , |N |} ; a set of strategies Si for each player i ∈ N ; and reward functions ui : Q 
+
+> j∈N
+
+Sj → R.Moreover, σ = (σ1, . . . , σ n) denotes the strategy profile, assigning a strategy to each player. Here, σi ∈ ∆( Si) rep-resents a mixed strategy for player i, where ∆( Si) denotes the probability distribution over the set Si. The subscript −i
+
+is used to denote all players excluding player i. For instance, 
+
+σ−i denotes a strategy profile for all players except player i.We say a best response (BR) of player i to strategy σ−i if 
+
+BR (σ−i) = arg max σi∈△ (Si).
+
+b) Hypergraph: A hypergraph, denoted as G =(V, E, W), captures higher-order relationships among multiple entities simultaneously, a capability absent in conventional graphs that are restricted to pairwise connections. Here, V
+
+and E denote the sets of vertices and hyperedges, respec-tively. Each hyperedge e ∈ E connects an arbitrary sub-set of vertices and carries a weight w(e) indicating the strength of that relationship. The weight information is con-solidated in the diagonal matrix W, where diag( W) = w(e1), w (e2), . . . , w (e|E| ).
+
+c) Partially Observable Markov Decision Process: 
+
+We formalize each robot’s decision-making as a Partially Observable Markov Decision Process (POMDP), a tuple 
+
+⟨S , A, T , R, Ω, O, γ ⟩, where S is the state space, A is the action space, T : S × A × S → [0 , 1] is the transition function, 
+
+R : S × A → R is the reward function, Ω is the observation space, O : S × A → Ω is the observation function, and 
+
+γ ∈ [0 , 1) is the discount factor. At timestep t, an agent receives partial observation ot, executes action at according to policy π : Ω → A , receives reward rt, and transitions to state st+1 . The objective is to find an optimal policy π∗ that maximizes expected cumulative return Eπ [P∞ 
+
+> t=0
+
+γtrt].For multi-robot coordination, we employ a Decentralized POMDP (Dec-POMDP) with n agents. Each agent i observes 
+
+oit ∈ Ωi, executes action ait ∈ A i via local policy πi : Ω i →JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4
+
+Ai, and the joint action at = ( a1
+
+t , . . . , a nt ) yields team reward 
+
+R(st, at) = Pni=1 Ri(st, at).
+
+B. Problem Formulation Definition 3.1 (Open Adaptive Teaming for Multi-Robot Systems): An Open Adaptive Teaming problem for multi-robot systems is defined by a tuple ⟨L , U, S, A, Θ, E, Φ, R, P, Penv ⟩,where L represents the set of learnable robot agents, U
+
+represents the set of uncontrolled partner agents, S is the state space, A is the action space, Θ is the type space characterizing partner behaviors, E is the environment space, Φ is the robot constraint set encoding physical and operational limitations, R
+
+is the reward function, P is the transition function, and Penv 
+
+is the environment distribution. Let C = L ∪ U denote the complete agent set and P denote the power set. The robot constraint set Φ = {ϕ1, ϕ 2, . . . , ϕ m} encapsulates various physical and operational constraints inherent to robotic platforms, including but not limited to dynamics constraints (velocity and acceleration limits), safety constraints (collision avoidance, workspace boundaries), communication constraints (range and bandwidth limitations), sensing constraints (field-of-view, occlusion), energy constraints (battery limits, power consumption), and task-specific operational constraints. To handle variable team size, we define a joint agent-action space 
+
+AC = {a|a ∈ P (C×A ), ∀(i, a i), (j, a j ) ∈ a : i = j ⇒ ai = aj },
+
+(1) where elements a ∈ AC are referred to as joint agent-actions .Similarly, we define a joint agent-type space 
+
+ΘC = {θ|θ ∈ P (C× Θ) , ∀(i, θ i), (j, θ j ) ∈ θ : i = j ⇒ θi = θj },
+
+(2) where θ ∈ ΘC is the joint agent-type and θi denotes the type of agent i in θ.The reward function is decomposed as R : S× AC ×E× Φ 7 →
+
+R, with 
+
+R(s, a, e, ϕ ) = Rtask (s, a, e ) + Rconstraint (s, a, ϕ ), (3) where Rtask (s, a, e ) rewards task performance and 
+
+Rconstraint (s, a, ϕ ) penalizes constraint violations: 
+
+Rconstraint (s, a, ϕ ) = −
+
+mX
+
+i=1 
+
+λiVi(s, a, ϕ i), (4) where Vi(s, a, ϕ i) quantifies the violation of constraint ϕi ∈ Φ
+
+and λi > 0 are penalty weights balancing task performance and constraint satisfaction. The transition function P : S × AC × E × Φ 7 → ∆( S × ΘC )
+
+determines the probability distribution over next states and joint agent-types, given the current state, joint agent-actions, environment, and robot constraints, where ∆( X) denotes the set of all probability distributions over X. The robot constraints Φ influence both feasible state transitions and team composition dynamics. At the start of an episode, an environment e ∼ P env (E)
+
+is sampled, along with an initial state s0 and an initial set of agents C0 ⊆ C with associated types θi
+
+0 for i ∈ C 0, from a starting distribution P0 ∈ ∆( S × ΘC ). At state st, agents <latexit sha1_base64="xRFvcCAHe3sdZK6o49MLG0zyJbM=">AAAB6nicbVBNS8NAEJ3Ur1q/qh69LBbBU0lE1GPRi8eK9gPaUDbbSbt0swm7m0IJ/QlePCji1V/kzX/jts1BWx8MPN6bYWZekAiujet+O4W19Y3NreJ2aWd3b/+gfHjU1HGqGDZYLGLVDqhGwSU2DDcC24lCGgUCW8Hobua3xqg0j+WTmSToR3QgecgZNVZ6HPe8XrniVt05yCrxclKBHPVe+avbj1kaoTRMUK07npsYP6PKcCZwWuqmGhPKRnSAHUsljVD72fzUKTmzSp+EsbIlDZmrvycyGmk9iQLbGVEz1MveTPzP66QmvPEzLpPUoGSLRWEqiInJ7G/S5wqZERNLKFPc3krYkCrKjE2nZEPwll9eJc2LqndVvXy4rNRu8ziKcAKncA4eXEMN7qEODWAwgGd4hTdHOC/Ou/OxaC04+cwx/IHz+QMLko2n</latexit> 
+
+v1
+
+<latexit sha1_base64="V6fAUfvT4bCSSOS4asvlQj3TYH0=">AAAB63icbVBNS8NAEJ3Ur1q/qh69LBbBU0lKUY9FLx4r2FpoQ9lsN+3S3U3YnRRK6V/w4kERr/4hb/4bkzYHbX0w8Hhvhpl5QSyFRdf9dgobm1vbO8Xd0t7+weFR+fikbaPEMN5ikYxMJ6CWS6F5CwVK3okNpyqQ/CkY32X+04QbKyL9iNOY+4oOtQgFo5hJk36t1C9X3Kq7AFknXk4qkKPZL3/1BhFLFNfIJLW267kx+jNqUDDJ56VeYnlM2ZgOeTelmipu/dni1jm5SJUBCSOTlkayUH9PzKiydqqCtFNRHNlVLxP/87oJhjf+TOg4Qa7ZclGYSIIRyR4nA2E4QzlNCWVGpLcSNqKGMkzjyULwVl9eJ+1a1buq1h/qlcZtHkcRzuAcLsGDa2jAPTShBQxG8Ayv8OYo58V5dz6WrQUnnzmFP3A+fwBCLY28</latexit> 
+
+v2
+
+<latexit sha1_base64="b2tEeKlWWv/DNO1wXN9nzf05O4M=">AAAB6nicbVDLTgJBEOzFF+IL9ehlIjHxRHaVqEeiF48Y5ZHAhswOvTBhdnYzM0tCCJ/gxYPGePWLvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCooeNUMayzWMSqFVCNgkusG24EthKFNAoENoPh3cxvjlBpHssnM07Qj2hf8pAzaqz0OOpedoslt+zOQVaJl5ESZKh1i1+dXszSCKVhgmrd9tzE+BOqDGcCp4VOqjGhbEj72LZU0gi1P5mfOiVnVumRMFa2pCFz9ffEhEZaj6PAdkbUDPSyNxP/89qpCW/8CZdJalCyxaIwFcTEZPY36XGFzIixJZQpbm8lbEAVZcamU7AheMsvr5LGRdm7KlceKqXqbRZHHk7gFM7Bg2uowj3UoA4M+vAMr/DmCOfFeXc+Fq05J5s5hj9wPn8ADpqNqQ==</latexit> 
+
+v3
+
+<latexit sha1_base64="hO320iBa8sEmbXNNilQxEqLdr0Y=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KokU9Vj04rGi/YA2lM120y7dbMLupFBCf4IXD4p49Rd589+4bXPQ1gcDj/dmmJkXJFIYdN1vZ219Y3Nru7BT3N3bPzgsHR03TZxqxhsslrFuB9RwKRRvoEDJ24nmNAokbwWju5nfGnNtRKyecJJwP6IDJULBKFrpcdyr9kplt+LOQVaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzyabGbGp5QNqID3rFU0YgbP5ufOiXnVumTMNa2FJK5+nsio5ExkyiwnRHFoVn2ZuJ/XifF8MbPhEpS5IotFoWpJBiT2d+kLzRnKCeWUKaFvZWwIdWUoU2naEPwll9eJc3LindVqT5Uy7XbPI4CnMIZXIAH11CDe6hDAxgM4Ble4c2Rzovz7nwsWtecfOYE/sD5/AEQHo2q</latexit> 
+
+v4
+
+<latexit sha1_base64="q4OfVUDlmkdclTH49lefZOq9sRg=">AAAB8nicbVBNSwMxEJ31s9avqkcvwSJ4kLKRUr0IRS8eK9gP2C4lm2bb0OxmSbJKWfozvHhQxKu/xpv/xrTdg7Y+GHi8N8PMvCARXBvX/XZWVtfWNzYLW8Xtnd29/dLBYUvLVFHWpFJI1QmIZoLHrGm4EayTKEaiQLB2MLqd+u1HpjSX8YMZJ8yPyCDmIafEWMljPXyOnnr4Gtd6pbJbcWdAywTnpAw5Gr3SV7cvaRqx2FBBtPawmxg/I8pwKtik2E01SwgdkQHzLI1JxLSfzU6eoFOr9FEola3YoJn6eyIjkdbjKLCdETFDvehNxf88LzXhlZ/xOEkNi+l8UZgKZCSa/o/6XDFqxNgSQhW3tyI6JIpQY1Mq2hDw4svLpHVRwbVK9b5art/kcRTgGE7gDDBcQh3uoAFNoCDhGV7hzTHOi/PufMxbV5x85gj+wPn8ASJlj90=</latexit> 
+
+e1, w 1 = 16 
+
+<latexit sha1_base64="4g4kc6Gyg/gk4VgIFqO+AQerPqA=">AAAB9HicbVDLSsNAFJ3UV42vqks3g0VwISUp9bERim5cVrAPaEOYTG/aoZOHM5NKCf0ONy4UcevHuPNvnLRZaOuBC4dz7uXee7yYM6ks69sorKyurW8UN82t7Z3dvdL+QUtGiaDQpBGPRMcjEjgLoamY4tCJBZDA49D2RreZ3x6DkCwKH9QkBicgg5D5jBKlJQfc6hl+cqvX1XPTdEtlq2LNgJeJnZMyytFwS1+9fkSTAEJFOZGya1uxclIiFKMcpmYvkRATOiID6GoakgCkk86OnuITrfSxHwldocIz9fdESgIpJ4GnOwOihnLRy8T/vG6i/CsnZWGcKAjpfJGfcKwinCWA+0wAVXyiCaGC6VsxHRJBqNI5ZSHYiy8vk1a1Yl9Uave1cv0mj6OIjtAxOkU2ukR1dIcaqIkoekTP6BW9GWPjxXg3PuatBSOfOUR/YHz+AJOhkAc=</latexit> 
+
+e2, w 2 = 25 
+
+<latexit sha1_base64="54J5TTe44LGJM/FF+3xz7xgXF4s=">AAAB83icbVBNS8NAEJ3Ur1q/qh69LBbBg5REgnoRil48VrAf0Iaw2W7apZtN2N0oJfRvePGgiFf/jDf/jZs2B219MPB4b4aZeUHCmdK2/W2VVlbX1jfKm5Wt7Z3dver+QVvFqSS0RWIey26AFeVM0JZmmtNuIimOAk47wfg29zuPVCoWiwc9SagX4aFgISNYG6lPffcMPfnutWNX/GrNrtszoGXiFKQGBZp+9as/iEkaUaEJx0r1HDvRXoalZoTTaaWfKppgMsZD2jNU4IgqL5vdPEUnRhmgMJamhEYz9fdEhiOlJlFgOiOsR2rRy8X/vF6qwysvYyJJNRVkvihMOdIxygNAAyYp0XxiCCaSmVsRGWGJiTYx5SE4iy8vk/Z53bmou/durXFTxFGGIziGU3DgEhpwB01oAYEEnuEV3qzUerHerY95a8kqZg7hD6zPH1mSj/E=</latexit> 
+
+e4, w 4 = 10 
+
+<latexit sha1_base64="xRFvcCAHe3sdZK6o49MLG0zyJbM=">AAAB6nicbVBNS8NAEJ3Ur1q/qh69LBbBU0lE1GPRi8eK9gPaUDbbSbt0swm7m0IJ/QlePCji1V/kzX/jts1BWx8MPN6bYWZekAiujet+O4W19Y3NreJ2aWd3b/+gfHjU1HGqGDZYLGLVDqhGwSU2DDcC24lCGgUCW8Hobua3xqg0j+WTmSToR3QgecgZNVZ6HPe8XrniVt05yCrxclKBHPVe+avbj1kaoTRMUK07npsYP6PKcCZwWuqmGhPKRnSAHUsljVD72fzUKTmzSp+EsbIlDZmrvycyGmk9iQLbGVEz1MveTPzP66QmvPEzLpPUoGSLRWEqiInJ7G/S5wqZERNLKFPc3krYkCrKjE2nZEPwll9eJc2LqndVvXy4rNRu8ziKcAKncA4eXEMN7qEODWAwgGd4hTdHOC/Ou/OxaC04+cwx/IHz+QMLko2n</latexit> 
+
+v1
+
+<latexit sha1_base64="V6fAUfvT4bCSSOS4asvlQj3TYH0=">AAAB63icbVBNS8NAEJ3Ur1q/qh69LBbBU0lKUY9FLx4r2FpoQ9lsN+3S3U3YnRRK6V/w4kERr/4hb/4bkzYHbX0w8Hhvhpl5QSyFRdf9dgobm1vbO8Xd0t7+weFR+fikbaPEMN5ikYxMJ6CWS6F5CwVK3okNpyqQ/CkY32X+04QbKyL9iNOY+4oOtQgFo5hJk36t1C9X3Kq7AFknXk4qkKPZL3/1BhFLFNfIJLW267kx+jNqUDDJ56VeYnlM2ZgOeTelmipu/dni1jm5SJUBCSOTlkayUH9PzKiydqqCtFNRHNlVLxP/87oJhjf+TOg4Qa7ZclGYSIIRyR4nA2E4QzlNCWVGpLcSNqKGMkzjyULwVl9eJ+1a1buq1h/qlcZtHkcRzuAcLsGDa2jAPTShBQxG8Ayv8OYo58V5dz6WrQUnnzmFP3A+fwBCLY28</latexit> 
+
+v2
+
+<latexit sha1_base64="b2tEeKlWWv/DNO1wXN9nzf05O4M=">AAAB6nicbVDLTgJBEOzFF+IL9ehlIjHxRHaVqEeiF48Y5ZHAhswOvTBhdnYzM0tCCJ/gxYPGePWLvPk3DrAHBSvppFLVne6uIBFcG9f9dnJr6xubW/ntws7u3v5B8fCooeNUMayzWMSqFVCNgkusG24EthKFNAoENoPh3cxvjlBpHssnM07Qj2hf8pAzaqz0OOpedoslt+zOQVaJl5ESZKh1i1+dXszSCKVhgmrd9tzE+BOqDGcCp4VOqjGhbEj72LZU0gi1P5mfOiVnVumRMFa2pCFz9ffEhEZaj6PAdkbUDPSyNxP/89qpCW/8CZdJalCyxaIwFcTEZPY36XGFzIixJZQpbm8lbEAVZcamU7AheMsvr5LGRdm7KlceKqXqbRZHHk7gFM7Bg2uowj3UoA4M+vAMr/DmCOfFeXc+Fq05J5s5hj9wPn8ADpqNqQ==</latexit> 
+
+v3
+
+<latexit sha1_base64="hO320iBa8sEmbXNNilQxEqLdr0Y=">AAAB6nicbVBNS8NAEJ34WetX1aOXxSJ4KokU9Vj04rGi/YA2lM120y7dbMLupFBCf4IXD4p49Rd589+4bXPQ1gcDj/dmmJkXJFIYdN1vZ219Y3Nru7BT3N3bPzgsHR03TZxqxhsslrFuB9RwKRRvoEDJ24nmNAokbwWju5nfGnNtRKyecJJwP6IDJULBKFrpcdyr9kplt+LOQVaJl5My5Kj3Sl/dfszSiCtkkhrT8dwE/YxqFEzyabGbGp5QNqID3rFU0YgbP5ufOiXnVumTMNa2FJK5+nsio5ExkyiwnRHFoVn2ZuJ/XifF8MbPhEpS5IotFoWpJBiT2d+kLzRnKCeWUKaFvZWwIdWUoU2naEPwll9eJc3LindVqT5Uy7XbPI4CnMIZXIAH11CDe6hDAxgM4Ble4c2Rzovz7nwsWtecfOYE/sD5/AEQHo2q</latexit> 
+
+v4
+
+<latexit sha1_base64="KEK0I1JKU+v9zj5b5kBO3gwAZlQ=">AAAB8nicbVBNSwMxEM3Wr1q/qh69BIvgadmV0noRil48VrAfsF1KNs22odlkSWaFUvozvHhQxKu/xpv/xrTdg7Y+GHi8N8PMvCgV3IDnfTuFjc2t7Z3ibmlv/+DwqHx80jYq05S1qBJKdyNimOCStYCDYN1UM5JEgnWi8d3c7zwxbbiSjzBJWZiQoeQxpwSsFPQYkL5/47m1er9c8VxvAbxO/JxUUI5mv/zVGyiaJUwCFcSYwPdSCKdEA6eCzUq9zLCU0DEZssBSSRJmwuni5Bm+sMoAx0rbkoAX6u+JKUmMmSSR7UwIjMyqNxf/84IM4utwymWaAZN0uSjOBAaF5//jAdeMgphYQqjm9lZMR0QTCjalkg3BX315nbSvXL/mVh+qlcZtHkcRnaFzdIl8VEcNdI+aqIUoUugZvaI3B5wX5935WLYWnHzmFP2B8/kDiUyQHw==</latexit> 
+
+⌘1 = 0 .67 
+
+<latexit sha1_base64="1cEhwLUatNaa4NAGE/HZoVDezBE=">AAAB73icbVDLSgNBEJyNrxhfUY9eBoPgKexqUC9C0IvHCOYByRJmJ51kyOzsOtMrhCU/4cWDIl79HW/+jZNkD5pY0FBUddPdFcRSGHTdbye3srq2vpHfLGxt7+zuFfcPGiZKNIc6j2SkWwEzIIWCOgqU0Io1sDCQ0AxGt1O/+QTaiEg94DgGP2QDJfqCM7RSqwPIuufXXrdYcsvuDHSZeBkpkQy1bvGr04t4EoJCLpkxbc+N0U+ZRsElTAqdxEDM+IgNoG2pYiEYP53dO6EnVunRfqRtKaQz9fdEykJjxmFgO0OGQ7PoTcX/vHaC/Ss/FSpOEBSfL+onkmJEp8/TntDAUY4tYVwLeyvlQ6YZRxtRwYbgLb68TBpnZe+iXLmvlKo3WRx5ckSOySnxyCWpkjtSI3XCiSTP5JW8OY/Oi/PufMxbc042c0j+wPn8ASu6j2k=</latexit> 
+
+⌘3 = 1 
+
+<latexit sha1_base64="hFtu6FfLfd9gg/6du72Zxg6/bOs=">AAAB8nicbVBNS8NAEJ34WetX1aOXxSJ4kJK0Rb0IRS8eK9gPSEPYbDft0k027G6UEvozvHhQxKu/xpv/xm2bg7Y+GHi8N8PMvCDhTGnb/rZWVtfWNzYLW8Xtnd29/dLBYVuJVBLaIoIL2Q2wopzFtKWZ5rSbSIqjgNNOMLqd+p1HKhUT8YMeJ9SL8CBmISNYG8mlfu0cPfm166rtl8p2xZ4BLRMnJ2XI0fRLX72+IGlEY004Vsp17ER7GZaaEU4nxV6qaILJCA+oa2iMI6q8bHbyBJ0apY9CIU3FGs3U3xMZjpQaR4HpjLAeqkVvKv7nuakOr7yMxUmqaUzmi8KUIy3Q9H/UZ5ISzceGYCKZuRWRIZaYaJNS0YTgLL68TNrVinNRqd/Xy42bPI4CHMMJnIEDl9CAO2hCCwgIeIZXeLO09WK9Wx/z1hUrnzmCP7A+fwAg+I/c</latexit> 
+
+e3, w 3 = 20 
+
+<latexit sha1_base64="BxSa3s5lCzvGj1/thAA2ZqGWMTU=">AAAB73icbVBNS8NAEN34WetX1aOXxSJ4KokU9SIUvXisYD+gDWWznbRLN5u4OxFK6J/w4kERr/4db/4bt20O2vpg4PHeDDPzgkQKg6777aysrq1vbBa2its7u3v7pYPDpolTzaHBYxnrdsAMSKGggQIltBMNLAoktILR7dRvPYE2IlYPOE7Aj9hAiVBwhlZqdwFZr3rt9kplt+LOQJeJl5MyyVHvlb66/ZinESjkkhnT8dwE/YxpFFzCpNhNDSSMj9gAOpYqFoHxs9m9E3pqlT4NY21LIZ2pvycyFhkzjgLbGTEcmkVvKv7ndVIMr/xMqCRFUHy+KEwlxZhOn6d9oYGjHFvCuBb2VsqHTDOONqKiDcFbfHmZNM8r3kWlel8t127yOArkmJyQM+KRS1Ijd6ROGoQTSZ7JK3lzHp0X5935mLeuOPnMEfkD5/MHK7yPaQ==</latexit> 
+
+⌘4 = 0 
+
+<latexit sha1_base64="ngPrpPifZvb93km/ILlEESIOQ0U=">AAAB73icbVDLSgNBEOyNrxhfUY9eBoPgKeyGoF6EoBePEcwDkiXMTnqTIbOz68ysEEJ+wosHRbz6O978GyfJHjSxoKGo6qa7K0gE18Z1v53c2vrG5lZ+u7Czu7d/UDw8auo4VQwbLBaxagdUo+ASG4Ybge1EIY0Cga1gdDvzW0+oNI/lgxkn6Ed0IHnIGTVWanfR0F7l2usVS27ZnYOsEi8jJchQ7xW/uv2YpRFKwwTVuuO5ifEnVBnOBE4L3VRjQtmIDrBjqaQRan8yv3dKzqzSJ2GsbElD5urviQmNtB5Hge2MqBnqZW8m/ud1UhNe+RMuk9SgZItFYSqIicnsedLnCpkRY0soU9zeStiQKsqMjahgQ/CWX14lzUrZuyhX76ul2k0WRx5O4BTOwYNLqMEd1KEBDAQ8wyu8OY/Oi/PufCxac042cwx/4Hz+ACo0j2g=</latexit> 
+
+⌘2 = 1 
+
+Fig. 2: Schematic illustration of Open Hypergraphic-Form Game (left) and its corresponding preference hypergraph (right). Hyper-preference centrality is computed using in-degree centrality aggregated across hyperedge cardinalities. 
+
+Ct ⊆ C with types θit, i ∈ C t exist in the environment and choose their actions ait by sampling from their policies πi. The learner receives a reward computed through R(st, a t, e, ϕ ),where at ∈ ACt denotes the joint agent-actions. The next state st+1 and the next set of existing agents Ct+1 with types are sampled from P given st, at, e, and ϕ.The objective is to learn policies {πi}i∈L for learnable robot agents that maximize the expected discounted return while respecting robot constraints: 
+
+J = Ee∼P env ,τ ∼P
+
+" TX
+
+t=0 
+
+γtR(st, a t, e, ϕ )
+
+#
+
+, (5) where τ denotes the trajectory and γ ∈ [0 , 1) is the discount factor. This formulation ensures that learned policies generate robot-feasible behaviors deployable on physical platforms. IV. H YPERGRAPHIC OPEN -ENDED LEARNING ALGORITHM 
+
+To address the multi-robot open adaptive learning problem, we introduce a novel approach named the hypergraphic open-ended learning algorithm (HOLA). In Section IV-A, we first introduce the preference hypergraph and hyper-preference centrality to model cooperative relationships and assess the coordination ability of each agent within the hypergraph. In Section IV-B, we provide the details of HOLA, as illustrated in Fig. 3. 
+
+A. Open Preference Hypergraph 
+
+We propose a hypergraphic-form game formulation to model multi-agent interactions in open adaptive teaming, ex-tending beyond traditional normal-form games that represent pairwise interactions. In multi-robot coordination, the utility of cooperative behaviors often depends on higher-order inter-actions among multiple agents simultaneously—for instance, successful target encirclement requires coordinated positioning of three or more robots, which cannot be decomposed into pairwise relationships. While normal-form games represent two-player interactions as matrices and have been extended to tensors for multi-player games, they become computation-ally intractable for variable team sizes and dynamic team compositions. Our hypergraphic-form game leverages hyper-graphs—mathematical structures where edges (hyperedges) can connect arbitrary numbers of vertices—to naturally rep-resent these higher-order cooperative relationships. Crucially, JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5<latexit sha1_base64="ke99Bl1jhQVkpn7/H7PzcNMMAXI=">AAAB+nicbVDLSsNAFL3xWesr1aWbwaK4KokUdVl0ocsK9gFNCJPppB07eTAzUUrsp7hxoYhbv8Sdf+OkzUJbDwwczrmXe+b4CWdSWda3sbS8srq2Xtoob25t7+yalb22jFNBaIvEPBZdH0vKWURbiilOu4mgOPQ57fijq9zvPFAhWRzdqXFC3RAPIhYwgpWWPLPiHDvICbEaEsyz64l375lVq2ZNgRaJXZAqFGh65pfTj0ka0kgRjqXs2Vai3AwLxQink7KTSppgMsID2tM0wiGVbjaNPkFHWumjIBb6RQpN1d8bGQ6lHIe+nsxDynkvF//zeqkKLtyMRUmqaERmh4KUIxWjvAfUZ4ISxceaYCKYzorIEAtMlG6rrEuw57+8SNqnNfusVr+tVxuXRR0lOIBDOAEbzqEBN9CEFhB4hGd4hTfjyXgx3o2P2eiSUezswx8Ynz+b/pOa</latexit> 
+
+& Gj
+
+…… 2
+
+1
+
+3
+
+> …
+
+<latexit sha1_base64="o+XI5V4B/iwvTSHWzH0XUaavjsM=">AAAB/HicbVDLSsNAFL2pr1pf0S7dBIvgqiRS1GXRjcsK9gFtKJPppB06mYSZiRJC/BU3LhRx64e482+cpFlo64FhDufcy5w5XsSoVLb9bVTW1jc2t6rbtZ3dvf0D8/CoJ8NYYNLFIQvFwEOSMMpJV1HFyCASBAUeI31vfpP7/QciJA35vUoi4gZoyqlPMVJaGpv1UYDUzPPT4qYqfcyysdmwm3YBa5U4JWlAic7Y/BpNQhwHhCvMkJRDx46UmyKhKGYkq41iSSKE52hKhppyFBDppkX4zDrVysTyQ6EPV1ah/t5IUSBlEnh6Mo8ol71c/M8bxsq/clPKo1gRjhcP+TGzVGjlTVgTKghWLNEEYUF1VgvPkEBY6b5qugRn+curpHfedC6arbtWo31d1lGFYziBM3DgEtpwCx3oAoYEnuEV3own48V4Nz4WoxWj3KnDHxifP9AJlYo=</latexit> 
+
+w
+
+<latexit sha1_base64="o+XI5V4B/iwvTSHWzH0XUaavjsM=">AAAB/HicbVDLSsNAFL2pr1pf0S7dBIvgqiRS1GXRjcsK9gFtKJPppB06mYSZiRJC/BU3LhRx64e482+cpFlo64FhDufcy5w5XsSoVLb9bVTW1jc2t6rbtZ3dvf0D8/CoJ8NYYNLFIQvFwEOSMMpJV1HFyCASBAUeI31vfpP7/QciJA35vUoi4gZoyqlPMVJaGpv1UYDUzPPT4qYqfcyysdmwm3YBa5U4JWlAic7Y/BpNQhwHhCvMkJRDx46UmyKhKGYkq41iSSKE52hKhppyFBDppkX4zDrVysTyQ6EPV1ah/t5IUSBlEnh6Mo8ol71c/M8bxsq/clPKo1gRjhcP+TGzVGjlTVgTKghWLNEEYUF1VgvPkEBY6b5qugRn+curpHfedC6arbtWo31d1lGFYziBM3DgEtpwCx3oAoYEnuEV3own48V4Nz4WoxWj3KnDHxifP9AJlYo=</latexit> 
+
+w
+
+<latexit sha1_base64="o+XI5V4B/iwvTSHWzH0XUaavjsM=">AAAB/HicbVDLSsNAFL2pr1pf0S7dBIvgqiRS1GXRjcsK9gFtKJPppB06mYSZiRJC/BU3LhRx64e482+cpFlo64FhDufcy5w5XsSoVLb9bVTW1jc2t6rbtZ3dvf0D8/CoJ8NYYNLFIQvFwEOSMMpJV1HFyCASBAUeI31vfpP7/QciJA35vUoi4gZoyqlPMVJaGpv1UYDUzPPT4qYqfcyysdmwm3YBa5U4JWlAic7Y/BpNQhwHhCvMkJRDx46UmyKhKGYkq41iSSKE52hKhppyFBDppkX4zDrVysTyQ6EPV1ah/t5IUSBlEnh6Mo8ol71c/M8bxsq/clPKo1gRjhcP+TGzVGjlTVgTKghWLNEEYUF1VgvPkEBY6b5qugRn+curpHfedC6arbtWo31d1lGFYziBM3DgEtpwCx3oAoYEnuEV3own48V4Nz4WoxWj3KnDHxifP9AJlYo=</latexit> 
+
+w
+
+<latexit sha1_base64="o+XI5V4B/iwvTSHWzH0XUaavjsM=">AAAB/HicbVDLSsNAFL2pr1pf0S7dBIvgqiRS1GXRjcsK9gFtKJPppB06mYSZiRJC/BU3LhRx64e482+cpFlo64FhDufcy5w5XsSoVLb9bVTW1jc2t6rbtZ3dvf0D8/CoJ8NYYNLFIQvFwEOSMMpJV1HFyCASBAUeI31vfpP7/QciJA35vUoi4gZoyqlPMVJaGpv1UYDUzPPT4qYqfcyysdmwm3YBa5U4JWlAic7Y/BpNQhwHhCvMkJRDx46UmyKhKGYkq41iSSKE52hKhppyFBDppkX4zDrVysTyQ6EPV1ah/t5IUSBlEnh6Mo8ol71c/M8bxsq/clPKo1gRjhcP+TGzVGjlTVgTKghWLNEEYUF1VgvPkEBY6b5qugRn+curpHfedC6arbtWo31d1lGFYziBM3DgEtpwCx3oAoYEnuEV3own48V4Nz4WoxWj3KnDHxifP9AJlYo=</latexit> 
+
+w
+
+Learner 
+
+j
+
+<latexit sha1_base64="poaNn7PDUgeSzcwSIkksucJl0W0=">AAAB/nicbVDLSsNAFL3xWesrKq7cDBbFjSWRoi6LLnRZwT6gCWEynbRjJw9mJkIJAX/FjQtF3Pod7vwbJ20X2npg4HDOvdwzx084k8qyvo2FxaXlldXSWnl9Y3Nr29zZbck4FYQ2Scxj0fGxpJxFtKmY4rSTCIpDn9O2P7wu/PYjFZLF0b0aJdQNcT9iASNYackz951jBzkhVgOCeXaTe9nDqZ17ZsWqWmOgeWJPSQWmaHjml9OLSRrSSBGOpezaVqLcDAvFCKd52UklTTAZ4j7tahrhkEo3G8fP0ZFWeiiIhX6RQmP190aGQylHoa8ni6By1ivE/7xuqoJLN2NRkioakcmhIOVIxajoAvWYoETxkSaYCKazIjLAAhOlGyvrEuzZL8+T1lnVPq/W7mqV+tW0jhIcwCGcgA0XUIdbaEATCGTwDK/wZjwZL8a78TEZXTCmO3vwB8bnD1IYlRg=</latexit> 
+
+& Gj 1
+
+j
+
+2
+
+1
+
+3
+
+> …
+
+j-1 
+
+j
+
+Co-Play 
+
+Partners 
+
+Sample 
+
+Learner <latexit sha1_base64="sg3Osjp/PPfJVYzuR+fY+tt9N/o=">AAAB+HicbVDLSsNAFL2pr1ofjbp0M1gEVyURUZdFF7qsYB/QhjCZTtuxk0mYmQg15EvcuFDErZ/izr9x0mahrQcGDufcyz1zgpgzpR3n2yqtrK6tb5Q3K1vbO7tVe2+/raJEEtoiEY9kN8CKciZoSzPNaTeWFIcBp51gcp37nUcqFYvEvZ7G1AvxSLAhI1gbyber/RDrMcE8vcn89CHz7ZpTd2ZAy8QtSA0KNH37qz+ISBJSoQnHSvVcJ9ZeiqVmhNOs0k8UjTGZ4BHtGSpwSJWXzoJn6NgoAzSMpHlCo5n6eyPFoVLTMDCTeUy16OXif14v0cNLL2UiTjQVZH5omHCkI5S3gAZMUqL51BBMJDNZERljiYk2XVVMCe7il5dJ+7TuntfP7s5qjauijjIcwhGcgAsX0IBbaEILCCTwDK/wZj1ZL9a79TEfLVnFzgH8gfX5A0UMk4A=</latexit> 
+
+Gj
+
+j+1 
+
+Sample Update 
+
+Partners Learner 
+
+Co-Play 
+
+> …
+> …
+
+Grapher Oracle 
+
+Generation j 
+
+<latexit sha1_base64="oMK3+KCLF+dvnaJZyH6VO1ny8pI=">AAACB3icbVDLSsNAFJ3UV62vqEtBBovgqiRS1GXRjcuK9gFNKJPppB06eTBzI5aQnRt/xY0LRdz6C+78GydtFtp6YODMufdw7z1eLLgCy/o2SkvLK6tr5fXKxubW9o65u9dWUSIpa9FIRLLrEcUED1kLOAjWjSUjgSdYxxtf5fXOPZOKR+EdTGLmBmQYcp9TAlrqm4dOQGDk+akTj3jmYAfYA+jvbSS0LeubVatmTYEXiV2QKirQ7JtfziCiScBCoIIo1bOtGNyUSOBUsKziJIrFhI7JkPU0DUnAlJtO78jwsVYG2I+kfiHgqfrbkZJAqUng6c58azVfy8X/ar0E/As35WGcAAvpbJCfCAwRzkPBAy4ZBTHRhFDJ9a6YjogkFHR0FR2CPX/yImmf1uyzWv2mXm1cFnGU0QE6QifIRueoga5RE7UQRY/oGb2iN+PJeDHejY9Za8koPPvoD4zPHxclmhs=</latexit> 
+
+  Solver 
+
+<latexit sha1_base64="lmzOVIWCWsUwF1soys8pByZk8bA=">AAAB7nicbVBNS8NAEJ3Ur1q/qh69LBahXkIiRXssiuCxgv2ANpTNdtMu3WzS3Y1QQv0PXjwo4tXf481/47bNQVsfDDzem2Fmnh9zprTjfFu5tfWNza38dmFnd2//oHh41FRRIgltkIhHsu1jRTkTtKGZ5rQdS4pDn9OWP7qZ+a1HKhWLxIOexNQL8UCwgBGsjdS6HdtP5ep5r1hybGcOtErcjJQgQ71X/Or2I5KEVGjCsVId14m1l2KpGeF0WugmisaYjPCAdgwVOKTKS+fnTtGZUfooiKQpodFc/T2R4lCpSeibzhDroVr2ZuJ/XifRQdVLmYgTTQVZLAoSjnSEZr+jPpOUaD4xBBPJzK2IDLHERJuECiYEd/nlVdK8sN1Lu3JfKdWuszjycAKnUAYXrqAGd1CHBhAYwTO8wpsVWy/Wu/WxaM1Z2cwx/IH1+QP/o460</latexit> 
+
+Eq. (8) 
+
+<latexit sha1_base64="hpnySaJh+/CAhHti5mNvHw101yA=">AAAB63icbVBNS8NAEJ3Ur1q/qh69LBbBU0mkVI9FLx4r2A9oQ9lsN83S3U3Y3Qgl9C948aCIV/+QN/+NmzYHbX0w8Hhvhpl5QcKZNq777ZQ2Nre2d8q7lb39g8Oj6vFJV8epIrRDYh6rfoA15UzSjmGG036iKBYBp71gepf7vSeqNIvlo5kl1Bd4IlnICDa5NEwiNqrW3Lq7AFonXkFqUKA9qn4NxzFJBZWGcKz1wHMT42dYGUY4nVeGqaYJJlM8oQNLJRZU+9ni1jm6sMoYhbGyJQ1aqL8nMiy0nonAdgpsIr3q5eJ/3iA14Y2fMZmkhkqyXBSmHJkY5Y+jMVOUGD6zBBPF7K2IRFhhYmw8FRuCt/ryOule1b1mvfHQqLVuizjKcAbncAkeXEML7qENHSAQwTO8wpsjnBfn3flYtpacYuYU/sD5/AEWdo5I</latexit> 
+
+ 
+
+Fig. 3: Hypergraphic Open-ended Learning Algorithm: Detailed illustration of a single generation within the open-ended learning phase, including the grapher and oracle modules. this is a game-theoretic formulation for modeling strategic interactions and payoff structures, not a neural architecture based on graph neural networks. Each vertex represents an agent’s policy (parameterized by a neural network), and each hyperedge captures the joint utility obtained when a specific subset of agents coordinate their actions. This formulation enables efficient reasoning about cooperation patterns across varying team compositions while maintaining tractability as team size changes. 
+
+Definition 4.1 (Open Hypergraphic-Form Game): The Open 
+
+Hypergraphic-Form Game (OH-Game) G is defined by the tuple (V, E, w, L), where V is a set of vertices representing agent policies parameterized by neural network weights θi;
+
+E = S
+
+l∈L El is a set of hyperedges with varying cardinalities, where El ⊆  V
+
+l
+
+ denotes hyperedges connecting exactly l ver-tices; w : E → R assigns utilities to hyperedges representing expected returns from coordination; and K = {lmin , . . . , l max }
+
+specifies the range of possible hyperedge cardinalities. For each hyperedge e ∈ E l, its cardinality |e| = l represents the number of coordinating agents. The open formulation allows the active subset of hyperedges to vary dynamically as team composition changes during episodes. Although the OH-Game model offers a comprehensive framework for modeling multi-scale agent interactions, di-rectly extracting data relevant to cooperative capabilities within the game remains a challenge. To address this, we further introduce the preference hypergraph OPG .
+
+Definition 4.2 (Open Preference Hypergraph): An open preference hypergraph, denoted as OPG , is an unweighted directed hypergraph derived from an OH-Game G =(V, E, w, L) and represented as (V, eE). For each node i ∈ V 
+
+and each cardinality l ∈ L , there exists an outgoing hyperedge 
+
+eeli ∈ eE such that w(eeli) = max e∈E i,l w(e), where Ei,l = {e ∈El : i ∈ e} is the set of l-cardinality hyperedges that connect to node i. This captures agent i’s preferred coalition partners for each possible team size. In the hyper-preference graph, a node that serves as the endpoint of multiple hyperedges across different cardinalities typically indicates higher cooperative ability and adaptability to varying team compositions. We introduce the concept of 
+
+hyper-preference centrality , denoted by η, to quantify the cooperative ability of each node. For any node i ∈ V , the hyper-preference centrality ηi is defined as 
+
+ηi = 1(|V| − 1) · |K| 
+
+X
+
+l∈K 
+
+dl(i) (6) where dl(i) quantifies the importance of node i within the l-cardinality preference network, measuring how many agents prefer to coordinate with i in teams of size l. The summation over all cardinalities l ∈ L captures an agent’s overall cooperative capacity across different team scales. Intuitively, each hyperedge in eE signifies a preference re-lationship, with the source node favoring the formation of a coalition of specific size with the end nodes. This preference arises because the source node achieves the highest outcomes when co-playing with the end nodes in teams of that size. Fig. 2 provides a schematic illustration of the hypergraph representation of OH-Game (left) and its corresponding pref-erence hypergraph (right). In this example, nodes v2 and 
+
+v3 exhibit the highest cooperative capacity, indicating their desirability as teammates across multiple team configurations. Furthermore, a best-preferred agent is defined as one achieving hyper-preference centrality η = 1 , indicating that it is the most preferred coordination partner across all team scales within the population. Intuitively, for any agent πi,its best-preferred partner πj (πi̸ = πj ) is the one with whom πi achieves the highest expected return across varying team compositions, environments, and constraint satisfaction scenarios. 
+
+B. Hypergraphic Open-ended Learning Algorithm 
+
+We then incorporate the hypergraphic-form game into open-ended learning framework and propose HOLA, which con-tinuously adjusts training objectives to enhance coordination capabilities among agents. As shown in Fig. 3, HOLA consists of two main phases: the pre-training phase and the open-ended learning phase. 
+
+1) Pre-training phase: To improve the diversity of policies in the hypergraph, we first pre-train a population of drone agents and then construct the initial OH-Game G0. Building on the principles of maximum entropy reinforcement learning and maximum entropy population-based training (MEP) [45], we incorporate an additional maximum entropy objective into the training function to cultivate a diverse population of strategies. This encourages the development of a population of agents that JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6
+
+can cooperate effectively while employing mutually distinct strategies. The objective function is defined as follows: 
+
+J(¯ π) = X
+
+> t
+
+E(st,a t)∼¯π [R (st, a t) + αH (¯ π (· | st))] . (7) The objective optimizes the policy ¯π by maximizing the ex-pected reward R(st, a t) and encouraging exploration through the entropy term H(¯ π(· | st)) , with a trade-off controlled by the weight α ∈ [0 , 1] . The entropy term is defined as follows: 
+
+H (¯ π (· | st)) = − X
+
+> a∈A
+
+¯π(i) (at | st) log ¯ π(i) (at | st) . (8) 
+
+2) Open-ended learning phase: After pretraining the initial population, HOLA begins continuous training by iteratively developing best-preferred agents within the evolving Open Hypergraphic-Form Game (O-HyFoG). The HOLA framework consists of two main modules: the Grapher module constructs the evolving O-HyFoG, and the Oracle module trains improved agents through targeted partner sampling via its internal ϕ
+
+Solver submodule. 
+
+a) Grapher module: The Grapher module constructs the latest O-HyFoG Gj = ( Vj , Ej , wj , L) by integrating newly generated learner agents Πnew  
+
+> j
+
+= {π1 
+
+> j
+
+, . . . , π nj 
+
+> j
+
+} with the existing population Vj−1, where the learner count nj ∼Pteam ({1, . . . , n max }) varies across episodes to promote adapt-ability to dynamic team configurations. For each cardinality 
+
+l ∈ L with l ≥ nj , the module samples (l − nj ) partner agents from Vj−1 to form hyperedges with Πnew  
+
+> j
+
+. For each hyperedge 
+
+e ∈ E j,l connecting l agents, the module evaluates coordination performance across multiple environments ε ∼ P env (E) and computes the average return:       
+
+> wj(e) = Eε∼P env
+> h
+> Enj∼P team
+> h
+> Eτ∼{ πi:i∈e}
+> hPTt=0 γtR(st,at, ε, ϕ )
+> iii
+> ,
+
+(9) where {πi : i ∈ e} denotes the joint policy of agents in hyperedge e, and R(st, at, ε, ϕ ) = Rtask (st, at, ε ) + 
+
+Rconstraint (st, at, ϕ ) captures both task performance and physi-cal constraint satisfaction. This formulation ensures hyperedge weights reflect coalition effectiveness across diverse environ-ments and variable learner configurations. 
+
+b) Oracle module: The Oracle module is the core of HOLA, training new agents to become best-preferred partners across the population. Given learner policy πj and the current O-HyFoG Gj from the Grapher module, the Oracle seeks a new policy πj+1 by optimizing: 
+
+πj+1 = BEST RESPONSE (πj , Gj , Jj ), such that η(πj+1 ) = 1 ,
+
+(10) where the objective function Jj is defined as: 
+
+Jj = Eπ−j ∼ϕj (Vj )
+
+> e∼P env
+> Ct∼P team
+
+"
+
+Eτ ∼{ πj ,π −j ,π ev }
+
+" TX
+
+> t=0
+
+γtR(st, a t, e, ϕ )
+
+## 
+
+,
+
+(11) where πev denotes the evader policy. The three expectation terms capture the core dimensions of open adaptive teaming: 
+
+π−j ∼ ϕj targets coordination with low-capability partners, 
+
+e ∼ P env ensures generalization across diverse environments, and Ct ∼ Pteam models within-episode team membership changes. This objective integrates three key aspects of open adap-tive teaming: partner sampling π−j ∼ ϕj targets coor-dination with low-capability agents, environment distribu-tion e ∼ Penv ensures generalization across diverse sce-narios, and dynamic team composition Ct ∼ Pteam cap-tures within-episode team membership changes. The trajec-tory τ = {(s0, a 0, C0), (s1, a 1, C1), . . . , (sT , a T , CT )} includes state-action sequences and time-varying team compositions Ct,while the evader policy πe represents the target’s behavior in pursuit tasks. The key to effective training lies in the partner sampling distribution ϕj , which is computed by the Oracle’s inter-nal ϕ Solver submodule. Given the O-HyFoG Gj , the ϕ
+
+Solver derives a distribution that inversely weights agents by their cooperative capacity, ensuring that agents with lower cooperative ability receive higher sampling probability. This directs training effort toward improving coordination with challenging partners. We compute ϕj using the inverse of the generalized Myerson value adapted for hypergraphs with varying cardinalities. For any agent i ∈ V j , the inverse Myerson value ϕ−1 
+
+> j
+
+(i) is computed as: 
+
+ϕ−1 
+
+> j
+
+(i) = X
+
+> l∈L
+
+1
+
+|Π( Vj )|
+
+X 
+
+> σ∈Π( Vj)
+
+[vl(Pσi ∪ { i}) − vl(Pσi )] , (12) where Π( Vj ) is the set of all permutations of Vj , Pσi denotes the set of agents preceding i in permutation σ, and vl(S) is the coalition value function for coalitions of size l:
+
+vl(S) = 
+
+(P  
+
+> e∈E j,l ,e ⊆S
+
+wj (e), if |S| ≥ l, 
+
+0, if |S| < l. (13) The summation over l ∈ L in Eq. 12 aggregates contri-butions across all team scales, capturing an agent’s overall cooperative value in open settings. 
+
+Proposition 4.3 (Myerson Value for O-HyFoG): For a con-nected O-HyFoG G = ( V, E, w, L), the inverse Myerson value can be equivalently computed as: 
+
+ϕ−1(i) = X
+
+> l∈L
+
+SV li (V, v l), (14) where SV li (V, v l) is the Shapley value of agent i in the l-cardinality coalition game. For each cardinality l ∈ L , we show that the contribution to 
+
+ϕ−1(i) from l-coalitions equals the Shapley value SV li (V, v l).Since O-HyFoG is connected, any subset S ⊆ V induces a connected subhypergraph. For a given permutation σ ∈ Π( V),define the marginal contribution of agent i in l-coalitions as: 
+
+∆l(i, σ ) = vl(Pσi ∪ { i}) − vl(Pσi ). (15) By definition of vl in Eq. 13, we have: 
+
+∆l(i, σ ) = X 
+
+> e∈E l,e ⊆P σi∪{ i}
+
+w(e) − X
+
+> e∈E l,e ⊆P σi
+
+w(e) (16) 
+
+= X
+
+> e∈E l:i∈e,e \{ i}⊆P σi
+
+w(e), (17) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7
+
+which counts only those l-cardinality hyperedges that include 
+
+i and have all other members in Pσi . Averaging over all permutations yields: 
+
+1
+
+|Π( V)|
+
+X
+
+> σ∈Π( V)
+
+∆l(i, σ ) = SV li (V, v l), (18) by the definition of Shapley value. Summing over all cardi-nalities l ∈ L establishes Eq. 14. The sampling distribution ϕj is then computed as: 
+
+ϕj (i) = ϕ−1 
+
+> j
+
+(i)−1
+
+P 
+
+> k∈V j
+
+ϕ−1 
+
+> j
+
+(k)−1 , (19) ensuring higher probability for agents with lower cooperative capacity. The constraint η(πj+1 ) = 1 in Eq. 10 ensures that πj+1 
+
+becomes the best-preferred agent, achieving the highest hyper-preference centrality across all team scales. However, this strict condition may be infeasible. Thus, we relax it to require that 
+
+πj+1 ’s centrality rank within the top m:
+
+πj+1 = APPROX BEST RESPONSE (πj , Gj , Jj ),
+
+such that rank (η(πj+1 )) ≤ m, (20) where rank (·) returns the ranking of centrality scores. The resulting policy πj+1 is termed an approximate best-preferred agent. The complete procedure is presented in Algorithm 1, and Fig. 3 illustrates the workflow for a single generation. V. E XPERIMENTAL SETTING 
+
+We validate our approach on cooperative multi-robot pursuit tasks using two robotic platforms: multi-drone and multi-quadruped systems. The experiments are designed to eval-uate the three core dimensions of open adaptive teaming: coordination with unseen teammates, generalization to unseen environments, and scalability to variable team sizes. We first describe the task formulation and platform specifications, then detail the evaluation protocols including both open team and fixed team settings. Finally, we present the evader policy, and unseen teammate pools. 
+
+A. Task Formulation 
+
+We adopt multi-robot cooperative pursuit as the primary testbed for evaluating open adaptive teaming. In this task, a team of pursuers must coordinate to capture multiple evaders within a bounded arena containing obstacles. The pursuit scenario is particularly well-suited for assessing open adaptive teaming capabilities because it inherently demands real-time coordination under dynamic conditions: pursuers are typically slower than evaders, making individual capture infeasible and necessitating strategic cooperation that must continuously adapt as team composition and environmental configurations change. At the start of each episode, pursuers and evaders are randomly spawned in designated regions of the arena. An evader is considered captured when any pursuer moves within the capture distance dc. Each agent operates under limited 
+
+Algorithm 1 Open-Ended Learning Phase of HOLA  
+
+> 1:
+
+Input: Pre-trained population G0, cardinality set L, robot constraints Φ 
+
+> 2:
+
+Input: Environment distribution Penv , team size distribu-tion Pteam , top-m threshold  
+
+> 3:
+
+for each generation j ∈ { 1, 2, . . . } do  
+
+> 4:
+
+▷ Grapher Module  
+
+> 5:
+
+Sample learner count: nj ∼ P team ({1, . . . , n max }) 
+
+> 6:
+
+Vj ← V j−1 ∪ Πnew  
+
+> j
+> 7:
+
+for each cardinality l ∈ L with l ≥ nj do  
+
+> 8:
+
+for each subset S ⊆ V j−1 with |S| = l − nj do  
+
+> 9:
+
+Form hyperedge e ← S ∪ Πnew  
+
+> j
+> 10:
+
+Sample environments {ε1, . . . , ε K } ∼ P env  
+
+> 11:
+
+Evaluate:  
+
+> 12:
+
+wj (e) ← 1
+
+> K
+
+PKk=1 Eτ
+
+hPTt=0 γtR(st, at, ε k, ϕ )
+
+i 
+
+> 13:
+
+Ej,l ← E j,l ∪ { e} 
+
+> 14:
+
+end for  
+
+> 15:
+
+end for  
+
+> 16:
+
+Gj ← (Vj , S 
+
+> l∈L
+
+Ej,l , wj , L) 
+
+> 17:
+
+▷ Oracle Module  
+
+> 18:
+
+for each agent i ∈ V j do  
+
+> 19:
+
+Compute ϕ−1 
+
+> j
+
+(i) via Eq. 12  
+
+> 20:
+
+end for  
+
+> 21:
+
+ϕj (i) ← ϕ−1 
+
+> j
+
+(i)−1/ P 
+
+> k
+
+ϕ−1 
+
+> j
+
+(k)−1 for all i ∈ V j 
+
+> 22:
+
+repeat  
+
+> 23:
+
+Sample learner count: nj+1 ∼ P team  
+
+> 24:
+
+Sample partners: π−j ∼ ϕj with |π−j | = l − nj+1 
+
+for sampled l ∈ L  
+
+> 25:
+
+Sample environment: ε ∼ P env  
+
+> 26:
+
+Update learners:  
+
+> 27:
+
+Πnew  
+
+> j+1
+
+← UPDATE (Π new  
+
+> j
+
+, π −j , ε, ϕ ) via Eq. 11  
+
+> 28:
+
+until rank (η(Π new 
+
+> j+1
+
+)) ≤ m 
+
+> 29:
+
+end for  
+
+> 30:
+
+Return: Trained population Gj
+
+perception with range dp and maintains a safe radius ds for collision avoidance. The episode terminates when all evaders are captured or the maximum time horizon tmax is reached. 
+
+B. Robotic Platforms and Real-World Deployment 
+
+To validate the generality of our approach across different embodiments, we deploy the cooperative pursuit task on two distinct robotic platforms: a multi-drone system and a multi-quadruped system. While both platforms implement the same task formulation, they differ fundamentally in physical dynamics, motion constraints, and operational scales. The multi-drone system operates in aerial space with high maneu-verability but limited payload, whereas the multi-quadruped system navigates the ground plane with different inertial properties and contact dynamics. This diversity in platform characteristics enables robust evaluation of whether the learned coordination strategies generalize across embodiment types. Both platforms share a common system architecture: a motion capture system provides global pose estimation, a centralized pursuit planner executes the learned policy, and wireless JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+Fig. 4: Real-world deployment of multi-robot open adaptive teaming on two robotic platforms. communication modules relay control commands to individual robots. 
+
+1) Multi-Drone Platform: As shown in Fig. 4, the drone ex-periments are conducted using a Crazyflie 2.1 multi-quadrotor system within a rectangular flight arena measuring wb = 3 .6 min width and hb = 5.0 m in length. Each episode has a time horizon of tmax = 100 seconds, and the system runs at 10 fps. The training team configuration consists of three pursuers (p1, p 2, p 3) and two evaders (e1, e 2). At episode initialization, agents are randomly spawned in designated areas of ws = 3 .2 m × hs = 0 .6 m, with evaders in the upper region and pursuers in the lower region. The arena contains 5 obstacles, each measuring wo = 0 .65 m × ho = 0 .1 m. The capture distance is dc = 0 .2 m, the perception range is 
+
+dp = 2 .0 m, and each drone maintains a safe radius ds = 0 .1 mfor collision avoidance. Pursuers move at vP = 0 .3 m/s while evaders move at vE = 0 .6 m/s, creating a 2:1 speed ratio that necessitates coordinated encirclement. For real-world deployment, drone positions are tracked by a network of 12 FZMotion cameras operating at 120 Hz. The position data, represented as point clouds, is collected by a motion capture server via USB and transmitted to the pursuit planner over Ethernet. The planner runs on a Lenovo ThinkPad T590 equipped with a Jetson Orin Nano module, which performs policy inference and sends velocity commands to each drone through a Crazyradio PA wireless dongle. On each Crazyflie, an onboard Mellinger controller tracks the received velocity commands. Control commands are issued at approximately 10 Hz to ensure stable flight. The commu-nication and control pipeline is built upon the CrazySwarm framework. 
+
+2) Multi-Quadruped Platform: The quadruped experiments employ the L1 robot developed by GEMBODY AI, operating in a ground-based rectangular arena measuring 6.0 m in width and 8.0 m in length. The task horizon and frame rate remain identical to the drone platform at tmax = 100 seconds and 10 fps, with the same team composition of 3 pursuers and 2 evaders. Spawn areas maintain proportional dimensions relative to the larger arena. The capture distance is increased to dc = 0 .65 m to account for the physical dimensions of the quadruped robots, while the perception range remains 
+
+dp = 2 .0 m. The safe radius is set to ds = 0 .4 m, reflecting the larger footprint of ground robots. Movement velocities are configured identically to the drone platform with vP = 0 .3 m/s and vE = 0.6 m/s, preserving the same speed differential across platforms. The real-world arena , shown in Fig. 4, is instrumented with a high-precision spatial positioning system consisting of 50 motion capture cameras that provide real-time 6-DoF pose estimation for all robots. Pose data is acquired by a motion capture server via USB and forwarded to the pursuit planner through Ethernet. After data parsing and fusion, the planner distributes position control commands to each robot via wireless communication modules at a rate of 10 Hz. At the communication level, a distributed architecture based on ROS2 and the Chrony time synchronization protocol achieves end-to-end latency of ≤ 10 ms. At the motion control level, each L1 robot runs a locomotion policy trained via deep reinforcement learning, which provides robust dynamic walking capability over the foam-mat terrain used in the arena. 
+
+C. Evaluation Protocols 
+
+We evaluate our approach under two experimental protocols that systematically probe different aspects of open adaptive teaming. 
+
+1) Open Team Protocol: This protocol implements the complete open adaptive teaming framework across all three dimensions. First, to test coordination with unseen teammates, we construct a diverse partner pool U = {u1, . . . , u K } where each policy is trained with a distinct algorithm exhibiting different cooperative capabilities. At each episode, teammates are sampled from U, and team composition may change within episodes as partners join or leave. The learning agent has no prior knowledge of teammate policies and must coordinate without pre-established protocols. Second, to test generaliza-tion to unseen environments, the number, size, and placement of obstacles are randomized to produce spatial configurations not encountered during training. Third, to test scalability across variable team sizes, the number of active pursuers JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9
+
+TABLE I: One-evader capture success rate (SR) and av-erage episode length (AEL) performance of agents in the unseen heterogeneous teammate pool. The numbers (1) and (2) following D3QN-G represent models trained with different random seeds. All results are averaged over 50 validation episodes.             
+
+> Metrics Greedy VICSEK D3QN-G (1) D3QN-G (2) SR 62.0% 98.0% 80.0% 78.0%
+> AEL 561.78 295.88 435.78 510.34
+
+varies both across and within episodes, ranging from small teams requiring tight coordination to larger teams demanding scalable cooperation mechanisms. 
+
+2) Fixed Team Protocol: As a controlled ablation study, we also evaluate performance under a fixed team setting on the multi-drone platform. In this protocol, team size is held constant at 3 pursuers and 2 evaders throughout each episode, while the unseen teammate and unseen environment conditions remain active. By comparing fixed and open team results on the same platform, we isolate the impact of variable team size adaptation and quantify its contribution to overall performance. 
+
+D. Evader Policy 
+
+The evaders are controlled by the escape policy proposed by [46] and [2]. This policy defines multiple repulsive forces exerted by pursuers and obstacles on evaders. Additionally, wall-following rules are incorporated to help evaders maneuver along obstacle surfaces when positioned between pursuers and obstacles. 
+
+E. Unseen Teammate Pools 
+
+To evaluate cooperative capabilities with previously unen-countered partners, we construct a heterogeneous pool con-sisting of four distinct models: Greedy Agent. This agent pursues targets independently, continually adjusting movement to align with evader positions. State information includes own position and orientation, distances and angles to team-mates and evaders, and proximity to obstacles. The agent applies evasive maneuvers when obstacles or pursuers are detected within its avoidance range. VICSEK Agent. Inspired by group chasing tactics [46], this strategy continuously computes velocity vectors directed toward evaders based on current environmental state. When obstacles or other pursuers are detected nearby, the agent applies repulsive forces with varying magnitudes. Although the computed velocity vector includes both magnitude and orientation, only the orientation component is utilized in the current implementation. D3QN-G Agent. This ensemble algorithm combines Double Deep Q-Network (D3QN) [47] with the Greedy strategy. Initially, D3QN-G employs the D3QN method to pursue the first evader. Upon successful capture, it switches to the Greedy strategy for the second evader. The action space consists of 24 artificial potential field with attention (APF-A) parameter pairs ( λ,
+
+η), formed by the Cartesian product of 8 λ candidates and 3 η candidates, following [2]. The parameter η calculates repulsive force while λ determines inter-robot force. The state dimension is 9, including position, orientation, teammate and evader information, obstacle proximity, and an activity bit indicating whether the agent remains active after teammate captures. As shown in Table I, these agents span a capability spec-trum from low-level Greedy (62% SR), through medium-level D3QN-G variants (approximately 80% SR), to expert-level VICSEK (98% SR). At each evaluation episode, we randomly sample two teammates from the pool to test zero-shot coordination ability across varying skill levels. VI. E XPERIMENTAL RESULTS 
+
+We evaluate HOLA through a progressive experimental pro-tocol that validates both fundamental coordination capabilities and comprehensive open adaptive teaming performance. The fixed team experiments establish baseline coordination abilities under controlled conditions with constant team composition within episodes. Building on this foundation, the open team experiments evaluate the core challenge of adaptive teaming where team composition changes dynamically during task execution. 
+
+A. Fixed Team Coordination 
+
+Fixed team experiments assess zero-shot coordination ca-pabilities where team composition remains constant within each episode, allowing systematic evaluation of adaptation to unseen teammates and novel environments. 
+
+1) Coordination with Unseen Teammates and Environ-ments: Fig. 5 compares HOLA performance against six base-line methods: MAPPO [14], DACOOP-A [2], self-play [48], [49], PBT [15], [49], FCP [50], and MEP [45]. We construct a heterogeneous teammate pool containing four drone agents with varying cooperative abilities from medium to expert lev-els. For each evaluation episode, two teammates are randomly sampled from this pool, repeated 50 times per seed to ensure statistical robustness. Results reveal fundamental limitations of traditional CTDE-based approaches. MAPPO and DACOOP-A achieve no more than 40% success rate, demonstrating that methods trained un-der fixed team configurations fail to generalise to unseen part-ners, regardless of their underlying coordination architecture. In contrast, HOLA reaches 82% success rate with a 13.67% collision rate, substantially outperforming FCP (72% success, second-best) and PBT (22.67% collision, highest among base-lines). The efficiency advantage is equally pronounced, with HOLA a required mean episode length of 663.72 timesteps compared to 801.19 for the closest competitor FCP. Table II reports performance in randomly generated un-seen environments to assess simultaneous adaptation across both teammate and environment dimensions. During train-ing, agents operate in fixed layouts with five obstacles. The evaluation pool contains diverse configurations with three or four randomly placed rectangular obstacles, with a new environment sampled at the start of each experiment. Averaged over 50 experiments across three random seeds, HOLA achieves the highest success rate (44.00%) and matches JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10 
+
+Fig. 5: Comparison of task success rate (first column, higher is better), collision rate (second column, lower is better), and mean episode length (third column, lower is better) among four baseline methods, one ablation method HOLA R (marked as Our R), and our proposed HOLA in the 3-pursuer-2-evader scenario when playing with random heterogeneous teammates (where policies are derived from different algorithms). The means and standard deviations, indicated by the error bars, are calculated over three different random seeds, with each seed undergoing 50 repeated runs. TABLE II: Performance comparison for generalization to randomly sampled novel environments. Results are averaged over 50 repeated experiments with three different random seeds, where each experiment evaluates performance in a newly sampled unseen environment from the pool.                             
+
+> Metrics Methods MAPPO DACOOP-A SP PBT FCP MEP HOLA SUC 35.33 25.33 40.00 42.67 40.00 36.00 44.00 AST 1388.11 1553.53 1316.05 1290.91 1318.02 1392.43 1294.65
+> COL 61.33 70.00 58.00 54.67 56.67 61.33 54.67
+
+the lowest collision rate (54.67%). For average success timesteps, HOLA ranks second at 1294.65, trailing PBT by fewer than four steps while maintaining superior success and collision metrics. These results confirm that HOLA effectively handles coordination uncertainty across both partner and en-vironment dimensions in fixed team settings. 
+
+2) Ablation Study: Effectiveness of ϕ Solver Module: To isolate the contribution of the ϕ solver module, we evaluate HOLA R, a variant that removes this component and instead uses inverse mean reward as the cooperative relationship distribution ϕ. Fig. 5 (gold bars) shows consistent performance degradation across all metrics when the ϕ solver is removed. Compared to full HOLA (red bars), HOLA R exhibits lower success rates, higher collision rates, and longer episode lengths in heterogeneous teammate configurations. This degradation validates that explicit modeling of team-level cooperative dependencies through the hypergraphic formulation is essential for effective coordination with unseen partners. 
+
+B. Open Team Coordination 
+
+The open team protocol evaluates the fundamental capabil-ity of adaptive teaming by introducing dynamic team com-position changes within episodes, not merely across episodes. This represents a critical departure from fixed team settings, requiring agents to continuously adapt as teammates join or leave during task execution while simultaneously handling novel environments. 
+
+1) Multi-Drone Pursuit: The top row of Fig. 6 presents multi-drone pursuit results under the open adaptive teaming setting. We evaluate performance in both seen environments (one obstacle layout) and unseen environments (three obstacle layouts) to assess generalization capabilities. HOLA consistently achieves the highest capture rates across all conditions, reaching approximately 73% in seen environ-ments and further improving to around 85% in unseen envi-ronments. A striking observation is that most methods exhibit higher capture rates in unseen environments than in seen ones, which appears counterintuitive at first glance. We attribute this to the richer obstacle topology in three-obstacle layouts, which creates more opportunities for strategic cornering of the evader. However, the magnitude of this improvement varies significantly across methods. HOLA and MAPPO transition relatively smoothly (approximately 12 and 15 percentage point gains, respectively), while self-play shows a larger jump from 60% to 73%, suggesting that self-play benefits more from environmental structure but lacks the stable coordination needed to perform consistently in sparser environments. PBT, by contrast, remains below 40% in both conditions, confirming that population-based training alone is insufficient for open team coordination where teammates are non-stationary. Efficiency and safety metrics reinforce these findings. HOLA completes tasks in roughly 320 timesteps in both seen and unseen environments, exhibiting remarkable stability across conditions. This consistency contrasts sharply with self-play, whose completion time drops from 440 to 350 steps when moving to unseen environments, mirroring its dependence on environmental structure rather than learned coordination. Collision rates further differentiate the methods: HOLA achieves approximately 14% in unseen environments, nearly half that of self-play (24%) and a third of PBT (44%). The simultaneous achievement of highest capture rate and lowest collision rate demonstrates that HOLA does not trade safety for aggressiveness but instead discovers coordinated pursuit strategies that are inherently more efficient. 
+
+2) Multi-Quadruped Pursuit: The bottom row of Fig. 6 validates HOLA’s adaptability on quadruped platforms, where the coordination challenge is compounded by the complexity of legged locomotion and tighter spatial constraints. Overall performance across all methods is notably lower than on drones, reflecting the increased difficulty of this morphology. HOLA achieves 57.2% and 62.6% capture rates in seen and unseen environments respectively, maintaining a consis-JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 11 
+
+(a) Multi-drone open adaptive teaming 
+
+(b) Multi-quadruped open adaptive teaming 
+
+Fig. 6: Open team coordination on multi-drone (top row) and multi-quadruped (bottom row) platforms. Metrics: capture rate (↑), collision rate ( ↓), average episode length ( ↓), evaluated on seen (one-obstacle) and unseen (three-obstacle) environments. HOLA leads on capture rate and episode efficiency across all conditions, and generalizes favorably to unseen layouts where denser obstacle topology creates strategic cornering opportunities. tent margin of roughly 6 to 10 percentage points over the closest baseline MAPPO. The gap widens dramatically against self-play and PBT, both of which fall below 35% in seen environments. This ordering reveals a clear hierarchy: methods with centralized training and explicit cooperative modeling (HOLA, MAPPO) substantially outperform those relying on implicit coordination (self-play, PBT), and the hypergraphic formulation in HOLA provides additional gains by capturing team-level relationships beyond pairwise interactions. An important finding emerges from the efficiency analysis. HOLA completes tasks in 475.7 and 416.3 timesteps in seen and unseen conditions, maintaining approximately a 60-step advantage over MAPPO and over 80 steps faster than self-play and PBT across both settings. This consistent efficiency gap suggests that the Oracle module generates more decisive cooperative plans that reduce redundant exploration, even when team membership is changing dynamically throughout the episode. Collision rates on quadrupeds are substantially higher than on drones across all methods, with PBT reaching 63.6% in seen environments. HOLA records 39.6% and 33.0% in the two conditions, generally the lowest among all methods. An interesting nuance is that MAPPO achieves a slightly lower collision rate (31.8%) than HOLA (33.0%) in unseen environments, yet at the cost of a 6-percentage-point deficit in capture rate. This tradeoff indicates that MAPPO adopts a more conservative strategy in novel environments, whereas HOLA maintains aggressive but coordinated pursuit that yields higher task success without proportionally increasing collision risk. Taken together, the results across both robotic platforms and environmental conditions establish three key conclusions. First, the hypergraphic formulation in HOLA enables robust open team coordination that generalizes across robotic mor-phologies, environmental layouts, and dynamic team compo-sitions. Second, the performance advantage of HOLA is not merely incremental but reflects a qualitative difference in co-ordination capability, particularly evident in the simultaneous optimization of capture efficiency and collision avoidance. Third, the consistency of HOLA’s performance across seen and unseen conditions suggests that the learned cooperative structures capture transferable relational patterns rather than environment-specific strategies, a property essential for prac-tical deployment in unstructured real-world scenarios. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 12 
+
+VII. C ONCLUSION 
+
+This paper presents HOLA, a hypergraphic open-ended learning algorithm for open adaptive multi-robot teaming, which jointly addresses three dimensions of adaptability: coordination with unseen partners, generalization to novel environments, and adaptation to variable team sizes. Central to our approach is a hypergraphic-form game formulation that models team-level cooperative relationships beyond pairwise interactions, providing a principled basis for credit assignment and partner sampling in open teams. We evaluate HOLA on cooperative multi-robot pursuit across two robotic platforms, multi-drone and multi-quadruped systems, under both fixed and open team protocols. In fixed team settings, HOLA achieves the highest success rate and lowest collision rate among all baselines, confirming its zero-shot coordination capability with unseen partners across novel environments. In open team settings, where team composition changes dynamically within episodes rather than only across them, HOLA consistently outperforms all baselines on capture rate and episode efficiency across both seen and unseen environments. Critically, learned policies transfer directly to physical platforms without fine-tuning, with successful real-world deployments on both Crazyflie multi-drone and Zsibot L1 quadruped systems demonstrating robust coordination with unseen teammates in novel environments. Despite these gains, several limitations remain. First, safety-aware behavior can still be improved in dense interactions, especially when agents trade collision risk for faster cap-ture. Second, although variable team-size adaptation is val-idated, larger-scale teams and longer-horizon tasks remain challenging. Third, our evaluations focus on pursuit scenarios; broader multi-robot task families should be explored to assess generality further. Future work will integrate stronger safety constraints, improve scalable training and inference for larger teams, and extend open adaptive teaming to more diverse real-world cooperative tasks. REFERENCES [1] T. H. Chung, G. A. Hollinger, and V. Isler, “Search and pursuit-evasion in mobile robotics: A survey,” Autonomous robots , vol. 31, pp. 299–316, 2011. [2] Z. Zhang, D. Zhang, Q. Zhang, W. Pan, and T. Hu, “DACOOP-A: Decentralized adaptive cooperative pursuit via attention,” IEEE Robotics and Automation Letters , vol. PP, pp. 1–8, 11 2023. [3] J. P. Queralta, J. Taipalmaa, B. C. Pullinen, V. K. Sarker, T. N. Gia, H. Tenhunen, M. Gabbouj, J. Raitoharju, and T. Westerlund, “Collaborative multi-robot search and rescue: Planning, coordination, perception, and active vision,” Ieee Access , vol. 8, pp. 191617–191643, 2020. [4] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environments,” in 
+
+Advances in Neural Information Processing Systems , vol. 30, 2017. [5] T. Rashid, M. Samvelyan, C. Schroeder, G. Farquhar, J. Foerster, and S. Whiteson, “QMIX: Monotonic value function factorisation for decen-tralised multi-agent reinforcement learning,” in International Conference on Machine Learning , pp. 4295–4304, PMLR, 2018. [6] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of PPO in cooperative multi-agent games,” 
+
+Advances in Neural Information Processing Systems , vol. 35, pp. 24611– 24624, 2022. [7] H. Hu, A. Lerer, A. Peysakhovich, and J. Foerster, ““Other-Play” for zero-shot coordination,” in International Conference on Machine Learning , pp. 4399–4410, PMLR, 2020. [8] P. Long, T. Fan, X. Liao, W. Liu, H. Zhang, and J. Pan, “Towards optimally decentralized multi-robot collision avoidance via deep rein-forcement learning,” in 2018 IEEE International Conference on Robotics and Automation (ICRA) , pp. 6252–6259, IEEE, 2018. [9] Q. Li, F. Gama, A. Ribeiro, and A. Prorok, “Graph neural networks for decentralized multi-robot path planning,” in 2020 IEEE/RSJ Interna-tional Conference on Intelligent Robots and Systems (IROS) , pp. 11785– 11792, IEEE, 2020. [10] Y. Li, S. Zhang, J. Sun, Y. Du, Y. Wen, X. Wang, and W. Pan, “Coop-erative open-ended learning framework for zero-shot coordination,” in 
+
+Proceedings of the 40th International Conference on Machine Learn-ing (ICML) , vol. 202 of Proceedings of Machine Learning Research ,pp. 20470–20484, PMLR, 2023. [11] P. Stone, G. A. Kaminka, S. Kraus, and J. S. Rosenschein, “Ad hoc autonomous agent teams: Collaboration without pre-coordination,” in 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , vol. 24, pp. 1504–1509, 2010. [12] J. Wang, Y. Li, Y. Zhang, W. Pan, and S. Kaski, “Open ad hoc teamwork with cooperative game theory,” in Proceedings of the 41st International Conference on Machine Learning (ICML) , PMLR, 2024. [13] J. Tobin, R. Fong, A. Ray, J. Schneider, W. Zaremba, and P. Abbeel, “Domain randomization for transferring deep neural networks from simulation to the real world,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 23–30, 2017. [14] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of ppo in cooperative, multi-agent games,” 2022. [15] M. Jaderberg, V. Dalibard, S. Osindero, W. M. Czarnecki, J. Don-ahue, A. Razavi, O. Vinyals, T. Green, I. Dunning, K. Simonyan, 
+
+et al. , “Population based training of neural networks,” arXiv preprint arXiv:1711.09846 , 2017. [16] D. Strouse, K. McKee, M. Botvinick, E. Hughes, and R. Everett, “Collaborating with humans without human data,” in Advances in Neural Information Processing Systems , vol. 34, pp. 14502–14515, 2021. [17] J. D. Madden, R. C. Arkin, and D. R. MacNulty, “Multi-robot system based on model of wolf hunting behavior to emulate wolf and elk interactions,” in 2010 IEEE International Conference on Robotics and Biomimetics , pp. 1043–1050, Dec. 2010. [18] C. Muro, R. Escobedo, L. Spector, and R. P. Coppinger, “Wolf-pack (Canis lupus ) hunting strategies emerge from simple rules in computa-tional simulations,” Behavioural Processes , vol. 88, pp. 192–197, Nov. 2011. [19] L. Angelani, “Collective Predation and Escape Strategies,” Phys. Rev. Lett. , vol. 109, no. 11, 2012. [20] M. Janosov, C. Vir´ agh, G. V´ as´ arhelyi, and T. Vicsek, “Group chasing tactics: how to catch a faster prey,” New J. Phys. , vol. 19, p. 053003, May 2017. Publisher: IOP Publishing. [21] A. Pierson, Z. Wang, and M. Schwager, “Intercepting Rogue Robots: An Algorithm for Capturing Multiple Evaders With Multiple Pursuers,” 
+
+IEEE Robotics and Automation Letters , vol. 2, pp. 530–537, Apr. 2017. Conference Name: IEEE Robotics and Automation Letters. [22] Z. Mu, J. Pan, Z. Zhou, J. Yu, and L. Cao, “A survey of the pursuit–evasion problem in swarm intelligence,” Front Inform Technol Electron Eng , vol. 24, pp. 1093–1116, Aug. 2023. [23] E. Garcia, Z. E. Fuchs, D. Milutinovic, D. W. Casbeer, and M. Pachter, “A Geometric Approach for the Cooperative Two-Pursuer One-Evader Differential Game,” IFAC-PapersOnLine , vol. 50, pp. 15209–15214, July 2017. [24] M. Kothari, J. G. Manathara, and I. Postlethwaite, “Cooperative Multiple Pursuers against a Single Evader,” J Intell Robot Syst , vol. 86, pp. 551– 567, June 2017. [25] S. Y. Hayoun and T. Shima, “A Two-on-One Linear Pursuit–Evasion Game with Bounded Controls,” J Optim Theory Appl , vol. 174, pp. 837– 857, Sept. 2017. [26] L. Matignon, G. J. Laurent, and N. Le Fort-Piat, “Hysteretic Q-learning : an algorithm for Decentralized Reinforcement Learning in Cooperative Multi-Agent Teams,” in 2007 IEEE/RSJ International Conference on Intelligent Robots and Systems , pp. 64–69, Oct. 2007. ISSN: 2153-0866. [27] S. Li, Y. Wu, X. Cui, H. Dong, F. Fang, and S. Russell, “Robust Multi-Agent Reinforcement Learning via Minimax Deep Deterministic Policy Gradient,” Proceedings of the AAAI Conference on Artificial Intelligence ,vol. 33, pp. 4213–4220, July 2019. Number: 01. [28] S. Qi, X. Huang, P. Peng, X. Huang, J. Zhang, and X. Wang, “Cascaded Attention: Adaptive and Gated Graph Attention Network for Multiagent Reinforcement Learning,” IEEE Transactions on Neural Networks and Learning Systems , vol. 35, pp. 3769–3779, Mar. 2024. Conference Name: IEEE Transactions on Neural Networks and Learning Systems. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 13 
+
+[29] C. de Souza, R. Newbury, A. Cosgun, P. Castillo, B. Vidolov, and D. Kuli´ c, “Decentralized Multi-Agent Pursuit Using Deep Rein-forcement Learning,” IEEE Robotics and Automation Letters , vol. 6, pp. 4552–4559, July 2021. Conference Name: IEEE Robotics and Automation Letters. [30] L. Zhang, J. Li, Y. Zhu, H. Shi, and K.-S. Hwang, “Multi-agent rein-forcement learning by the actor-critic model with an attention interface,” 
+
+Neurocomputing , vol. 471, pp. 275–284, Jan. 2022. [31] J. Chen, G. Li, C. Yu, X. Yang, B. Xu, H. Yang, and Y. Wang, “Taskflex solver for multi-agent pursuit via automatic curriculum learning,” arXiv preprint arXiv:2312.12255 , 2023. [32] J. Chen, C. Yu, G. Li, W. Tang, X. Yang, B. Xu, H. Yang, and Y. Wang, “Multi-uav pursuit-evasion with online planning in un-known environments by deep reinforcement learning,” arXiv preprint arXiv:2409.15866 , 2024. [33] S. Barrett, A. Rosenfeld, S. Kraus, and P. Stone, “Making friends on the fly: Cooperating with new teammates,” Artificial Intelligence , vol. 242, pp. 132–171, 2017. [34] A. Rahman, E. Hopkinson, J. Rawling, S. D. Varma, and J. Leitner, “A general learning framework for open ad hoc teamwork using graph-based policy learning,” Journal of Machine Learning Research , vol. 24, no. 99, pp. 1–62, 2023. [35] J. Wang, Y. Li, Y. Zhang, W. Pan, and S. Kaski, “Open ad hoc teamwork with cooperative game theory,” in Proceedings of the 41st International Conference on Machine Learning , vol. 235 of Proceedings of Machine Learning Research , pp. 50902–50930, PMLR, 2024. [36] J. Wang, Y. Li, S. Kaski, and J. Lawry, “Shapley machine: A game-theoretic framework for n-agent ad hoc teamwork,” arXiv preprint arXiv:2506.11285 , 2025. [37] H. Hu, A. Lerer, B. Cui, L. Pineda, N. Brown, and J. Foerster, “Off-belief learning,” in International Conference on Machine Learning , pp. 4369– 4379, PMLR, 2021. [38] R. Zhao, J. Song, Y. Qi, S. Yuan, H. Hu, Y. Gao, F. Wu, Q. Zhang, and W. Wang, “Maximum entropy population-based training for zero-shot human-AI coordination,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 37, pp. 6145–6153, 2023. [39] Y. Li, S. Zhang, J. Sun, Y. Du, Y. Wen, X. Wang, and W. Pan, “Coop-erative open-ended learning framework for zero-shot coordination,” in 
+
+Proceedings of the 40th International Conference on Machine Learning ,vol. 202 of Proceedings of Machine Learning Research , pp. 20470– 20484, PMLR, 2023. [40] Y. Li, S. Zhang, J. Sun, W. Zhang, Y. Du, Y. Wen, X. Wang, and W. Pan, “Tackling cooperative incompatibility for zero-shot human-ai coordination,” Journal of Artificial Intelligence Research , vol. 80, pp. 1139–1185, 2024. [41] S. Hu, F. Zhu, X. Chang, and X. Liang, “UPDeT: Universal multi-agent reinforcement learning via policy decoupling with transformers,” in International Conference on Learning Representations , 2021. [42] M. Wen, J. G. Kuba, R. Lin, W. Zhang, Y. Wen, J. Wang, and Y. Yang, “Multi-agent reinforcement learning is a sequence modeling problem,” in 
+
+Advances in Neural Information Processing Systems , vol. 35, pp. 16509– 16521, 2022. [43] Q. Long, Z. Zhou, A. Gupta, F. Fang, Y. Wu, and X. Wang, “Evo-lutionary population curriculum for scaling multi-agent reinforcement learning,” in International Conference on Learning Representations ,2020. [44] R. Wang, M. Everett, and J. P. How, “Skilled population curriculum for multi-agent reinforcement learning,” in International Conference on Learning Representations , 2023. [45] R. Zhao, J. Song, Y. Yuan, H. Hu, Y. Gao, Y. Wu, Z. Sun, and W. Yang, “Maximum entropy population-based training for zero-shot human-ai coordination,” in Thirty-Seventh AAAI Conference on Artificial Intelli-gence, AAAI 2023, Thirty-Fifth Conference on Innovative Applications of Artificial Intelligence, IAAI 2023, Thirteenth Symposium on Educational Advances in Artificial Intelligence, EAAI 2023, Washington, DC, USA, February 7-14, 2023 (B. Williams, Y. Chen, and J. Neville, eds.), pp. 6145–6153, AAAI Press, 2023. [46] M. Janosov, C. Vir´ agh, G. V´ as´ arhelyi, and T. Vicsek, “Group chasing tactics: How to catch a faster prey,” New Journal of Physics , vol. 19, 05 2017. [47] Z. Wang, T. Schaul, M. Hessel, H. Hasselt, M. Lanctot, and N. Freitas, “Dueling network architectures for deep reinforcement learning,” in 
+
+International conference on machine learning , pp. 1995–2003, PMLR, 2016. [48] J. Schulman, X. Chen, and P. Abbeel, “Equivalence between policy gradients and soft q-learning,” arXiv preprint arXiv:1704.06440 , 2017. [49] M. Carroll, R. Shah, M. K. Ho, T. Griffiths, S. Seshia, P. Abbeel, and A. Dragan, “On the utility of learning about humans for human-ai coordination,” Advances in neural information processing systems ,vol. 32, 2019. [50] D. Strouse, K. McKee, M. Botvinick, E. Hughes, and R. Everett, “Collaborating with humans without human data,” Advances in Neural Information Processing Systems , vol. 34, pp. 14502–14515, 2021.
