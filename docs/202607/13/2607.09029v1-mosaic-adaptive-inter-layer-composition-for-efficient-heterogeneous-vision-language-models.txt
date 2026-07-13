@@ -1,0 +1,752 @@
+Title: MOSAIC: Adaptive Inter-layer Composition for Efficient Heterogeneous Vision-Language Models
+
+URL Source: https://arxiv.org/pdf/2607.09029v1
+
+Published Time: Mon, 13 Jul 2026 00:16:24 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# MOSAIC: Adaptive Inter-layer Composition for Efficient Heterogeneous Vision-Language Models 
+
+## Yuncheng Yang * Feiyang Ye * Shixian Luo † Yinna Zhu Lianlei Shan Wangcai Zhao Kuo Zhang Yan Chen Yong Wu † Yan Xie LiAuto Inc. 
+
+## Abstract 
+
+Vision-Language Models (VLMs) have achieved significant suc-cess by employing homogeneous Transformer architectures to pro-cess multimedia information, specifically visual and textual data. Recent studies on Large Multimodal Models (LMMs) indicate that heterogeneous structures interleaving efficient mechanisms, such as linear attention, have demonstrated improvements in both per-formance and inference latency compared to homogeneous de-signs. However, these efforts rely on handcrafted designs with static mixing patterns, which are inherently sub-optimal and diffi-cult to adapt to specific hardware deployment targets. To bridge this gap, we propose Multi-Objective Search for Adaptive Inter-layer Composition (MOSAIC), a hardware-aware search method that automatically transforms homogeneous models into optimized heterogeneous architectures. MOSAIC integrates diverse effi-ciency mechanisms, including linear, sparse, and low-rank oper-ators, into a unified search space. By formulating the selection process as a multi-objective Mixed Integer Programming (MIP) problem, our method identifies optimal configurations that maxi-mize downstream performance under strict hardware latency con-straints. To mitigate the performance degradation arising from structural transitions, we introduce a two-stage parameter recov-ery process. We first perform global off-policy distillation to sta-bilize the model’s internal representations, followed by a dual-teacher on-policy distillation strategy that leverages a 235B or-acle teacher for knowledge expansion while utilizing the original 4B teacher to maintain distributional stability. We validate the effectiveness of MOSAIC through MOSAIC-4B, a heterogeneous model derived from Qwen3-VL-4B-Instruct. Experimental results demonstrate that MOSAIC-4B matches the performance of the Qwen3-VL-4B-Instruct baseline across multiple benchmarks while requiring less than 2% of the training cost of the original model. Furthermore, MOSAIC-4B substantially improves inference effi-ciency, achieving a 1.76 × prefilling speedup and 2.54 × decod-ing acceleration. Our MOSAIC-4B model is publicly available at 
+
+https://huggingface.co/LiAuto-DSR/MOSAIC-4B .     
+
+> *Equal contribution.
+> †Corresponding author. 0.5× 1.0× 1.5× 2.0× 2.5×
+> Decoding Acceleration
+> 50
+> 60
+> 70
+> 80
+> Average Performance (%)
+> Qwen3-VL-4B-Instruct MOSAIC-4B
+> (Ours)
+> Qwen3-VL-2B-Instruct
+> InternVL3.5-4B
+> InternVL3.5-2B
+> SmolVLM2-2.2B
+> Molmo2-4B
+> 2.54× Speedup
+
+Figure 1. Average performance on image understanding bench-marks vs. decoding acceleration, measured by time per output to-ken (TPOT). MOSAIC-4B matches the performance of the teacher model (Qwen3-VL-4B-Instruct) while achieving a 2.54 × TPOT speedup. 
+
+## 1. Introduction 
+
+Vision-Language Models (VLMs) [20, 38, 49, 60, 72] play a pivotal role in modern real-world multimodal systems, ranging from autonomous driving [33, 69, 76] to embod-ied AI [7, 26, 63, 73]. Standard VLM designs predom-inantly rely on homogeneous architectures, which feature a fixed sequential interleaving of dense self-attention and multi-layer perceptron (MLP) layers. However, the scala-bility of these architectures is significantly challenged by the quadratic time complexity of standard attention mech-anisms [56]. This complexity results in prohibitive com-putational overhead, particularly in long-context scenarios [19, 34] or under specific hardware deployment constraints. Recent studies on LMMs indicate that heterogeneous structures, which interleave efficient mechanisms such as linear attention and sparse attention, demonstrate signifi-cant advantages in both quality and efficiency over purely homogeneous designs [28, 29, 32, 53, 54, 57]. For instance, the Kimi Linear architecture [54] utilizes Kimi Delta At-tention (KDA) to outperform traditional full-attention mod-els in long-context scenarios while significantly reducing the memory overhead of the KV cache. Similarly, the 1arXiv:2607.09029v1 [cs.CV] 10 Jul 2026 Jamba framework [28] proposes a hybrid design by inter-leaving standard Transformer layers with Mamba blocks. This approach balances the expressive reasoning capabili-ties of attention with the linear scaling and high through-put of State Space Models (SSMs) [19]. Furthermore, the InfiniteVL framework [53] combines linear and sparse at-tention to support vision-language modeling with extensive input lengths, achieving notable inference acceleration on standard hardware without increasing the memory footprint. These hybrid architectures demonstrate that the strategic in-tegration of diverse operators is essential for efficient long-range modeling and real-time multimodal deployment on resource-constrained devices. Despite these advances, existing heterogeneous architec-tures are subject to two primary limitations that restrict their broader applicability. First, current designs rely on manu-ally designed topological arrangements with fixed mixing ratios, which are inherently suboptimal. These heuristic patterns often employ simple periodic interleaving of differ-ent operators, failing to explore the vast architectural search space and reach the optimal performance-efficiency frontier for specific multimodal tasks. Second, these fixed configu-rations lack the flexibility to adapt to diverse hardware de-ployment targets. Given that different hardware platforms exhibit distinct execution profiles for various operators, a fixed architecture optimized for one device may fail to meet the strict latency constraints of another. Addressing these hardware-specific requirements through manual trial-and-error is computationally prohibitive, as structural reconfig-uration typically necessitates an expensive retraining cycle. Consequently, the inability to automatically customize het-erogeneous architectures for specific hardware remains a critical bottleneck for the deployment of LMMs. To address these challenges, we introduce MOSAIC, which automatically transforms homogeneous VLMs into optimized heterogeneous architectures through adaptive inter-layer composition. MOSAIC encompasses a unified, per-layer search space that integrates a wide spectrum of efficiency mechanisms, including linear attention, sparse operators, and low-rank representations, allowing for fine-grained architectural adaptation. To identify the optimal configuration without the prohibitive costs of exhaustive end-to-end retraining, we first employ Blockwise Local Distillation (BLD) to initialize candidate modules by align-ing them with their corresponding teacher layers. By evalu-ating candidates across multiple capability metrics, we for-mulate the architecture selection as a multi-objective MIP problem. This approach enables the discovery of opti-mal heterogeneous structures that satisfy strict hardware-specific latency constraints while maximizing model per-formance. To mitigate the performance degradation in such structural transitions, we introduce a two-stage distillation method. We first perform global off-policy distillation to stabilize the model’s internal representations. This is fol-lowed by a dual teacher on-policy distillation, which uses a 235B oracle teacher for knowledge expansion and the orig-inal 4B teacher to maintain stability. We validate our MO-SAIC method through the MOSAIC-4B model, which ef-fectively matches the performance of the Qwen3-VL-4B-Instruct baseline across multiple benchmarks. Notably, it achieves a 1.76 × prefilling speedup and 2.54 × decoding acceleration, while requiring less than 2% of the original training cost. The corresponding results are shown in Fig. 1. Our contributions are summarized as follows: • We propose MOSAIC, which transitions homogeneous VLMs into optimized heterogeneous architectures via adaptive inter-layer composition under hardware-specific latency constraints. To our knowledge, it is the first work to explore the automated search for optimal heteroge-neous VLM configurations. • We formulate the architectural search as a multi-objective optimization problem, enabling the discovery of heterogeneous mixtures that maximize downstream performance within given hardware constraints. • We propose a progressive two-stage parameter recovery method to effectively restore foundational capabilities and achieve high-quality alignment. • We demonstrate the effectiveness of the MOSAIC method through the generated MOSAIC-4B model, which achieves significant inference acceleration and matches the overall capabilities of its homogeneous teacher. 
+
+## 2. Related Work 
+
+Efficient Attention and Hybrid Architecture. The quadratic computational and memory complexity of stan-dard self-attention [56] remains the primary obstacle to scaling Large Multimodal Models (LMMs) for long-context or hardware-constrained scenarios. To address this, various efficient attention kernels have been proposed. For instance, Linear Transformers such as RetNet [52] and RWKV [48] replace the softmax kernel with associative feature maps to enable recurrent inference with O(N ) complexity. Simi-larly, State Space Models (SSMs) like Mamba [19] achieve efficiency through hardware-aware parallel algorithms in recurrent mode. More specialized operators have also been developed. Kimi Delta Attention (KDA) [54] employs delta update rules for long-range modeling, Gated Delta Net-works (GDN) [65] incorporate gating for expressive rout-ing, and Multi-head Latent Attention (MLA) [13] projects KV pairs into low-rank latent spaces to reduce memory us-age. Additionally, Sliding Window Attention (SWA) [9] and Native Sparse Attention (NSA) [68] apply local or dy-namic sparsity to balance efficiency and resolution. While these mechanisms reduce complexity, their limited expres-sivity has historically led to lower performance compared to 2standard self-attention in language modeling. For example, linear mechanisms such as GDN and KDA achieve compa-rable performance on moderate-length sequences through gating or decay, but the performance of structures based purely on linear attention remains constrained by finite-state capacity, making long-sequence modeling fundamentally challenging. Heterogeneous architectures that combine standard self-attention with efficient mechanisms have emerged as a prac-tical approach to balancing quality and efficiency. Jamba [28] interleaves Transformer layers with Mamba blocks, while InfiniteVL [53] and Kimi-Linear [54] integrate linear and global attention to process long multimodal inputs. Step 3.5 Flash [22] combines SWA and GQA to improve decod-ing efficiency without sacrificing performance. However, these frameworks rely on manually designed, periodic mix-ing patterns, such as placing one full-attention layer every three layers. These static designs are often suboptimal be-cause they do not account for the different representational needs at various network depths and are difficult to adapt to different hardware. MOSAIC addresses this by automating the orchestration of per-layer mechanisms through a data-driven search. 
+
+Neural Architecture Search. Neural Architecture Search (NAS) is a key tool for automating the design of efficient models for specific hardware. Early hardware-aware NAS frameworks like HAT [58] and OFA [8] optimized the width and depth of models to meet latency constraints on edge devices. In the context of LMMs, searching for an en-tirely new architecture and retraining from scratch is of-ten computationally prohibitive. To mitigate this, several works seek to identify architectural design laws at a lower computational cost and extrapolate them to larger models. For instance, [51] establishes a hardware co-design scaling law by modeling training loss as a function of architectural hyperparameters and using roofline modeling to identify the Pareto frontier for inference latency. Similarly, Com-poser [1] performs architecture searches at a small scale be-fore applying specific extrapolation strategies to scale the structures to 3B parameters. Another line of work em-ploys distillation-based search to identify sub-models from a teacher model that satisfy specific constraints. A repre-sentative method is Puzzle [6], which uses the logits of a large teacher to guide the search for an optimal student ar-chitecture. Puzzle is closely related to our approach but is typically limited to a search space focused on size, such as reducing the number of layers or hidden dimensions within the same architecture family, and is primarily de-signed for unimodal text processing. MOSAIC differs by treating the mechanism type including linear, sparse, low-rank, or full attention as a primary search variable. By for-mulating the architecture search as a multi-objective MIP problem, we identify optimal topologies for VLMs that sat-isfy strict hardware latency constraints while maximizing downstream performance. 
+
+## 3. Methodology 
+
+In this section, we introduce the proposed MOSAIC method for searching heterogeneous VLM architectures. In Sec. 3.1, we define a unified, per-layer heterogeneous search space that integrates diverse attention mechanisms and FFN configurations, allowing the model to adapt its ar-chitecture across different depths. Sec. 3.2 details the search methodology, which involves blockwise local distillation, variant scoring, and the formulation of a multi-objective MIP problem to identify optimal structures under hardware constraints. In Sec. 3.3, we introduce a recovery process to restore model quality through two-stage distillation. An overview of MOSAIC is illustrated in Fig. 2. 
+
+3.1. Search Space Design 
+
+In this work, we define a comprehensive search space for MOSAIC, encompassing diverse architectural operations for each layer of the parent homogeneous VLM. Following the convention of modular design, each transformer layer is treated as a block composed of two primary subblocks: the attention module and the feed-forward network (FFN). The total search space for an L-layer model allows each layer to independently select its optimal configuration from a pool of valid candidates. To ensure structural compatibility, fol-lowing layer-wise NAS techniques [6, 15], we require all candidate subblocks to maintain the same hidden dimen-sions as the parent model, preserving the consistency of the residual stream. 
+
+Attention subblocks: For the attention subblocks in each layer, the search space integrates a spectrum of mech-anisms ranging from standard quadratic kernels to effi-cient linear recurrences and sparse patterns. Specifically, for a teacher model based on Grouped-Query Attention (GQA), the search space includes the GQA configuration of the original teacher model, linear attention mechanisms such as Kimi Delta Attention (KDA) and Gated Delta Net-work (GDN), the low-rank KV compression mechanism via Multi-head Latent Attention (MLA), and the sparse atten-tion mechanism via Sliding Window Attention (SWA). 
+
+FFN subblocks: For the FFN subblocks in each layer, in contrast to the discrete mechanism replacement strategy employed for the attention subblocks, we adopt a structured pruning approach to facilitate more granular utilization of the hardware latency budget. This scaling-centric search space focuses on optimizing the intermediate expansion of the SwiGLU layers through a series of width-reduction con-figurations. The available choices range from 100%, which retains the full intermediate dimension of the teacher model for maximum representational capacity, down to 0%, repre-senting a No-Op configuration that removes the FFN block 3from the residual stream. The search space is designed to balance inference la-tency and model accuracy by addressing the primary com-putational bottlenecks of standard Transformer architec-tures. By incorporating KV compression mechanisms such as GQA and MLA, linear attention alternatives such as KDA and GDN, and sparse attention patterns via SWA, the method significantly reduces the time-per-token required for real-time VLM applications. Within this method, FFN scaling serves as a complementary axis of heterogeneity rather than a simple compression step. Because the re-quired representational width of the subsequent FFN may change as attention mechanisms are modified, we incor-porate different scaling configurations ranging from 0% to 100%. This allows the search process to reallocate the pa-rameter budget from redundant feed-forward blocks to more demanding attention layers, resulting in a more balanced distribution of parameters and computation. Such flexibil-ity enables the model to meet specific hardware acceleration targets while maintaining high performance. To illustrate the combinatorial complexity of the de-signed search space, consider the Qwen3-VL-4B-Instruct model, which consists of L = 36 transformer layers. For the specific instantiation presented in this work, we define five alternatives for attention subblocks and seven scaling configurations for FFN subblocks (from 0% to 100%), re-sulting in 35 possible architectural configurations per layer. Consequently, the total number of potential child model ar-chitecture candidates is 35 36 . To navigate this large and diverse search space efficiently without the prohibitive cost of end-to-end retraining, we employ the proposed MOSAIC method, comprising blockwise local distillation, blockwise capability scoring, and multi-objective architecture search (detailed in Sec. 3.2). 
+
+3.2. Heterogeneous Architecture Search 
+
+The heterogeneous architecture search in MOSAIC consists of three stages: blockwise local distillation, multi-capability scoring, and architecture generation via a multi-objective MIP solver. 
+
+Blockwise Local Distillation. To provide high-quality ini-tialization for the search space, we first construct a block library by aligning each candidate block with the corre-sponding layer of the teacher model. We perform Block-wise Local Distillation (BLD), where each candidate block is optimized to match the teacher’s output activations at the same layer. Concretely, we minimize the normalized Mean Squared Error (MSE) between the teacher output ot and the candidate output oc:
+
+Lalign = ∥ot − oc∥2/∥ot∥2. (1) During BLD, each child block receives as input the activa-tions produced by the preceding teacher layer, which iso-lates the optimization of individual modules and makes the process highly parallelizable. In practice, this stage requires only 80,000 training samples to establish a strong initial-ization for the entire candidate pool. More importantly, it preserves compatibility with the original residual stream, thereby reducing the difficulty of the subsequent global re-covery stage. 
+
+Multi-Capability Scoring. Although BLD enforces local alignment, it does not fully reflect the global generaliza-tion ability of a candidate block or its effect on challenging downstream tasks. We therefore introduce an ability set Λ to evaluate each candidate from multiple perspectives, includ-ing Perplexity (PPL), Kullback–Leibler (KL) divergence, and representative LLM/VLM benchmark scores. Com-pared with prior methods that rely primarily on KL diver-gence as a proxy for alignment quality [6], our formulation incorporates both language modeling quality and task-level performance, leading to a more reliable estimate of each block’s capability. For the i-th candidate block at layer l, we define a rel-ative capability score Skl,i for the k-th ability in Λ. Fol-lowing the normalization practice commonly used in Multi-Task Learning (MTL) [35, 74], we compute this score as the normalized improvement over a reference baseline: 
+
+Skl,i = ( −1) σk · P kl,i − M k
+
+M k , (2) where P kl,i denotes the performance achieved when the i-th candidate is inserted into layer l, and M k is the correspond-ing reference value. For PPL and downstream benchmarks, 
+
+M k is defined as the teacher’s performance; for KL diver-gence, it is set to the minimum KL value among all candi-dates across all layers. The binary variable σk indicates the direction of the metric: σk = 1 for “lower-is-better” met-rics such as PPL and KL, and σk = 0 for “higher-is-better” metrics such as benchmark accuracy. Under this formula-tion, a positive Skl,i always indicates a favorable candidate, which makes scores from heterogeneous objectives directly comparable during optimization. 
+
+Multi-Objective MIP Formulation. After obtaining the per-block capability scores and hardware runtime profiles, we formulate architecture selection as a multi-objective constrained optimization problem. The goal is to identify a heterogeneous configuration that satisfies a predefined la-tency budget while preserving the strongest and most bal-anced capability profile across the ability set Λ.Consider a teacher model with L layers and K candidate blocks per layer. For the i-th candidate at layer l, we in-troduce a binary decision variable xl,i ∈ { 0, 1} indicating whether that candidate is selected. The architecture config-uration X is therefore defined as 
+
+X = {xl,i | 1 ≤ l ≤ L, 1 ≤ i ≤ K} ∈ B , (3) 4where B denotes the feasible set satisfying PKi=1 xl,i = 1 
+
+for every layer and xl,i ∈ { 0, 1}.Assuming that m abilities are considered, the architecture-level score on the k-th ability is defined as 
+
+F k(X) = XKi=1 
+
+XLl=1 xl,i Skl,i . (4) The resulting multi-objective optimization problem is writ-ten as 
+
+max 
+
+> X∈B
+
+
+
+F 1(X), F 2(X), . . . , F m(X)
+
+
+
+, (5) s.t. XKi=1 
+
+XLl=1 runtime (l, i ) xl,i ≤ Target , (6) where runtime (l, i ) is the measured runtime of candidate 
+
+i at layer l, and Target is the global latency budget corre-sponding to the desired acceleration ratio. This formulation explicitly captures the trade-off between efficiency and ca-pability retention. To solve the problem, we adopt the Tchebycheff (TCH) scalarisation [37], which can recover Pareto-optimal solu-tions even on non-convex regions of the Pareto frontier. Given a preference coefficient w = (w1, . . . , w m) with P 
+
+> k
+
+wk = 1 and an ideal point z = ( z1, . . . , z m) where 
+
+zk = max X∈B F k(X), the TCH objective becomes 
+
+min  
+
+> X∈B
+
+max  
+
+> k=1 ,...,m
+
+wk ·  zk − F k(X) , (7) s.t. XKi=1 
+
+XLl=1 runtime (l, i ) xl,i ≤ Target .
+
+(8) This min–max objective can be converted into a standard linear MIP by introducing an auxiliary variable C:
+
+min  
+
+> X∈B
+
+C, (9) s.t. wk ·  zk − F k(X) ≤ C, k = 1 , . . . , m, (10) 
+
+XKi=1 
+
+XLl=1 runtime (l, i ) xl,i ≤ Target . (11) The resulting problem is solved efficiently with the open-source python-mip package [24]. In our experiments, we consider m = 4 objectives in Λ: KL divergence, PPL, LLM benchmark performance, and VLM benchmark per-formance. Together, these objectives provide a balanced cri-terion that spans local alignment, language modeling qual-ity, and downstream multimodal capability. 
+
+3.3. Two-Stage Parameter Recovery 
+
+A key limitation of blockwise local distillation is the lack of inter-block compatibility, as modules are trained using teacher inputs rather than the actual outputs of their pre-decessors in the student model. Therefore, the searched model initially exhibits a performance gap. To bridge this gap and restore the model’s capabilities, we introduce a global knowledge distillation (GKD) phase as the final step in the proposed MOSAIC method, which contains a two-stage training pipeline: Global Off-Policy Distillation and 
+
+Dual Teacher On-Policy Distillation .
+
+Global Off-Policy Distillation. The first stage focuses on stabilizing the internal representations of the student by distilling knowledge from the given homogeneous teacher model ( e.g ., Qwen3-VL-4B-Instruct). We utilize a di-verse training set comprising large-scale text corpora to recover language modeling proficiency and interleaved image-video-text pairs to restore cross-modal alignment. During this stage, the student is trained to replicate the output distribution of the teacher through a standard knowl-edge distillation objective comprising a hard-target loss and a soft-target loss. We denote the probability distributions from the teacher and student model by p and qθ , respec-tively, where θ is the model parameter. The corresponding hard-target loss is denoted by LCE (qθ ; D), which represents the Cross-Entropy (CE) loss calculated on the ground-truth tokens in datasets D. For the soft-target distillation, fol-lowing [50, 61], we adopt a symmetric Kullback-Leibler Divergence, which combines forward KL and reverse KL divergences, and is denoted by 
+
+LKL (θ; D) = D KL (p∥qθ ) + D KL (qθ ∥p) . (12) The forward KL term encourages the student to assign prob-ability mass where the teacher does, ensuring broad cov-erage of the teacher’s knowledge. Conversely, the reverse KL term penalizes the student for placing mass where the teacher does not, yielding sharper and more confident pre-dictions. This combination provides complementary su-pervision, balancing broad distributional coverage with fo-cused sharpening. The overall training objective for global off-policy distil-lation is defined as: 
+
+Lrecover (θ) = LKL (θ; D) + αLCE (qθ ; D), (13) where α is a hyperparameter. This global off-policy dis-tillation provides a robust initialization, effectively recover-ing the general reasoning and perception capabilities of the teacher model. 
+
+Dual Teacher On-Policy Distillation. While Global Off-Policy Distillation already aligns the student with the base-line teacher on foundational abilities, further training is still required for the student to improve on complex reason-ing and challenging tasks. To push the performance ceil-ing without inducing catastrophic forgetting or optimiza-tion instability, we propose a dual-teacher instruction align-ment strategy. This stage simultaneously leverages a large-capacity oracle teacher ( e.g ., Qwen3-VL-235B) for knowl-edge expansion and the original teacher for distributional stability. 5Per -Layer Search Space  Blockwise  Distillation  Multi -Objective MIP 
+
+Stage  1: Global Off -Policy 
+
+Distillation 
+
+> Logits
+> Alignment
+
+Stage  2: Dual Teacher On -Policy  Distillation 
+
+> Full
+> Attention
+> FFN
+> Teacher
+> [Qwen3 -VL -4B]
+
+θ*  
+
+> Bench Score
+> KL
+> Hidden State
+> Distillation
+> Block Score Block Latency
+> MIP Search
+> Logits
+> Distillation
+
+Heterogeneous Architecture Search  
+
+> ×𝑳
+> Sparse
+> Attention
+> Low -Rank
+> Attention
+> Linear
+> Attention
+> Pruned
+> FFN
+
+Efficient variants 
+
+> Student
+> Student
+> Student
+
+× 𝑳 
+
+> Teacher
+
+× 𝑳 
+
+Two -Stage Parameter Recovery     
+
+> MOSAIC -4B Oracle Teacher
+> [Qwen3 -VL -235B] 𝑳 𝑲𝑳 +𝜶 𝑳 𝑪𝑬
+> 𝑳 𝑪𝑬
+> 𝑳 𝑲𝑳
+> On -policy
+> Generation Data
+> Distillation
+> MOSAIC -4B
+> 2.54 ×
+> Speedup
+> Baseline
+> Accuracy
+> <2%
+> Training
+> Data
+
+MOSAIC -4B   
+
+> Efficient
+> Attention
+> Pruned
+> FFN
+> Teacher
+> [Qwen3 -VL -4B]
+> Input Proj
+> Output Proj
+
+Standard VLM     
+
+> 𝑳 𝑴𝑺𝑬
+> Q𝑲 𝑻 𝑽 x
+> Input Proj
+> Output Proj
+> ×𝑳
+> MOSAIC -4B
+
+Figure 2. Overview of the MOSAIC method, which consists of two steps: (1) Heterogeneous Architecture Search, which identifies the optimal structure via BLD and multi-objective MIP; (2) Two-Stage Parameter Recovery, which recovers model performance through global off-policy distillation followed by a dual-teacher on-policy distillation. The resulting MOSAIC-4B inherits heterogeneous designs, achieves significant inference acceleration and matches the performance of its homogeneous teacher. 
+
+To instill superior reasoning patterns beyond the capacity of the baseline teacher, we utilize responses synthesized by the oracle teacher as high-quality targets. We apply a stan-dard Supervised Fine-Tuning (SFT) loss on these outputs, allowing the student to learn what to generate from a more powerful policy. This prevents the student from being lim-ited by the inherent architectural constraints of the baseline teacher. Furthermore, to ensure training stability and prevent the student from drifting away from its functional distribution, we employ the baseline teacher model as an on-policy log-its teacher. For each prompt, the student generates a re-sponse based on its current policy; the baseline teacher then provides supervision by computing logits for these student-generated tokens. We apply the mixed KL divergence as the on-policy distillation loss, ensuring the student learns how to maintain a stable output distribution while absorbing new knowledge from the oracle teacher. The final objective for the dual teacher on-policy distil-lation is formulated as: 
+
+Lalign (θ) = LKL (θ; D′) + βLCE (θ; Do), (14) where Do represents the data synthesized by the large-capacity oracle teacher, and D′ denotes the on-policy su-pervision from the baseline teacher model. This hybrid ap-proach allows the student to surpass the performance of the baseline teacher while remaining grounded in a stable opti-mization landscape. 
+
+## 4. Experiments 
+
+In this section, we evaluate the effectiveness of MOSAIC by deriving heterogeneous VLM models and conducting com-prehensive ablation studies. 
+
+4.1. Experimental Setup 
+
+We apply the MOSAIC method to Qwen3-VL-4B-Instruct, a state-of-the-art multimodal model supporting both text and multimodal understanding. Through this process, we generate MOSAIC-4B, an optimized heterogeneous deriva-tive. 
+
+Searching configuration. The search space comprises 35 valid candidates per layer across L = 36 transformer lay-ers, yielding a combinatorial space of size 35 × 36 = 1260 
+
+for the MOSAIC method. Following [37], the weight vec-tor ω is assigned equal preference across all objectives. The runtime of each block variant is evaluated at batch size 1 with a prefilling length of 96k and a decoding length of 256, where the corresponding results for all block variants are shown in Sec. B.1. The predefined global latency budget 6is set with a constraint of 1.5× speedup w.r.t. Qwen3-VL-4B-Instruct baseline model. For the capability scoring, we utilize both plain-text and multimodal inputs: 1K long-text instances sampled from Olmo3 [46] for PPL and KL diver-gence, MMLU [21] for evaluating plain-text capability, and SeedBench [30] for evaluating multimodal capability. 
+
+Training configuration. Due to the page limitation, the training details are put in Sec. B.2. The whole training cor-pus comprises exclusively publicly available, open-source datasets totaling ∼32M samples. Therefore, the total train-ing cost is less than 2% training cost of the original Qwen3-VL-4B-Instruct. 
+
+Evaluation benchmarks. We evaluate the generated MOSAIC-4B model and baseline models on 19 represen-tative benchmarks spanning three modalities. Image un-derstanding (13 benchmarks): MME [16], MMBench-EN, MMBench-CN [39], MMMU [70], GQA [23], Sci-enceQA [40], BLINK [18], CV-Bench 2D, CV-Bench 3D [55], InfoVQA [44], DocVQA [43], ChartQA [42], and OCRBench [45]. Video understanding (3 benchmarks): MVBench [31], Video-MME [17], and WorldSense [5]. 
+
+Text understanding (3 benchmarks): ARC-Challenge [11], GSM-8K [12], and HellaSwag [71]. 
+
+4.2. Main Results 
+
+The performance of the proposed MOSAIC-4B model on image understanding, video understanding, and text under-standing are reported on Tab. 1, Tab. 2, and Tab. 3, respec-tively. The Qwen3-VL-4B-Instruct model is used as the ref-erence model, and we report the average performance and average per-metric difference, denoted by ∆, for every com-peting baseline model. On image understanding tasks, MOSAIC-4B leads on 8 of 13 metrics with a mean delta of only −0.6% from the Qwen3-VL-4B-Instruct reference. Notably, it significantly outperforms the Qwen3-VL-2B-Instruct and InternVL3.5-2B baselines, demonstrating that MOSAIC effectively pre-serves general perception and document comprehension even with reduced latency. On video understanding tasks, Molmo2-4B is the only model to match the reference on average with a ∆ of +0 .1% , while MOSAIC-4B obtains the highest WorldSense score of 39.7% and a competitive 
+
+∆ of −0.8% . It also shows a clear margin over the 2B-parameter models, indicating that our heterogeneous alloca-tion is superior to simple parameter reduction for temporal modeling. On text tasks, MOSAIC-4B ranks second at a ∆
+
+of −2.3% . Despite the aggressive speedup, MOSAIC-4B maintains a substantial lead over Qwen3-VL-2B-Instruct and InternVL3.5-2B, confirming that heterogeneous mixing preserves strong language ability alongside visual compe-tence. To evaluate practical deployability, we implement MOSAIC-4B within an optimized vLLM framework [27], 4k 
+
+> 8k
+> 16k
+> 32k
+> 64k
+> 96k
+> Prefill Length
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> TTFT (s)
+> 1.68×
+> 1.76×
+> Qwen3-VL-4B-Instruct
+> MOSAIC-4B
+> 256
+> 1k
+> 4k
+> 16k
+> 64k
+> 256k
+> Decode Length
+> 60
+> 80
+> 100
+> 120
+> 140
+> 160
+> 180
+> 200
+> TPOT (ms/token)
+> 2.54×
+> 2.68×
+> 2.72×
+> Qwen3-VL-4B-Instruct
+> MOSAIC-4B
+> Figure 3. Left: The time to first token (TTFT) of Qwen3-VL-4B-Instruct and MOSAIC. Right: The time per output token (TPOT) of Qwen3-VL-4B-Instruct and MOSAIC, with the prefix length fixed at 96k tokens.
+
+as detailed in Sec. B.4. Through this implementation, MOSAIC-4B can run efficiently in real inference scenarios. We evaluate its latency gains w.r.t. Qwen3-VL-4B-Instruct model, and the results are illustrated in Fig. 3. Specifically, for prefilling, the speedup in time to first token (TTFT) be-comes more substantial with longer prefill lengths, reaching 
+
+1.76 × at 96k tokens. For decoding, the speedup in time per output token (TPOT) also increases with decode length, at-taining 2.54 ×, 2.68 ×, and 2.72 × at decode lengths of 1k, 16k, and 256k, respectively. These results indicate that the efficiency advantages of MOSAIC are amplified in long-context and long-generation regimes, where latency is most critical in practice. 
+
+4.3. Ablation Studies 
+
+Ablation experiments are performed using 20% of the train-ing data used for the main model, while other settings re-main unchanged. 
+
+4.3.1. Hand-Designed Fixed-Ratio Architectures. 
+
+To evaluate the benefits of automated architectural opti-mization, we compare MOSAIC against six hand-designed fixed-ratio configurations. Although fixed-ratio interleav-ing also introduces a form of per-layer heterogeneity, these static patterns are typically designed through manual intu-ition rather than data-driven search. Our baselines include three configurations from previous studies [22, 53, 54] and three derived from common design patterns, all employing a uniform 1:3 interleaving where every fourth layer utilizes a minority type. For each configuration, we use MOSAIC to search for an optimal per-layer assignment within the same mechanism palette and latency budget. All resulting models are trained using the identical recovery pipeline to ensure that performance gains are attributable solely to the discov-ered architectural patterns. 7Table 1. Image understanding results and the time per output token (TPOT) speedup. Gray row : Qwen3-VL-4B-Instruct reference. 
+
+∆: mean per-metric gap (%) w.r.t. the reference. Avg: average performance (%) over all 13 metrics. Bold : best; †: second best among competing models.                                                                                                                                
+
+> Model TPOT MME MMB-E MMB-C MMMU GQA SQA BLINK CV-2D CV-3D Info Doc Chart OCR Avg ∆↑
+> Qwen3-VL-4B-Instruct [3] 1.00 ×2299 83.7 76.1 61.5 62.9 88.6 65.1 69.9 88.5 79.9 94.2 84.2 84.1 78.5 0.0 InternVL3.5-4B [59] 1.41 ×2272 80.3 79.5 66.6 62 .4†86 .3†58 .4†72.3 85.2 78.4 93 .2†86.4 82 .2†77 .9†−0.6†
+> InternVL3.5-2B [59] 2.11 ×2129 78.2 76.5 51.8 56.6 68.3 51.4 58.3 80.2 69.3 70.5 63.8 63.4 66.5 −12.0 Qwen3-VL-2B-Instruct [3] 2.09 ×2215 †80 .5†78 .2†58.3 60.8 78.5 56.8 64.2 83.6 73.8 82.5 76.3 73.5 72.6 −5.9 SmolVLM2-2.2B [41] 1.24 ×1892 69.2 55.3 41.6 52.4 65.1 42.3 45.2 60.3 37.8 45.3 42.6 62.5 52.9 −25.6 Molmo2-4B [10] 0.87 ×2100 78.3 68.5 54.2 53.4 76.2 50.6 66.3 85 .4†72.5 84.3 75.2 70.4 70.0 −8.5
+> MOSAIC-4B (Ours) 2.54 ×2285 82.7 77.6 59 .9†62.9 89.2 63.7 70 .6†89.3 74.6 93.9 83 .2†83.9 77.9 −0.6
+
+Table 2. Video understanding results. The notations follow Tab. 1.                                          
+
+> Model MVBench VideoMME WorldSense Avg ∆↑
+> Qwen3-VL-4B-Instruct 67.1 64.8 39.6 57.2 0.0 InternVL3.5-4B 66 .4†63 .8†38 .5†56 .2†−1.0†
+> InternVL3.5-2B 61.5 58.4 34.0 51.3 −5.9 Qwen3-VL-2B-Instruct 64.8 62.5 37.2 54.8 −2.4 SmolVLM2-2.2B 46.3 52.1 24.5 41.0 −16.2 Molmo2-4B 69.3 64.5 38.2 57.3 +0.1
+> MOSAIC-4B (Ours) 66.2 63.3 39.7 56 .4†−0.8†
+
+Table 3. Text understanding results. Notation follows Tab. 1. 
+
+Model GSM-8K ARC HellaSwag Avg ∆ ↑
+
+Qwen3-VL-4B-Instruct 82.3 88.7 78.4 83.1 0.0 InternVL3.5-4B 81.2 87.9 77.5 82.2 −0.9
+
+InternVL3.5-2B 76.5 83.2 74.1 77.9 −5.2 Qwen3-VL-2B-Instruct 79.5 86 .2† 76.3 80.7 −2.4 SmolVLM2-2.2B 43.8 56.4 54.2 51.5 −31.6 Molmo2-4B 68.5 75.4 69.2 71.0 −12.1 
+
+MOSAIC-4B (Ours) 79 .6† 85.7 77 .1† 80 .8† −2.3†
+
+Tab. 4 reveals several findings. (i) Search consistently outperforms fixed ratios. Across all six mechanism pairs, the MOSAIC-optimised assignment surpasses the uniform 1:3 interleaving, confirming that different layers exhibit dif-ferent sensitivity to attention mechanism choice and that a one-size-fits-all ratio fails to achieve optimal performance. 
+
+(ii) The choice of mechanism palette matters. Even with optimal per-layer placement, some two-mechanism combi-nations yield substantially higher ceilings than others, high-lighting the importance of a rich search space rather than merely a smarter allocation of a narrow palette. 
+
+4.3.2. Search Space Design. 
+
+To assess the importance of different architectural compo-nents, we ablate the search space by removing one mecha-nism family at a time while maintaining a fixed latency bud-get of 1.5× speedup relative to the Qwen3-VL-4B-Instruct baseline. The results reported in Tab. 5 reveal that linear attention variants are the most critical component. Remov-
+
+Table 4. Hand-designed vs. MOSAIC with fixed-ratio architec-ture configuration. Each group pairs a uniform 1:3 interleaving pattern with a MOSAIC-optimised assignment using the same two mechanism types and the same latency budget. Design references: 
+
+> †
+
+Kimi, ‡InfiniteVL, §Step-Fun. 
+
+Configuration Method Img Vid Txt Overall MLA:KDA = 1:3 † Designed 57.4 39.6 49.2 48.7 MOSAIC 58.3 40.1 50.3 49.6 
+
+SWA:GDN = 1:3 ‡ Designed 64.3 41.6 62.3 56.1 MOSAIC 66.8 45.3 69.7 60.6 
+
+GQA:SWA = 1:3 § Designed 70.6 29.6 66.3 55.5 MOSAIC 72.6 31.3 64.1 56.0 
+
+GQA:GDN = 1:3 Designed 71.6 44.1 61.1 58.9 MOSAIC 72.9 45.2 59.7 59.3 
+
+GQA:MLA = 1:3 Designed 67.9 40.9 59.7 56.2 MOSAIC 68.7 48.7 66.4 61.3 
+
+GQA:KDA = 1:3 Designed 69.8 46.9 61.6 59.4 MOSAIC 70.0 52.3 63.9 62.1 
+
+Table 5. Search space ablation. Each row removes one attention or FFN category from the search space. All models are re-searched and re-trained under the same budget. 
+
+Search Space Variant Img Vid Txt Overall Full MOSAIC 74.8 53.6 71.6 66.7 
+
+w/o Linear (KDA, GDN) 72.3 16.9 65.8 51.7 w/o Low-Rank (MLA) 75.0 51.6 69.8 65.5 w/o Sparse (SWA) 73.6 52.3 69.2 65.0 w/o FFN Search 74.6 52.9 71.3 66.3 
+
+ing KDA and GDN results in a substantial overall drop of 15.0, a decline driven almost entirely by the video modal-ity, where performance falls from 53.6% to 16.9%. This occurs because the solver is forced to replace linear layers that are effective for long contexts with costlier alternatives or layer removal to satisfy the latency constraints. Sparse 8Table 6. Ablation on search objectives. Objectives are added in-crementally. All variants use the same latency budget and recovery pipeline. 
+
+Search Objectives Img Vid Txt Overall KL only 65.3 42.9 71.2 59.8 + PPL 66.7 42.3 70.3 59.8 + LLM Bench 69.7 48.8 71.9 63.5 + VL Bench 74.7 53.2 70.1 66.0 
+
+attention is the second most impactful with a reduction of 1.7%, followed by low-rank attention with a reduction of 1.2%. While both incur moderate degradation across all modalities, the impact remains far less severe than the loss of linear attention. These results confirm that maintaining a diverse attention set, particularly linear attention mecha-nisms, for long sequences, is essential to the effectiveness of the MOSAIC method. 
+
+4.3.3. Multi-Objective Architecture Search. 
+
+We conduct an ablation study on the effectiveness of multi-objective architecture search. As we claimed in Sec. 3.2, the KL divergence can be considered as an indicator of align-ment quality. Therefore, starting from a single objective architecture search based on KL divergence, we sequen-tially incorporate objectives, including PPL, LLM bench-mark performance, and VLM benchmark performance. The corresponding results are shown in Tab. 6. The searched model based on KL divergence alone yields the weakest overall performance of 59.8%. This suggests that minimizing distributional divergence on calibration data does not directly translate to strong task-level accuracy. In-troducing PPL leaves the overall score unchanged at 59.8% and produces only marginal shifts across modalities, which indicates that perplexity alone provides limited comple-mentary guidance. The LLM benchmark objective brings the largest single-step improvement of 3.7% points overall. This substantially boosts video and image performance by 6.5% and 3.0%, respectively, while retaining the best text score of 71.9%. These results demonstrate the importance of steering the search toward reasoning-preserving config-urations. Finally, incorporating the VL benchmark objec-tive delivers further gains on image at 74.7% and video at 53.2%, lifting the overall score to 66.0% at only a modest text trade-off of 1.8%. The full four-objective formulation achieves the best overall balance, confirming that each addi-tional objective contributes non-redundant, modality-aware information to the architecture search. 
+
+4.3.4. Two-Stage Parameter Recovery. 
+
+To evaluate the contribution of each recovery component, we progressively add elements of the two-stage pipeline, with the results in Tab. 7 showing a clear progression. In 
+
+Table 7. Ablation on the parameter recovery pipeline. Perfor-mance impact of different training stages and objectives. Stage 2 variants are applied after Stage 1. 
+
+Configuration Img Vid Txt Overall Stage 1: Pre-train KD 60.6 45.6 61.8 56.0 Stage 1: Instruction KD 76.0 53.3 74.9 68.1 Stage 2: SFT only 72.9 44.9 71.6 63.1 Stage 2: On-policy KD only 76.1 54.3 75.9 68.8 Stage 2: SFT + On-policy KD 77.9 56.4 80.8 71.7 0 10 20 30  
+
+> Layer Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Estimated Runtime
+> SWA
+> SWA
+> GDN
+> GQA*
+> GDN
+> SWA*
+> GDN
+> GDN*
+> GDN
+> GQA*
+> KDA*
+> GDN*
+> KDA
+> KDA
+> GDN
+> GDN
+> MLA
+> KDA
+> MLA
+> KDA
+> MLA
+> Block Runtime Saved Runtime
+
+Figure 4. The runtime reduction of layer-wise architectural re-placements in MOSAIC, relative to the original Qwen3-VL-4B-Instruct layers. Blue denotes the layers from the original model, and green denotes replaced layers, where annotations indicate the attention variant used after searching. ∗ indicates additional FFN pruning in the corresponding layer. 
+
+Stage 1, instruction KD yields a substantial overall im-provement of 12.1% on top of pre-training KD, raising the performance from 56.0% to 68.1%. This stage includes sig-nificant gains across all modalities, such as an increase of 15.4% on image understanding, which confirms that task-specific instruction alignment is essential. In Stage 2, ap-plying SFT alone leads to a performance drop from 68.1% to 63.1%, likely due to distribution shift or catastrophic for-getting. Conversely, applying on-policy KD alone provides a slight overall gain of 0.7% while maintaining stability. The full pipeline, combining both SFT and on-policy KD, yields the best result of 71.7%, representing a 3.6% im-provement over Stage 1 alone. This confirms that the super-vised data generated by 235B oracle teacher model provides complementary knowledge, but this signal must be regular-ized by on-policy KD to maintain distributional consistency and achieve optimal performance. 
+
+4.4. Discovered Architecture Patterns 
+
+The MOSAIC-4B architecture achieves substantial compu-tational savings through the strategic distribution of het-erogeneous operators across the network depth. Accord-ing to Fig. 4, we found that it reveals several consistent structural patterns. Specifically, SWA is allocated to the 9shallow layers, suggesting that the early stages of the net-work primarily attend to local contextual information. The emergence of this pattern provides a strong validation of the MOSAIC method. By independently recovering expert-designed architectural heuristics solely through data-driven multi-objective optimization, the framework confirms the efficacy of local window mechanisms for capturing initial contextual representations [4, 25, 64]. The middle and later layers are predominantly assigned linear attention mecha-nisms, such as KDA and GDN, which account for the ma-jority of the total latency reduction. The framework prefer-entially retains MLA in the tail layers, indicating that global information aggregation is essential for generating high-quality representations in the final stages. We further val-idate these consistent structural distribution patterns across a range of target speedup ratios, with comprehensive visu-alizations of the resulting architectures provided in Sec. C. 
+
+## 5. Conclusion 
+
+In this paper, we propose MOSAIC, a hardware-aware method that automates the transition from homogeneous VLMs to optimized heterogeneous architectures via adaptive inter-layer composition. MOSAIC formulates architecture selection as a multi-objective MIP problem and identifies optimal configurations within a diverse search space of efficient operators. To bridge the perfor-mance gap caused by structural transitions, we introduce a two-stage distillation method. The resulting model, MOSAIC-4B, effectively matches the performance of its Qwen3-VL-4B-Instruct teacher across 19 benchmarks while delivering a 1.76 × prefilling speedup and a 2.54 × de-coding acceleration. Remarkably, these gains are achieved with less than 2% of the original training cost. These findings highlight the efficacy of automated heteroge-neous design for building efficient vision-language models. 
+
+## References 
+
+[1] Bilge Acun, Prasoon Sinha, Newsha Ardalani, Sangmin Bae, Alicia Golden, Chien-Yu Lin, Meghana Madhyastha, Fei Sun, Neeraja J Yadwadkar, and Carole-Jean Wu. Composer: A search framework for hybrid neural architecture design. 
+
+arXiv preprint arXiv:2510.00379 , 2025. 3 [2] Xiang An, Yin Xie, Kaicheng Yang, Wenkang Zhang, Xiuwei Zhao, Zheng Cheng, Yirui Wang, Songcen Xu, Changrui Chen, Didi Zhu, et al. Llava-onevision-1.5: Fully open framework for democratized multimodal training. 
+
+arXiv preprint arXiv:2509.23661 , 2025. 1, 2 [3] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, et al. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 , 2025. 8 [4] Iz Beltagy, Matthew E Peters, and Arman Cohan. Long-former: The long-document transformer. arXiv preprint arXiv:2004.05150 , 2020. 10, 3 [5] Youssef Benchekroun, Megi Dervishi, Mark Ibrahim, Jean-Baptiste Gaya, Xavier Martinet, Gr´ egoire Mialon, Thomas Scialom, Emmanuel Dupoux, Dieuwke Hupkes, and Pas-cal Vincent. Worldsense: A synthetic benchmark for grounded reasoning in large language models. arXiv preprint arXiv:2311.15930 , 2023. 7 [6] Akhiad Bercovich, Tomer Ronen, Talor Abramovich, et al. Puzzle: Distillation-based nas for inference-optimized llms. In ICML , 2025. 3, 4 [7] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail, Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom, Karol Hausman, Brian Ichter, et al. π0: A vision-language-action flow model for general robot control. arXiv preprint arXiv:2410.24164 , 2024. 1 [8] Han Cai et al. Once-for-all: Train one network and specialize it for efficient deployment. In ICLR , 2020. 3 [9] Rewon Child, Scott Gray, Alec Radford, and Ilya Sutskever. Generating long sequences with sparse transformers. arXiv preprint arXiv:1904.10509 , 2019. 2 [10] Christopher Clark, Jieyu Zhang, Zixian Ma, Jae Sung Park, Mohammadreza Salehi, Rohun Tripathi, Sangho Lee, Zhongzheng Ren, Chris Dongjoo Kim, Yinuo Yang, et al. Molmo2: Open weights and data for vision-language mod-els with video understanding and grounding. arXiv preprint arXiv:2601.10611 , 2026. 8 [11] Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try arc, the ai2 reasoning challenge. arXiv preprint arXiv:1803.05457 ,2018. 7 [12] Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al. Train-ing verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 , 2021. 7 [13] DeepSeek-AI. Deepseek-v2: A strong, economical, and ef-ficient mixture-of-experts language model. arXiv preprint arXiv:2405.04434 , 2024. 2, 1 [14] Shizhe Diao, Yu Yang, Yonggan Fu, Xin Dong, Dan Su, Markus Kliegl, Zijia Chen, Peter Belcak, Yoshi Suhara, Hongxu Yin, et al. Nemotron-climb: Clustering-based it-erative data mixture bootstrapping for language model pre-training. arXiv preprint arXiv:2504.13161 , 2025. 2 [15] Yicheng Fan, Dana Alon, Jingyue Shen, Daiyi Peng, Keshav Kumar, Yun Long, Xin Wang, Fotis Iliopoulos, Da-Cheng Juan, and Erik Vee. Layernas: Neural architecture search in polynomial complexity. arXiv preprint arXiv:2304.11517 ,2023. 3 [16] Chaoyou Fu, Peixian Chen, Yunhang Shen, Yulei Qin, Mengdan Zhang, Xu Lin, Jinrui Yang, Xiawu Zheng, Ke Li, Xing Sun, et al. Mme: A comprehensive evaluation bench-mark for multimodal large language models. arXiv preprint arXiv:2306.13394 , 2023. 7 [17] Chaoyou Fu, Yuhan Dai, Yongdong Luo, Lei Li, Shuhuai Ren, Renrui Zhang, Zihan Wang, Chenyu Zhou, Yunhang Shen, Mengdan Zhang, et al. Video-mme: The first-ever comprehensive evaluation benchmark of multi-modal llms in 
+
+10 video analysis. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 24108– 24118, 2025. 7 [18] Xingyu Fu, Yushi Hu, Bangzheng Li, Yu Feng, Haoyu Wang, Xudong Lin, Dan Roth, Noah A Smith, Wei-Chiu Ma, and Ranjay Krishna. Blink: Multimodal large language models can see but not perceive. In European Conference on Com-puter Vision , pages 148–166. Springer, 2024. 7 [19] Albert Gu and Tri Dao. Mamba: Linear-time sequence mod-eling with selective state spaces. In First conference on lan-guage modeling , 2024. 1, 2 [20] Dong Guo, Faming Wu, Feida Zhu, Fuxing Leng, Guang Shi, Haobin Chen, Haoqi Fan, Jian Wang, Jianyu Jiang, Jiawei Wang, et al. Seed1. 5-vl technical report. arXiv preprint arXiv:2505.07062 , 2025. 1 [21] Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Mea-suring massive multitask language understanding. arXiv preprint arXiv:2009.03300 , 2020. 7 [22] Ailin Huang, Ang Li, Aobo Kong, Bin Wang, Binxing Jiao, Bo Dong, Bojun Wang, Boyu Chen, Brian Li, Buyun Ma, et al. Step 3.5 flash: Open frontier-level intelligence with 11b active parameters. arXiv preprint arXiv:2602.10604 , 2026. 3, 7 [23] Drew A Hudson and Christopher D Manning. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , pages 6700–6709, 2019. 7 [24] COIN-OR Foundation Inc. Python-MIP: collection of Python tools for the modeling and solution of mixed-integer linear programs. https://github.com/coin-or/ python-mip , 2023. Version 1.15.0. 5 [25] Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guillaume Lam-ple, Lucile Saulnier, et al. Mistral 7b. arXiv preprint arXiv:2310.06825 , 2023. 10, 3 [26] Moo Jin Kim, Chelsea Finn, and Percy Liang. Fine-tuning vision-language-action models: Optimizing speed and suc-cess. arXiv preprint arXiv:2502.19645 , 2025. 1 [27] Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large language model serving with pagedattention. In Pro-ceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles , 2023. 7, 2 [28] Barak Lenz, Opher Lieber, Alan Arazi, Amir Bergman, Avshalom Manevich, Barak Peleg, Ben Aviram, Chen Al-magor, Clara Fridman, Dan Padnos, et al. Jamba: Hybrid transformer-mamba language models. In The thirteenth in-ternational conference on learning representations , 2025. 1, 2, 3 [29] Aonian Li, Bangwei Gong, Bo Yang, Boji Shan, Chang Liu, Cheng Zhu, Chunhao Zhang, Congchao Guo, Da Chen, Dong Li, et al. Minimax-01: Scaling foundation models with lightning attention. arXiv preprint arXiv:2501.08313 , 2025. 1[30] Bohao Li, Yuying Ge, Yixiao Ge, Guangzhi Wang, Rui Wang, Ruimao Zhang, and Ying Shan. Seed-bench: Bench-marking multimodal large language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition , pages 13299–13308, 2024. 7 [31] Kunchang Li, Yali Wang, Yinan He, Yizhuo Li, Yi Wang, Yi Liu, Zun Wang, Jilan Xu, Guo Chen, Ping Luo, et al. Mvbench: A comprehensive multi-modal video understand-ing benchmark. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 22195– 22206, 2024. 7 [32] Yingyue Li, Bencheng Liao, Wenyu Liu, and Xinggang Wang. Matvlm: Hybrid mamba-transformer for efficient vision-language modeling. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 20878– 20888, 2025. 1, 3 [33] Yongkang Li, Kaixin Xiong, Xiangyu Guo, Fang Li, Sixu Yan, Gangwei Xu, Lijun Zhou, Long Chen, Haiyang Sun, Bing Wang, et al. Recogdrive: A reinforced cognitive frame-work for end-to-end autonomous driving. arXiv preprint arXiv:2506.08052 , 2025. 1 [34] Opher Lieber, Barak Lenz, Hofit Bata, Gal Cohen, Jhonathan Osin, Itay Dalmedigos, Erez Safahi, Shaked Meirom, Yonatan Belinkov, Shai Shalev-Shwartz, et al. Jamba: A hybrid transformer-mamba language model. arXiv preprint arXiv:2403.19887 , 2024. 1 [35] Baijiong Lin, Feiyang Ye, Yu Zhang, and Ivor Tsang. Rea-sonable effectiveness of random weighting: A litmus test for multi-task learning. Transactions on Machine Learning Re-search , 2022. 4 [36] Honglin Lin, Zheng Liu, Yun Zhu, Chonghan Qin, Juekai Lin, Xiaoran Shang, Conghui He, Wentao Zhang, and Li-jun Wu. Mmfinereason: Closing the multimodal reason-ing gap via open data-centric methods. arXiv preprint arXiv:2601.21821 , 2026. 2 [37] Xi Lin, Xiaoyuan Zhang, Zhiyuan Yang, Fei Liu, Zhenkun Wang, and Qingfu Zhang. Smooth tchebycheff scalar-ization for multi-objective optimization. arXiv preprint arXiv:2402.19078 , 2024. 5, 6 [38] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. Visual instruction tuning. Advances in neural information processing systems , 36:34892–34916, 2023. 1 [39] Yuan Liu, Haodong Duan, Yuanhan Zhang, Bo Li, Songyang Zhang, Wangbo Zhao, Yike Yuan, Jiaqi Wang, Conghui He, Ziwei Liu, et al. Mmbench: Is your multi-modal model an all-around player? In European conference on computer vi-sion , pages 216–233. Springer, 2024. 7 [40] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in neural information processing systems , 35:2507–2521, 2022. 7 [41] Andr´ es Marafioti, Orr Zohar, Miquel Farr´ e, Merve Noyan, Elie Bakouch, Pedro Cuenca, Cyril Zakka, Loubna Ben Allal, Anton Lozhkov, Nouamane Tazi, et al. Smolvlm: Redefining small and efficient multimodal models. arXiv preprint arXiv:2504.05299 , 2025. 8 
+
+11 [42] Ahmed Masry, Xuan Long Do, Jia Qing Tan, Shafiq Joty, and Enamul Hoque. Chartqa: A benchmark for question answer-ing about charts with visual and logical reasoning. In Find-ings of the association for computational linguistics: ACL 2022 , pages 2263–2279, 2022. 7 [43] Minesh Mathew, Dimosthenis Karatzas, and CV Jawahar. Docvqa: A dataset for vqa on document images. In Proceed-ings of the IEEE/CVF winter conference on applications of computer vision , pages 2200–2209, 2021. 7 [44] Minesh Mathew, Viraj Bagal, Rub` en Tito, Dimosthenis Karatzas, Ernest Valveny, and CV Jawahar. Infographicvqa. In Proceedings of the IEEE/CVF Winter Conference on Ap-plications of Computer Vision , pages 1697–1706, 2022. 7 [45] Anand Mishra, Shashank Shekhar, Ajeet Kumar Singh, and Anirban Chakraborty. Ocr-vqa: Visual question answering by reading text in images. In 2019 international conference on document analysis and recognition (ICDAR) , pages 947– 952. IEEE, 2019. 7 [46] Team Olmo, Allyson Ettinger, Amanda Bertsch, Bailey Kuehl, David Graham, David Heineman, Dirk Groeneveld, Faeze Brahman, Finbarr Timbers, Hamish Ivison, et al. Olmo 3. arXiv preprint arXiv:2512.13961 , 2025. 7 [47] Viorica Patraucean, Lucas Smaira, Ankush Gupta, Adria Re-casens, Larisa Markeeva, Dylan Banarse, Skanda Koppula, Mateusz Malinowski, Yi Yang, Carl Doersch, et al. Per-ception test: A diagnostic benchmark for multimodal video models. Advances in Neural Information Processing Sys-tems , 36:42748–42761, 2023. 2 [48] Bo Peng et al. Rwkv: Reinventing rnns for the transformer era. In EMNLP , 2023. 2 [49] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervi-sion. In International conference on machine learning , pages 8748–8763. PmLR, 2021. 1 [50] Pier Giuseppe Sessa, Robert Dadashi, L´ eonard Hussenot, Jo-han Ferret, Nino Vieillard, Alexandre Ram´ e, Bobak Shariari, Sarah Perrin, Abe Friesen, Geoffrey Cideron, et al. Bond: Aligning llms with best-of-n distillation. arXiv preprint arXiv:2407.14622 , 2024. 5 [51] Luoyang Sun, Jiwen Jiang, Yifeng Ding, Fengfa Li, Yan Song, Haifeng Zhang, Jian Ying, Lei Ren, Kun Zhan, Wei Chen, et al. Hardware co-design scaling laws via roofline modelling for on-device llms. arXiv preprint arXiv:2602.10377 , 2026. 3 [52] Yutao Sun et al. Retentive network: A successor to transformer for large language models. arXiv preprint arXiv:2307.08621 , 2023. 2 [53] Hongyuan Tao, Bencheng Liao, Shaoyu Chen, Haoran Yin, Qian Zhang, Wenyu Liu, and Xinggang Wang. Infinitevl: Synergizing linear and sparse attention for highly-efficient, unlimited-input vision-language models. arXiv preprint arXiv:2512.06450 , 2025. 1, 2, 3, 7 [54] Kimi Team, Yu Zhang, Zongyu Lin, Xingcheng Yao, Jiaxi Hu, Fanqing Meng, Chengyin Liu, Xin Men, Songlin Yang, Zhiyuan Li, et al. Kimi linear: An expressive, efficient atten-tion architecture. arXiv preprint arXiv:2510.26692 , 2025. 1, 2, 3, 7 [55] Shengbang Tong, Ellis Brown, Penghao Wu, Sanghyun Woo, Manoj Middepogu, Sai C Akula, Jihan Yang, Shusheng Yang, Adithya Iyer, Xichen Pan, et al. Cambrian-1: Afully open, vision-centric exploration of multimodal llms. 
+
+Advances in Neural Information Processing Systems , 37: 87310–87356, 2024. 7 [56] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. 1, 2 [57] Roger Waleffe, Wonmin Byeon, Duncan Riach, Bran-don Norick, Vijay Korthikanti, Tri Dao, Albert Gu, Ali Hatamizadeh, Sudhakar Singh, Deepak Narayanan, et al. An empirical study of mamba-based language models. arXiv preprint arXiv:2406.07887 , 2024. 1 [58] Hanrui Wang et al. Hat: Hardware-aware transformers for efficient natural language processing. In ACL , 2020. 3 [59] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, et al. Internvl3. 5: Advancing open-source multimodal models in versatility, reasoning, and efficiency. 
+
+arXiv preprint arXiv:2508.18265 , 2025. 8 [60] Chenfei Wu, Jiahao Li, Jingren Zhou, Junyang Lin, Kaiyuan Gao, Kun Yan, Sheng-ming Yin, Shuai Bai, Xiao Xu, Yilei Chen, et al. Qwen-image technical report. arXiv preprint arXiv:2508.02324 , 2025. 1 [61] Taiqiang Wu, Chaofan Tao, Jiahao Wang, Runming Yang, Zhe Zhao, and Ngai Wong. Rethinking kullback-leibler di-vergence in knowledge distillation for large language mod-els. In Proceedings of the 31st International Conference on Computational Linguistics , pages 5737–5755, 2025. 5 [62] Junbin Xiao, Xindi Shang, Angela Yao, and Tat-Seng Chua. Next-qa: Next phase of question-answering to explaining temporal actions. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , pages 9777–9786, 2021. 2 [63] Lei Xiao, Jifeng Li, Juntao Gao, Feiyang Ye, Yan Jin, Jingjing Qian, Jing Zhang, Yong Wu, and Xiaoyuan Yu. Ava-vla: Improving vision-language-action models with active visual attention. arXiv preprint arXiv:2511.18960 , 2025. 1 [64] Yixing Xu, Shivank Nag, Dong Li, Lu Tian, and Emad Barsoum. Mswa: Refining local attention with multi-scalewindow attention. arXiv preprint arXiv:2501.01039 ,2025. 10, 3 [65] Songlin Yang, Jan Kautz, and Ali Hatamizadeh. Gated delta networks: Improving mamba2 with delta rule. arXiv preprint arXiv:2412.06464 , 2024. 2, 1 [66] Shusheng Yang, Jihan Yang, Pinzhi Huang, Ellis Brown, Zi-hao Yang, Yue Yu, Shengbang Tong, Zihan Zheng, Yifan Xu, Muhan Wang, et al. Cambrian-s: Towards spatial supersens-ing in video. arXiv preprint arXiv:2511.04670 , 2025. 2 [67] Kexin Yi, Chuang Gan, Yunzhu Li, Pushmeet Kohli, Jiajun Wu, Antonio Torralba, and Joshua B Tenenbaum. Clevrer: Collision events for video representation and reasoning. 
+
+arXiv preprint arXiv:1910.01442 , 2019. 2 
+
+12 [68] Jingyang Yuan, Huazuo Gao, Damai Dai, Junyu Luo, Liang Zhao, Zhengyan Zhang, Zhenda Xie, Yuxing Wei, Lean Wang, Zhiping Xiao, et al. Native sparse attention: Hardware-aligned and natively trainable sparse attention. In 
+
+Proceedings of the 63rd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) ,pages 23078–23097, 2025. 2 [69] Zhenlong Yuan, Chengxuan Qian, Jing Tang, Rui Chen, Zi-jian Song, Lei Sun, Xiangxiang Chu, Yujun Cai, Dapeng Zhang, and Shuo Li. Autodrive-r 2: Incentivizing reason-ing and self-reflection capacity for vla model in autonomous driving. arXiv preprint arXiv:2509.01944 , 2025. 1 [70] Xiang Yue, Yuansheng Ni, Kai Zhang, Tianyu Zheng, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, et al. Mmmu: A massive multi-discipline multimodal understanding and reasoning benchmark for ex-pert agi. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 9556–9567, 2024. 7 [71] Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. Hellaswag: Can a machine really finish your sentence? In Proceedings of the 57th annual meeting of the association for computational linguistics , pages 4791–4800, 2019. 7 [72] Jingyi Zhang, Jiaxing Huang, Sheng Jin, and Shijian Lu. Vision-language models for vision tasks: A survey. IEEE transactions on pattern analysis and machine intelligence ,46(8):5625–5644, 2024. 1 [73] Wenyao Zhang, Hongsi Liu, Zekun Qi, Yunnan Wang, Xin-qiang Yu, Jiazhao Zhang, Runpei Dong, Jiawei He, Fan Lu, He Wang, et al. Dreamvla: a vision-language-action model dreamed with comprehensive world knowledge. arXiv preprint arXiv:2507.04447 , 2025. 1 [74] Yu Zhang and Qiang Yang. A survey on multi-task learning. 
+
+IEEE transactions on knowledge and data engineering , 34 (12):5586–5609, 2021. 4 [75] Han Zhao, Min Zhang, Wei Zhao, Pengxiang Ding, Siteng Huang, and Donglin Wang. Cobra: Extending mamba to multi-modal large language model for efficient inference. In Proceedings of the AAAI Conference on Artificial Intel-ligence , pages 10421–10429, 2025. 3 [76] Zewei Zhou, Tianhui Cai, Seth Z Zhao, Yun Zhang, Zhiyu Huang, Bolei Zhou, and Jiaqi Ma. Autovla: A vision-language-action model for end-to-end autonomous driving with adaptive reasoning and reinforcement fine-tuning. arXiv preprint arXiv:2506.13757 , 2025. 1 [77] Orr Zohar, Xiaohan Wang, Yonatan Bitton, Idan Szpektor, and Serena Yeung-Levy. Video-star: Self-training enables video instruction tuning with any supervision. arXiv preprint arXiv:2407.06189 , 2024. 2 
+
+13 A. Details for the Search Space 
+
+In this section, we provide the comprehensive architec-tural specifications for the candidate subblocks within the search space. For the Qwen3-VL-4B-Instruct teacher model employed in our primary experiments, the search space is meticulously designed to ensure structural compatibil-ity with the parent model while offering a diverse range of efficiency-accuracy trade-offs. To maintain consistency with the teacher’s residual stream, the hidden dimension for all attention and FFN subblocks is fixed at 2560 .The search space for attention modules encompasses five distinct mechanism types. Their configurations either in-herit the settings from the teacher’s GQA or follow the de-fault hyperparameters from the representative FLA 1 library for efficient sequence modeling: • Grouped-Query Attention (GQA): This configuration utilizes the original GQA mechanism of the teacher model, featuring 32 attention heads and 8 key-value heads. • Gated Delta Network (GDN): Following the architecture in [65], this variant employs a head dimension of 128 and an expansion factor of 2 for the value states. • Kimi Delta Attention (KDA): Based on the design in [54], this mechanism uses a head dimension of 128 and an expansion factor of 1 for the value states. • Multi-head Latent Attention (MLA): Adopting the configuration from [13], this variant utilizes a 128-dimensional value head and 192-dimensional key/query heads. It leverages LoRA-style bottlenecks for queries with a rank of 64 and key-values with a rank of 512. • Sliding Window Attention (SWA): This setup retains the teacher model’s GQA parameters but restricts the atten-tion scope to a sliding window of length 1024. For the FFN subblocks, we employ a structured prun-ing approach to optimize the intermediate dimension of the SwiGLU layers. The intermediate dimensions of all candidate subblocks are aligned to multiples of 256 or powers of two to maximize hardware execution efficiency. Specifically, the search space includes seven scaling ratios: {100% , 84% , 74% , 50% , 21% , 11% , 0% }.These correspond to the setting d =
+
+{9728 , 8192 , 7168 , 4864 , 2048 , 1024 , 0} of the inter-mediate dimensions, respectively, where a dimension of 0 represents the removal of the FFN subblock. To provide a warm start for the subblocks in the search space, we initialize these alternative subblocks by leverag-ing the pretrained weights of the teacher model. Specifi-cally, the GQA and SWA subblocks are initialized directly from the teacher model as they maintain structural compat-ibility. For the GDN and KDA linear attention variants, we initialize the head projection matrices by performing 
+
+> 1https://github.com/fla-org
+
+mean-pooling over the teacher’s corresponding projection matrices to align the feature dimensions. To initialize the low-rank projection matrices in the MLA subblocks, we ap-ply Singular Value Decomposition (SVD) to the teacher’s projection matrices and utilize the decomposed results to populate the latent representations. Finally, for FFN sub-block initialization, we reduce the teacher’s intermediate di-mensions by performing structured channel pruning, where channels are randomly pruned to meet the target dimen-sions. This strategy ensures that candidate blocks inherit foundational knowledge, significantly reducing the diffi-culty of the subsequent recovery stages. 
+
+## B. Additional Implementation Details 
+
+In this section, we provide the additional implementation details for the experiments in Sec. 4. 
+
+B.1. Details of Blockwise Latency Evaluation 
+
+To establish the latency constraints runtime (l, i ) for the multi-objective MIP problem, we independently profile the latency of each candidate block under realistic inference conditions. To isolate the true hardware execution time, we employ static key-value (KV) cache pre-allocation and leverage CUDA Graphs during the decoding phase, effec-tively eliminating dynamic memory allocation overheads and CPU dispatch bottlenecks. Specifically, we evaluate prefill lengths scaling from 1k up to 96k tokens, using a batch size of 16 and a decode length of 256 tokens. As il-lustrated in Fig. 5, across these extensive context lengths, we observe that the latency of standard GQA increases significantly, inherently bottlenecked by the computational complexity of full attention matrix multiplications. In con-trast, SWA exhibits highly efficient scaling, as its compu-tational overhead is strictly bounded by the fixed window size. Furthermore, MLA demonstrates consistent latency reductions through its low-rank KV compression, while lin-ear attention variants, including GDN and KDA, maintain near-constant decoding latency and minimal memory foot-prints owing to their recurrent state mechanisms. Conse-quently, this rigorous profiling yields the precise, determin-istic latency metrics required to populate the runtime (l, i )
+
+constraint, thereby accurately guiding the multi-objective MIP search process. We also provide supplementary pro-filing of attention-only latency in Fig. 5. 
+
+B.2. Training Details 
+
+Training proceeds through three stages: blockwise distil-lation, global off-policy distillation, and dual-teacher on-policy distillation. The entire training procedure is con-ducted on 64 × NVIDIA H800-80GB GPUs over 172 hours, amounting to approximately 11K GPU hours in total. For blockwise distillation, we utilize 80K samples drawn from LLaVA-OneVision-1.5-Midtrain [2], a general-11k 
+
+> 2k
+> 4k
+> 8k
+> 16k
+> 32k
+> 48k
+> 64k
+> 96k
+> Prefill Length
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> 350
+> Total Runtime (ms)
+> Teacher Block
+> GQA + FFN
+> MLA + FFN
+> SWA + FFN
+> GDN + FFN
+> KDA + FFN
+> Linear + FFN
+> no-op + FFN 1k
+> 2k
+> 4k
+> 8k
+> 16k
+> 32k
+> 48k
+> 64k
+> 96k
+> Prefill Length
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> 300
+> Total Runtime (ms)
+> GQA
+> MLA
+> SWA
+> GDN
+> KDA
+> Linear
+
+Figure 5. Hardware performance analysis of various attention variants. Left: Profiling of block-wise latency across different hardware stages, illustrating the specific time breakdown. Right: Comparison of scaling efficiency across prefill lengths from 1k to 96k (FFN cost excluded). 
+
+purpose VLM captioning dataset commonly employed as multimodal pretraining data. Each block is trained for one epoch with the MSE loss. This round of distillation serves as an effective warm-up for the blocks, preventing inaccu-rate module scores that may arise from discrepancies in pa-rameter inheritance. The global off-policy distillation in the parameter re-covery stage proceeds in two sub-phases. (i) Pre-training KD : We distill from Qwen3-VL-4B-Instruct using approx-imately 10M samples of pure text from ClimbMix [14], augmented with 10M image-text pairs from the LLaVA-OneVision-1.5 [2] midtrain split. For optimization, we em-ploy AdamW with β1=0 .9, β2=0 .95 , and a weight decay of 0.1. The learning rate and effective batch size are set to 
+
+1×10 −5 and 512, respectively. The distillation coefficient is α=0 .1. (ii) Instruction KD : We continue distillation on an instruction mixture comprising LLaVA-OneVision-1.5-Instruct, LLaVA-Video-178K, CLEVR, NExT-QA, Percep-tionTest, STAR, and VSI-590K [47, 62, 66, 67, 77], totaling approximately 10M samples. For the dual-teacher on-policy distillation in the param-eter recovery stage, we combine MMFineVision [36] with the data used in Stage 1, i.e ., global off-policy distillation, at a 1:1 ratio, yielding approximately 2M samples in total. For each prompt, the SFT target is a response generated by Qwen3-VL-235B, while the logits teacher is Qwen3-VL-4B-Instruct. We set the learning rate to 5×10 −6 with 
+
+β = 0 .5.We select the above datasets because they have under-gone high-quality cleaning and careful mixture-ratio tuning, and have been successfully used to train strong open-source models. The total training cost is less than 2% of the train-ing cost of the original Qwen3-VL-4B-Instruct. 
+
+B.3. Details of Benchmark Evaluation 
+
+For the evaluation of image and video benchmarks, we em-ploy VLMEvalKit 2 as the evaluation framework. To en-sure a fair comparison, we apply a unified set of generation hyperparameters across all models: the temperature is set to 
+
+0.7, the maximum number of new tokens to 4,096 , the rep-etition penalty to 1.0, the presence penalty to 1.5, top-p to 
+
+0.8, and top-k to 20 . For text-only benchmarks, we conduct evaluations using OpenCompass 3, with the maximum in-put length uniformly capped at 96K tokens. 
+
+B.4. Details of Model Latency Evaluation 
+
+To evaluate the real-world latency and throughput of the de-rived MOSAIC-4B model, we deploy it using vLLM [27], a highly optimized open-source inference engine. vLLM achieves high throughput by utilizing custom PagedAtten-tion kernels to efficiently manage KV caching and mitigate memory fragmentation. To seamlessly deploy the specific heterogeneous, per-layer paradigms generated by our MO-SAIC search space, we further extend vLLM’s backend. Specifically, we develop a unified decoder layer that dy-namically dispatches to specialized operators based on the searched configuration. Built upon PagedAttention, the en-gine natively supports GQA with variable KV-head ratios and SWA. We extend this paging capability to MLA to ac-commodate its low-rank KV compression scheme. To sup-port GDN and KDA linear attention, we incorporate their internal recurrent states into a hybrid state management sys-tem. This allows the memory scheduler to dynamically allo-cate and page these states identically to standard KV caches. Consequently, by replacing isolated implementations with native, hardware-aware operators, the extended engine fully 
+
+> 2https://github.com/open-compass/vlmevalkit
+> 3https://github.com/open-compass/opencompass
+
+21k 
+
+> 2k
+> 4k
+> 8k
+> 16k
+> 32k
+> 64k
+> 96k
+> Prefill Length
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> Latency (s)
+> 1.70×
+> 1.82×
+> 1.96×
+> Qwen3-VL-4B-Instruct
+> MOSAIC-4B Figure 6. Comparison of end-to-end inference latency. MOSAIC-4B achieves substantially higher efficiency than the Qwen3-VL-4B-Instruct teacher model.
+
+supports the latency evaluation and practical deployment of any heterogeneous architecture derived from our MIP for-mulation. Fig. 6 illustrates the end-to-end inference latency of MOSAIC-4B and Qwen3-VL-4B-Instruct across differ-ent prefill lengths, where MOSAIC-4B achieves up to a 
+
+1.96 × latency speedup at 96k tokens. 
+
+## C. Additional Experiments 
+
+In this section, we provide additional experimental results. 
+
+C.1. Comparison with Heterogeneous VLMs 
+
+To further demonstrate the effectiveness of MOSAIC, in addition to the results in Tab. 1, we compare MOSAIC-4B against three representative heterogeneous VLMs: MatVLM [32], InfiniteVL [53], and Cobra [75]. All mod-els are evaluated on the same benchmark suite described in Sec. 4.1, with results aggregated into three modality cat-egories: image understanding (Img), video understanding (Vid), and text understanding (Txt). As shown in Tab. 8, MOSAIC-4B achieves the best performance across all three modalities by a substantial margin. Notably, Cobra and MatVLM lag significantly behind, suggesting that naive manual hybridization strategies—whether through simple module concatenation or rule-based layer substitution— fail to capture the nuanced, layer-wise architectural pref-erences that automated search can exploit. These results confirm that principled heterogeneous architecture search yields considerably superior designs compared to the hand-designed architecture. 
+
+C.2. Performance of Faster Configurations 
+
+To further investigate the flexibility of the MOSAIC frame-work, we evaluate a speed-oriented variant, MOSAIC-4B-Flash, derived from the architectural configuration discov-                                      
+
+> Table 8. Performance and decoding efficiency comparison be-tween MOSAIC variants and representative heterogeneous VLMs. Img, Vid, and Txt denote the average performance (%) on image, video, and text understanding benchmarks, respectively. TPOT de-notes the decoding acceleration (time per output token) relative to the corresponding homogeneous baseline. Bold : best; †: second best among competing models.
+> Model TPOT Img Vid Txt Overall Qwen3-VL-4B-Instruct 1.00 ×78.5 57.2 83.1 72.9 Cobra [75] 4.83 ×56.2 35.8 60.4 50.8 MatVLM [32] 1.21 ×62.1 41.3 64.5 56.0 InfiniteVL [53] 4.21 ×69.8 48.3 72.1 63.4
+> MOSAIC-4B 2.54 ×77.9 56.4 80.8 71.7 MOSAIC-4B-Flash 4.42 †×75 .1†53 .8†77 .3†68 .7†
+
+ered under a 2.0× speedup constraint, which achieves com-petitive inference speed with existing heterogeneous VLMs. This model has undergone the same two-stage recovery process as the MOSAIC-4B. The corresponding model ar-chitecture is shown in Fig. 7 (c). As reported in Tab. 8, MOSAIC-4B-Flash achieves a measured decoding acceler-ation of 4.42 ×, substantially surpassing the 2.54 × speedup of the standard MOSAIC-4B. Experimental results indicate that this increased effi-ciency comes at a relatively modest cost to model quality. Specifically, MOSAIC-4B-Flash exhibits a performance de-crease of approximately 3.0 points in the overall average score compared to the standard model, while still maintain-ing a clear performance advantage over other heterogeneous VLMs at comparable speed levels. These findings suggest that the MOSAIC framework can effectively navigate the Pareto frontier between inference efficiency and task accu-racy, potentially providing a range of optimized candidates to meet diverse hardware deployment requirements. 
+
+C.3. Experiments on Architecture Patterns 
+
+In Sec. 4.4, we analyze the architectural patterns of the MOSAIC-4B model searched under a global latency bud-get constrained to a 1.5× speedup relative to the Qwen3-VL-4B-Instruct baseline. In this section, we evaluate the analysis results of discovered architectural patterns by visu-alizing the configurations identified by MOSAIC across a wide spectrum of latency constraints, ranging from 1.2× to 
+
+2.5× speedup relative to the Qwen3-VL-4B-Instruct base-line. As illustrated in Fig. 7, several fundamental structural patterns remain stable across these different latency con-straints. Specifically, SWA is consistently allocated to the shallow layers of the network, reinforcing the conclusion that early stages primarily benefit from local contextual in-formation for initial representation. This finding aligns with prior works [4, 25, 64] supporting the efficacy of local win-30 10 20 30 
+
+Layer Index  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Relative Runtime
+> SWA
+> SWA
+> SWA
+> GDN
+> GDN
+> KDA
+> KDA
+> KDA
+> GDN
+> MLA
+> Block Runtime Saved Runtime
+
+(a) 1.2× speedup. 0 10 20 30 
+
+Layer Index   
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Relative Runtime
+> SWA
+> SWA
+> GDN
+> GQA*
+> GDN
+> SWA*
+> GDN
+> GDN*
+> GDN
+> GQA*
+> KDA*
+> GDN*
+> KDA
+> KDA
+> GDN
+> GDN
+> MLA
+> KDA
+> MLA
+> KDA
+> MLA
+> Block Runtime Saved Runtime
+
+(b) 1.5× speedup. 0 10 20 30 
+
+Layer Index  
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Relative Runtime
+> SWA
+> SWA*
+> SWA*
+> GDN
+> GDN
+> GDN
+> SWA
+> GDN
+> GDN
+> GDN
+> GDN*
+> GDN
+> GDN*
+> GDN
+> GDN*
+> KDA
+> KDA
+> KDA
+> GDN
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> MLA
+> MLA
+> Block Runtime Saved Runtime
+
+(c) 2× speedup. 0 10 20 30 
+
+Layer Index   
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Relative Runtime
+> SWA
+> SWA
+> SWA
+> SWA
+> GDN
+> GDN
+> SWA
+> GDN
+> GDN
+> GDN
+> GDN
+> GDN
+> GDN
+> GDN
+> GDN*
+> GDN
+> GDN*
+> GDN
+> GDN
+> GDN
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> KDA
+> MLA
+> MLA
+> Block Runtime Saved Runtime
+
+(d) 2.5× speedup. 
+
+Figure 7. The runtime reduction of layer-wise architectural replacements in MOSAIC under varying latency constraint settings ( 1.2×
+
+to 2.5× speedup), relative to the original Qwen3-VL-4B-Instruct layers. Blue denotes the layers from the original model, and green denotes replaced layers, where annotations indicate the attention variant used after searching. ∗ indicates additional FFN pruning in the corresponding layer. 
+
+dow mechanisms in initial layers for capturing fundamen-tal contextual features. Meanwhile, linear attention vari-ants like KDA and GDN predominantly occupy the mid-dle layers, serving as the primary driver for latency reduc-tion across all evaluated constraints. In the deep layers, the framework preferentially retains MLA or standard GQA, suggesting that global information aggregation remains es-sential for the final stages of the model. These findings align with the structural patterns observed in Sec. 4.4. Since these architectural patterns were re-covered through data-driven multi-objective optimization rather than manual intervention, this indicates that such het-erogeneous distributions may offer a favorable balance for vision-language modeling. Such discovered architecture patterns may offer useful architectural intuitions and serve as a potential reference for future explorations in efficient multimodal design. 4

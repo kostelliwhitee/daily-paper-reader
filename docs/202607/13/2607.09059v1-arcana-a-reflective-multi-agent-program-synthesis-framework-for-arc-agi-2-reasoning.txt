@@ -1,0 +1,820 @@
+Title: ARCANA: A Reflective Multi-Agent Program Synthesis Framework for ARC-AGI-2 Reasoning
+
+URL Source: https://arxiv.org/pdf/2607.09059v1
+
+Published Time: Mon, 13 Jul 2026 00:28:53 GMT
+
+Number of Pages: 7
+
+Markdown Content:
+# ARCANA: A Reflective Multi-Agent Program Synthesis Framework for ARC-AGI-2 Reasoning 
+
+Kunbo Zhang * 
+
+Columbia University 
+
+New York, USA kz2437@columbia.edu 
+
+Lei Fu 
+
+Independent Researcher 
+
+San Jose, USA fuleiac@gmail.com 
+
+ZeYu Wang 
+
+University of California, Los Angeles 
+
+Los Angeles, USA zeyuwang@ucla.edu 
+
+Zijing Liu 
+
+Northeastern University 
+
+Boston, USA liuzijing23@gmail.com 
+
+Kejian Tong 
+
+Independent Researcher 
+
+Mukilteo, USA tongcs2021@gmail.com 
+
+Abstract —We present ARCANA, a collaborative multi agent framework for solving ARC AGI 2 tasks under strict test time and hardware constraints. ARCANA decomposes each task into iterative perception, hypothesis generation, symbolic execution, and reflective refinement. A perceptual grounding agent builds object centric scene graphs from raw grids, a latent program policy proposes diverse DSL programs, a symbolic executor verifies candidates on demonstrations, and a reflective agent synthesizes failure driven feedback for the next turn. These agents communicate through a shared differentiable blackboard and are scheduled by a learned meta controller. The design combines structured program search with adaptive multi turn correction, improving reasoning efficiency and solution quality on challenging abstract transformation tasks. 
+
+Index Terms —ARC AGI 2, multi agent reasoning, program synthesis, object centric learning, symbolic execution, test time adaptation 
+
+I. I NTRODUCTION 
+
+Abstract reasoning on ARC AGI 2 remains difficult because successful solutions must infer compact transformation rules from only a few demonstrations, while handling variable grid sizes, object interactions, and severe ambiguity in the latent rule space. Large pretrained models have improved broad pattern recognition, yet few shot generalization on compo-sitional grid transformations still demands precise search, explicit verification, and strong inductive bias for structure discovery [1]. Recent advances in reasoning have shown that intermediate deliberation can improve complex inference, but these gains do not directly solve ARC style tasks. Chain based prompting helps expose reasoning steps, yet it does not guarantee executable consistency across demonstrations [2]. Iterative self feedback further improves correction behavior, but pure text based refinement remains weak when the hy-pothesis space is symbolic, spatial, and tightly constrained by exact grid outputs [3]. To address this challenge, we introduce ARCANA, an adaptive collaborative architecture that turns each task into a multi turn reasoning episode. ARCANA separates object centric perception, latent program proposal, symbolic execution, and reflective refinement into specialized agents connected by a shared blackboard. This design allows the system to generate diverse candidate programs, test them against demonstrations, diagnose failure patterns, and redirect search toward more promising regions of the program space. The result is a practical framework for abstract visual reason-ing under realistic compute limits. II. R ELATED WORK 
+
+Recent work on structured reasoning has increasingly re-visited object centric representations and modular rule ma-nipulation as a foundation for compositional generalization. Slot based perceptual decomposition provides a differentiable route to discover entities and their attributes from raw inputs, which is especially useful when reasoning depends on object level transformations rather than dense pixels [4]. In parallel, neural systems that emulate production style rule application have shown how explicit modular structure can support more systematic computation than monolithic end to end predictors [5]. A second line of research emphasizes stronger reasoning behavior in neural models through explicit interaction between deliberation and action, or by casting reasoning steps into executable forms.Hybrid architectures that combine multi-granularity semantic encoders with graph attention have also shown strong results in structurally complex domains [6]. ReAct couples intermediate reasoning with environment facing decisions, which improves controllability in sequential prob-lem solving [7]. Program of Thoughts extends this direction by separating symbolic computation from language generation, illustrating the value of executable intermediate programs when exact correctness matters [8]. Our approach is also informed by several specific techniques that improve efficiency and robustness in structured inference.Hardware-conscious de-ployment on edge-class CPUs also motivates mixed-precision and kernel-level optimization strategies for large language models [9].Our approach is also informed by several specific techniques that improve efficiency and robustness in structured inference [10]. Rotary position encoding strengthens attention over spatial relations and is well suited to grid based inputs arXiv:2607.09059v1 [cs.AI] 10 Jul 2026 [11]. Parameter efficient adaptation through low rank updates enables lightweight test time specialization without retraining the full model [12]. Diverse decoding strategies such as self consistency further suggest that exploring multiple reasoning paths can outperform single trajectory prediction, an idea that aligns with our diverse program proposal and verification loop [13].Similarly, MERIT-Net shows that a two-stage retrieval-and-ranking pipeline with task-specific calibration can benefit from explicit modular design and carefully reported training settings [14].Related work on retrieval-augmented reasoning has also explored dynamic tool use and selective fallback mechanisms, as exemplified by DynaRAG, which improves robustness by routing to external APIs when retrieved evidence is insufficient [15]. III. M ETHODOLOGY 
+
+We introduce ARCANA (Adaptive Reasoning with Collab-orative Agent Network Architecture), a multi-agent frame-work that formulates each ARC-AGI-2 task as a multi-turn agentic reasoning episode across four specialized agents (Fig. 1). The Perceptual Grounding Agent uses a 2D-aware Transformer with Slot Attention to build object-centric scene graphs from raw grids. The Hypothesis Generation Agent is a latent program policy based on a conditional VAE that auto-regressively proposes diverse candidate transformation programs. The Symbolic Execution Agent evaluates candidates on the demonstration pairs and records structured execution traces. The Reflective Refinement Agent performs failure-driven credit assignment via counterfactual analysis over these traces, producing gradient-like feedback that steers subsequent hypothesis generation away from previously failed program regions. The four agents communicate through a shared differen-tiable blackboard, coordinated by a learned Meta-Controller that adaptively allocates a limited compute budget across turns via a policy-gradient-trained activation strategy. The frame-work is trained end-to-end with a novel Reasoning Trajectory Optimization (RTO) objective rewarding both final-answer correctness and intermediate reasoning efficiency. Under the official ARC Prize 2026 hardware constraints, ARCANA’s agentic multi-turn refinement substantially outperforms both neural transductive baselines and standalone program synthesis methods, setting a new state-of-the-art among open-source solutions on ARC-AGI-2 and narrowing the gap to human-level abstract reasoning.This emphasis on adaptive resource allocation under strict latency and reliability constraints is reminiscent of recent work on adaptive GPU instance scal-ing for serverless AI inference [16].Under the official ARC Prize 2026 hardware constraints, ARCANA’s agentic multi-turn refinement substantially outperforms both neural trans-ductive baselines and standalone program synthesis methods, setting a new state-of-the-art among open-source solutions on ARC-AGI-2 and narrowing the gap to human-level abstract reasoning [17].          
+
+> Fig. 1. Overall ARCANA framework. Four specialized agents—Perceptual Grounding (PGA), Hypothesis Generation (HGA), Symbolic Execution (SEA), and Reflective Refinement (RRA)—communicate through a shared differentiable blackboard Btunder a learned Meta-Controller. The coral feedback arrow from RRA to HGA implements the multi-turn refinement loop driving ARCANA’s improvements.
+
+IV. T HE ARCANA F RAMEWORK 
+
+A. Problem Formulation 
+
+We cast ARC-AGI-2 as a sequential decision-making prob-lem solved by a collaborative multi-agent system. Given a task τ with N demonstration pairs Dτ = {(Gin  
+
+> n
+
+, Gout  
+
+> n
+
+)}Nn=1 
+
+and one or more test inputs {Gin  
+
+> t
+
+}, the goal is to produce the correct output Gout  
+
+> t
+
+for each test input. Each grid G ∈{0, 1, . . . , 9}H×W is a 2D array of discrete color symbols with dimensions from 1×1 to 30 ×30 .ARCANA decomposes each task into a multi-turn episode 
+
+E = ( s0, a 1, s 1, a 2, . . . , s T ): at each turn t, a subset of agents is activated, messages pass through the blackboard B, and the state st is updated. This design reflects the observation that the dominant theme in ARC-AGI progress—the refinement loop— maps naturally to a multi-agent architecture where perception, hypothesis generation, symbolic execution, and reflection are specialized modules that iteratively cooperate.This design re-flects the observation that the dominant theme in ARC-AGI progress—the refinement loop—maps naturally to a multi-agent architecture where perception, hypothesis generation, symbolic execution, and reflection are specialized modules that iteratively cooperate [18]. The episode ends when a verified solution is found or the compute budget is exhausted. 
+
+B. Perceptual Grounding Agent (PGA) 
+
+The Perceptual Grounding Agent (Fig. 2) transforms raw grid representations into structured, object-centric scene graphs that serve as the shared perceptual foundation for all downstream reasoning agents. Its internal architecture com-prises three stages: cell-level encoding, object discovery, and relational scene graph construction. 
+
+1) 2D-Aware Transformer Encoder: Each grid cell value 
+
+v ∈ { 0, . . . , 9} is mapped to a dense vector via a learnable color embedding matrix Ecolor ∈ R10 ×d. To inject geometric inductive bias appropriate for 2D grid reasoning, we employ a factored 2D Rotary Position Encoding (RoPE-2D), which Fig. 2. Perceptual Grounding Agent pipeline. Raw grids are color-embedded with RoPE-2D positional encoding, contextualized by a 6-layer 2D-aware Transformer, parsed into K = 16 object slots via differentiable Slot Attention, and assembled into scene graphs whose pairwise transformations are aggregated by a cross-demonstration Transformer into the task representation Rtask .
+
+encodes the row index i and column index j of each cell into rotation matrices applied directly within the self-attention dot product. The embedded cell representation is: 
+
+xij = Ecolor [vij ] + prow  
+
+> i
+
++ pcol  
+
+> j
+
+(1) The row and column positional encodings are defined through interleaved sinusoidal rotation pairs: 
+
+prow  
+
+> i
+
+=
+
+> d/ 4
+
+M
+
+> k=1
+
+cos( i · ωk)sin( i · ωk)
+
+
+
+, ω k = 110000 4k/d (2) 
+
+pcol  
+
+> j
+
+=
+
+> d/ 4
+
+M
+
+> k=1
+
+cos( j · ωk)sin( j · ωk)
+
+
+
+, ω k = 110000 4k/d (3) where L denotes concatenation along the embedding di-mension. Within the self-attention layers, the rotary encoding modulates the query-key dot product such that attention scores become a function of relative position: 
+
+Attn( qij , ki′j′ ) =  Rrow  
+
+> i−i′
+
+Rcol  
+
+> j−j′
+
+qij 
+
+⊤ki′j′ (4) where Rrow ∆ , Rcol ∆ are block-diagonal rotation matrices param-eterized by relative displacements. For example: 
+
+Rrow ∆ = diag 
+
+ cos θ − sin θ
+
+sin θ cos θ
+
+
+
+, . . . 
+
+
+
+(5) where θ = ∆ i · ωk for each rotation block. The flattened cell embeddings X ∈ R(H·W )×d are processed by a Transformer encoder with Lpga = 6 layers, h = 8
+
+attention heads, embedding dimension d = 256 , and GELU activation. Each layer follows the pre-norm residual structure: 
+
+˜X(ℓ) = X(ℓ) + MHSA 
+
+
+
+LN 
+
+
+
+X(ℓ) 
+
+(6) 
+
+X(ℓ+1) = ˜X(ℓ) + FFN 
+
+
+
+LN 
+
+ ˜X(ℓ) 
+
+(7) where LN( ·) denotes RMSNorm: 
+
+RMSNorm( x) = x
+
+q 1
+
+> d
+
+Pdi=1 x2 
+
+> i
+
++ ϵ
+
+⊙ γ (8) with learnable scale γ ∈ Rd. The feed-forward network employs a SwiGLU gating mechanism: 
+
+FFN( x) =  SiLU( xW gate ) ⊙ (xW up )Wdown (9) where Wgate , Wup ∈ Rd×dff and Wdown ∈ Rdff ×d with 
+
+dff = ⌊ 83 d⌋ rounded to the nearest multiple of 64. The encoder output is the contextualized cell feature map Z ∈ R(H·W )×d.
+
+2) Object Discovery via Differentiable Slot Attention: 
+
+Rather than relying on hard-coded connected component anal-ysis, we employ a differentiable Slot Attention module to discover objects in an unsupervised, gradient-friendly manner. We initialize K learnable slot vectors {μ(0)  
+
+> k
+
+}Kk=1 from aGaussian prior μ(0)  
+
+> k
+
+∼ N (μinit , σ 2init I), where K = 16 is set to exceed the maximum expected object count. At each refinement iteration r = 1 , . . . , R (we use R = 3 ), the slots compete to explain the cell features via a softmax attention followed by weighted aggregation and a GRU state update: 
+
+A(r) 
+
+> ki
+
+=exp 
+
+ q(μ(r−1)  
+
+> k)⊤k(Zi)
+> √dk
+
+P 
+
+> k′
+
+exp 
+
+ q(μ(r−1)  
+
+> k′)⊤k(Zi)
+> √dk
+
+ (10) where q(·) and k(·) are learned linear projections. The atten-tion weights are then column-normalized to produce assign-ment probabilities: 
+
+ˆA(r) 
+
+> ki
+
+= A(r)
+
+> ki
+
+PHW i′=1 A(r) 
+
+> ki ′
+
++ ϵ (11) Each slot aggregates its assigned features and updates its state through a GRU cell: 
+
+u(r) 
+
+> k
+
+=
+
+> HW
+
+X
+
+> i=1
+
+ˆA(r) 
+
+> ki
+
+· v(Zi) (12) 
+
+μ(r) 
+
+> k
+
+= GRU 
+
+
+
+μ(r−1)  
+
+> k
+
+, u(r)
+
+> k
+
+
+
+(13) After R iterations, the final slot representations μ(R) 
+
+> k
+
+∈ Rd
+
+serve as object-level features, each capturing the appearance and local structure of a discovered entity. 
+
+3) Scene Graph Construction and Cross-Demonstration En-coding: Each object slot μ(R) 
+
+> k
+
+is augmented with explicit geometric attributes computed from its soft attention mask— centroid (¯ xk, ¯yk), bounding box dimensions (wk, h k), area Ak,and dominant color cdom  
+
+> k
+
+—producing a node feature: 
+
+hk =  μ(R) 
+
+> k
+
+∥ ¯xk ∥ ¯yk ∥ wk
+
+∥ hk ∥ Ak ∥ onehot( cdom  
+
+> k
+
+)  (14) Pairwise spatial relations are computed via a relation network: 
+
+ekl = ϕrel 
+
+  hk ∥ hl ∥ hk − hl
+
+∥ hk ⊙ hl
+
+ (15) where ϕrel is a two-layer MLP with SiLU activation. We construct scene graphs Gin  
+
+> n
+
+, Gout  
+
+> n
+
+for all 2N grids and compute a delta representation capturing the transformation pattern for each demonstration pair: 
+
+δn = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+MLP δ
+
+  hin  
+
+> n,k
+
+∥ hout 
+
+> n,k
+
+∥ hout  
+
+> n,k
+
+− hin 
+
+> n,k
+
+ (16) The delta representations are aggregated across demonstrations using a cross-demonstration Transformer with Lcross = 2
+
+layers that attends over all N pairs to produce a permutation-invariant task representation: 
+
+Rtask = Pool  CrossDemoTF( δ1, . . . , δN ) ∈ Rdr (17) where Pool( ·) applies attention-weighted mean pooling with a learnable query vector. This Rtask captures the invariant transformation pattern shared across all demonstrations and is written to the blackboard B as the primary input for downstream agents. 
+
+C. Hypothesis Generation Agent (HGA) 
+
+The Hypothesis Generation Agent (Fig. 3) operates as a latent program policy: it consumes the task representation and any refinement feedback from previous turns, and pro-duces a diverse set of candidate transformation programs. Its architecture combines a conditional variational auto-encoder (CVAE) with an auto-regressive program decoder, enabling both structured exploration and exploitation of the program space.                    
+
+> Fig. 3. Hypothesis Generation Agent. The conditioning context c=[Rtask ∥Frefine ]feeds parallel paths: a conditional prior pθused at inference and an amortized posterior qϕused during training (dashed). Sampled latent codes zπare decoded auto-regressively into typed DSL programs, and a k-DPP selects a maximally diverse candidate subset.
+
+1) Conditional Variational Latent Program Space: We de-fine a latent program space Zπ ⊆ Rdz equipped with a learned conditional prior and an inference-time posterior. The prior is conditioned on the task representation and the optional refine-ment signal Frefine from the Reflective Refinement Agent (set to 0 at the first turn): 
+
+pθ (zπ | Rtask , Frefine ) = N μθ (c), diag( σ2 
+
+> θ
+
+(c))  (18) where c = [ Rtask ∥Frefine ] and μθ , σθ are parameterized by a two-layer MLP with LayerNorm. During training, an amor-tized posterior network incorporates the ground-truth program embedding: 
+
+qϕ(zπ | c, π ∗) = N μϕ(c, eπ∗ ), diag( σ2
+
+> ϕ
+
+(c, eπ∗ ))  (19) Sampling employs the reparameterization trick zπ = μ + σ ⊙
+
+ϵ, ϵ ∼ N (0, I). The refinement signal Frefine conditions the prior to shift away from previously failed program regions, implementing the key insight from the reflective refinement loop. 
+
+2) Auto-Regressive Program Decoder Network: A la-tent code zπ is decoded into a symbolic program π =(p1, p 2, . . . , p T ) as an ordered sequence of typed DSL primi-tives. The decoder is a Ldec = 4 layer causal Transformer with cross-attention to the conditioning context. At each decoding step t:
+
+ot = CausalDec(Embed( p1: t−1), [zπ ∥ Rtask ]) (20) The causal Transformer decoder consists of masked self-attention (MMHSA), cross-attention to the conditioning con-text, and a SwiGLU feed-forward block. Let H(ℓ) denote the hidden states at layer ℓ:
+
+˜H(ℓ) = H(ℓ) + MMHSA 
+
+
+
+LN( H(ℓ))
+
+
+
+(21) 
+
+¯H(ℓ) = ˜H(ℓ) + CrossAttn 
+
+
+
+LN( ˜H(ℓ)), Cctx 
+
+
+
+(22) 
+
+H(ℓ+1) = ¯H(ℓ) + FFN SwiGLU 
+
+
+
+LN( ¯H(ℓ))
+
+
+
+(23) where Cctx = MLP ctx ([ zπ ∥Rtask ]) ∈ Rnctx ×d are the context vectors. The cross-attention mechanism computes: 
+
+CrossAttn( Q, C) = softmax QW cQ(CW cK )⊤
+
+√dk
+
+!
+
+CW cV
+
+(24) The probability of selecting primitive pt from vocabulary P
+
+is: 
+
+Pψ (pt | p<t , zπ , Rtask ) = exp( o⊤ 
+
+> t
+
+ep/τ )
+
+P 
+
+> p′
+
+exp( o⊤ 
+
+> t
+
+ep′ /τ ) (25) where ep ∈ Rd is the embedding of primitive p and τ is a temperature parameter. The full program probability factorizes auto-regressively: 
+
+Pψ (π | zπ , Rtask ) = 
+
+> T
+
+Y
+
+> t=1
+
+Pψ (pt | p<t , zπ , Rtask ) (26) 
+
+3) Diverse Hypothesis Sampling via DPP: At inference, we draw M latent codes {z(m) 
+
+> π
+
+}Mm=1 from the conditional prior and decode each into a candidate program. To maximize cov-erage of the program space, we apply a k-DPP (determinantal point process) kernel to select a maximally diverse subset 
+
+S ⊆ { 1, . . . , M }:
+
+PDPP (S) ∝ det( LS ),Lmm ′ = qmqm′ exp − ∥z(m) 
+
+> π
+
+− z(m′) 
+
+> π
+
+∥2
+
+2σ2dpp 
+
+! (27) where qm = Pψ (π(m) | z(m) 
+
+> π
+
+, Rtask ) is the quality score measuring program coherence. This balances quality and di-versity: high-probability programs are preferred, but redundant candidates are penalized. 
+
+D. Symbolic Execution Agent (SEA) 
+
+SEA executes each HGA candidate on demonstrations, scores it, and emits a structured trace for RRA consumption. 
+
+DSL and execution. Our DSL P has 47 typed primitives spanning geometric transforms, color ops, object manipulation, structural ops, and control flow. A program π = ( p1, . . . , p T )
+
+with each p : Gnin ×Θp → G runs compositionally: 
+
+ˆG(m) 
+
+> n
+
+= ( p(m) 
+
+> T
+
+◦ · · · ◦ p(m)1 )( Gin  
+
+> n
+
+) (28) 
+
+Hierarchical verification. We combine exact-match, cell accuracy, and SSIM (on one-hot grids) into: 
+
+V (π(m), Dτ ) = 1
+
+N
+
+X
+
+> n
+
+h
+
+⊮[ ˆG(m) 
+
+> n
+
+=Gout  
+
+> n
+
+] + γ1CellAcc n
+
++ γ2 SSIM( ˆG(m) 
+
+> n
+
+, Gout  
+
+> n
+
+)
+
+i (29) with γ1=0 .3, γ 2=0 .1.
+
+Trace encoding. Each step (pt, Gbefore  
+
+> t
+
+, Gafter  
+
+> t
+
+)
+
+is embedded by an MLP over 
+
+[ept ∥AvgPool(Enc( Gbefore  
+
+> t
+
+)) ∥AvgPool(Enc( Gafter  
+
+> t
+
+))] 
+
+(Enc reuses the frozen PGA encoder); steps are summarized by a BiGRU into e(m)trace and written to the blackboard B.
+
+E. Reflective Refinement Agent (RRA) 
+
+RRA—the core innovation—diagnoses failures and re-shapes the hypothesis distribution in the next turn. 
+
+Error diagnosis. For each failed candidate, the binary error map E(m) 
+
+> n,ij
+
+= ⊮[ ˆG(m)
+
+> n,ij
+
+̸ = Gout  
+
+> n,ij
+
+] is averaged across demos, concatenated with the predicted and target one-hot grids, and passed through a 4-layer residual ConvNet (GN+GELU), then globally pooled to e(m)err ∈ Rde .
+
+Counterfactual credit assignment. We blame step t by replacing it with identity: 
+
+ρ(m) 
+
+> t
+
+= V (π(m), Dτ ) − V
+
+
+
+π(m) 
+
+> \t
+
+, Dτ
+
+
+
+(30) Negative values indicate harmful steps; ˆρ(m) 
+
+> t
+
+=softplus -norm( −ρ(m) 
+
+> t
+
+) is the normalized blame over 
+
+t.
+
+Feedback synthesis. Per-candidate feedback fuses error, blame-weighted primitives, and trace via a 3-layer residual MLP: 
+
+f (m) = MLP fb 
+
+e(m)err ∥ P 
+
+> t
+
+ˆρ(m) 
+
+> t
+
+ept ∥ e(m)trace 
+
+
+
+(31) Candidates are aggregated by attention with query Rtask :
+
+Frefine = X
+
+> m∈F
+
+softmax m
+
+ R⊤
+
+> task
+
+Wf f (m)/√d f (m) (32) 
+
+Frefine feeds the HGA prior (Eq. 18) to steer the latent distribution away from failed regions. 
+
+F. Meta-Controller and Agentic Orchestration 
+
+The Meta-Controller decides per turn which agents to fire, how much compute to spend, and when to stop. 
+
+Blackboard. Bt = Bt−1 ∪ { (κ(a) 
+
+> t
+
+, v(a) 
+
+> t
+
+) : a ∈ A t} is a key-value memory read by scaled-dot-product attention. 
+
+Controller state. A GRU tracks state: 
+
+st = GRU ctrl 
+
+
+
+st−1, Read( Bt, qctrl )
+
+∥ Embed( Vbest ,t )∥ Embed( t/T max )
+
+ (33) with Vbest ,t = max m V (π(m) 
+
+> t
+
+, Dτ ); t/T max provides budget awareness. 
+
+Activation, budget, and termination. Agents a ∈{PGA , HGA , SEA , RRA } fire under a multi-label Bernoulli policy P (At+1 | st) = Q 
+
+> a
+
+Bern( σ(w⊤ 
+
+> a
+
+st + ba)) ; PGA typically fires only at t=1 . Per-turn compute is allocated as 
+
+bt+1 = Crem ,t · σ(w⊤ 
+
+> b
+
+st + bb), enforcing the $0.42/task ceiling P 
+
+> t
+
+ct ≤ C max . Termination fires on full verification, or when 
+
+∆Vt = Vbest ,t − Vbest ,t −1 < η stop with t > t min =2 , or when 
+
+Crem ,t < c min (ηstop learnable). 
+
+G. Test-Time Adaptation via LoRA 
+
+Before the agentic loop, we fine-tune a LoRA adapter on the PGA attention weights: W′ =
+
+W + ( α/r ) BA with A ∈ Rr×din , B ∈ Rdout ×r ,rank r=8 . Only A, B are updated by minimizing 
+
+LTTT = 1
+
+> N
+
+P 
+
+> n
+
+Lfocal (Decode(PGA LoRA (Gin  
+
+> n
+
+)) , Gout  
+
+> n
+
+) for 
+
+STTT =50 AdamW steps ( lr=3 ×10 −4) with D8 symmetry augmentation to prevent overfitting. TABLE I CONSOLIDATED RESULTS ON ARC-AGI-2. T OP : MAIN COMPARISON ON THE SEMI -PRIVATE EVALUATION SET (120 TASKS ). M IDDLE : ABLATION ON THE PUBLIC SET (120 TASKS ). B OTTOM : P ASS @k (%). A LL CONSTRAINED METHODS : 4 ×L4, 12 H, OFFLINE .Pass@ k (%) Method Params Acc (%) CellAcc (%) Cost/Task @2 @8 @32 @128 CNE Main CompressARC 76K 4.2 28.7 $0.03 — — — — 2.47 TRM 7M 8.3 37.4 $0.05 — — — — 3.83 OmniARC 500M 14.2 45.1 $0.15 — — — — 3.60 SOAR 8B 18.5 51.3 $0.22 20.0 28.3 37.5 46.7 4.08 NVARC 660M 24.0 56.8 $0.20 25.8 33.5 39.2 43.1 5.49 EPS-Grok — 26.0 58.2 $0.19 28.3 36.7 44.2 50.0 6.07 ARCANA 48M 32.5 67.4 $0.16 35.8 45.0 53.3 59.2 7.90 Ablation ARCANA (full) 48M 35.8 69.2 — — — — — —
+
+− Reflective Refinement (RRA) — 25.0 58.5 — — — — — —
+
+− TTT LoRA adaptation — 28.3 62.1 — — — — — —
+
+− DPP diverse sampling — 31.7 65.8 — — — — — —
+
+− Slot Attention (use CC analysis) — 32.5 66.4 — — — — — —
+
+− Meta-Controller (fixed schedule) — 33.0 67.0 — — — — — —
+
+− CVAE latent space (direct decode) — 33.4 67.6 — — — — — —
+
+− Cross-Demo Transformer — 34.2 68.1 — — — — — —Human baseline — 75.0 94.1 ∼$0.01 — — — — —
+
+H. Loss Functions and Training 
+
+ARCANA is trained end-to-end via Reasoning Trajectory Optimization (RTO): 
+
+Ltotal = λ1Lfocal + λ2LVAE + λ3LPG + λ4Lcontra (34) with λ1:4 =(1 .0, 0.5, 0.1, 0.3) . The four terms: 
+
+(i) Focal reconstruction: class-balanced focal loss on the decoder with inverse-sqrt frequency weights αc=1 /f 0.5 
+
+> c
+
+and focusing β=2 :
+
+Lfocal = − 1 
+
+> H′W′
+
+P 
+
+> i,j,c
+
+αc(1 − ˆyijc )β yijc log(ˆ yijc + ϵ) (35) 
+
+(ii) Variational program loss: standard Gaussian-prior ELBO with closed-form KL, 
+
+LVAE = −Eqϕ [log Pψ (π∗ | zπ , Rtask )] + βkl DKL (qϕ∥pθ )
+
+(36) with βkl linearly annealed 0→1 over 10K steps to avoid posterior collapse. 
+
+(iii) Policy gradient: REINFORCE with learned baseline 
+
+b = Vω (s0) and reward R(E) = Vfinal − λc Tused /T max :
+
+LPG = −EE
+
+(R−b) PTused  
+
+> t=1
+
+log P (At | st−1) (37) 
+
+(iv) Contrastive refinement: InfoNCE pulling Frefine toward the latent zπ+ of an improving program against other candi-dates as negatives: 
+
+Lcontra = − log exp(cos( Frefine , zπ+ )/τ c)
+
+P 
+
+> m
+
+exp(cos( Frefine , zπ(m) )/τ c) (38) 
+
+Training schedule. Three phases: (i) pre-train PGA+decoder with Lfocal (100K steps); (ii) joint HGA+SEA with Lfocal +LVAE (80K steps); (iii) end-to-end Ltotal (50K steps). V. E XPERIMENTS 
+
+All experiments follow ARC Prize 2026 constraints: 4×NVIDIA L4 GPUs, 12h wall-clock, offline. 
+
+A. Evaluation Metrics 
+
+We adopt the official ARC Prize 2026 protocol with sup-plementary metrics: Acc (task solved if any of A=2 candi-dates is pixel-perfect), CellAcc (per-cell correctness), CNE =Acc / log 2(1 + Cavg /C human ), Pass@ k, and RER (accuracy gained per agentic turn). 
+
+B. Baselines and Results 
+
+We compare ARCANA against six representative base-lines covering the main ARC-AGI-2 paradigms: NVARC (LongT5+TTT), TRM (recursive transductive net), Com-pressARC (per-task VAE), SOAR (evolutionary synthesis), EPS-Grok (Grok-4 evolutionary synthesis), and OmniARC (Qwen2.5-0.5B). The results are in Table I; the training dynamics is shown in Fig. 4. 
+
+Fig. 4. Model indicator change chart. 
+
+With only 48M parameters, ARCANA reaches 32.5% ac-curacy (+6.5 over EPS-Grok) and the best CNE (7.90) among constrained methods. Ablations identify RRA ( −10.8%) and TTT-LoRA ( −7.5%) as the two most critical components, and the steeper Pass@ k curve confirms that CVAE+DPP yields a more diverse candidate pool. ARCANA uses on average 3.7 refinement turns (up to 
+
+Tmax =8 for hard tasks, as few as 2 for easy ones), with Vbest 
+
+rising monotonically ( 0.42 →0.58 →0.67 →0.71 ). Largest gains over EPS-Grok appear on multi-rule composition (+8.8%) and multi-step sequential tasks (+8.9%); symbolic interpretation remains hardest for all methods. VI. C ONCLUSION 
+
+We presented ARCANA, a multi-agent framework cast-ing ARC-AGI-2 reasoning as a multi-turn episode in which four specialized agents—Perceptual Grounding, Hypothesis Generation, Symbolic Execution, and Reflective Refinement— collaborate via a shared differentiable blackboard under a learned Meta-Controller. Under ARC Prize 2026 constraints, ARCANA attains 32.5% on the semi-private set (+6.5 over the strongest Kaggle baseline) at $0.16 per task, with RRA and TTT-LoRA together contributing over 18 points. A substantial gap to human performance ( ∼75%) persists, REFERENCES [1] T. Brown, B. Mann, N. Ryder, M. Subbiah, J. D. Kaplan, P. Dhariwal, A. Neelakantan, P. Shyam, G. Sastry, A. Askell et al. , “Language mod-els are few-shot learners,” Advances in neural information processing systems , vol. 33, pp. 1877–1901, 2020. [2] J. Wei, X. Wang, D. Schuurmans, M. Bosma, F. Xia, E. Chi, Q. V. Le, D. Zhou et al. , “Chain-of-thought prompting elicits reasoning in large language models,” Advances in neural information processing systems ,vol. 35, pp. 24 824–24 837, 2022. [3] A. Madaan, N. Tandon, P. Gupta, S. Hallinan, L. Gao, S. Wiegreffe, U. Alon, N. Dziri, S. Prabhumoye, Y. Yang et al. , “Self-refine: Iter-ative refinement with self-feedback,” Advances in neural information processing systems , vol. 36, pp. 46 534–46 594, 2023. [4] F. Locatello, D. Weissenborn, T. Unterthiner, A. Mahendran, G. Heigold, J. Uszkoreit, A. Dosovitskiy, and T. Kipf, “Object-centric learning with slot attention,” Advances in neural information processing systems ,vol. 33, pp. 11 525–11 538, 2020. [5] A. G. ALIAS PARTH GOYAL, A. Didolkar, N. R. Ke, C. Blundell, P. Beaudoin, N. Heess, M. C. Mozer, and Y. Bengio, “Neural production systems,” Advances in Neural Information Processing Systems , vol. 34, pp. 25 673–25 687, 2021. [6] Y. Xu, “Pyramid convolution and bidirectional graph attention for cyber threat detection from unstructured text,” in Proceedings of the 2026 International Conference on Artificial Intelligence and Control , 2026, pp. 561–567. [7] S. Yao, J. Zhao, D. Yu, N. Du, I. Shafran, K. Narasimhan, and Y. Cao, “React: Synergizing reasoning and acting in language models,” arXiv preprint arXiv:2210.03629 , 2022. [8] W. Chen, X. Ma, X. Wang, and W. W. Cohen, “Program of thoughts prompting: Disentangling computation from reasoning for numerical reasoning tasks,” arXiv preprint arXiv:2211.12588 , 2022. [9] Q. Zhou, “Roofline-guided mixed quantization and kernel co-optimization for efficient large language model inference on arm cpus,” in 2026 3rd International Conference on Digital Image Processing and Computer Applications (DIPCA) . IEEE, 2026, pp. 123–129. [10] Z. Xue, S. Zhao, Y. Qi, X. Zeng, and Z. Yu, “Resilient routing: Risk-aware dynamic routing in smart logistics via spatiotemporal graph learning,” arXiv preprint arXiv:2601.13632 , 2026. [11] J. Su, M. Ahmed, Y. Lu, S. Pan, W. Bo, and Y. Liu, “Roformer: En-hanced transformer with rotary position embedding,” Neurocomputing ,vol. 568, p. 127063, 2024. [12] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, W. Chen et al. , “Lora: Low-rank adaptation of large language models.” 
+
+Iclr , vol. 1, no. 2, p. 3, 2022. [13] X. Wang, J. Wei, D. Schuurmans, Q. Le, E. Chi, S. Narang, A. Chowdh-ery, and D. Zhou, “Self-consistency improves chain of thought reasoning in language models,” arXiv preprint arXiv:2203.11171 , 2022. [14] S. Tang, “Two-stage multimodal retrieval and multi-task ranking for e-commerce recommendation,” in 2025 6th International Conference on Information Science, Parallel and Distributed Systems (ISPDS) . IEEE, 2025, pp. 126–130. [15] P. Liang, M. Yuan, J. Liu, J. Yang, X. Li, W. Yan, and Y. Wu, “Dynarag: Bridging static and dynamic knowledge in retrieval-augmented genera-tion,” in 2026 9th International Symposium on Big Data and Applied Statistics (ISBDAS) . IEEE, 2026, pp. 442–445. [16] Q. Zhou, “Adascale: Predictive and utility-aware autoscaling for server-less ai inference,” in 2026 6th International Conference on Artificial Intelligence and Industrial Technology Applications (AIITA) . IEEE, 2026, pp. 544–550. [17] Z. Xue, M. Huo, and Y. Wang, “Eagle: Edge-aware graph learning for proactive delivery delay prediction in smart logistics networks,” arXiv preprint arXiv:2604.05254 , 2026. [18] W. Yan, Y. Wu, P. Liang, M. Yuan, J. Liu, J. Yang, and X. Li, “Prism: Pipeline for root-cause investigation via specialized multi-agents,” in 
+
+2026 International Conference on Generative Artificial Intelligence and Information Security (GAIIS) . IEEE, 2026, pp. 709–712.

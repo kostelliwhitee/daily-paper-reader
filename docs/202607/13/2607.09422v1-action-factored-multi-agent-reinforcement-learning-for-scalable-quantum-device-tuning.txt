@@ -1,0 +1,1519 @@
+Title: Action-Factored Multi-Agent Reinforcement Learning for Scalable Quantum Device Tuning
+
+URL Source: https://arxiv.org/pdf/2607.09422v1
+
+Published Time: Mon, 13 Jul 2026 00:53:37 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Action-Factored Multi-Agent Reinforcement Learning for Scalable Quantum Device Tuning 
+
+Edwin De Nicolo ∗
+
+Department of Physics University of Oxford United Kingdom 
+
+edwin.denicolo@merton.ox.ac.uk 
+
+Rahul Marchand †
+
+Department of Engineering Science University of Oxford United Kingdom 
+
+rahul.marchand@new.ox.ac.uk 
+
+Cornelius Carlsson 
+
+Department of Engineering Science University of Oxford United Kingdom 
+
+cornelius.carlsson@spc.ox.ac.uk 
+
+Pranav Vaidhyanathan 
+
+Department of Engineering Science University of Oxford United Kingdom 
+
+pranav@robots.ox.ac.uk 
+
+Natalia Ares 
+
+Department of Engineering Science University of Oxford United Kingdom 
+
+natalia.ares@eng.ox.ac.uk 
+
+# Abstract 
+
+Cooperative multi-agent reinforcement learning is well suited to problems with large parameter spaces and exploitable local structure, such as the tuning of electrostatically-defined quantum-dot arrays. However, if parameter cross-talk is strong, a non-stationary environment from the perspective of any individual agent can destabilize learning – the same effect that plagues manual tuning of such systems. We propose using a factored representation of the action space, learned online, to decouple agents and minimize their interference. Our framework, QADAPT, uses this factorization to efficiently learn shared policies based on local measurements and rewards. With this modular strategy, we achieve zero-shot generalization to unseen quantum device sizes and maintain an approximately constant number of convergence steps to reach target regimes. This work provides a scalable route toward the rapid calibration of large-scale quantum processors. 
+
+# 1 Introduction 
+
+Reinforcement learning (RL) provides a general framework for sequential decision-making under uncertainty, where agents learn policies through interaction with an environment [ 1]. Combining RL with deep neural networks has achieved human-level performance on complex, high-dimensional tasks [ 2], and its extension to continuous control domains has allowed agents to learn efficiently from sensory inputs [ 3 ]. This opens practical applications for robotics and locomotion, and more recently, has bridged RL with the field of quantum computing for tasks such as error-robust quantum gate design [ 4], analog pulse shaping [ 5], real-time qubit feedback [ 6, 7], and voltage tuning of 
+
+> ∗Equal Contribution. Order determined alphabetically.
+> †Equal Contribution. Order determined alphabetically. Preprint. arXiv:2607.09422v1 [cs.LG] 10 Jul 2026
+
+quantum dots [ 8 ]. While RL, and machine learning in general, is becoming central to quantum control [ 9 , 10 ], a key challenge lies in scaling these computational methods efficiently to larger devices [11, 12, 13, 14, 15, 16]. Semiconductor spin qubits in particular, while a compelling quantum computing platform [ 17 , 18 ,19 , 20 ], face enormous control complexity due to measurement noise, device non-uniformities, and cross-talk. The tuning procedure involves calibrating dc gate voltages to create confined islands of charge, i.e. quantum dots, as shown in Fig. 1a. There exist two main gate types; plunger gates 
+
+predominantly control the electrochemical potential of quantum dots, hence their charge occupations, and barrier gates modulate the tunnel coupling between dots. Because of dense gate electrode arrangements, adjusting one gate voltage perturbs neighboring dots via capacitive cross-talk [ 21 ]. Measuring the system’s response as a function of two gate voltages produces images known as 
+
+charge stability diagrams (CSDs). These diagrams contain relevant tuning and cross-talk information, which may be inferred from the position and curvature of the line features they contain. As shown in Fig. 1b, the objective is to reach a voltage configuration that brings all charge occupations and tunnel-couplings to a predefined target. Even with existing autotuning approaches – including fully autonomous spin qubit tuning [ 22 ] and a broad class of quantum dot tuning methods [ 23 , 24 , 25 , 26 ] – demonstrations beyond two-dot (sub)systems are lacking. Sequential tuning of smaller sub-systems offers no guarantee of global optimality, and designing meaningful score functions for supervised or Bayesian algorithms becomes increasingly non-trivial as parameter spaces grow and tuning landscapes become highly non-convex. Since data acquisition remains the primary time bottleneck in practice, stricter sample efficiency is also demanded. To address these bottlenecks, we present QADAPT (Quantum Arrays of Dots in Automated Parallel Tuning), a multi-agent reinforcement learning (MARL) framework for tuning quantum devices at scale. Our key insight is that learning a factored representation of the voltage parameter space online enables decoupled control over each dots’ electrochemical potential. Under this factorization, QADAPT becomes highly amenable to a centralized training with decentralized execution paradigm (CTDE), whereby agents not only act independently, conditioned on local observations, but can also benefit from physically-motivated policy sharing strategies. Our resulting modular architec-ture mitigates the combinatorial growth of action spaces associated with larger devices, enabling parallelization and zero-shot generalization as newly introduced agents can directly inherit existing policies. In summary, our core contributions are: • Adaptive Action-Space Factorization: We develop a Kalman-guided pipeline that esti-mates the local gate-to-dot capacitance matrix online and uses it to construct a virtual action basis. This structure-aware reparameterization reduces cross-agent action interference and improves sample efficiency. • Role-Shared Decentralized MARL: We formulate quantum dot tuning as a cooperative continuous Decentralized Partially Observable Markov Decision Processes (Dec-POMDP) and introduce a modular actor-critic architecture with gate-type-specific parameter shar-ing [ 27 ]. This decomposes a high-dimensional global search problem while keeping the number of learned policies independent of array size. • Zero-Shot Scalability and Empirical Evaluation: We demonstrate that QADAPT zero-shot generalizes across different system sizes, unseen device configurations, and various non-idealized physical effects without retraining. We empirically evaluate our framework against various state-of-the-art baselines and demonstrate superior performance across all benchmarks. 
+
+# 2 Related Work 
+
+Automatic tuning of semiconductor quantum dots spans simple physics-inspired heuristics [ 28 , 29 ]to machine-learning-assisted pipelines [ 22 , 26 ]. Recent works have introduced various classifiers to enable the autonomous tuning of quantum dots [ 30 , 31 , 32 ], reach target charge occupations [ 33 , 34 ], and calibrate tunnel couplings [ 35 ]. In conjunction with Bayesian optimization, classifier methods 2. . . 
+
+. . .       
+
+> CSD1 CSD2 CSD3 CSD4 CSD5 CSD6 CSD7
+
+(a) 
+
+(b)  Input CSDs  Output CSDs                       
+
+> Tuning Agents
+> 1.0, 0.4, 0.1
+> 0.4, 1.0, 0.4
+> 0.1, 0.4, 1.0
+> ...
+> ... CNN
+> Kalman Filter
+> P1 P2 P3
+> d1
+> d2
+> d3
+> Virtualization Model
+> Enc. Dec.
+> Enc. Dec.
+> vP2
+> B2
+> vP3
+> ... ...
+> P1P2P3P4P5P6P7P8
+> d5d6d7d8
+> B1B2B3B4B5B6B7
+> (0,0) (1,0) (2,0)
+> (0,1)
+> (0,2)
+> (1,1)
+> (2,2) (1,2)
+> (2,1)
+
+Figure 1: Algorithmic Flow of QADAPT (a) Barrier gates ( Bx) interdigitate plunger gates ( Px), and primarily control dot-dot tunnel couplings and charge occupations, respectively. All gates contribute in defining the confinement potential necessary to form quantum dots ( d1... dD). Gate cross-talk can be approximated by a capacitive network, which in general extends beyond nearest neighbors, greatly complicating array tuning. Charge stability diagrams (CSDs) are acquired by sweeping the voltage on neighboring pairs of plunger gates and bear information on the array’s current tuning state. (b) 
+
+Each CSD is passed through a virtualization model and tuning agent model. The virtualization model returns relative cross-talk estimates between Px and dots dx−1, dx, dx+1 , refined by a Kalman filter at each tuning step, resulting in a cross-capacitance matrix that enables decoupled plunger control. Tuning agents operate in the decoupled plunger gate basis, outputting decentralized actions in the form of new virtual voltage setpoints denoted by vP x. Through collective optimization of local objectives, a global target configuration is reached with a desired level of tunnel-coupling between dots, and charge occupation across all dots in the array (right). have also proven successful across multiple device architectures [ 36 ], yet, their validation is restricted beyond double-dot systems. The standard strategy for larger systems relies on sequential tuning: capacitive crosstalk is probed iteratively and quantum dots are tuned using virtual voltage controls via an "n+1" procedure [ 37 ]. Using CSDs as input, the underlying feature-tracking task for gate virtualization has been offloaded to vision models, including Convolutional Neural Networks (CNNs) [ 38 ], U-Net-like architectures [ 39 ,40 ] and Transformers [ 41 , 42 ], but requires additional pre-processing for larger systems [ 43 ]. In sequential tuning, however, devices are prone to biasing into locally compatible rather than globally optimal voltage configurations. Furthermore, post-hoc and fixed cross-capacitance estimates greatly limit practical voltage tuning windows. To cope with the combinatorial growth of joint action spaces, decentralized policies are often preferred; however, the coordination of multiple agents can be challenging when cross-talk is present due to ambiguous credit assignment and conflicting local objectives [ 44 ]. The simplest approach – independent Q-learning (IQL) [ 45 ], where each agent treats others as part of the environment – generally lacks convergence guarantees due to the non-stationarity induced by simultaneous policy updates. A substantial body of work has addressed these challenges, which we group into five categories: 
+
+Value function factorization decomposes the joint action-value function into per-agent utilities, enabling decentralized execution under a shared reward signal. In deep RL, VDN introduced additive value decomposition, later generalized by QMIX through monotonic mixing, and by QTRAN through 3unconstrained surrogate factorization [ 46 , 47 , 48 ]. COMIX and FacMADDPG extend factorization to the continuous control domain using cross-entropy optimization and factored critics, respectively [ 49 ]. 
+
+Centralized critics augment each agent’s value estimate with global information. COMA [ 50 ]introduced a counterfactual baseline to produce agent-specific advantage estimates, directly addressing credit assignment. In the multi-agent setting, MADDPG [ 51 ] conditioned each agent’s critic on the joint observations and actions of all agents. FACMAC [ 52 ] combined the factored critics of QMIX with the centralized policy gradients of MADDPG. 
+
+Learning to communicate enables agents to selectively exchange information to improve coordina-tion, either through graph-structured policies or learned message-passing protocols [ 53 ]. Most notably, GPG [ 54 ] introduced parametrized swarm policies over a proximity graph, InforMARL [ 55 ] proposed graph attention over local neighborhoods, and MADDPG-M [ 56 ] learns explicit communication channels alongside task policies. 
+
+Consensus-based methods coordinate agents through shared latent representations. These representa-tions can be formed either from joint observations, such as in CMAT [ 57 , 58 ] using an auto-regressive Transformer decoder, or from local observations, for instance via contrastive learning [59]. 
+
+Parameter sharing and specialization shares policies across agents with similar roles, reducing the number of independently trained networks and improving sample efficiency [ 60 ]. IPPO and MAPPO [ 61 , 62 ] showed that shared PPO policies achieve strong cooperative performance, which HAPPO [ 63 , 64 ] extended to the heterogeneous agent case. HyperMARL [ 65 ] further mitigated gradient interference using hypernetworks conditioned on agent identity. In QADAPT, we take a fundamentally different approach to cooperative MARL. Rather than forcing coordination among coupled agents, we propose to decouple agents altogether by learning a factored action space representation . By transforming the joint control problem into an approximately separable sum of local objectives, cooperative outcomes naturally follow (see Appendix A.) 
+
+# 3 Methods 
+
+3.1 Problem Formulation and Simulation Setting 
+
+We simulate the quantum dot tuning environment using QArray [ 66 , 67 ], acquiring CSDs by sweeping the voltage on pairs of nearest neighbor plunger gates. The array is considered optimally tuned when all inter-dot tunnel couplings meet a pre-defined target value, and each dot contains exactly one charge, as in Fig. 1b (right). These conditions are satisfied over a voltage manifold that constitutes a small (<1%) fraction [ 22 ] of the total voltage hyper-volume, the center of which we denote as the target voltage configuration v∗. We note that orthogonal pairs of transition lines in each CSD are an indicator of accurate cross-talk compensation, however, they are not a pre-requisite for convergence. We formulate this tuning process as a Decentralized Partially Observable Markov Decision Process (Dec-POMDP) utilizing 2N − 1 agents [68], representing one agent for each device gate. • State & Observations: The system state st = ( vtp, vtb) ∈ R2N −1 is the vector of all plunger and barrier gate voltages. At time step t, agent i receives a local observation oti consisting of its current normalized voltage vti ∈ [−1, 1] concatenated with a CNN representation of its local CSD scans. • Actions: Each agent outputs a normalized action ˆai ∈ [−1, 1] , corresponding to an absolute voltage assignment ati = vt+1  
+
+> i
+
+. The transition dynamics over the joint action space at are fully deterministic, given by P (st+1 |st, at) = δ(st − at).• Rewards: Due to varying lever arms across simulated devices, identical voltage changes can induce different physical responses. We apply reward shaping [ 69 ] to define a nor-malized per-agent reward rti ∈ [0 , 1] , rescaled according to the agent’s hidden lever arm 
+
+αi and the voltage tuning range. The agents’ goal is to maximize the cumulative return 
+
+J = Eπθ
+
+hPTt=0 
+
+PNi=1 rti
+
+i
+
+, which in our cooperative setting is equivalent to optimizing a common global objective [47]. 43.2 Adaptive Gate Virtualization 
+
+To mitigate action interference caused by capacitive cross-talk, QADAPT learns a factored represen-tation of the plunger action space online. At each time step, CSDs are passed through a lightweight CNN, fvirt (·), to estimate the capacitances between each plunger gate and its surrounding dots (up to two neighbors away). A Kalman filter incrementally updates these estimates, treating the unknown couplings as latent state variables, and uses new measurements as observations for Bayesian updates [ 70 , 71 ]. This process yields a time-dependent D × D cross-capacitance matrix Φt, which maps physical plunger voltages 
+
+vp to virtual voltages up = Φ tvp.In this space, the new control variables ui act approximately independently by diagonalizing the local coupling between gates and dots. Let et denote the local device-state error and let Ct be the local response Jacobian. Under the virtual action update ∆vtp = Φ −1 
+
+> t
+
+∆utp, the one-step quadratic model becomes: 12 ∥et + CtΦ−1 
+
+> t
+
+∆utp∥22. (1) When CtΦ−1 
+
+> t
+
+≈ I, this objective has small mixed action terms and is close to the separable surrogate 
+
+> 12
+
+P
+
+> i
+
+(et,i + ∆ utp,i )2. This transforms the joint control problem into an approximately separable sum of local objectives, preconditioning the local quadratic control landscape (Appendix A). 
+
+3.3 Modular Actor-Critic Architecture 
+
+To process observations and output actions, we employ a modular advantage actor-critic architec-ture [ 72 ]. To reduce model complexity and enable zero-shot scalability to new arrays [ 73 ], parameters 
+
+{θ, ϕ } are shared across all agents of the same physical type [ 60 ] (i.e., one parameter set for all plunger gates, and another for all barrier gates). The network relies on a convolutional encoder fCNN (·) to extract spatial hierarchies from the CSDs in which gate i participates, denoted as Xti. This feature representation is concatenated with a learned linear projection p(·) of the gate’s current voltage, such that oti = fCNN (Xti)|| p(vti ). For plungers at the edge of the array that participate in only one CSD, the single available scan is duplicated across channels. For inner plungers, the two participating CSDs are stacked along the channel dimension. Barrier gates participate only in CSDs acquired by sweeping the gate’s two immediate neighboring plungers, as barrier-induced cross-talk on next-nearest dots is near zero [ 39 ]. The network then branches: • Actor Head: Outputs a probability distribution over continuous voltage adjustments via a Gaussian policy πθ (ati | oti).• Critic Head: Produces an estimate of the value function Vϕ(oti) based strictly on local observations, preserving decentralized execution. 
+
+3.4 Training Pipeline 
+
+We train QADAPT on a 4-dot system using a modified Proximal Policy Optimization (PPO) method for stable and sample-efficient learning in continuous control tasks [ 74 ]. At each training iteration, we roll out multiple parallel episodes using the current policy πθ . Because of our parameter-sharing scheme, experiences from all agents of the same type are aggregated into a single batch. This effectively multiplies our batch size by the number of agents, significantly stabilizing updates. Because the optimal policy at any given step is always to move the system closer to the target configuration, future rewards offer little additional guidance [ 75 ]. Therefore, we model the task as a contextual bandit, eliminating temporal credit assignment (discount factor γ = 0 ). Each step is treated independently with dense, immediate feedback, which simplifies the learning problem and handles any residual non-stationarity of the multi-agent environment (supported by our ablation in Table 1). After collecting a batch of trajectories, per-agent advantage estimates ˆAti are computed, which, without temporal credit assignment, reduces to immediate reward residuals: 
+
+ˆAti = rti − Vϕ(oti) (2) 5To update the shared policy parameters θ, local advantages are aggregated and the joint PPO clipped surrogate objective is maximized across all agents i and batch time steps t:
+
+LCLIP (θ) = ˆEt,i 
+
+h
+
+min 
+
+
+
+κti(θ) ˆAti, clip( κti(θ), 1 − ϵ, 1 + ϵ) ˆAti
+
+i 
+
+(3) where κti(θ) = πθ (ati |oti )    
+
+> πθold (ati|oti)
+
+is the probability ratio. Concurrently, the shared critic parameters ϕ are updated by minimizing the aggregated mean squared error between the predicted values and the actual returns (which here equal the immediate rewards 
+
+rti ): 
+
+LVF (ϕ) = ˆEt,i 
+
+h Vϕ(oti) − rti
+
+2i
+
+(4) By computing these expectations over the joint experience buffer of all homogeneous agents, gradients become averaged across the array. This decentralized PPO algorithm is thus an instance of centralized training with decentralized execution [76]. (a)  (b)  (c)  (d) 
+
+Figure 2: Gate Virtualization and Scaling Performance of QADAPT . a) Kalman filter’s posterior uncertainty (variance) σ against absolute estimation error ˆμerror for nearest neighbor gate-to-dot cross-capacitances. Each marker represents one time step in a 4-dot system (3 CSD measurements), averaged over 1000 episodes. The cross-capacitance has a fixed ground truth value of 0.7. A top-right to bottom-left trajectory demonstrates that capacitance estimates improve over time, and that the filter’s uncertainty tracks this improvement. b) same as a), but for second-nearest neighbor gate-to-dot cross-capacitances, with ground-truth values set to 0.3. The trajectory here is weaker but stable, as there is a weaker cross-talk signal from further separated dots. c) Raw prediction errors of fCNN (·)
+
+over time for both first- and second-nearest gate-to-dot couplings. d) Zero-shot scaling of CSD measurement acquisitions and time steps to reach convergence in 2, 4, 6, and 8 dot systems. 
+
+# 4 Experiments 
+
+To highlight the benefits of our deep multi-agent approach, we evaluate QADAPT against several strong baseline methods (Fig. 2). To represent approaches commonly found in the literature of low-dimensional quantum dot tuning, we first consider several gradient-free optimizers: random search, Nelder–Mead [ 77 ], Bayesian optimization with Gaussian processes [ 78 , 79 ], and L-BFGS [ 80 ] using finite-difference gradient estimates. To represent model-based reinforcement learning, we employ DreamerV3 [ 81 ], adapting its latent world model to plan actions for the tuning task. This compar-ison probes whether explicit dynamics modeling improves sample efficiency in our measurement-constrained regime. To identify components responsible for QADAPT’s performance, we conduct several further baseline comparisons and ablations (Table 1). Firstly, we compare fCNN (·) of our actor-critic architecture with three alternative backbones: (i) a heavier ResNet-style encoder (“Nature CNN”) [ 82 , 38 ]; (ii) an LSTM-based recurrent policy [ 83 ]; and (iii) a vanilla Transformer [ 84 ]. To isolate the contribution of our action space factorization, we ablate the virtualization model in addition to a variant where only the Kalman filtering is disabled. Without virtualization, QADAPT becomes identical to IPPO [ 61 ]. We compare this against MAPPO [ 62 ] (the critic receives a concatenation of all agents’ observations), allowing us to discern whether giving the critic access to global information during training can overcome the absence of virtualization to coordinate agents. We also include MADDPG [ 51 ] and 62 dots  4 dots  6 dots  8 dots      
+
+> QADAPT (ours) DreamerV3 Bayes. Random L-BFGS Nelder -Mead
+
+Figure 3: Domain-specific Benchmarks with Array Size . As the length of the quantum dot array increases from 2 to 8 (moving left to right), QADAPT maintains rapid convergence, out-performing all benchmark methods, including: model-based reinforcement learning (DreamerV3), Bayesian optimisation using Gaussian processes, the gradient free Nelder-Mead optimiser, the gradient-based Limited-memory Broyden-Fletcher-Goldfarb-Shanno algorithm (L-BFGS), and a random search. The score reflects normalized distance to the target voltage configuration across all gates, and is plotted using the cumulative minimum distance at each scan step. Lines represent averages over 100 runs, with an envelope of half a standard deviation. Initial and target voltage configurations are randomized in each run. DreamerV3 is omitted from the 8-dot benchmarks due to compute resource constraints. FACMAC [ 52 ] as off-policy baselines, probing the benefits of past experiences (in the form of replay buffers) toward agent coordination. Finally, we evaluate the contribution of QADAPT’s multi-agent framework using a single-agent PPO baseline. In all comparisons, we report both convergence and steps-to-convergence to disentangle reliability from efficiency. Table 1: Ablation Study and MARL-specific Baseline Comparisons . We report the percentage of runs converging within 100 time steps, and the average number of steps to convergence, μsteps ,for those runs in a 4-dot array. Each row averages over 100 tuning trials. Convergence is defined as the fraction of runs that terminate with all agents within a threshold radius of their target voltage. Radii of 2%, 5%, and 10% of each agent’s total tuning range are reported (see Appendix B for more details). μsteps is calculated only over converged runs. Early stopping is used during training and the number of training epochs is shown for each variant 
+
+Variant Convergence Rate (%) ↑ μsteps ↓ Epochs 
+
+QADAPT (ours) 93 / 95 / 95 20.5 / 16.7 / 13.2 150 w/ Nature CNN [82, 38] 91 / 98 / 100 20.1 / 17.8 / 14.6 250 w/ LSTM [83] 73 / 85 / 94 22.1 / 17.3 / 12.7 275 w/ Transformer [84] 3 / 26 / 61 33.7 / 29.2 / 27.1 150 w/o Kalman filter 10 / 55 / 89 26.9 / 24.2 / 18.1 100 
+
+γ = 0 .9 89 / 94 / 97 19.5 / 16.3 / 13.3 150 IPPO [61] 63 / 84 / 98 28.0 / 22.5 / 15.2 275 MAPPO [62] 78 / 90 / 95 26.1 / 19.2 / 14.2 400 MADDPG [51] 1 / 2 / 5 19.0 / 20.5 / 18.8 500k ∗
+
+FACMAC [52] 0 / 0 / 1 N/A / N/A / 1 500k ∗
+
+Single Agent PPO 0 / 1 / 6 N/A / 43.0 / 26.2 150 
+
+> ∗For off-policy methods, the number of environment steps is reported.
+
+# 5 Results and Discussion 
+
+Across all evaluated array sizes and randomized device parameter settings, QADAPT consistently outperforms the learning-based and domain-specific black-box baselines described in Section 4. In particular, QADAPT achieves the highest convergence rates within a fixed measurement budget while also requiring fewer measurement cycles to reach the target configuration when it converges. 7In Fig. 2(a-b), we first illustrate the performance of our virtualization model in the baseline 4-dot system. As tuning progresses, a trend emerges in which the mean error in predicted gate-to-dot cross capacitance decreases, along with the variance in those predictions. This correlation is expected, because the confidence in Φ – derived from the Kalman filter’s uncertainty signal – should increase as prediction errors decrease (proof provided in Appendix A). A high density of predictions with small errors, occurring beyond t ≈ 20 , is comparable to QADAPT’s mean steps to convergence (see Fig. 3a), indicating a constructive feedback loop between Φ and the MDP. Overall, this supports our claim that a factored action space improves agent coordination and therefore accelerates quantum dot array tuning. This is further evidenced by our main model for comparison, IPPO, whose performance is shown in Table 1: removing virtualization leads to a marked drop in convergence and requires more steps to converge. This is consistent with the intuition that cross-talk produces strong action interference in the raw voltage basis, effectively turning local gate voltage updates into global perturbations. Ablating the Kalman filter alone also harms performance, which verifies that the filtering acts as a good regularizer over capacitance estimates, throttling sudden capacitance changes that would otherwise destabilize tuning. This may occur, for example, near target configurations where transition lines in CSDs are sparse. We note that capacitance predictions can be negative, which would correspond to an overcompensation by nearby plunger gate voltages when gate i is updated. We explicitly provide such examples when training fvirt (·) to enable Φ to self-correct online. In Fig. 3, we present the evolution of the tuning score with the number of simulated measurements (CSD acquisitions). Because data acquisition is typically the dominant wall-clock cost in experiments, we report performance as a function of the number of measured CSDs, rather than gradient steps or environment transitions. The score is defined as 1 − PNi=1 ˜vi/N , where ˜vi and is the ‘best-so-far’ distance to the target voltage v∗ 
+
+> i
+
+, normalized by the voltage bounds of the tuning environment. We observe the largest performance margins between QADAPT and traditional L-BFGS and Nelder-Mead optimizers, likely due to the non-convex optimization landscape, which causes the algorithms to become trapped in local minima. For this reason, we are unsurprised to find a random search to be more efficient, and showing higher mean scores. Using RL-based approaches avoids spending many evaluations exploring uninformative directions in the high-dimensional voltage space. To quantify scalability, we evaluate the learned policy from the 4-dot system on arrays ranging from 2 to 8 dots. In particular, we find that QADAPT’s parameter-sharing strategy across agents of the same type (barrier and plunger) mitigates the combinatorial growth in joint action space that limits centralized baselines, such as DreamerV3. In practice, this manifests as a comparatively shallow degradation in QADAPT’s convergence rate as the number of dots increases, which is especially important given the constrained measurement budget of quantum dot tuning. This is exemplified in Fig. 2d, where we show QADAPT’s near-linear scaling O(N ) in the number of measurements required to reach a mean tuning score of 0.95, which translates to a near constant number of time steps to reach convergence. Another popular domain-specific method, Bayesian optimization, suffers greatly in this context, showing a catastrophic slow-down in convergence beyond 4 dots (see Fig. 3). This poses an additional overhead compared to other learning-based and gradient-free methods due to the cubic complexity with observations that Gaussian process surrogate models experience. MADDPG and FACMAC both fail to converge under our measurement budget (Table 1). We observed actor gradient collapse in MADDPG and critic gradient explosion in FACMAC, suggesting that off-policy replay and centralized value estimation are not in themselves sufficient to stabilize learning when agents act in a strongly coupled action basis. For the single agent variant of our PPO method, we find zero convergence for our strictest convergence threshold criterion. We attribute this to a noisy reward signal stemming from an inability to accredit advantage estimates to specific control dimensions during training. Taken together, we conclude that our proposed factorization of the action space, enabling effective parameter sharing and decentralized execution, is the primary driver of both tuning efficiency and reliability. In the ablations of our actor-critic architecture, we find that this mainly trades computation for modest changes in steps-to-convergence. The policy is not strongly bottlenecked by visual feature capacity once the essential features in CSDs are captured. Hence, our encoder proves to be effective as a lightweight network as compared to that of larger attention based or recurrent neural networks. 85.1 Scalability 
+
+The efficient zero-shot scaling to various array sizes demonstrates how QADAPT’s modular training architecture is amenable to adding agents at test time, circumventing credit-assignment, long-horizon planning that potentially compounds errors over imagined roll-outs, and optimization complexity with the growth of a joint action space. Thanks to our action space factorization and shared-policy formulation, a QADAPT policy trained on an array with N dots can be directly deployed to an array with N ′ dots (using 2N ′ − 1 agents) without architectural changes or retraining. This inherently makes QADAPT parallelizable: by exploiting the locality of each agent, all agents can operate concurrently on their respective part of the tuning task without interference, both during training and execution. This is not the case for single-agent models, which experience an exponential growth in the joint state-action space grows exponentially with the addition of more control variables. For example, training DreamerV3 on 2/4/6 dot-arrays in the benchmark comparison of Fig. 2 required 2/1/0.5 million training rollouts. Transferability to various device sizes is a key limitation of other baseline MARL approaches. In FACMAC, despite a factored critic as well as mixing networks applied on agent utilities, policy gradients and the semantics of the value function are still tied to the agent cardinality deployed during training. Similarly in MAPPO, transferability is not guaranteed due to the centralized critic using a concatenation of all agent observations, which is unique to the training environment. We point out that in more scalable graph-based communication strategies, such as InforMARL, agents still only control single entities. In our context, this would equate to each agent acting on a single voltage parameter ∆vtp, and the learning of virtualized voltage adjustments ∆utp would have to take place implicitly. In QADAPT, this becomes entirely off-loaded to our lightweight fvirt (·), giving more capacity to the actor-critic network for learning optimal actions, reducing training overheads. 
+
+5.2 Generalizability 
+
+We consider how QADAPT would generalize to two- and three-dimensional arrays, where quantum dots may have more than two nearest neighbors. In this case, QADAPT scales trivially: each gate agent will simply participate in more CSDs and the cross-capacitance matrix Φ will become more dense, owing to an increased number of nearest- and second-nearest dot neighbors. While this would require re-training fvirt (·), all components of the QADAPT framework would remain unchanged and the algorithm becomes backward compatible. Compute memory can be easily sized according to resource availability and the resolution of CSD images can be adjusted to accommodate faster measurement cycles. Here, we redirect the reader Appendix G where we apply the QADAPT framework to a completely different setting – the tuning of superconducting qubits in the presence of drive cross-talk. This shares many similarities to the quantum dot array tuning task: each qubit has configurable parameters and the adjustment of any one parameter influences the performance of nearby qubits. With minor modifications to input and output dimensions, we show that an action space factorization and paramater sharing strategy is also highly suitable for this quantum control problem. 
+
+5.3 Limitations 
+
+While QADAPT generalizes well to realistic experimentally simulated data (see Appendix B), the sim-2-real gap still remains unexplored. Real hardware can experience parameter drift, hysteresis, and time-varying voltage offsets. While the bandit reduction avoids long-horizon planning that would be destabilized by such effects, they may nonetheless hamper the online learning of Φ if cross-capacitance values vary significantly between tuning steps. This can be mitigated by increasing the Kalman filter’s process noise, which relaxes posterior confidence and permits larger matrix updates, though potentially at the cost of additional steps to convergence. A further limitation of QADAPT may stem from the strict assignment of agent types among barrier and plunger categories. In simulation, these model distinctly different behaviors, however, fabrication imperfections and gate dimensions may blur their respective roles on real hardware. Whether this function-based parameter sharing strategy degrades gracefully when physical symmetries break remains to be validated. This could be mitigated, for instance, using parameter sharing masks [ 85 ], which could be selected dynamically based on cross-capacitance behaviors. 9Finally, we note that simulated devices are assumed to operate in an ‘open’ regime, whereby each quantum dot is capable of acquiring charges from a nearby reservoir. While such device architectures are standard, future devices may operate in an ‘isolated’ regime [ 86 ]. This introduces non-steady state solutions and modifies charge stability diagram (CSD) features, which may reduce the effectiveness of our non-temporal credit assignment. 
+
+# 6 Conclusion 
+
+We introduced QADAPT, a multi-agent reinforcement learning framework for the automated tuning of quantum dot arrays that combines (i) parameter sharing across gate-local agents, and (ii) an online factorization of the control space, refined via Kalman-guided cross-capacitance estimation. This for-mulation enables scalable and decentralized control while preserving coordinated optimization in the tuning of strongly coupled quantum devices. Across simulated quantum dot arrays of increasing size, QADAPT consistently outperforms state-of-the-art RL baselines and black-box optimizers, achieving higher convergence rates under fixed measurement budgets and requiring fewer measurements to reach target configurations. Crucially, its modular design supports zero-shot transfer. These results suggest that action-factored MARL is a practical and scalable paradigm for quantum device calibration, addressing a key bottleneck in the deployment of large-scale quantum dot-based processors. Future work will focus on hardware-in-the-loop validation and robustness to experimental non-idealities. 
+
+# Acknowledgments and Disclosure of Funding 
+
+The authors would like to thank Marios Samiotis for helpful discussions. C.C. acknowledges support from the UKRI Doctoral Training Partnership related to EP/W524311/1 (project ref. 2887634). N.A. acknowledges support from the European Research Council (Grant Agreement No. 948932) and the Royal Society (URF-R1-191150). The views and opinions expressed are those of the authors only and do not necessarily reflect those of the European Union, Research Executive Agency or UK Research & Innovation. Neither the European Union nor UK Research & Innovation can be held responsible for them. P.V. acknowledges supported from the United States Army Research Office (Award No. W911NF-21-S-0009-2). The views and conclusions contained herein are those of the authors and should not be interpreted as necessarily representing the official policies or endorsements, either expressed or implied, of the Army Research Office, or the U.S. Government. This project is co-funded by the European Union and UK Research & Innovation (Quantum Flagship project ASPECTS, Grant Agreement No. 101080167). 
+
+# References       
+
+> [1] Richard S. Sutton and Andrew G. Barto. Reinforcement Learning: An Introduction. MIT Press, Cambridge, MA, 2nd edition, 2018. [2] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A Rusu, Joel Veness, Marc G Bellemare, Alex Graves, Martin Riedmiller, Andreas K Fidjeland, Georg Ostrovski, et al. Human-level control through deep reinforcement learning. nature, 518(7540):529–533, 2015. [3] Timothy Paul Lillicrap, Jonathan James Hunt, Alexander Pritzel, Nicolas Manfred Otto Heess, Tom Erez, Yuval Tassa, David Silver, and Daniel Pieter Wierstra. Continuous control with deep reinforcement learning, September 15 2020. US Patent 10,776,692. [4] Yuval Baum, Mirko Amico, Sean Howell, Michael Hush, Maggie Liuzzi, Pranav Mundada, Thomas Merkh, Andre RR Carvalho, and Michael J Biercuk. Experimental deep reinforcement learning for error-robust gate-set design on a superconducting quantum computer. PRX quantum, 2(4):040324, 2021. [5] Rudy Semola, Lorenzo Moro, Davide Bacciu, and Enrico Prati. Deep reinforcement learning quantum control on ibmq platforms and qiskit pulse. In 2022 ieee international conference on quantum computing and engineering (qce), pages 759–762. IEEE, 2022. [6] Kevin Reuer, Jonas Landgraf, Thomas Fösel, James O’Sullivan, Liberto Beltrán, Abdulkadir Akin, Gra-ham J Norris, Ants Remm, Michael Kerschbaum, Jean-Claude Besse, et al. Realizing a deep reinforcement learning agent for real-time quantum feedback. Nature Communications, 14(1):7138, 2023.
+
+10 [7] Pranav Vaidhyanathan, Florian Marquardt, Mark T Mitchison, and Natalia Ares. Quantum feedback control with a transformer neural network architecture. Physical Review Research, 8(1):L012043, 2026. [8] V Nguyen, SB Orbell, Dominic T Lennon, Hyungil Moon, Florian Vigneau, Leon C Camenzind, Liuqi Yu, Dominik M Zumbühl, G Andrew D Briggs, Michael A Osborne, et al. Deep reinforcement learning for efficient measurement of quantum devices. npj Quantum Information, 7(1):100, 2021. [9] Yuri Alexeev, Marwa H Farag, Taylor L Patti, Mark E Wolf, Natalia Ares, Alán Aspuru-Guzik, Simon C Benjamin, Zhenyu Cai, Shuxiang Cao, Christopher Chamberland, et al. Artificial intelligence for quantum computing. Nature Communications, 16(1):10829, 2025. [10] Shuxiang Cao, Zijian Zhang, Abhishek Agarwal, Grace Bratrud, Niyaz R Beysengulov, Daniel C Cole, Alejandro Gómez Frieiro, Elena O Glen, Hao Hsu, Gang Huang, et al. Qcaleval: Benchmarking vision-language models for quantum calibration plot understanding. arXiv preprint arXiv:2604.25884, 2026. [11] Natalia Ares. Machine learning as an enabler of qubit scalability. Nature Reviews Materials, 6(10):870– 871, 2021. [12] Justyna P Zwolak, Jacob M Taylor, Reed W Andrews, Jared Benson, Garnett W Bryant, Donovan Buterakos, Anasua Chatterjee, Sankar Das Sarma, Mark A Eriksson, Eliška Greplová, et al. Data needs and challenges for quantum dot devices automation. npj Quantum Information, 10(1):105, 2024. [13] Chihiro Kondo, Raisei Mizokuchi, Jun Yoneda, and Tetsuo Kodera. Environment model construction toward auto-tuning of quantum dot devices based on model-based reinforcement learning. APL Machine Learning, 3(1), 2025. [14] Pranav Vaidhyanathan, Aristotelis Papatheodorou, Mark T Mitchison, Natalia Ares, and Ioannis Havoutis. Metasym: A symplectic meta-learning framework for physical intelligence. arXiv preprint arXiv:2502.16667, 2025. [15] Lucas Schorling, Pranav Vaidhyanathan, Jonas Schuff, Miguel J Carballido, Dominik Zumbühl, Gerard Milburn, Florian Marquardt, Jakob Foerster, Michael A Osborne, and Natalia Ares. Meta-learning characteristics and dynamics of quantum systems. arXiv preprint arXiv:2503.10492, 2025. [16] Marin Bukov and Florian Marquardt. Reinforcement learning for quantum technology. arXiv preprint arXiv:2601.18953, 2026. [17] Anasua Chatterjee, Paul Stevenson, Silvano De Franceschi, Andrea Morello, Nathalie P de Leon, and Ferdinand Kuemmeth. Semiconductor qubits in practice. Nature Reviews Physics, 3(3):157–177, 2021. [18] Samuel K Bartee, Will Gilbert, Kun Zuo, Kushal Das, Tuomo Tanttu, Chih Hwan Yang, Nard Du-moulin Stuyck, Sebastian J Pauka, Rocky Y Su, Wee Han Lim, et al. Spin-qubit control with a milli-kelvin cmos chip. Nature, pages 1–6, 2025. [19] Paul Steinacker, Nard Dumoulin Stuyck, Wee Han Lim, Tuomo Tanttu, MengKe Feng, Santiago Serrano, Andreas Nickl, Marco Candido, Jesus D Cifuentes, Ensar Vahapoglu, et al. Industry-compatible silicon spin-qubit unit cells exceeding 99% fidelity. Nature, pages 1–7, 2025. [20] Jurgen J Dijkema, Xin Zhang, Achilleas Bardakas, Daniel Bouman, Alice Cuzzocrea, David van Driel, Davide Girardi, Lucas EA Stehouwer, Giordano Scappucci, Anne-Marije J Zwerver, et al. Simultaneous operation of an 18-qubit modular array in germanium. arXiv preprint arXiv:2604.01063, 2026. [21] Francesco Borsoi, Nico W Hendrickx, Valentin John, Marcel Meyer, Sayr Motz, Floor Van Riggelen, Amir Sammak, Sander L De Snoo, Giordano Scappucci, and Menno Veldhorst. Shared control of a 16 semiconductor quantum dot crossbar array. Nature Nanotechnology, 19(1):21–27, 2024. [22] Jonas Schuff, Miguel J Carballido, Madeleine Kotzagiannidis, Juan Carlos Calvo, Marco Caselli, Jacob Rawling, David L Craig, Barnaby van Straaten, Brandon Severin, Federico Fedele, et al. Fully autonomous tuning of a spin qubit. Nature Electronics, pages 1–10, 2026. [23] Hyungil Moon, Dominic T Lennon, James Kirkpatrick, Nina M van Esbroeck, Leon C Camenzind, Liuqi Yu, Florian Vigneau, Dominik M Zumbühl, G Andrew D Briggs, Michael A Osborne, et al. Machine learning enables completely automatic tuning of a quantum device faster than human experts. Nature communications, 11(1):4161, 2020. [24] Justyna P Zwolak, Thomas McJunkin, Sandesh S Kalantre, JP Dodson, ER MacQuarrie, DE Savage, MG Lagally, SN Coppersmith, Mark A Eriksson, and Jacob M Taylor. Autotuning of double-dot devices in situ with machine learning. Physical review applied, 13(3):034075, 2020. 
+
+11 [25] Marc-Antoine Roux, Joffrey Rivard, Victor Yon, Alexis Morel, Dominic Leclerc, Claude Rohrbacher, El Bachir Ndiaye, Felice Francesco Tafuri, Brendan Bono, Stefan Kubicek, et al. Rapid autotuning of a sige quantum dot into the single-electron regime with machine learning and rf-reflectometry fpga-based measurements. arXiv preprint arXiv:2509.19537, 2025. [26] Cornelius Carlsson, Jaime Saez-Mollejo, Federico Fedele, Stefano Calcaterra, Daniel Chrastina, Giovanni Isella, Georgios Katsaros, and Natalia Ares. Automated all-rf tuning for spin qubit readout and control. arXiv preprint arXiv:2506.10834, 2025. [27] Jayesh K Gupta, Maxim Egorov, and Mykel Kochenderfer. Cooperative multi-agent control using deep reinforcement learning. In International conference on autonomous agents and multiagent systems, pages 66–83. Springer, 2017. [28] Timothy A Baart, Pieter T Eendebak, Christian Reichl, Werner Wegscheider, and Lieven MK Vandersypen. Computer-automated tuning of semiconductor double quantum dots into the single-electron regime. Applied Physics Letters, 108(21), 2016. [29] Victor Yon, Bastien Galaup, Claude Rohrbacher, Joffrey Rivard, Alexis Morel, Dominic Leclerc, Clement Godfrin, Ruoyu Li, Stefan Kubicek, Kristiaan De Greve, et al. Experimental online quantum dots charge autotuning using neural networks. Nano Letters, 25(10):3717–3725, 2025. [30] Sandesh S Kalantre, Justyna P Zwolak, Stephen Ragole, Xingyao Wu, Neil M Zimmerman, MD Stewart Jr, and Jacob M Taylor. Machine learning techniques for state recognition and auto-tuning in quantum dots. npj Quantum Information, 5(1):6, 2019. [31] Joshua Ziegler, Florian Luthi, Mick Ramsey, Felix Borjans, Guoji Zheng, and Justyna P Zwolak. Tuning arrays with rays: Physics-informed tuning of quantum dot charge states. Physical Review Applied ,20(3):034067, 2023. [32] Barnaby Van Straaten, Federico Fedele, Florian Vigneau, Joseph Hickie, Daniel Jirovec, Andrea Ballabio, Daniel Chrastina, Giovanni Isella, Georgios Katsaros, and Natalia Ares. All-rf-based coarse-tuning algorithm for quantum devices using machine learning. Physical Review Applied, 24(5):054030, 2025. [33] Renato Durrer, Benedikt Kratochwil, Jonne V Koski, Andreas J Landig, Christian Reichl, Werner Wegschei-der, Thomas Ihn, and Eliska Greplova. Automated tuning of double quantum dots into specific charge states using neural networks. Physical Review Applied, 13(5):054019, 2020. [34] Stefanie Czischek, Victor Yon, Marc-Antoine Genest, Marc-Antoine Roux, Sophie Rochette, Julien Cami-rand Lemyre, Mathieu Moras, Michel Pioro-Ladrière, Dominique Drouin, Yann Beilliard, et al. Minia-turizing neural networks for charge state autotuning in quantum dots. Machine Learning: Science and Technology, 3(1):015001, 2021. [35] Nina M van Esbroeck, Dominic T Lennon, Hyungil Moon, Vu Nguyen, Florian Vigneau, Leon C Ca-menzind, Liuqi Yu, Dominik M Zumbühl, G Andrew D Briggs, Dino Sejdinovic, et al. Quantum device fine-tuning using unsupervised embedding learning. New Journal of Physics, 22(9):095003, 2020. [36] Brandon Severin, Dominic T Lennon, Leon C Camenzind, Florian Vigneau, Federico Fedele, Daniel Jirovec, Andrea Ballabio, Daniel Chrastina, Giovanni Isella, Mathieu de Kruijf, et al. Cross-architecture tuning of silicon and sige-based quantum devices using machine learning. Scientific Reports, 14(1):17281, 2024. [37] Christian Volk, Anne-Marije J Zwerver, Uditendu Mukhopadhyay, Pieter T Eendebak, Cornelis Jacobus van Diepen, Juan Pablo Dehollain, Toivo Hensgens, Takafumi Fujita, Christian Reichl, Werner Wegscheider, et al. Loading a quantum-dot based “qubyte” register. npj Quantum Information, 5(1):29, 2019. [38] Tatsuo Tsuzuki, Hideaki Yuta, Yui Muto, Arne Ludwig, Andreas Dirk Wieck, Akira Oiwa, and Takafumi Fujita. Cnn-assisted automatic cross-capacitance matrix update for virtual-gate control of quantum dot arrays. Japanese Journal of Applied Physics, 65(1):01SP03, 2026. [39] Anantha S Rao, Donovan Buterakos, Barnaby van Straaten, Valentin John, Cécile X Yu, Stefan D Oost-erhout, Lucas Stehouwer, Giordano Scappucci, Menno Veldhorst, Francesco Borsoi, et al. Modular autonomous virtualization system for two-dimensional semiconductor quantum dot arrays. Physical Review X, 15(2):021034, 2025. [40] Yui Muto, Michael R Zielewski, Motoya Shinozaki, Kosuke Noro, and Tomohiro Otsuka. Automatic detection of single-electron regime of quantum dots and definition of virtual gates using u-net and clustering. arXiv preprint arXiv:2501.05878, 2025. 
+
+12 [41] Fabian Hader, Fabian Fuchs, Sarah Fleitmann, Karin Havemann, Benedikt Scherer, Jan Vogelbruch, Lotte Geck, and Stefan Van Waasen. Automated charge transition detection in quantum dot charge stability diagrams. IEEE Transactions on Quantum Engineering, 2025. [42] Rahul Marchand, Lucas Schorling, Cornelius Carlsson, Jonas Schuff, Barnaby van Straaten, Taylor L Patti, Federico Fedele, Joshua Ziegler, Parth Girdhar, Pranav Vaidhyanathan, et al. End-to-end analysis of charge stability diagrams with transformers. arXiv preprint arXiv:2508.15710, 2025. [43] Giovanni A Oakes, Jingyu Duan, John JL Morton, Alpha Lee, Charles G Smith, and M Zalba. Auto-matic virtual voltage extraction of a 2x2 array of quantum dots with machine learning. arXiv preprint arXiv:2012.03685, 2020. [44] Afshin Oroojlooy and Davood Hajinezhad. A review of cooperative multi-agent deep reinforcement learning. Applied Intelligence, 53(11):13677–13722, 2023. [45] Ming Tan et al. Multi-agent reinforcement learning: Independent vs. cooperative agents. In Proceedings of the tenth international conference on machine learning, pages 330–337, 1993. [46] Peter Sunehag, Guy Lever, Audrunas Gruslys, Wojciech Marian Czarnecki, Vinicius Zambaldi, Max Jaderberg, Marc Lanctot, Nicolas Sonnerat, Joel Z Leibo, Karl Tuyls, et al. Value-decomposition networks for cooperative multi-agent learning. arXiv preprint arXiv:1706.05296, 2017. [47] Tabish Rashid, Mikayel Samvelyan, Christian Schroeder De Witt, Gregory Farquhar, Jakob Foerster, and Shimon Whiteson. Monotonic value function factorisation for deep multi-agent reinforcement learning. Journal of Machine Learning Research, 21(178):1–51, 2020. [48] Kyunghwan Son, Daewoo Kim, Wan Ju Kang, David Earl Hostallero, and Yung Yi. Qtran: Learning to factorize with transformation for cooperative multi-agent reinforcement learning. In International conference on machine learning, pages 5887–5896. PMLR, 2019. [49] Christian Schroeder de Witt, Bei Peng, Pierre-Alexandre Kamienny, Philip Torr, Wendelin Böhmer, and Shimon Whiteson. Deep multi-agent reinforcement learning for decentralized continuous cooperative control. arXiv preprint arXiv:2003.06709, 19, 2020. [50] Jakob Foerster, Gregory Farquhar, Triantafyllos Afouras, Nantas Nardelli, and Shimon Whiteson. Coun-terfactual multi-agent policy gradients. In Proceedings of the AAAI conference on artificial intelligence, volume 32, 2018. [51] Ryan Lowe, Yi I Wu, Aviv Tamar, Jean Harb, OpenAI Pieter Abbeel, and Igor Mordatch. Multi-agent actor-critic for mixed cooperative-competitive environments. Advances in neural information processing systems, 30, 2017. [52] Bei Peng, Tabish Rashid, Christian Schroeder de Witt, Pierre-Alexandre Kamienny, Philip Torr, Wendelin Böhmer, and Shimon Whiteson. Facmac: Factored multi-agent centralised policy gradients. Advances in neural information processing systems, 34:12208–12221, 2021. [53] Sainbayar Sukhbaatar, Rob Fergus, et al. Learning multiagent communication with backpropagation. Advances in neural information processing systems, 29, 2016. [54] Arbaaz Khan, Ekaterina Tolstaya, Alejandro Ribeiro, and Vijay Kumar. Graph policy gradients for large scale robot control. In Conference on robot learning, pages 823–834. PMLR, 2020. [55] Siddharth Nayak, Kenneth Choi, Wenqi Ding, Sydney Dolan, Karthik Gopalakrishnan, and Hamsa Balakrishnan. Scalable multi-agent reinforcement learning through intelligent information aggregation. In International conference on machine learning, pages 25817–25833. PMLR, 2023. [56] Ozsel Kilinc and Giovanni Montana. Multi-agent deep reinforcement learning with extremely noisy observations. arXiv preprint arXiv:1812.00922, 2018. [57] Zijian Zhao, Jing Gao, and Sen Li. Bridging marl to sarl: An order-independent multi-agent transformer via latent consensus. arXiv preprint arXiv:2604.13472, 2026. [58] Muning Wen, Jakub Kuba, Runji Lin, Weinan Zhang, Ying Wen, Jun Wang, and Yaodong Yang. Multi-agent reinforcement learning is a sequence modeling problem. Advances in Neural Information Processing Systems, 35:16509–16521, 2022. [59] Pu Feng, Junkang Liang, Size Wang, Xin Yu, Xin Ji, Yiting Chen, Kui Zhang, Rongye Shi, and Wenjun Wu. Hierarchical consensus-based multi-agent reinforcement learning for multi-robot cooperation tasks. In 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), pages 642–649. IEEE, 2024. 
+
+13 [60] Filippos Christianos, Georgios Papoudakis, Muhammad A Rahman, and Stefano V Albrecht. Scaling multi-agent reinforcement learning with selective parameter sharing. In International Conference on Machine Learning, pages 1989–1998. PMLR, 2021. [61] Christian Schroeder De Witt, Tarun Gupta, Denys Makoviichuk, Viktor Makoviychuk, Philip HS Torr, Mingfei Sun, and Shimon Whiteson. Is independent learning all you need in the starcraft multi-agent challenge? arXiv preprint arXiv:2011.09533, 2020. [62] Chao Yu, Akash Velu, Eugene Vinitsky, Jiaxuan Gao, Yu Wang, Alexandre Bayen, and Yi Wu. The sur-prising effectiveness of ppo in cooperative multi-agent games. Advances in neural information processing systems, 35:24611–24624, 2022. [63] Jakub Grudzien Kuba, Ruiqing Chen, Muning Wen, Ying Wen, Fanglei Sun, Jun Wang, and Yaodong Yang. Trust region policy optimisation in multi-agent reinforcement learning. arXiv preprint arXiv:2109.11251, 2021. [64] Yifan Zhong, Jakub Grudzien Kuba, Xidong Feng, Siyi Hu, Jiaming Ji, and Yaodong Yang. Heterogeneous-agent reinforcement learning. Journal of Machine Learning Research, 25(32):1–67, 2024. [65] Kale-ab Abebe Tessera, Arrasy Rahman, Amos Storkey, and Stefano V Albrecht. Hypermarl: Adaptive hypernetworks for multi-agent rl. arXiv preprint arXiv:2412.04233, 2024. [66] Barnaby van Straaten, Joseph Hickie, Lucas Schorling, Jonas Schuff, Federico Fedele, and Natalia Ares. Qarray: A gpu-accelerated constant capacitance model simulator for large quantum dot arrays. SciPost Physics Codebases, page 035, 2024. [67] Barnaby van Straaten, Joseph Hickie, Lucas Schorling, Jonas Schuff, Federico Fedele, and Natalia Ares. Codebase release 1.3 for qarray. SciPost Physics Codebases, page 035, 2024. [68] Daniel S Bernstein, Robert Givan, Neil Immerman, and Shlomo Zilberstein. The complexity of de-centralized control of markov decision processes. Mathematics of operations research, 27(4):819–840, 2002. [69] Yujing Hu, Weixun Wang, Hangtian Jia, Yixiang Wang, Yingfeng Chen, Jianye Hao, Feng Wu, and Changjie Fan. Learning to utilize shaping rewards: A new approach of reward shaping. Advances in Neural Information Processing Systems, 33:15931–15941, 2020. [70] Zhe Chen et al. Bayesian filtering: From kalman filters to particle filters, and beyond. Statistics, 182(1):1– 69, 2003. [71] Huazhen Fang, Ning Tian, Yebin Wang, MengChu Zhou, and Mulugeta A Haile. Nonlinear bayesian estimation: From kalman filtering to a broader horizon. IEEE/CAA Journal of Automatica Sinica, 5(2):401– 417, 2018. [72] Vijay Konda and John Tsitsiklis. Actor-critic algorithms. Advances in neural information processing systems, 12, 1999. [73] Oren Neumann and Claudius Gros. Scaling laws for a multi-agent reinforcement learning model. arXiv preprint arXiv:2210.00849, 2022. [74] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347, 2017. [75] Djallel Bouneffouf, Irina Rish, and Charu Aggarwal. Survey on applications of multi-armed and contextual bandits. In 2020 IEEE congress on evolutionary computation (CEC), pages 1–8. IEEE, 2020. [76] Zhiyuan Xu, Jian Tang, Jingsong Meng, Weiyi Zhang, Yanzhi Wang, Chi Harold Liu, and Dejun Yang. Experience-driven networking: A deep reinforcement learning based approach. In IEEE INFOCOM 2018-IEEE conference on computer communications, pages 1871–1879. IEEE, 2018. [77] John A Nelder and Roger Mead. A simplex method for function minimization. The Computer Journal, 7(4):308–313, 1965. [78] Carl Edward Rasmussen and Christopher K I Williams. Gaussian Processes for Machine Learning. MIT Press, 2006. [79] Bobak Shahriari, Kevin Swersky, Ziyu Wang, Ryan P Adams, and Nando de Freitas. Taking the human out of the loop: A review of bayesian optimization. Proceedings of the IEEE, 104(1):148–175, 2016. 
+
+14 [80] Jorge Nocedal. Updating quasi-newton matrices with limited storage. Mathematics of Computation ,35(151):773–782, 1980. [81] Danijar Hafner, Jurgis Pasukonis, Jimmy Ba, and Timothy Lillicrap. Mastering diverse domains through world models, 2024. [82] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), pages 770–778, 2016. [83] Sepp Hochreiter and J"urgen Schmidhuber. Long short-term memory. Neural Computation, 9(8):1735– 1780, 1997. [84] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems, 30, 2017. [85] Xinran Li, Ling Pan, and Jun Zhang. Kaleidoscope: Learnable masks for heterogeneous multi-agent reinforcement learning. Advances in Neural Information Processing Systems, 37:22081–22106, 2024. [86] Benoit Bertrand, Hanno Flentje, Shintaro Takada, Michihisa Yamamoto, Seigo Tarucha, Arne Ludwig, Andreas D Wieck, Christopher Bäuerle, and Tristan Meunier. Quantum manipulation of two-electron spin states in isolated double quantum dots. Physical review letters, 115(9):096801, 2015. [87] Pascal Massart. Concentration inequalities and model selection: Ecole d’Eté de Probabilités de Saint-Flour XXXIII-2003. Springer, 2007. [88] Jaap J Wesdorp, Eric Hyyppä, Joona Andersson, Janos Adam, Rohit Beriwal, Ville Bergholm, Saga Dahl, Simone Diego Fasciati, Alejandro Gomez Friero, Zheming Gao, et al. Mitigating crosstalk errors for simultaneous single-qubit gates on a superconducting quantum processor. arXiv preprint arXiv:2603.11018, 2026. [89] Yvonne Y Gao, M Adriaan Rol, Steven Touzard, and Chen Wang. Practical guide for building supercon-ducting quantum devices. PRX quantum, 2(4):040202, 2021. [90] Matthew Reed. Entanglement and quantum error correction with superconducting qubits . Lulu. com, 2013. [91] Jens Koch, Terri M Yu, Jay Gambetta, Andrew A Houck, David I Schuster, Johannes Majer, Alexandre Blais, Michel H Devoret, Steven M Girvin, and Robert J Schoelkopf. Charge-insensitive qubit design derived from the cooper pair box. Physical Review A—Atomic, Molecular, and Optical Physics, 76(4):042319, 2007. [92] Pierre Guilmin, Adrien Bocquet, Élie Genois, Daniel Weiss, and Ronan Gautier. Dynamiqs: an open-source python library for gpu-accelerated and differentiable simulation of quantum systems. 2025. 
+
+15 A Proofs on Virtualization and Filters 
+
+Notation. For z ∈ Rd, define ∥z∥2 := √z⊤z. For a matrix A ∈ Rm×n, define the spectral norm 
+
+∥A∥2 := sup 
+
+> ∥x∥2=1
+
+∥Ax ∥2.
+
+Recall that ∥A∥2 equals the largest singular value σmax (A), and for any x,
+
+∥Ax ∥2 ≤ ∥ A∥2 ∥x∥2 (by the definition of the supremum) .
+
+We also use the elementary implication: if 0 ≺ B ⪯ A (PSD order), then A−1 ⪯ B−1.
+
+A.0.1 Local linearization model 
+
+We start by fixing an operating point u0 ∈ RD (plunger voltages). Let x(u) ∈ RD denote the local device state. Let J(u) := ∇x(u) ∈ RD×D.
+
+Assumption A.1 (Locally Lipschitz Jacobian) . There exists a convex neighborhood mathcalU ⊂
+
+RD and a constant L ≥ 0 such that for all u, v ∈ U ,
+
+∥J(u) − J(v)∥2 ≤ L∥u − v∥2.
+
+Lemma A.2 (First-order expansion with explicit remainder bound) . Fix u0 ∈ U and define C := 
+
+J(u0). For any u ∈ U , there exists a remainder vector r(u) ∈ RD such that 
+
+x(u) = x(u0) + C(u − u0) + r(u),
+
+and r(u) satisfies the explicit bound 
+
+∥r(u)∥2 ≤ L
+
+2 ∥u − u0∥22.
+
+Proof. Define the path γ : [0 , 1] → U by γ(t) = u0 + t(u − u0) (convexity ensures γ(t) ∈ U ). By the fundamental theorem of calculus, 
+
+x(u) − x(u0) = 
+
+Z 10
+
+ddt x(γ(t)) dt =
+
+Z 10
+
+J(γ(t))( u − u0) dt. 
+
+Add and subtract C(u − u0) inside the integral and define 
+
+r(u) := 
+
+Z 10
+
+ J(γ(t)) − C(u − u0) dt. 
+
+Then the expansion holds. For the bound, use the definition of ∥ · ∥ 2 and Assumption A.1: for each 
+
+t ∈ [0 , 1] ,
+
+∥ J(γ(t)) −C(u−u0)∥2 ≤ ∥ J(γ(t)) −C∥2 ∥u−u0∥2 ≤ L∥γ(t)−u0∥2 ∥u−u0∥2 = Lt ∥u−u0∥22.
+
+Integrating t from 0 to 1 gives 
+
+∥r(u)∥2 ≤
+
+Z 10
+
+Lt ∥u − u0∥22 dt = L
+
+2 ∥u − u0∥22.
+
+A.0.2 One-step quadratic objective and greedy optimum 
+
+Let x⋆ ∈ RD be a target and define e(u) := x(u) − x⋆. At iteration t, the algorithm chooses ∆ut
+
+and applies ut+1 = ut + ∆ ut. In the linearized model (dropping r(·) for the moment), the one-step surrogate cost is 
+
+Jt(∆ u) := 12 ∥et + C∆u∥22, et := e(ut).
+
+Proposition A.3 (Greedy optimum in raw coordinates) . If C is invertible, the unique minimizer of 
+
+Jt(∆ u) is 
+
+∆u⋆t = −C−1et,
+
+and under the linear model the next error satisfies et+1 = 0 .
+
+16 Proof. Write Jt(∆ u) = 12 (et + C∆u)⊤(et + C∆u). Differentiating w.r.t. ∆u yields 
+
+∇∆uJt(∆ u) = C⊤(et + C∆u).
+
+At a minimizer, ∇∆uJt(∆ u) = 0 , i.e. 
+
+C⊤C ∆u = −C⊤et.
+
+Since C is invertible, C⊤C is positive definite and invertible, hence the solution is unique: 
+
+∆u = −(C⊤C)−1C⊤et.
+
+Because C is invertible, one checks directly that (C⊤C)−1C⊤ = C−1 (multiply by C on the right to obtain the identity), so ∆u⋆t = −C−1et. Substituting gives et+1 = et + C∆u⋆t = 0 .
+
+A.0.3 Virtualization as a preconditioned coordinate system 
+
+QADAPT constructs an estimate bCt of the cross-capacitance and uses it to define a virtualized coordinate ∆vt through the linear change of variables 
+
+∆ut = bC−1 
+
+> t
+
+∆vt.
+
+Under the linear model, the error evolves as 
+
+et+1 = et + C bC−1 
+
+> t
+
+∆vt.
+
+Theorem A.4 (Exact cancellation in ideal virtual coordinates) . Assume C and bCt are invertible and choose ∆vt = −et. Define the mismatch matrix 
+
+Et := I − C bC−1 
+
+> t
+
+.
+
+Then 
+
+et+1 = Etet.
+
+Moreover, if there exists ρ ∈ [0 , 1) such that ∥Et∥2 ≤ ρ for all t, then 
+
+∥et∥2 ≤ ρt∥e0∥2 for all t ≥ 0.
+
+Proof. Substitute ∆vt = −et into the update: 
+
+et+1 = et − C bC−1 
+
+> t
+
+et = ( I − C bC−1 
+
+> t
+
+)et = Etet.
+
+To bound ∥et+1 ∥2, use the definition of ∥Et∥2:
+
+∥et+1 ∥2 = ∥Etet∥2 ≤ ∥ Et∥2∥et∥2 ≤ ρ∥et∥2.
+
+Iterating this inequality yields ∥et∥2 ≤ ρt∥e0∥2.
+
+Mismatch in terms of estimation error. Let ∆t := bCt − C.
+
+Lemma A.5 (Mismatch identity and explicit norm bound) . If bCt is invertible, then 
+
+Et = ∆ t bC−1 
+
+> t
+
+.
+
+Consequently, 
+
+∥Et∥2 ≤ ∥ ∆t∥2 ∥ bC−1 
+
+> t
+
+∥2.
+
+Proof. Compute 
+
+C bC−1 
+
+> t
+
+= ( bCt − ∆t) bC−1 
+
+> t
+
+= bCt bC−1 
+
+> t
+
+− ∆t bC−1 
+
+> t
+
+= I − ∆t bC−1 
+
+> t
+
+.
+
+Hence Et = I − C bC−1 
+
+> t
+
+= ∆ t bC−1 
+
+> t
+
+.For the norm bound, start from the definition of ∥Et∥2:
+
+∥Et∥2 = sup 
+
+> ∥x∥2=1
+
+∥Etx∥2 = sup 
+
+> ∥x∥2=1
+
+∥∆t bC−1 
+
+> t
+
+x∥2.
+
+For each such x, let y := bC−1 
+
+> t
+
+x. Then ∥∆ty∥2 ≤ ∥ ∆t∥2∥y∥2. Therefore 
+
+∥∆t bC−1 
+
+> t
+
+x∥2 ≤ ∥ ∆t∥2 ∥ bC−1 
+
+> t
+
+x∥2 ≤ ∥ ∆t∥2 ∥ bC−1 
+
+> t
+
+∥2 ∥x∥2 = ∥∆t∥2 ∥ bC−1 
+
+> t
+
+∥2.
+
+Taking the supremum over ∥x∥2 = 1 yields the claimed inequality. 17 Invertibility and stability of the inverse. Lemma A.6 (Neumann-series inverse bound) . Let C be invertible and bC = C + ∆ . If 
+
+∥C−1∥2∥∆∥2 < 1, then bC is invertible and 
+
+∥ bC−1∥2 ≤ ∥C−1∥2
+
+1 − ∥ C−1∥2∥∆∥2
+
+.
+
+Proof. Factor bC as 
+
+bC = C(I + C−1∆) .
+
+Let X := C−1∆. The assumption implies ∥X∥2 < 1. Consider the series S := P∞
+
+> k=0
+
+(−X)k. For each partial sum Sn = Pnk=0 (−X)k,
+
+(I + X)Sn =
+
+> n
+
+X
+
+> k=0
+
+(−X)k +
+
+> n
+
+X
+
+> k=0
+
+X(−X)k = I +
+
+> n
+
+X
+
+> k=1
+
+(−X)k +
+
+> n+1
+
+X
+
+> k=1
+
+(−X)k = I − (−X)n+1 .
+
+Since ∥X∥2 < 1, we have ∥(−X)n+1 ∥2 ≤ ∥ X∥n+1 2 → 0, hence Sn → S and (I + X)S = I. Thus 
+
+(I + X)−1 = S exists and 
+
+∥(I + X)−1∥2 = ∥S∥2 ≤
+
+> ∞
+
+X
+
+> k=0
+
+∥X∥k 
+
+> 2
+
+= 11 − ∥ X∥2
+
+.
+
+Therefore 
+
+bC−1 = ( I + C−1∆) −1C−1, ∥ bC−1∥2 ≤ ∥ (I + X)−1∥2 ∥C−1∥2 ≤ ∥C−1∥2
+
+1 − ∥ C−1∥2∥∆∥2
+
+.
+
+Corollary A.7 (Explicit sufficient condition for contraction) . Assume C is invertible and bCt = C+∆ t.If ∥C−1∥2∥∆t∥2 < 12 , then ∥Et∥2 < 1. In fact, 
+
+∥Et∥2 ≤ ∥C−1∥2∥∆t∥2
+
+1 − ∥ C−1∥2∥∆t∥2
+
+.
+
+Proof. By Lemma A.5, 
+
+∥Et∥2 ≤ ∥ ∆t∥2 ∥ bC−1 
+
+> t
+
+∥2.
+
+Apply Lemma A.6 with ∆ = ∆ t:
+
+∥ bC−1 
+
+> t
+
+∥2 ≤ ∥C−1∥2
+
+1 − ∥ C−1∥2∥∆t∥2
+
+.
+
+Multiplying yields the claimed bound. Let a := ∥C−1∥2∥∆t∥2. If a < 1/2, then 
+
+a
+
+1 − a < 1/21 − 1/2 = 1 ,
+
+hence ∥Et∥2 < 1.
+
+A.1 Virtualization Improves Conditioning (Preconditioning) 
+
+Consider minimizing the one-step quadratic surrogate 
+
+Jt(∆ u) := 12 ∥et + C ∆u∥22.
+
+In voltage coordinates, the Hessian is 
+
+∇2∆uJt(∆ u) = C⊤C, 
+
+18 so the conditioning of the local quadratic model is governed by 
+
+κ(C⊤C) = λmax (C⊤C)
+
+λmin (C⊤C) = κ(C)2,
+
+which can be large when gate cross-talk makes C ill-conditioned. Under virtualization, we change variables via 
+
+∆u = bC−1 
+
+> t
+
+∆v. 
+
+Substituting into Jt yields the virtual-coordinate objective 
+
+Jt( bC−1 
+
+> t
+
+∆v) = 12 et + C bC−1 
+
+> t
+
+∆v 22
+
+= 12 et + Mt∆v 22
+
+, Mt := C bC−1 
+
+> t
+
+.
+
+The Hessian with respect to ∆v is therefore 
+
+∇2∆v Jt( bC−1 
+
+> t
+
+∆v) = M ⊤ 
+
+> t
+
+Mt.
+
+Hence the conditioning of the virtual-coordinate quadratic problem is 
+
+κ(M ⊤ 
+
+> t
+
+Mt) = λmax (M ⊤ 
+
+> t
+
+Mt)
+
+λmin (M ⊤ 
+
+> t
+
+Mt) = σmax (Mt)2
+
+σmin (Mt)2 = κ(Mt)2.
+
+Thus, virtualization improves conditioning exactly when Mt is close to the identity. Recall from Theorem B.4 that the mismatch matrix is defined as 
+
+Et := I − C bC−1 
+
+> t
+
+.
+
+Equivalently, 
+
+Mt = C bC−1 
+
+> t
+
+= I − Et.
+
+The next lemma shows that small mismatch implies κ(Mt) is close to 1.
+
+Lemma A.8 (Condition number bound for the preconditioned system)) . Let 
+
+Mt := C bC−1 
+
+> t
+
+and Et := I − Mt.
+
+If 
+
+∥Et∥2 < 1,
+
+then Mt is nonsingular and 
+
+κ(Mt) ≤ 1 + ∥Et∥2
+
+1 − ∥ Et∥2
+
+.
+
+Consequently, 
+
+κ(M ⊤ 
+
+> t
+
+Mt) ≤
+
+ 1 + ∥Et∥2
+
+1 − ∥ Et∥2
+
+2
+
+.
+
+Proof. We use the singular value characterizations 
+
+σmax (Mt) = sup 
+
+> ∥x∥2=1
+
+∥Mtx∥2, σmin (Mt) = inf  
+
+> ∥x∥2=1
+
+∥Mtx∥2.
+
+Since Mt = I − Et, for any x with ∥x∥2 = 1 ,
+
+∥Mtx∥2 = ∥(I − Et)x∥2 = ∥x − Etx∥2.
+
+Upper bound. By the triangle inequality, 
+
+∥x − Etx∥2 ≤ ∥ x∥2 + ∥Etx∥2 = 1 + ∥Etx∥2.
+
+By the definition of ∥Et∥2,
+
+∥Etx∥2 ≤ ∥ Et∥2∥x∥2 = ∥Et∥2.
+
+Therefore ∥Mtx∥2 ≤ 1 + ∥Et∥2 for all unit vectors x, and taking the supremum gives 
+
+σmax (Mt) ≤ 1 + ∥Et∥2.
+
+19 Lower bound. By the reverse triangle inequality ∥a − b∥2 ≥ ∥a∥2 − ∥ b∥2 , we have 
+
+∥x − Etx∥2 ≥ ∥x∥2 − ∥ Etx∥2 = 1 − ∥ Etx∥2.
+
+Using again ∥Etx∥2 ≤ ∥ Et∥2∥x∥2 = ∥Et∥2, we obtain 
+
+∥Mtx∥2 ≥ 1 − ∥ Et∥2 for all ∥x∥2 = 1 .
+
+Taking the infimum over unit vectors yields 
+
+σmin (Mt) ≥ 1 − ∥ Et∥2.
+
+Because ∥Et∥2 < 1, the right-hand side is strictly positive, hence σmin (Mt) > 0 and Mt is nonsingular. 
+
+Condition number bound. Finally, 
+
+κ(Mt) = σmax (Mt)
+
+σmin (Mt) ≤ 1 + ∥Et∥2
+
+1 − ∥ Et∥2
+
+.
+
+Squaring both sides and using κ(M ⊤ 
+
+> t
+
+Mt) = κ(Mt)2 gives the last claim. 
+
+A.1.1 Kalman filtering shrinks the mismatch bound 
+
+QADAPT treats the unknown couplings as latent variables and uses a Kalman filter to refine them from CSD-derived observations. We formalize the contraction improvement in the standard linear-Gaussian setting. Let c := vec( C) ∈ RD2
+
+be the vectorized coupling parameters and suppose that at each step t we obtain an observation yt ∈ Rm of the form 
+
+yt = Htc + νt, νt ∼ N (0 , R t), Rt ≻ 0.
+
+Let (ˆ ct, P t) be the Kalman posterior mean and covariance after assimilating y1: t. In information form, the covariance satisfies 
+
+P −1 
+
+> t
+
+= P −1 
+
+> t−1
+
++ H⊤ 
+
+> t
+
+R−1 
+
+> t
+
+Ht.
+
+Lemma A.9 (Posterior covariance is monotone decreasing) . For all t, Pt ⪯ Pt−1.Proof. Since Rt ≻ 0, the matrix H⊤ 
+
+> t
+
+R−1 
+
+> t
+
+Ht is positive semidefinite, so 
+
+P −1 
+
+> t
+
+− P −1 
+
+> t−1
+
+= H⊤ 
+
+> t
+
+R−1 
+
+> t
+
+Ht ⪰ 0, i.e. P −1 
+
+> t
+
+⪰ P −1
+
+> t−1
+
+.
+
+We now use the implication A ⪰ B ≻ 0 ⇒ A−1 ⪯ B−1. To prove it: let B1/2 be the PSD square root. Then A ⪰ B implies 
+
+B−1/2AB −1/2 ⪰ I. 
+
+Inverting both sides (order reverses under inversion for PSD matrices) yields 
+
+(B−1/2AB −1/2)−1 ⪯ I, 
+
+and multiplying by B−1/2 on left and right gives A−1 ⪯ B−1. Applying this with A = P −1 
+
+> t
+
+and 
+
+B = P −1 
+
+> t−1
+
+yields Pt ⪯ Pt−1.Write bCt := unvec(ˆ ct) and ∆t := bCt − C. Conditioned on y1: t, we have c − ˆct ∼ N (0 , P t). Thus 
+
+vec(∆ t) ∼ N (0 , P t) and 
+
+E∥∆t∥2 
+
+> F
+
+= E∥vec(∆ t)∥22 = tr( Pt).
+
+20 High-probability bound Let n := D2. Let g ∼ N (0 , I n) and write vec(∆ t) = P 1/2 
+
+> t
+
+g. A standard chi-square concentration inequality (Laurent–Massart) [87] gives that for any s > 0,
+
+P ∥g∥22 ≥ n + 2 √ns + 2 s ≤ e−s.
+
+Setting s = log(1 /δ ) yields: with probability at least 1 − δ,
+
+∥g∥2 ≤
+
+q
+
+n + 2 pn log(1 /δ ) + 2 log(1 /δ ).
+
+Moreover, 
+
+∥∆t∥F = ∥vec(∆ t)∥2 = ∥P 1/2 
+
+> t
+
+g∥2 ≤ ∥ P 1/2 
+
+> t
+
+∥2 ∥g∥2 = p∥Pt∥2 ∥g∥2,
+
+where the inequality follows from the definition of ∥P 1/2 
+
+> t
+
+∥2. Therefore, with probability at least 
+
+1 − δ,
+
+∥∆t∥2 ≤ ∥ ∆t∥F ≤ p∥Pt∥2
+
+q
+
+n + 2 pn log(1 /δ ) + 2 log(1 /δ ).
+
+Combining this with Corollary A.7 yields an explicit sufficient condition on the Kalman covariance for strict contraction (with high probability): if 
+
+∥C−1∥2
+
+p∥Pt∥2
+
+q
+
+n + 2 pn log(1 /δ ) + 2 log(1 /δ ) < 12 ,
+
+then ∥Et∥2 < 1 and Theorem A.4 gives geometric decay ∥et∥2 ≤ ρt∥e0∥2 on the linear model. 
+
+A.1.2 Robustness: policy error and nonlinear remainder 
+
+We now re-introduce (i) imperfect virtual actions and (ii) the Taylor remainder from Lemma A.2. Assume we pick 
+
+∆vt = −et + ηt
+
+for some action error ηt, and keep the first-order model around ut. Let Ct := J(ut). By Lemma A.2 applied at ut, there exists rt such that 
+
+et+1 = et + Ct∆ut + rt, ∥rt∥2 ≤ L
+
+2 ∥∆ut∥22.
+
+With ∆ut = bC−1 
+
+> t
+
+∆vt, we obtain 
+
+et+1 =  I − Ct bC−1
+
+> t
+
+et + Ct bC−1 
+
+> t
+
+ηt + rt.
+
+Taking norms and using the definition of ∥ · ∥ 2 as in Lemma A.5 yields the explicit inequality 
+
+∥et+1 ∥2 ≤ ∥ I − Ct bC−1 
+
+> t
+
+∥2 ∥et∥2 + ∥Ct bC−1 
+
+> t
+
+∥2 ∥ηt∥2 + L
+
+2 ∥ bC−1 
+
+> t
+
+∥22 ∥∆vt∥22.
+
+In particular, if ∥I − Ct bC−1 
+
+> t
+
+∥2 ≤ ρ < 1 uniformly and ηt ≡ 0, then since ∥∆vt∥2 = ∥et∥2,
+
+∥et+1 ∥2 ≤ ρ∥et∥2 + L
+
+2 ∥ bC−1 
+
+> t
+
+∥22∥et∥22,
+
+which implies strict contraction for all ∥et∥2 in a sufficiently small neighborhood (standard local-stability argument). 
+
+Proposition A.10 (Objective-level factorization induced by virtualization) . Let 
+
+Jt(∆ u) = 12 ∥et + Ct∆u∥22, et := x(ut) − x⋆, Ct := ∇x(ut).
+
+Then: (i) Jt is separable across agents, i.e. 
+
+Jt(∆ u) = ct +
+
+> D
+
+X
+
+> i=1
+
+ft,i (∆ ui),
+
+if and only if C⊤ 
+
+> t
+
+Ct is diagonal. 
+
+21 (ii) If Ct is invertible and we use exact virtual coordinates 
+
+∆u = C−1 
+
+> t
+
+∆v, 
+
+then 
+
+Jt(∆ v) = 12
+
+> D
+
+X
+
+> i=1
+
+(et,i + ∆ vi)2,
+
+so the one-step control objective is exactly separable. (iii) With an estimate ˆCt, define 
+
+Et := I − Ct ˆC−1 
+
+> t
+
+.
+
+Then 
+
+Jvirt  
+
+> t
+
+(∆ v) = 12 ∥et + ( I − Et)∆ v∥22.
+
+If 
+
+eJt(∆ v) := 12 ∥et + ∆ v∥22,
+
+then 
+
+|Jvirt  
+
+> t
+
+(∆ v) − eJt(∆ v)| ≤ ∥ Et∥2∥et + ∆ v∥2∥∆v∥2 + 12 ∥Et∥22∥∆v∥22.
+
+Proof. Expand 
+
+Jt(∆ u) = 12 e⊤ 
+
+> t
+
+et + ( C⊤ 
+
+> t
+
+et)⊤∆u + 12 ∆u⊤C⊤ 
+
+> t
+
+Ct∆u. 
+
+Hence for i̸ = j,
+
+∂2Jt
+
+∂∆ui∂∆uj
+
+= ( C⊤ 
+
+> t
+
+Ct)ij .
+
+So all mixed partials vanish if and only if C⊤ 
+
+> t
+
+Ct is diagonal, which is equivalent to separability for this quadratic objective. Now substitute ∆u = C−1 
+
+> t
+
+∆v:
+
+Jt(∆ v) = 12 ∥et + ∆ v∥22 = 12
+
+X
+
+> i
+
+(et,i + ∆ vi)2.
+
+For the approximate case, write Mt = Ct ˆC−1 
+
+> t
+
+= I − Et, so 
+
+Jvirt  
+
+> t
+
+(∆ v) = 12 ∥et + Mt∆v∥22.
+
+Then 
+
+Jvirt  
+
+> t
+
+(∆ v) − eJt(∆ v) = −⟨ et + ∆ v, E t∆v⟩ + 12 ∥Et∆v∥22,
+
+and the bound follows from Cauchy–Schwarz and 
+
+∥Et∆v∥2 ≤ ∥ Et∥2∥∆v∥2.
+
+This shows that other MARL techniques such as MADDPG, QMIX, and FACMAC learn coordination in a fixed action space through centralized critics or value mixing. QADAPT instead tries to make the control problem itself additive by learning a physically grounded change of coordinates. 22 B Details on the Simulated Quantum Dot Environment 
+
+In our simulator, quantum dot array configurations are randomized to ensure a broad and realistic training environment, including noise strengths, electrostatic couplings, and lever arms. We also reduce the contrast of charge stability diagram features toward the edges of our measurement environment, mimicking real devices whereby highly occupied quantum dots crossover into a classical transport regime and transition lines vanish. By accounting for such physical behaviors, we aim to bridge the sim-2-real gap of device tuning. Table 2: Details on the base QArray quantum dot simulator. When a min and a max value are specified, we sample uniformly at random between those limits at each reset of the environment. Cxy denotes the cross-capacitance matrix between potentials of type x and of type y, where d = dot potentials, g = plunger gates, b = barrier gates. 
+
+Parameter Min Max Value Cdd nearest coupling 0 0.2 -Cdd second nearest coupling 0 0.1 -Cgd lever arm 0.95 1.0 -Cgd nearest coupling 0.3 0.7 -Cgd second nearest coupling 0.01 0.3 -Cgd third nearest coupling 0 0.01 -Dot to sensor coupling 0.035 0.05 -Cbd nearest coupling 0.04 0.08 -Cbd second nearest coupling 0.01 0.03 -Cbd third nearest coupling 0.005 0.015 -Cbg nearest coupling 0.08 0.15 -Cbg second nearest coupling 0.03 0.18 -Cbg third nearest coupling 0.01 0.03 -Cbb nearest coupling 0.03 0.08 -Cbb second nearest neighbour 0.01 0.03 -Cbb third nearest neighbour 0.005 0.015 -Barrier to sensor coupling 0.0003 0.001 -Telegraph noise transition probability 0 0.01 -Telegraph noise amplitude 0 0.012 Latching noise lead coupling probability 0.2 1.0 -Latching noise inter-dot coupling probability 0.2 1.0 -Temperature (mK) 50 200 -Coulomb peak width 0 0.4 -Base tunnel coupling 0.5 3.0 -Tunnel coupling exponential factor ( α) 0.0001 0.0008 -Max charge carriers - - 4Optimal plunger dot charge occupancy - - 1Optimal sensor charge occupancy (fractional) - - 0.53 
+
+Table 3: Details on the gym environment. When a min and a max value are specified, we sample uniformly at random between those limits at each reset of the environment. Distances are in units of simulator volts, which has dimensions of voltage but scaled up to equal the transition line spacing. 
+
+Parameter Min Max Value Total plunger voltage range 80.0 100.0 -Scan size 3.0 4.0 -Total barrier voltage range 20.0 30.0 -Lower radius for zero additive white noise 20.0 30.0 -Distance to maximum additive white noise 5.0 10.0 -Distance to total white noise 30.0 40.0 -Maximum additive white noise amplitude - - 0.05 Distance to zero reward - - 40.0 Distance to half reward - - 1.0 Distance to zero barrier reward - - 6.0 
+
+23 C DreamerV3 Setup 
+
+We include DreamerV3 [ 81 ] as a representative modern model-based reinforcement learning baseline. DreamerV3 learns a latent “world model” from experience and optimizes a policy by imagining tra-jectories in that latent space. In our setting, each environment step corresponds to a full measurement cycle (Section 3), i.e., acquiring all neighbor-pair CSDs, updating the virtualization estimate, then applying gate updates. DreamerV3 models the predictive distribution over next-step observations and rewards through a recurrent state-space model (RSSM) operating on a learned latent state zt. In our case, the transition captures the effect of gate updates on subsequent measurement outcomes (i.e., changes in CSD geometry and reward). 
+
+# D Array Tuning Agent Rewards 
+
+Figure 4: Average per-agent reward for QADAPT trained on a 4-dot array, in addition to each version of the ablated base model, detailed in Section 4. In all benchmarks, trained parameters are always taken from the epoch in which models performed best. 24 E Array Tuning Convergence Over Time 
+
+Figure 5: Trained agent behavior sampled over 100 episodes for a 4-dot system. The four colors in each graph represent the signed distance to the ground truth position in voltage space for each of the plunger gate agents. 25 F Training Hyperparameters and Compute Resources 
+
+Table 4: Hyperparameters for PPO.              
+
+> Hyperparameter Value Batch size 16384 yGrad clip 40 Minibatch size 2048 Epochs 10 Learning rate 3e-5
+> γ0
+> λ0Clip 0.2 Entropy coefficient 0.01 Value function loss coeff 0.5 KL target 0.01 Predicted log std clip bounds (-5, 2)
+
+# G Extension to Superconducting Qubits 
+
+In this appendix, we apply QADAPT to the tuning of superconduting qubits in the presence of simultaneous drives. We largely follow the formulation of the control problem for flux-tunable transmon qubits, as laid out in [ 88 ]; however, unlike in that work, we do not rely on analytical formulae and also extend the number of variables that are available for tuning. Conventionally, the tune-up of superconducting qubits is based on a series of experiments, each of which targets one or more tunable parameters to varying levels of precision. A good overview is provided in [ 89 ] and its references. Here, we consider five key parameters: bare qubit frequency, drive frequency, drive amplitude, phase, and a corrective envelope parameter (see Appendix H for full details). We probe the quality of qubits in response to these parameters using just one type of simulated experiment, known as an all-XY calibration sequence [ 90 ]. In this protocol, 21 unique combinations of single-qubit gates are applied, and the resulting qubit state is measured. The result across all 21 operations ideally forms a “staircase” pattern where the qubit remains either entirely in the ground state, becomes fully excited, or enters into a perfect superposition of ground and excited states. The suboptimal calibration of any one parameter can lead to a deviation from the ideal staircase pattern. The sequential optimization of transmon qubit parameters does not guarantee good performance in a quantum processor due to the presence of drive-crosstalk. Furthermore, while individual parameter miscalibrations can lead to qualitatively different error syndromes, the all-XY output can produce degenerate signatures when multiple parameters are far from their optimal configuration. These two effects together make transmon qubit tuning a challenge control problem, yet whose physical structure lends itself naturally to QADAPT. We apply QADAPT to the transmon qubit tuning problem with minor modifications. Inputs, rather than being charge stability diagrams (CSDs) are now vectors of length 21. Actions are qubit parameter updates, which are split among two agent types, realized via shared policies – one type controls 
+
+{ω01 , ω d, ϕ } and the other controls {Ω, β }. Refer to Appendix H for parameter descriptions and Appendix I for their ranges. This parameter split is motivated by the physical similarities in the errors these parameters produce. For simplicity, we factor the action space directly based on the coupling between parameter adjustments and all-XY outputs (see Appendix K). The resulting cross-talk matrix is refined online at each time step. The tuning results are shown Figs. 6 & 7. 26 2 qubits 4 qubits 6 qubits 8 qubits Ideal All -XY Staircase Figure 6: All-XY Sequence Calibrated using QADAPT. After random initialization (top), QADAPT reliably tunes superconducting qubit parameters (bare qubit frequency, drive frequency, amplitude, phase, and DRAG coefficient) to near-optimal values in 20 steps (bottom). All violin plots represent distributions over 100 tuning runs, and colors correspond to various qubit counts. The same policy, trained on a four-qubit system, is used across all shown qubit counts. 
+
+# H Transmon Qubit Hamiltonian 
+
+The Hamiltonian of a transmon qubit i in the presence of drive cross-talk from n other, simultaneously driven, qubits, is given by: 
+
+H = ωi
+
+> 01
+
+a†a + αi
+
+2 a†a†aa + i 
+
+> n+1
+
+X
+
+> j=1
+
+λij vj (t)( a† − a), (5) where a† and a are the creation and annihilation operators in the subspace of qubit i, ωi 
+
+> 01
+
+is the qubit’s bare transition frequency, αi = ωi 
+
+> 12
+
+− ωi 
+
+> 01
+
+is the qubit anharmonicity, λij is the relative cross-talk magnitude from qubit j onto qubit i, and vj (t) is the applied driving field, modulated by complex driving envelopes according to 
+
+vj (t) = sjI (t) cos ( ωjdt + ϕj ) + sjQ(t) sin ( ωjdt + ϕj ) ∀ j ∈ { 0, ..., n }. (6) Here, ωjd and ϕj denote the angular drive frequency and phase on qubit j, and sjI (t) and sjQ(t) are time-dependent in-phase and quadrature drive envelopes. We employ raised-cosine pulse envelopes and standard Derivative Reduction by Adiabatic Gate (DRAG) correction, which relate sjI and sjQ in 27 QADAPT (ours) Random Figure 7: Convergence of Superconducting Qubit Tuning . QADAPT generalizes well to the superconducting setting, also scaling zero-shot to qubit numbers of 2, 6 and 8 using a policy trained on 4 qubits. The score is defined as the normalized overlap with the target excited state probability, averaged over qubits and gate-pairs in the all-XY calibration sequence. Lines represent averages over 100 runs, with an envelope of half a standard deviation. Initial parameter configurations are randomized in each run. the following way, 
+
+sjI (t) = Ωj
+
+2
+
+
+
+1 − cos 
+
+ 2πt tg
+
+ 
+
+, (7) 
+
+sjQ(t) = −
+
+ βj
+
+αj
+
+ dsjI
+
+dt = −
+
+ βj
+
+αj
+
+
+
+· Ωj πtg
+
+sin 
+
+ 2πt tg
+
+
+
+, (8) (9) where Ωj is the nominal Rabi rate in rad /ns , tg is the gate time, and βj is the DRAG coefficient. 
+
+H.1 Hardware effects 
+
+Experimentally, the drive amplitude in volts V is related to the Rabi rate via Ωj = ηj · V , where 
+
+ηj is the capacitive coupling strength between the transmon and its drive line. This coupling is predominantly determined by device geometry, which is fixed at fabrication, and pre-calibrated in earlier tuning stages. However, we account for imperfect calibration, or changes in line attenuation between qubits, by introducing a prefactor to Ωj . Adjustments to the raw Ωj by our algorithm should therefore be interpreted as corrective updates to the voltage amplitude of the qubit drive’s carrier envelope. Similarly, we introduce group and phase delays to mimic the behavior of pulses propagating through real cables, which in general are also unique for each qubit. In summary, this transforms t, ϕj and Ωj
+
+parameters appearing in Eqs. (6–8) as follows, 
+
+t → t + tjδ , (10) 
+
+ϕj → ϕj + ϕjδ , (11) 
+
+Ωj → Aj Ωj , (12) and prevents agent policies from collapsing toward trivial parameter settings. All parameter ranges used for training are summarized in Table. 5 We further note that, in practice, the transmon qubit frequency is tuned via an applied DC current 
+
+Ij 
+
+> bias
+
+through an on-chip bias line. This current produces a flux equal to Φj = M · Ij
+
+> bias
+
+, which scales 
+
+ωj 
+
+> 01
+
+according to [91], 
+
+ωj
+
+> 01
+
+(Φ j ) ∝ cos 
+
+ πΦj
+
+Φ0
+
+ 12
+
+, (13) where Φ0 = h/ 2e is the flux quantum. By applying parameter updates onto ωj 
+
+> 01
+
+directly, phase accumulation during the simulated gate becomes linearized, which better conditions the action space for agent learning. The characterization of ωj 
+
+> 01
+
+with respect to Ij 
+
+> bias
+
+is routinely done in experimental 28 settings, allowing a direct mapping to be made between the two variables at deployment. For fixed-frequency qubits, parameter updates to ω01 would drop out from the tuning algorithm. The effect of flux noise and flux cross-talk between qubits, as well as associated changes in the anharmonicity αj caused by second order effects upon varying Φj , are outside the scope of this work. We further neglect the weak dependence of the Rabi rate Ωj on the flux operating point. A more complete treatment would explicit parametrize both αj and Aj as functions of ωj
+
+> 01
+
+, which could be pre-calibrated via Rabi experiments at multiple flux operating points. However, since our algorithm treats each round of all-XY measurements independently, with no temporal credit assignment, the new effective Rabi rate would become implicitly absorbed into Aj in a real experiment for each new operating point. The inability to track flux-dependent dynamics is therefore not a limitation of the model, but rather a consequence of the immediate-feedback reward structure. 
+
+# I Transmon Qubit Simulation Parameters 
+
+Table 5: Parameter ranges used in transmon qubit simulations. When a min and a max value are specified, we sample uniformly at random between those limits at each reset of the environment. For values sampled from a normal distribution, the mean and standard deviation are indicated.                                                           
+
+> Parameter Min Max Value Number of qubits --4Fock space truncation --3
+> ω01 /2π(GHz) 46-
+> α/ 2π(MHz) −300 −200 -
+> λii ′0.0 0.5 -
+> tg(ns) 16 24 -
+> ωd/2π(GHz) --∼ N (ω01 /2π, 0.01)
+> ϕ(rad) −ππ-
+> Ω(rad/ns) --2π/t g(1 + δ),δ∼ N (0 ,0.1)
+> β0.0 1.5 -
+> tδ(ns) −22-
+> ϕδ(rad) −ππ-
+> A0.85 1.15 -
+
+Table 6: Parameter bounds for transmon qubit simulations. Min and max values are stated relative to their initialization at the start of each training episode.                     
+
+> Parameter Min Max
+> ω01 /2π(MHz) −150 0
+> ωd/2π(MHz) ω01 −20 ω01 +20
+> ϕ(rad) −ππ
+> Ω(rad/ns) 0.8 ×2π/t g1.2 ×2π/t g
+> β0.0 1.5
+
+29 J All-XY Calibration Sequence 
+
+The 21 gate pairs that comprise the all-XY calibration sequence are provided in Table 7 together with their ideal excited state probabilities. The drive amplitude Ωj enters the Hamiltonian linearly, such that the resulting rotation angle on qubit j scales proportionally with Ωj . Likewise, the drive phase ϕj enters the Hamiltonian as a rigid rotation of the drive vector in the IQ -plane, and so the axis of rotation is determined directly by ϕj , independently of the rotation angle. As a result, all gates in the calibration sequence can be expressed using amplitude scalings and/or phase offsets relative to a 
+
+Xπ base pulse. In real hardware, phase offsets can implemented at no extra cost using programmable ‘virtual’ phases. Table 7: Gate pairs participating in the all-XY calibration sequence. The qubit is assumed to be in the ground state |0⟩ at the start of each gate-pair. Amplitude scalings and phase offsets are stated relative to a perfectly calibrated Xπ gate pulse. 
+
+Index Gate pair Amplitude scaling Phase offset P (|1⟩)
+
+1 I, I 0.0, 0.0 0, 0 0.0 2 Xπ , X π 1.0, 1.0 0, 0 0.0 3 Yπ , Y π 1.0, 1.0 π 
+
+> 2
+
+, π 
+
+> 2
+
+0.0 4 Xπ , Y π 1.0, 1.0 0, π 
+
+> 2
+
+0.0 5 Yπ , X π 1.0, 1.0 π 
+
+> 2
+
+, 0 0.0 6 X π 
+
+> 2
+
+, I 0.5, 0.0 0, 0 0.5 7 Y π 
+
+> 2
+
+, I 0.5, 0.0 π 
+
+> 2
+
+, 0 0.5 8 X π 
+
+> 2
+
+, Y π 0.5, 1.0 0, π 
+
+> 2
+
+0.5 9 Y π 
+
+> 2
+
+, X π 0.5, 1.0 π 
+
+> 2
+
+, 0 0.5 10 X π 
+
+> 2
+
+, Y π 
+
+> 2
+
+0.5, 0.5 0, π 
+
+> 2
+
+0.5 11 Y π 
+
+> 2
+
+, X π 
+
+> 2
+
+0.5, 0.5 π 
+
+> 2
+
+, 0 0.5 12 Xπ , X π 
+
+> 2
+
+1.0, 0.5 0, 0 0.5 13 Xπ , Y π 
+
+> 2
+
+1.0, 0.5 0, π 
+
+> 2
+
+0.5 14 Yπ , X π 
+
+> 2
+
+1.0, 0.5 π 
+
+> 2
+
+, 0 0.5 15 Yπ , Y π 
+
+> 2
+
+1.0, 0.5 π 
+
+> 2
+
+, π 
+
+> 2
+
+0.5 16 X π 
+
+> 2
+
+, X π , 0.5, 1.0 0, 0 0.5 17 Y π 
+
+> 2
+
+, Y π , 0.5, 1.0 π 
+
+> 2
+
+, π 
+
+> 2
+
+0.5 18 X π 
+
+> 2
+
+, X π 
+
+> 2
+
+0.5, 0.5 0, 0 1.0 19 Y π 
+
+> 2
+
+, Y π 
+
+> 2
+
+0.5, 0.5 π 
+
+> 2
+
+, π 
+
+> 2
+
+1.0 20 Xπ , I 1.0, 0.0 0, 0 1.0 21 Yπ , I 1.0, 0.0 π 
+
+> 2
+
+, 0 1.0 
+
+30 K Implementation Details of Qubit Dynamics 
+
+All transmon qubit simulations are performed by solving the time-dependent Schrödinger equation under the Hamiltonian in 5 using dynamiqs [92 ], a JAX-based quantum dynamics library. We rely heavily on the library’s batching functionality to reduce compute time: all NQUBITS × NAllXY =4 × 21 independent quantum systems are evolved simultaneously within a single sesolve call by constructing a batched Hamiltonian of shape (NQUBITS × NAllXY × 3 × 3) , avoiding any Python-level loop over sequences or qubits. Each time-dependent drive is implemented as a scalar coefficient f (t) that modulates the Hamiltonian operator i( a† − a). Cross-talk between drive lines is incorporated via a linear transformation of the per-qubit coefficients at each time step. f is passed as a Python callable to dq.modulated ,which dynamiqs evaluates on demand at each step taken by the adaptive ODE solver. To account for per-qubit timing offsets tjδ , the integration window is expanded beyond [0 , 2tg ] to capture both earliest and latest arriving pulses, while each qubit’s envelope is still evaluated in its own shifted time coordinate τ j = t − tjδ , ensuring no pulse is truncated regardless of the sign of the delay. The full Jacobian of all-XY staircase outcomes with respect to all qubit control parameters is of shape (NQUBITS × NAllXY × NQUBITS × Nparams ), and is also computed in a single forward pass using jax.jacfwd , which leverages dynamiqs ’ forward sensitivity mode dq.gradient.Forward .This mode offer a speed advantage when the number of parameters is fewer than the number of outputs, which is true in our case. The resulting Jacobian blocks are used to construct the cross-talk compensation tensor via pseudoinversion. 
+
+# L Compute Resources and Cost 
+
+We iterated on various modifications of QADAPT on a cluster of NVIDIA RTX A4000 GPUs with 20 GB of GPU memory. All our hero runs were performed on NVIDIA 8xH100 GPUs with 80 GB of GPU memory. The cost of these hero runs add up to 2500 USD on the modal platform. 
+
+# M Code Availability 
+
+All the code for QADAPT is available through the anonymized url: https://anonymous.4open. science/r/rl-agent-for-qubit-array-tuning-71D1/README.md . We present the modal entry points to run this code as well. 31
