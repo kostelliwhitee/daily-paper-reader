@@ -1,0 +1,645 @@
+Title: CoDiMAD: Diffusion-Based Privileged Distillation for Communication-Free Multi-Robot Coordination
+
+URL Source: https://arxiv.org/pdf/2607.09587v1
+
+Published Time: Mon, 13 Jul 2026 01:17:31 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> 1
+
+# CoDiMAD: Diffusion-Based Privileged Distillation for Communication-Free Multi-Robot Coordination 
+
+Jiyue Tao 1, Shunheng Xin 1, Tongsheng Shen 2, Dexin Zhao 2,∗, and Feitian Zhang 1,∗
+
+Abstract —Decentralized multi-robot coordination under partial observability remains challenging, especially in communication-free settings where agents must act solely from local sensor observations. Privileged policy distillation provides a promising approach by transferring knowledge from a globally informed oracle to sensor-constrained students. However, in multi-agent systems, the same local observation may correspond to multiple global configurations requiring qualitatively different cooperative actions, making the conditional action distribution inherently multi-modal. Standard deterministic distillation collapses these modes to their mean, often yielding invalid or hesitant actions. To address this issue, we propose CoDiMAD, a three-stage framework that trains a privileged oracle with MAPPO, constructs an offline dataset of local-observation-oracle-action pairs, and distills the oracle into decentralized students parameterized as conditional denoising diffusion probabilistic models. By approximating the conditional oracle-action distribution through the diffusion reverse process, CoDiMAD samples decisive actions from coherent coordination modes rather than averaging across them. Theoretical analysis characterizes the mode-averaging failure of deterministic distillation and the distributional recovery property of diffusion-based distillation. Experiments on three cooperative tasks show that CoDiMAD consistently outperforms direct local MARL and deterministic distillation baselines. The source code will be made publicly available upon acceptance. 
+
+Index Terms —Multi-robot systems, imitation learning, rein-forcement learning, multi-agent diffusion policy. 
+
+I. I NTRODUCTION 
+
+# MULTI-ROBOT coordination underpins a growing range of applications, such as environmental monitoring [1], search and rescue [2], and cooperative manipulation [3], where teams of autonomous robots collectively accomplish objec-tives beyond individual capabilities. In practical deployments, scalability and communication constraints often necessitate 
+
+decentralized execution [4], where each agent acts based on its own sensor observations without relying on a central coor-dinator at runtime. The widely adopted Centralized Training Decentralized Execution (CTDE) paradigm [5]–[7] addresses this by leveraging global information during training, typically through a centralized critic, while constraining actor policies to local observations at deployment. 
+
+J. Tao, S. Xin, and F. Zhang are with the Robotics and Control Labora-tory, School of Advanced Manufacturing and Robotics, and the State Key Laboratory of Turbulence and Complex Systems, Peking University, Beijing, 100871, China (email: jiyuetao@pku.edu.cn; email: shxin25@stu.pku.edu.cn; email: feitian@pku.edu.cn). T. Shen and D. Zhao are with the National Innovation Institute of De-fense Technology, Beijing 100071, China (email: shents bj@126.com; email: zhaodx2008@163.com). 
+
+> ∗
+
+Send all correspondence to D. Zhao and F. Zhang. 
+
+Yet even with centralized value guidance, actors trained end-to-end from local observations usually converge slowly and settle on suboptimal coordination strategies. A primary cause is partial observability [4], as the same local observation may be consistent with multiple global configurations, each requiring a different cooperative response. This ambiguity is further amplified under communication-free execution , where robots cannot exchange observations to reduce uncertainty. Such constraints are particularly prevalent in marine robotics, where underwater vehicles suffer from severe acoustic latency and packet loss [8], and surface vessels face intermittent, range-limited radio-frequency links [9]. A principled way to mitigate partial observability is privi-leged policy distillation [10]. Instead of learning coordination directly under limited observations, one first trains an oracle policy with full state access, where the learning problem is substantially easier, and then transfers its behavior to sensor-constrained students via behavioral cloning (BC). This paradigm has achieved notable success in single-robot settings, including vision-based driving distilled from a map-equipped oracle [11] and proprioceptive locomotion distilled from a terrain-aware teacher [12]. Inspired by these successes, we extend privileged distillation to multi-robot coordination. However, this extension faces a fundamental challenge that is largely absent in single-robot tasks. In cooperative multi-agent systems, the oracle action for an individual robot may depend on the joint configuration of all agents and environment states beyond that robot’s sensing range. Consequently, the same local observation can correspond to multiple distinct oracle actions, inducing an inherently multi-modal conditional action distribution (Propo-sition 1). Standard deterministic policies cannot represent such distributions. Under common regression-based BC objectives such as mean squared error (MSE), they converge to the conditional mean, which may lie between distinct modes and correspond to no valid cooperative action (Corollary 1), leading to hesitant or degenerate coordination. To address this challenge, we propose CoDiMAD 
+
+(Co operative Di ffusion-based Multi-Agent Distillation), athree-stage framework that distills a privileged oracle into decentralized diffusion policies [13]. CoDiMAD first trains a MAPPO [14] oracle with global-state access, then collects an offline dataset pairing local observations with oracle ac-tions, and finally distills the oracle behavior into conditional denoising diffusion probabilistic models (DDPMs) [15]. By modeling the conditional action distribution rather than a point estimate, the diffusion student avoids mode averaging and can sample decisive actions from coherent coordination arXiv:2607.09587v1 [cs.RO] 10 Jul 2026 2
+
+modes. To overcome the high inference latency typical of diffusion models, we further integrate Denoising Diffusion Im-plicit Models (DDIM) [16] for accelerated, few-step sampling, thereby enabling real-time onboard deployment. The main contributions of this work are as follows.  
+
+> •
+
+We propose CoDiMAD, a privileged distillation frame-work that resolves multi-modal ambiguity in partially observable multi-agent coordination through conditional diffusion modeling. To the best of our knowledge, this is the first work to integrate diffusion-based generative policies into multi-robot privileged distillation.  
+
+> •
+
+We formally show that partial observability induces multi-modal action distributions under which regression-based distillation suffers from mode averaging, whereas diffusion-based generation approximates the conditional oracle action distribution.  
+
+> •
+
+We validate CoDiMAD on three cooperative tasks, demonstrating consistent improvements over direct lo-cal MARL and deterministic distillation baselines, with analyses confirming its ability to recover multi-modal coordination behaviors. II. R ELATED WORK 
+
+1) Multi-Agent Coordination: The CTDE paradigm [5]–[7] enables algorithms to use global information during training while executing with local observations. Many CTDE methods introduce learned communication channels [17]–[20] to ex-change task-relevant information at execution time. However, they typically assume reliable communication, which may be unavailable in communication-free or bandwidth-limited robotics deployments. Other approaches pursue implicit co-ordination through shared conventions [21] or heterogeneous policy architectures [22], but they still learn directly from partial observations and may therefore converge to suboptimal coordination strategies. 
+
+2) Privileged Policy Distillation: Privileged policy distilla-tion transfers knowledge from a teacher policy with privileged information to a student policy constrained by realistic sensory inputs, and has proven effective in single-agent settings [11], [12]. In multi-agent systems, Zhao et al. [23] introduced CTDS to distill centralized Q-values into decentralized student policies. More recently, Tang et al. [24] investigated resource-aware distillation for resource-constrained agents, while Cho et al. [25] proposed an interactive distillation framework to align student-teacher behaviors. However, these existing methods largely rely on deterministic regression objectives. Such objec-tives often reduce the multi-modal action distributions induced by partial observability to point estimates, thereby producing averaged, invalid coordination behaviors. 
+
+3) Diffusion Models for Decision-Making: Diffusion mod-els have recently emerged as a powerful tool for decision-making, including single-agent trajectory planning [26] and visuomotor policy learning [13], demonstrating strong capacity for modeling multi-modal behavior. In multi-agent settings, Negarmehr et al. [27] trained decentralized diffusion policies via imitation learning under a CTDE paradigm to achieve im-plicit coordination on bimanual manipulation tasks. However,                 
+
+> TABLE I OBSERVATION CHANNELS FOR THE ORACLE AND STUDENT POLICIES .Channel Oracle Student
+> Shared (egocentric)
+> LiDAR occupancy grid ✓✓
+> Ego-velocity field ✓✓
+> Privileged (global)
+> Ego-position heatmap (arena-scale) ✓×
+> Teammate position map (arena-scale) ✓×
+> Task-state map (arena-scale) ✓×
+> Local-only (student)
+> Teammate position map (sensing range) ×✓
+> Task-state map (sensing range) ×✓
+
+their approach relies heavily on high-quality, expert human demonstrations, which are difficult and expensive to scale to complex, dense coordination scenarios. In contrast, CoDiMAD leverages a privileged reinforcement learning oracle to gener-ate scalable supervision, bypassing the need for human demon-strations while retaining the multi-modal modeling advantages of diffusion-based multi-agent distillation. III. P ROBLEM FORMULATION 
+
+A. Dec-POMDP Formulation 
+
+We model multi-robot coordination as a Decentralized Par-tially Observable Markov Decision Process (Dec-POMDP) [4], defined by the tuple ⟨N, S, {A i}Ni=1 , {O i}Ni=1 , P, R, γ ⟩.There are N agents indexed by i ∈ { 1, . . . , N }, sharing a global state space S and a team reward R : S × A → R.Each agent i selects actions from a continuous individual action space Ai, which in our robot domains corresponds to a 2D velocity command [vx, v y ]. The joint action space is A = A1 × · · · × A N . The state transition function 
+
+P : S × A → ∆( S) maps a state and a joint action to a probability distribution over the next states. Each agent i
+
+does not observe the global state st ∈ S directly, but instead receives only a local observation oti ∈ O i and acts without direct communication. The objective is to learn decentralized policies πi(ati | o1: ti ) that maximize the expected cumulative team return, J(π) = E
+
+hPHt=0 γtR(st, at)
+
+i
+
+, where H is the episode horizon, at denotes the joint action, and γ ∈ [0 , 1) 
+
+denotes the discount factor. 
+
+B. Observation Spaces and Information Asymmetry 
+
+In this work, we instantiate the above formulation for a team of homogeneous robots. These agents share identical individ-ual observation and action spaces, allowing us to implement decentralized policies using shared parameters. To represent spatial and task-relevant information in a unified format, all local and global observations are structured as multi-channel bird’s-eye-view (BEV) grid maps with a spatial resolution of 
+
+32 ×32 , as summarized in Table I. The privileged oracle policy processes a dual-stream input (oloc  
+
+> i
+
+, oglo  
+
+> i
+
+). The local stream 
+
+oloc  
+
+> i
+
+∈ R2×32 ×32 consists of an egocentric LiDAR occupancy map and a velocity-field map. The privileged global stream 3Local Maps    
+
+> Global Maps
+> Environment
+> GRU
+> CNN
+> CNN
+> MLP
+> MAPPO Centralized Critic
+
+a!   
+
+> MAPPO
+> update
+> Dataset 𝒟
+> Oracle Policy Rollout
+
+a(#) 
+
+> Diffusion Process
+
+a(%)   
+
+> Conditioning
+> Local Maps
+> GRU
+> Denoising Head
+
+a(%)
+
+a(%&')a(#)  
+
+> 𝑇 −1
+> denoising
+> steps
+
+Stage 1. Oracle Policy Training Stage 2. Data Collection Stage 3. Diffusion Policy Training 
+
+c( 
+
+> 𝐨 !
+> "#$
+> 𝐨 !
+> %"#
+
+o(                        
+
+> CNN
+> Fig. 1. Overview of the CoDiMAD framework. (i) Stage 1 (Oracle Policy Training): The oracle actor encodes dual-stream inputs—local maps oloc
+> iand global maps oglo
+> i—through parallel CNN branches, aggregates temporal features via a GRU, and produces actions atthrough an MLP head. A centralized MAPPO critic provides privileged value estimates during training. (ii) Stage 2 (Data Collection): The converged oracle policy is rolled out to populate an offline dataset Dconsisting of local-observation-action pairs. (iii) Stage 3 (Diffusion Policy Training): A diffusion-based student policy πθis trained on D.A single-branch CNN–GRU encoder maps local observations oiinto a conditioning embedding ci. The denoising head ˆϵθiteratively refines Gaussian noise
+> a(T)into clean actions a(0) over Treverse diffusion steps conditioned on this embedding.
+
+oglo  
+
+> i
+
+∈ R3×32 ×32 contains three channels that encode arena-scale global information, including the absolute positions of the self-agent, its teammates, and the full task-state map (e.g., global target locations). In contrast, the student policy operates under realistic sensing limitations and observes only a single-stream tensor oi ∈ R4×32 ×32 , where the three global channels are replaced by two locally-restricted channels—a cropped task-state slice and teammate positions clipped to the agent’s limited sensing radius, which yields a 4-channel input com-bined with the two local channels from oloc  
+
+> i
+
+. This information asymmetry is the core source of multi-modal uncertainty: the same oti can be consistent with multiple global configurations, each potentially requiring a different coordination action. IV. M ETHODOLOGY 
+
+As illustrated in Fig. 1, CoDiMAD is a three-stage oracle-student distillation framework. In Stage 1, a shared oracle policy πO is trained via MAPPO with access to both local and privileged global observations. Stage 2 freezes πO and collects an offline dataset D of local-observation and oracle-action pairs from all agents instances and timesteps. In Stage 3, the oracle’s behavior is distilled into a shared diffusion-based student policy πθ conditioned solely on local observation his-tory. By adopting a DDPM as the policy class, the student can sample from the conditional oracle-action distribution induced by partial observability, rather than regressing to a single point estimate—thereby circumventing the mode-averaging failure formalized in Corollary 1. 
+
+A. Stage 1: Oracle Policy Training via MAPPO 
+
+We train the oracle policy πO following the CTDE paradigm using MAPPO. In our homogeneous robot domains, the oracle actor is shared across agents and is evaluated independently for each agent. The actor receives the dual-stream observation 
+
+(oloc  
+
+> i
+
+, oglo  
+
+> i
+
+) comprising both local and global map inputs, while the centralized critic receives the joint state for value estimation. During deployment, only the actor is retained for offline data collection, while the critic is discard. As shown in Fig. 1, the actor encodes (oloc  
+
+> i
+
+, oglo  
+
+> i
+
+) through a dual-branch convolutional encoder followed by a GRU [28] for temporal integration, and outputs a 2D velocity command [vx, v y ] via a diagonal Gaussian action head. The oracle policy is trained following the standard MAPPO configuration [14]. 
+
+B. Stage 2: Offline Trajectory Collection 
+
+Once the oracle policy converges, it is frozen and executed 
+
+deterministically by taking the mean of its Gaussian action distribution, rather than sampling. For each rollout step, we record (oti, ati, d ti) for all agents i and timesteps t, where oti
+
+is the student policy’s local observation, ati is the deterministic oracle action, and dti ∈ {0, 1} is the episode termination indicator used for hidden-state reset. Importantly, oti excludes the oracle’s privileged global stream and contains only the information available to the student at deployment. All samples from different agent instances and timesteps are pooled into a single offline dataset D for training the shared student policy. To ensure high-quality supervision, we filter the collected oracle rollouts by discarding episodes that fail to complete the task or contain any collision, and retain only collision-free successful episodes in the offline dataset. Actions are then z-score normalized dimension-wise over the full dataset, with per-dimension statistics (μa, σa) stored as model buffers for denormalization at inference. 4
+
+C. Stage 3: Diffusion-Based Behavioral Cloning 1) Architecture: The student policy πθ is a conditional denoising diffusion model comprising an observation encoder and a noise prediction network ˆϵθ . Unlike the oracle’s dual-branch encoder, the student encoder employs a single-branch convolutional network followed by a GRU, operating exclu-sively on the local observation stream. At each timestep, the encoder receives the local observation oti, while the GRU maintains a recurrent hidden state that summarizes the history 
+
+o1: ti . The hidden state is reinitialized at episode boundaries and produces a conditioning embedding cti. The noise prediction network receives the noisy action a(k) ∈ R2, a sinusoidal embedding of the diffusion timestep k, and the conditioning embedding cti as inputs. It comprises a cascade of residual MLP blocks, where the fused conditioning signal (cti + tk)
+
+is injected into each block to preserve observation-dependent information throughout the network depth. The output is the predicted noise vector ˆϵθ (a(k), k, c) ∈ R2.
+
+2) Training Objective: Let a(0) denote the normalized oracle action. For notational simplicity, we omit the agent and time indices in the following diffusion equations. The forward diffusion process corrupts the clean action a(0) by systematically adding Gaussian noise over T = 200 timesteps according to a cosine noise schedule 
+
+a(k) = √¯αk a(0) + √1 − ¯αk ϵ, ϵ ∼ N (0, I), (1) where k ∈ { 1, . . . , T } indexes the diffusion step, and ¯αk repre-sents the noise schedule coefficient. To train the student policy 
+
+πθ to mimic the oracle’s expertise under partial observability, we optimize the noise prediction network ˆϵθ following the DDPM framework [15]. The network is trained to reconstruct the added noise ϵ from the perturbed action a(k) under the guidance of the conditioning context c. The training loss is formulated with a per-timestep reweighting scheme 
+
+L = Ek, ϵ, (a(0) ,o)∼D 
+
+
+
+(1 − ¯αk) ϵ − ˆϵθ
+
+ a(k), k, c 2
+
+. (2) Here, (1 − ¯αk) downweights nearly clean samples and empha-sizes high-noise regimes, where denoising requires stronger dependence on the observation-conditioned prior. 
+
+3) DDIM Inference: The full DDPM reverse process re-quires T = 200 sequential denoising steps per action sample, which is costly for closed-loop robot control. Song et al. [16] show that a non-Markovian reverse process can preserve the same training marginals as DDPM, yielding the deterministic DDIM sampler with substantially fewer denoising steps. We adopt DDIM with a uniformly sub-sampled schedule of K =20 steps, achieving a 10 × reduction in inference cost without retraining, since the same noise prediction network ˆϵθ is used. Let {τj }Kj=0 denote the sub-sampled timestep sequence, where 
+
+τ0 = 0 and τK = T . Starting from a(τK ) ∼ N (0, I), we iteratively compute, for j = K, . . . , 1,
+
+a(τj−1) = p¯ατj−1
+
+a(τj ) − p1 − ¯ατj ˆϵθ
+
+ a(τj ), τ j , cp¯ατj
+
++ p1 − ¯ατj−1 ˆϵθ
+
+ a(τj ), τ j , c.
+
+(3) 
+
+Algorithm 1 CoDiMAD: Oracle-Student Distillation 
+
+Ensure: Trained student policy πθEMA  
+
+> 1:
+
+Stage 1: Privileged Oracle Training  
+
+> 2:
+
+Train shared oracle actor πO and centralized critic V via MAPPO using local and privileged global observations 
+
+(oloc  
+
+> i
+
+, oglo  
+
+> i
+
+); freeze πO 
+
+> 3:
+
+Stage 2: Offline Dataset Collection  
+
+> 4:
+
+D ← ∅  
+
+> 5:
+
+for episode e = 1 , . . . , E do  
+
+> 6:
+
+Be ← ∅  
+
+> 7:
+
+Reset environment  
+
+> 8:
+
+for t = 0 , 1, . . . , H − 1 do  
+
+> 9:
+
+for agent i = 1 , . . . , N do  
+
+> 10:
+
+ati ← μπO (ot, loc  
+
+> i
+
+, ot, glo  
+
+> i
+
+) 
+
+> 11:
+
+end for  
+
+> 12:
+
+Step environment with joint action at = {ati}Ni=1 and obtain done flags {dti}Ni=1  
+
+> 13:
+
+for agent i = 1 , . . . , N do  
+
+> 14:
+
+Store (ot, loc  
+
+> i
+
+, ati, d ti) into Be 
+
+> 15:
+
+end for  
+
+> 16:
+
+end for  
+
+> 17:
+
+if episode e is successful and collision-free then  
+
+> 18:
+
+D ← D ∪ B e 
+
+> 19:
+
+end if  
+
+> 20:
+
+end for  
+
+> 21:
+
+Normalize: a ← (a − μa) / σa, ∀(·, a, ·) ∈ D  
+
+> 22:
+
+Stage 3: Diffusion Policy Distillation  
+
+> 23:
+
+Initialize student parameters θ and EMA copy θEMA ← θ 
+
+> 24:
+
+repeat  
+
+> 25:
+
+for mini-batch (o, a(0) , d ) ∼ D do  
+
+> 26:
+
+c ← fθ (o; h) ▷ reset h when d = 1  
+
+> 27:
+
+Sample k ∼ U{ 1, . . . , T } and ϵ ∼ N (0, I) 
+
+> 28:
+
+a(k) ← √¯αk a(0) + √1 − ¯αk ϵ 
+
+> 29:
+
+L ← (1 − ¯αk) ϵ − ˆϵθ (a(k), k, c) 2 
+
+> 30:
+
+Update θ by minimizing L 
+
+> 31:
+
+θEMA ← λθ EMA + (1 − λ)θ 
+
+> 32:
+
+end for  
+
+> 33:
+
+until convergence  
+
+> 34:
+
+return πθEMA 
+
+Although the DDIM update is deterministic conditioned on the initial noise, different initial noise samples can yield different action modes. The final normalized action a(0) is denormalized using the stored statistics (μa, σa) to produce the velocity command. Algorithm 1 summarizes the complete three-stage training procedure. 
+
+D. Theoretical Analysis 
+
+The key difficulty in privileged multi-agent distillation is that the oracle conditions on global information, whereas the student only observes a local projection. Consequently, a single local observation may correspond to multiple global configurations and thus to multiple valid oracle actions. This turns oracle-to-student distillation into a conditional density estimation problem rather than a simple regression problem. 5
+
+Proposition 1 (Multi-modality from partial observability) . Let 
+
+μπO (s) denote the deterministic oracle action at global state 
+
+s, and let oi = h(s) be the local observation available to the student. Suppose that, conditioned on a local observation 
+
+oi, the posterior over global states decomposes into C ≥ 2
+
+configuration classes {S j }Cj=1 with weights wj = p(s ∈ S j |
+
+oi) > 0 and PCj=1 wj = 1 . Assume that the oracle actions induced by states within each class are locally distributed as 
+
+N (μj , σ 2 
+
+> j
+
+I), and that the class means are well separated: 
+
+∆ ≜ min   
+
+> j̸=l
+
+∥μj − μl∥ ≫ σmax ≜ max  
+
+> j
+
+σj .
+
+Then the conditional oracle-action distribution pD (a | oi) is multi-modal, with multiple separated high-density regions. Proof sketch. Because the oracle policy is deterministic, con-ditioning on the global state s fixes the action, i.e. pD (a | s) = 
+
+δ a − μπO (s). Marginalizing the hidden global state out of the posterior p(s | oi) gives 
+
+pD (a | oi) = 
+
+Z
+
+pD (a | s) p(s | oi) ds. 
+
+Since {S j }Cj=1 partitions the support of the posterior, we split the integral class by class and factor out the class weights 
+
+wj = R 
+
+> Sj
+
+p(s | oi) ds :
+
+pD (a | oi) = 
+
+> C
+
+X
+
+> j=1
+
+wj pD (a | s ∈ S j , oi),
+
+where each term is the action distribution induced by the states of a single configuration class. By assumption these class-conditional distributions are approximately N (μj , σ 2 
+
+> j
+
+I), which yields the mixture 
+
+pD (a | oi) ≈
+
+> C
+
+X
+
+> j=1
+
+wj N (a; μj , σ 2 
+
+> j
+
+I). (4) Under the separation condition ∆ ≫ σmax , the components have negligible pairwise overlap, so each μj corresponds to a distinct high-density region and the mixture is multi-modal. 
+
+Corollary 1 (Mode averaging under deterministic distillation) .
+
+Consider the two-mode special case of (4) ,
+
+pD (a | oi) = w N (a; μ1, σ 2I) + (1 − w) N (a; μ2, σ 2I),
+
+where ∆ = ∥μ1 − μ2∥ and w ∈ (0 , 1) . The MSE-optimal deterministic student is the conditional mean 
+
+f ∗(oi) = wμ1 + (1 − w)μ2. (5) 
+
+Let m = min( w, 1 − w). Then the distance from f ∗(oi) to its nearest mode is 
+
+min  
+
+> j∈{ 1,2}
+
+∥f ∗(oi) − μj ∥ = m∆.
+
+Therefore, the mixture density at the deterministic prediction satisfies 
+
+pD (f ∗(oi) | oi) ≤ (2 πσ 2)−da/2 exp 
+
+
+
+− m2∆2
+
+2σ2
+
+
+
+. (6) 012r lr c 0 12Er er l          
+
+> box 012rl
+> (a) Coverage (b) Pursuit-Evasion (c) Box Pushing
+> Fig. 2. Overview of the three evaluation environments. (a) Coverage: agents cooperatively explore the arena to maximize grid coverage. (b) Pursuit-Evasion: pursuers cooperate to capture a faster evader. (c) Box Pushing: agents push a heavy box to the goal region. rldenotes the LiDAR detection range,
+> rcdenotes the coverage radius, and redenotes the capture radius.
+
+Thus, in the well-separated regime m∆ ≫ σ, the density assigned to the deterministic prediction decays exponentially in (m∆/σ )2. Consequently, the conditional mean falls in an exponentially low-density region between valid oracle actions. 
+
+Remark 1 (Diffusion policies as conditional density models) .
+
+The denoising objective in (2) trains the model to estimate the conditional score of the noised action distribution qk(a(k) | c)ˆϵ∗ 
+
+> θ
+
+(a(k), k, c) = −√1 − ¯αk ∇a(k) log qk(a(k) | c)
+
+in the ideal limit of infinite data and model capacity [15], [29]. With the exact conditional score, the ideal reverse diffusion process samples from the full distribution pD (a | oi) [30], avoiding the mode-averaging collapse of Corollary 1. Hence, for the multi-modal distribution in Proposition 1, diffusion sampling can generate actions concentrated near individual modes instead of averaging across modes. While practical implementations use finite data, finite-capacity networks, and a finite number of denoising steps, they retain the key advantage of modeling a conditional action distribution rather than a single conditional mean. 
+
+V. E XPERIMENTS 
+
+A. Evaluation Environments 
+
+We evaluate CoDiMAD on three cooperative multi-robot tasks, as shown in Fig. 2. All tasks are implemented in a 
+
+200 × 200 continuous arena with N = 3 agents, randomized obstacles, and 200-step episodes. The observation encoding is summarized in Table I.  
+
+> •
+
+Cooperative Coverage : Agents explore the arena to maximize coverage of the occupancy grid. The reward en-courages discovering new cells, penalizes collisions, and grants a bonus upon completing the coverage objective.  
+
+> •
+
+Pursuit-Evasion : Pursuers cooperate to capture a single evader controlled by an Artificial Potential Field (APF) policy. The evader has a maximum speed twice that of the pursuers. The reward combines a capture bonus, a distance-shaping term, and a collision penalty.  
+
+> •
+
+Box Pushing : Agents cooperatively push a heavy box toward a randomly placed goal zone. The reward encour-ages box displacement toward the goal and simultaneous multi-agent contact, while penalizing collisions. 6
+
+> TABLE II PERFORMANCE COMPARISON ACROSS THREE COOPERATIVE TASKS .
+
+Coverage Pursuit-Evasion Box Pushing 
+
+Method Cov. Rate (%) ↑ Collision ↓ Cap. Rate (%) ↑ Collision ↓ Suc. Rate (%) ↑ Collision ↓
+
+MAPPO-Oracle † 97.6 ±0.3 0.42 ±0.22 99.1 ±0.6 0.83 ±0.15 98.2 ±1.4 1.18 ±0.05 
+
+MAPPO-Local 83.7 ±1.0 0.71 ±0.22 14.2 ±1.0 1.89 ±0.40 18.0 ±4.3 1.17 ±0.13 
+
+BC-RNN 80.9 ±0.9 10.37 ±1.15 90.3 ±1.7 3.41 ±0.48 6.5 ±2.5 10.32 ±0.67 CoDiMAD w/o RNN 94.8 ±0.3 0.81 ±0.10 84.0 ±3.5 1.41 ±0.27 68.9 ±0.5 2.39 ±0.27 
+
+CoDiMAD (Ours) 95.7 ±0.7 0.55 ±0.08 90.6 ±1.8 0.80 ±0.06 72.2 ±0.5 2.37 ±0.20 
+
+> †
+
+Non-deployable privileged policy (upper bound). 
+
+B. Experimental Setup 
+
+To isolate the individual contributions of privileged distil-lation, temporal history encoding, and diffusion-based action generation, we compare CoDiMAD against four comparison methods, including one privileged upper bound:  
+
+> •
+
+MAPPO-Oracle (Upper Bound): The privileged policy trained with full global state via MAPPO. While non-deployable in practical scenarios, it establishes the per-formance ceiling.  
+
+> •
+
+MAPPO-Local : MAPPO trained exclusively on local observations, representing the performance baseline of communication-free, model-free MARL.  
+
+> •
+
+BC-RNN : A deterministic distillation baseline sharing the same recurrent observation encoder as CoDiMAD, but replacing the diffusion head with an MLP trained via MSE regression. This variant isolates the effect of diffusion-based action generation.  
+
+> •
+
+CoDiMAD w/o RNN : An ablation that removes the GRU and conditions solely on single-frame observations, isolating the contribution of temporal history encoding. All methods are implemented in PyTorch and trained on an NVIDIA RTX 4090 GPU. The oracle policy is trained for 
+
+5 M environment steps. For the student, the noise prediction network consists of three residual MLP blocks with hidden dimension 128 , and the observation encoder uses a GRU layer with the same hidden size. The forward diffusion process employs a cosine noise schedule ( s = 0 .008 , β ∈ [10 −4, 0.02] )with T = 200 training steps, while DDIM inference uses 
+
+K = 20 denoising steps. The student network is optimized with AdamW (lr = 10 −4) and exponential moving average (with a decay of 0.99 ) for 50 epochs with a batch size 128 .
+
+C. Comparative Results 
+
+We evaluate each method across three random seeds, with each seed evaluated over 200 episodes. We report task-specific success metrics, including coverage rate, capture rate, and box-pushing success rate, together with a collision metric. The collision metric measures the average number of total collisions per episode, including both inter-agent and obstacle collisions. Table II summarizes the quantitative results. Bold entries denote the best-performing deployable method for each metric. We organize the analysis into four pairwise comparisons. 
+
+CoDiMAD vs. MAPPO-Oracle. Despite relying only on local observations and using no inter-agent communication, CoDiMAD closely approaches the privileged oracle on two of the three tasks. On Coverage, CoDiMAD achieves 95 .7% 
+
+coverage rate compared with the oracle’s 97 .6% , retaining approximately 98% of oracle-level performance while main-taining a comparably low collision count. On Pursuit-Evasion, CoDiMAD reaches a 90 .6% capture rate compared with the oracle’s 99 .1% , with similar collision frequency. On Box Push-ing, CoDiMAD achieves 72 .2% success compared with the oracle’s 98 .2% , which is the largest gap among the three tasks. This gap reflects the tight force-coordination requirements of cooperative manipulation, where small deviations in pushing timing or angle can lead to failure. These results indicate that diffusion-based distillation transfers a substantial portion of the globally-informed cooperative behavior to a sensor-constrained decentralized student. 
+
+Diffusion vs. regression (CoDiMAD vs. BC-RNN). CoDi-MAD consistently outperforms BC-RNN, supporting the mo-tivation developed in Section IV-D. On Coverage, CoDiMAD achieves 95 .7% coverage rate compared with BC-RNN’s 
+
+80 .9% , corresponding to a 14 .8 percentage-point improve-ment. At the same time, it reduces collisions from 10 .37 
+
+to 0.55 per episode, an approximately 19 × reduction. This large collision reduction is consistent with the mode-averaging failure of deterministic regression. For example, when the oracle action distribution contains two valid modes, such as bypassing an obstacle from the left or from the right, BC-RNN may regress to their conditional mean, producing an intermediate action that drives the agent approximately straight toward the obstacle. Such averaged actions do not correspond to any valid coordination mode and therefore substantially increase collision risk (cf. Corollary 1). On Pursuit-Evasion, the two methods achieve comparable capture rates ( 90 .6% vs. 90 .3% ), but CoDiMAD reduces col-lisions from 3.41 to 0.80 , a 4.3× improvement. This suggests that BC-RNN can often produce actions sufficient for eventual capture, yet its averaged trajectories are less coordinated and more collision-prone. On Box Pushing, the advantage of CoDiMAD becomes more pronounced: it achieves 72 .2% 
+
+success rate compared with BC-RNN’s 6.5% . This result suggests that the gap between CoDiMAD and deterministic regression may become larger as task difficulty increases, 7Mode 1/2 Centroids     
+
+> Mode 1/2 Centroids
+> Oracle actions BC-RNN output
+> Fig. 3. Conditional action distributions under partial observability. Under a fixed local observation oiin the Pursuit-Evasion task, the same local percept can be compatible with multiple global states and therefore multiple valid oracle actions. (a) Oracle actions from the 200 nearest-neighbor observations in the dataset, revealing two distinct coordination modes. (b) 200 independent CoDiMAD samples conditioned on the same observation embedding with different initial diffusion noise, capturing both modes. (c) The deterministic BC-RNN output (red cross) plotted against the oracle distribution (gray), illustrating the mode-averaging behavior, predicted by Corollary 1.
+
+particularly when success requires precise and sustained multi-agent coordination. 
+
+Distillation vs. direct local RL (CoDiMAD vs. MAPPO-Local). CoDiMAD substantially outperforms MAPPO trained end-to-end from local observations, validating the privileged distillation paradigm. The gap is especially large on Pursuit-Evasion, where MAPPO-Local achieves only 14 .2% capture rate compared with CoDiMAD’s 90 .6% . Pursuit requires co-ordinated behaviors such as flanking and encirclement, which are difficult to discover from local observations and sparse task rewards alone. On Box Pushing, a similar pattern emerges: MAPPO-Local achieves 18 .0% success rate compared with CoDiMAD’s 72 .2% , as cooperative manipulation requires agents to discover pushing configurations that are highly sensi-tive to relative positioning. On Coverage, MAPPO-Local per-forms comparatively better, yet CoDiMAD still outperforms it by 12 .0 percentage points with fewer collisions. Across all tasks, the distillation pipeline mitigates the exploration bottleneck by first learning coordinated behavior in the fully-observable setting and then transferring that behavior to a sensor-constrained decentralized student. 
+
+Temporal history (CoDiMAD vs. CoDiMAD w/o RNN). 
+
+Removing the GRU leads to a moderate but consistent per-formance drop across all three tasks. The effect is most visible on Pursuit-Evasion, where the capture rate decreases from 90 .6% to 80 .4% and collisions increase from 0.80 to 
+
+1.41 per episode. On Coverage and Box-Pushing, the gaps are smaller, but still indicate a positive contribution from temporal history. These results suggest that the GRU provides useful contextual information for disambiguating single-frame observations, especially in sequential coordination tasks. 
+
+D. Analysis of Multi-Modal Behavior 
+
+The theoretical analysis in Section IV-D suggests that par-tial observability can induce multi-modal conditional action distributions, that deterministic regression yields invalid mode-averaged outputs, and that diffusion sampling recovers individ-ual modes. We empirically examine these claims using action-space visualizations and rollout-level trajectory comparisons. Agent 1 Agent 2 Agent 3 
+
+(a) BC-RNN (Coverage) (b) CoDiMAD (Coverage) 
+
+(c) BC-RNN (Pursuit) (d) CoDiMAD (Pursuit)   
+
+> Agent 1 Agent 2 Agent 3 Evader
+> Fig. 4. Trajectory diversity from identical initial states. Five rollouts are shown for each method from the same initial condition. (a) and (b): Coverage. (c) and (d): Pursuit-Evasion. CoDiMAD produces diverse but individually coherent trajectories, corresponding to different coordination modes. BC-RNN collapses to a single deterministic trajectory across rollouts.
+
+1) Action Distribution Visualization: To visualize action multi-modality, we select a local observation oi from the Pursuit-Evasion dataset whose nearest neighbors in obser-vation space exhibit bimodal oracle actions. This indicate that similar local observations may correspond to differ-ent global configurations requiring different cooperative re-sponses. Fig. 3(a) shows the oracle actions of the 200 nearest neighbors in the 2D action space, where two clear clusters emerge. Fig. 3(b) shows that CoDiMAD, sampled 200 times from the same observation embedding with independent ini-tial diffusion noise, generates actions covering both oracle modes. In contrast, Fig. 3(c) shows that BC-RNN produces a single deterministic output located between the two clusters, consistent with the mode-averaging behavior described in Corollary 1. 
+
+2) Trajectory Diversity: We further examine whether action-level multi-modality leads to distinct coordination strategies over time. Starting from identical initial states, we execute five independent rollouts for both CoDiMAD and BC-RNN. As shown in Fig. 4, CoDiMAD produces diverse but coherent trajectories across rollouts: agents may cover different regions in Coverage or adopt different approach paths in Pursuit-Evasion. By contrast, BC-RNN produces the same deterministic trajectory across rollouts, reflecting its lack of sampling diversity. These results show that CoDiMAD’s stochastic diffusion policy preserves multi-modal behavior over extended horizons, enabling different valid coordination strategies from the same initial condition. 8
+
+VI. C ONCLUSION 
+
+We presented CoDiMAD, a three-stage learning framework for communication-free multi-robot coordination. CoDiMAD first trains a privileged MAPPO oracle policy with access to the full global state, and then distills its behavior into deploy-able student policies parameterized as conditional denoising diffusion models that act solely on local observations. Unlike regression-based distillation, which predicts a single condi-tional mean action, CoDiMAD parameterizes each student policy as a conditional denoising diffusion model and therefore learns the full conditional action distribution induced by partial observability. This allows each agent to sample actions from coherent coordination modes rather than averaging across multiple valid strategies. Experiments on three multi-agent tasks show that CoDiMAD consistently outperforms both direct local MARL and deterministic distillation baselines, while approaching the performance of the privileged oracle under communication-free decentralized execution. Action-distribution and trajectory visualizations further support our theoretical analysis: local observations can correspond to multi-modal oracle action distributions, CoDiMAD recovers distinct modes through diffusion sampling, and determinis-tic distillation method tends to produce intermediate mode-averaged actions. Several limitations suggest directions for future work. First, as an offline distillation method, CoDiMAD may struggle to recover from states outside the oracle’s trajectory distribution. Incorporating online fine-tuning with diffusion-compatible RL objectives [31] could improve robustness under such distribu-tion shifts. Second, scalability beyond N = 3 agents remains to be evaluated. As the number of agents grows, the coordination space may become increasingly complex, motivating more expressive architectures such as attention-based denoisers. Finally, deployment on physical marine robots is an ongoing direction of our work, aiming to validate its applicability in real-world communication-constrained environments. REFERENCES [1] Y. Zhou, L. Quang, C. Nieto-Granda, and G. Loianno, “Coped-advancing multi-robot collaborative perception: A comprehensive dataset in real-world environments,” IEEE Robot. Automat. Lett. , vol. 9, no. 7, 2024. [2] H. Zhang, J. Cheng, L. Zhang, Y. Li, and W. Zhang, “H2gnn: Hierarchical-hops graph neural networks for multi-robot exploration in unknown environments,” IEEE Robot. Automat. Lett. , vol. 7, no. 2, pp. 3435–3442, 2022. [3] H. Zhang, X. Zhang, Z. Feng, and X. Xiao, “Heterogeneous multi-robot cooperation with asynchronous multi-agent reinforcement learning,” 
+
+IEEE Robot. Automat. Lett. , vol. 9, no. 1, pp. 159–166, 2024. [4] F. A. Oliehoek and C. Amato, A concise introduction to decentralized POMDPs . Springer, 2016, vol. 1. [5] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environments,” in 
+
+Proc. Adv. Neural Inf. Process. Syst. , vol. 30, 2017, pp. 6379–6390. [6] T. Rashid, M. Samvelyan, C. S. De Witt, G. Farquhar, J. Foerster, and S. Whiteson, “Monotonic value function factorisation for deep multi-agent reinforcement learning,” J. Mach. Learn. Res. , vol. 21, no. 178, pp. 1–51, 2020. [7] J. Tao, T. Shen, D. Zhao, and F. Zhang, “ARBoids: Adaptive residual reinforcement learning with boids model for cooperative multi-USV target defense,” IEEE Robot. Automat. Lett. , vol. 11, no. 3, pp. 3637– 3644, 2026. [8] Z. Zhou, J. Liu, and J. Yu, “A survey of underwater multi-robot systems,” 
+
+IEEE/CAA J. Autom. Sin. , vol. 9, no. 1, pp. 1–18, 2021. [9] X. An, C. Wu, Y. Lin, M. Lin, T. Yoshinaga, and Y. Ji, “Multi-robot systems and cooperative object transport: Communications, platforms, and challenges,” IEEE Open J. Comput. Soc. , vol. 4, pp. 23–36, 2023. [10] V. Vapnik and A. Vashist, “A new learning paradigm: Learning using privileged information,” Neural Netw. , vol. 22, no. 5-6, pp. 544–557, 2009. [11] D. Chen, B. Zhou, V. Koltun, and P. Kr¨ ahenb¨ uhl, “Learning by cheating,” in Proc. Conf. Robot Learn. , 2020, pp. 66–75. [12] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: Rapid motor adaptation for legged robots,” in Proc. Robot. Sci. Syst. , 2021. [13] C. Chi et al. , “Diffusion policy: Visuomotor policy learning via action diffusion,” Int. J. Robot. Res. , vol. 44, no. 10-11, pp. 1684–1704, 2025. [14] C. Yu et al. , “The surprising effectiveness of PPO in cooperative multi-agent games,” in Proc. Adv. Neural Inf. Process. Syst. , vol. 35, 2022, pp. 24 611–24 624. [15] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” in Proc. Adv. Neural Inf. Process. Syst. , vol. 33, 2020, pp. 6840–6851. [16] J. Song, C. Meng, and S. Ermon, “Denoising diffusion implicit models,” in Proc. Int. Conf. Learn. Represent. , 2021. [17] S. Sukhbaatar, A. Szlam, and R. Fergus, “Learning multiagent commu-nication with backpropagation,” in Proc. Adv. Neural Inf. Process. Syst. ,vol. 29, 2016, pp. 2244–2252. [18] J. N. Foerster, Y. M. Assael, N. de Freitas, and S. Whiteson, “Learning to communicate with deep multi-agent reinforcement learning,” in Proc. Adv. Neural Inf. Process. Syst. , vol. 29, 2016. [19] A. Das et al. , “TarMAC: Targeted multi-agent communication,” in Proc. Int. Conf. Mach. Learn. , 2019, pp. 1538–1546. [20] J. Jiang and Z. Lu, “Learning attentional communication for multi-agent cooperation,” in Proc. Adv. Neural Inf. Process. Syst. , vol. 31, 2018, pp. 7254–7264. [21] H. Hu, A. Lerer, B. Cui, L. Pineda, N. Brown, and J. Foerster, “Off-belief learning,” in Proc. Int. Conf. Mach. Learn. , 2021, pp. 4369–4379. [22] Y. Zhong, J. G. Kuba, X. Feng, S. Hu, J. Ji, and Y. Yang, “Heterogeneous-agent reinforcement learning,” J. Mach. Learn. Res. ,vol. 25, no. 32, pp. 1–67, 2024. [23] J. Zhao, X. Hu, M. Yang, W. Zhou, J. Zhu, and H. Li, “CTDS: Cen-tralized teacher with decentralized student for multiagent reinforcement learning,” IEEE Trans. Games , vol. 16, no. 1, pp. 140–150, 2022. [24] C. Tang et al. , “KD-MARL: Resource-aware knowledge distillation in multi-agent reinforcement learning,” arXiv preprint arXiv:2604.06691 ,2025. [25] M. Cho, B. Altundas, and M. Gombolay, “Interactive distillation for cooperative multi-agent reinforcement learning,” arXiv preprint arXiv:2601.05407 , 2026. [26] M. Janner, Y. Du, J. B. Tenenbaum, and S. Levine, “Planning with diffusion for flexible behavior synthesis,” in Proc. Int. Conf. Mach. Learn. , 2022, pp. 9902–9915. [27] N. Negarmehr, N. Mehr et al. , “MIMIC-D: Multi-modal imitation for multi-agent coordination with decentralized diffusion policies,” arXiv preprint arXiv:2509.14159 , 2025. [28] K. Cho et al. , “Learning phrase representations using rnn encoder– decoder for statistical machine translation,” in Proc. Conf. Empirical Methods Nat. Lang. Process. , 2014, pp. 1724–1734. [29] P. Vincent, “A connection between score matching and denoising au-toencoders,” Neural Comput. , vol. 23, no. 7, pp. 1661–1674, 2011. [30] Y. Song, J. Sohl-Dickstein, D. P. Kingma, A. Kumar, S. Ermon, and B. Poole, “Score-based generative modeling through stochastic differ-ential equations,” in Proc. Int. Conf. Learn. Represent. , 2021. [31] P. Hansen-Estruch, I. Kostrikov, M. Janner, J. G. Kuba, and S. Levine, “IDQL: Implicit q-learning as an actor-critic method with diffusion policies,” arXiv preprint arXiv:2304.10573 , 2023.

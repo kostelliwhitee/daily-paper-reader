@@ -6,46 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-13
-- 运行时间：2026-07-13 21:31:16 UTC
+- 最新运行日期：2026-07-14
+- 运行时间：2026-07-14 21:40:26 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：3
-- 速读区：5
+- 本次总论文数：6
+- 精读区：2
+- 速读区：4
 
 ### 今日简报（AI）
-1) 今日精选8篇新论文，精读聚焦智能仓库自动化代理Eluna与异构视觉语言模型高效组合MOSAIC，速读涵盖稀疏注意力及量子设备多智能体调优。
-2) 最值得关注的两个方向：一是通过Agentic LLM将推理与任务执行整合到仓库操作中（Eluna，8.0/10），二是利用自适应层间组合让不同规模模型高效协作（MOSAIC，8.0/10）。
-3) 建议普通读者优先阅读Eluna与MOSAIC，理解LLM如何从对话走向实际自动化执行，以及如何灵活搭配大小模型以兼顾性能与效率。
-- 详情：[/202607/13/README](/202607/13/README)
+今日6篇论文聚焦多智能体系统核心瓶颈，提出状态算子抽象、探索失败诊断及高效推理新方案。  
+精读推荐【AAFLOW+】的零拷贝KV缓存编排与【Multi-Agent LLMs Fail to Explore Each Other】的协作探索失效分析，两者均获8.0高分，直指分布式部署与交互短板。  
+建议普通读者优先关注探索失败论文，它揭示了当前多智能体LLM的常见误区，对设计更鲁棒的协作系统有直接启发。
+- 详情：[/202607/14/README](/202607/14/README)
 
 ### 精读区论文标签
-1. [Eluna: An Agentic LLM System for Automating Warehouse Operations with Reasoning and Task Execution](/202607/13/2607.08960v1-eluna-an-agentic-llm-system-for-automating-warehouse-operations-with-reasoning-and-task-execution)  
+1. [[AAFLOW+] Stateful Operator Abstraction with Zero-Copy Distributed KV Cache Orchestration for Multi-Agent Workflows](/202607/14/2607.10987v1-aaflow-stateful-operator-abstraction-with-zero-copy-distributed-kv-cache-orchestration-for-multi-agent-workflows)  
    标签：评分：8.0/10、query:ma-la
-   evidence：用于仓库运营的多智能体框架
-2. [MOSAIC: Adaptive Inter-layer Composition for Efficient Heterogeneous Vision-Language Models](/202607/13/2607.09029v1-mosaic-adaptive-inter-layer-composition-for-efficient-heterogeneous-vision-language-models)  
+   evidence：分布式KV缓存实现可扩展多智能体工作流
+2. [Multi-Agent LLMs Fail to Explore Each Other](/202607/14/2607.11250v1-multi-agent-llms-fail-to-explore-each-other)  
    标签：评分：8.0/10、query:ma-la
-   evidence：明确提及线性注意力用于高效视觉语言模型
-3. [ARCANA: A Reflective Multi-Agent Program Synthesis Framework for ARC-AGI-2 Reasoning](/202607/13/2607.09059v1-arcana-a-reflective-multi-agent-program-synthesis-framework-for-arc-agi-2-reasoning)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：反思式多智能体程序合成框架
+   evidence：多智能体探索动力学
 
 ### 速读区论文标签
-1. [COBS: Cumulant Order Block Sparse Attention](/202607/13/2607.09052v1-cobs-cumulant-order-block-sparse-attention)  
+1. [KV-PRM: Efficient Process Reward Modeling via KV-Cache Transfer for Multi-Agent Test-Time Scaling](/202607/14/2607.09153v1-kv-prm-efficient-process-reward-modeling-via-kv-cache-transfer-for-multi-agent-test-time-scaling)  
    标签：评分：7.0/10、query:ma-la
-   evidence：块稀疏注意力方法用于高效LLM推理
-2. [STEEL: Sparsity-Aware Fused Attention for Energy-Efficient Long-Sequence Inference on AMD's XDNA NPU](/202607/13/2607.09385v1-steel-sparsity-aware-fused-attention-for-energy-efficient-long-sequence-inference-on-amds-xdna-npu)  
+   evidence：通过KV缓存传输实现多智能体系统的可扩展注意力
+2. [CoDiMAD: Diffusion-Based Privileged Distillation for Communication-Free Multi-Robot Coordination](/202607/14/2607.09587v1-codimad-diffusion-based-privileged-distillation-for-communication-free-multi-robot-coordination)  
    标签：评分：7.0/10、query:ma-la
-   evidence：稀疏感知融合注意力用于高效长序列推理
-3. [Action-Factored Multi-Agent Reinforcement Learning for Scalable Quantum Device Tuning](/202607/13/2607.09422v1-action-factored-multi-agent-reinforcement-learning-for-scalable-quantum-device-tuning)  
+   evidence：无通信多机器人协调
+3. [Route, Communicate, and Reason: Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning](/202607/14/2607.10836v1-route-communicate-and-reason-gated-routing-and-adaptive-depth-for-efficient-multi-agent-reasoning)  
    标签：评分：7.0/10、query:ma-la
-   evidence：合作多智能体强化学习，动作分解实现可扩展学习
-4. [Mosaic: Runtime-Efficient Multi-Agent Embodied Planning](/202607/13/2607.09603v1-mosaic-runtime-efficient-multi-agent-embodied-planning)  
+   evidence：门控智能体间通信与自适应深度多智能体推理
+4. [Interpreting Rewards from Inverse Reinforcement Learning](/202607/14/biorxiv-10-64898-2026-07-08-736783-v1-interpreting-rewards-from-inverse-reinforcement-learning)  
    标签：评分：7.0/10、query:ma-la
-   evidence：运行时高效的多智能体具身规划与协调
-5. [Collective Cognition in Hybrid Groups: A Network Science Synthesis](/202607/13/2607.05593v1-collective-cognition-in-hybrid-groups-a-network-science-synthesis)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：混合群体中的集体认知，注意力视角
+   evidence：通过奖励解释推断多智能体社交交互中的潜在动机
 
 
 <div class="dpr-home-promo-card">

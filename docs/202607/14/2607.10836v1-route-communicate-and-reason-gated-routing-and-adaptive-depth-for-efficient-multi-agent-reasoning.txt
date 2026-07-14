@@ -1,0 +1,742 @@
+Title: Route, Communicate, and Reason: Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+URL Source: https://arxiv.org/pdf/2607.10836v1
+
+Published Time: Tue, 14 Jul 2026 02:19:51 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+,lcs2 iit delhi July 2026 
+
+# Route , Communicate , and Reason : Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning 
+
+Sudipto Ghosh 1 Tanmoy Chakraborty 1,2   
+
+> 1Yardi School of Artificial Intelligence, Indian Institute of Technology Delhi
+> 2Department of Electrical Engineering, Indian Institute of Technology Delhi
+
+sudipto.ghosh@scai.iitd.ac.in, tanchak@iitd.ac.in  
+
+> agithub.com/parmanu-lcs2/grade
+
+Abstract Multi-agent ensembling multiplies active parameters and inference cost without answering three basic ques-tions: which agents to consult, how deeply a query should traverse a hierarchy of agents, and when inter-agent communi-cation is worth its cost. We present GRADE (Gated Routing and Adaptive Depth for Efficient Reasoning), a hierarchical multi-agent system in which four lightweight learned gates jointly govern agent selection, hierarchy depth, inter-agent communication, and branch pruning. Training uses CoGRPO (Collaborative Group-Relative Policy Optimization), a novel critic-free recipe that adapts GRPO to multi-agent hierarchies and assigns a shared advantage signal to every gate and agent that participated in a rollout. Agent models are drawn from a hot-swappable Expert Registry; per-agent calibration maps allow experts to be replaced at inference time without retraining. At ∼17B average active parameters, GRADE out-performs all baselines on GSM8K, MMLUPro, and GPQA, surpassing the strongest baseline by 4.8 points on MMLUPro at half the active compute. On AIME-2025, where model depth dominates, GRADE remains competitive to existing frame-works. Ablations isolate the hierarchy and masked cross-attention as the largest contributors to accuracy, and show that per-agent calibration is necessary for safe hot-swapping. 
+
+# 1 Introduction and Prior Art 
+
+Each successive doubling of parameters in Large Language Models (LLMs) yields diminishing returns on popular benchmarks while linearly inflating memory and inference latency [1]. This cost-quality tradeoff has pushed the field toward multi-agent LLM coordination, where a pool of smaller, specialized models collaborates to outperform a larger monolith at a fraction of the active-parameter budget. Prior multi-agent coordination strategies span several paradigms. General-purpose agent frameworks such as Au-toGen [2], MetaGPT [3], CAMEL [4], and ChatDev [5] orchestrate role-specialized LLMs through hand-designed communication protocols, but their topology and routing are fixed by the prompt rather than learned. Debate and critique methods [6, 7] allow multiple model instances to exchange arguments before reaching a consensus, im-proving factuality at the cost of requiring multiple rounds of interaction and back-and-forth communication with exploding context lengths. Iterative self-refinement [8] uses extra compute to improve a single model’s output, but cannot exploit a heterogeneous pool; reasoning-and-acting loops [9] interleave tool calls but still operate on a sin-gle model. Ensemble and fusion approaches [10, 11] rank, vote over, or fuse outputs from independently queried models; LLM-Blender [10] adds pairwise reranking and generative fusion, but routing is fixed rather than learned. 
+
+Mixture-of-Agents [12] uses layered aggregation to refine outputs across rounds, but every agent processes every query, so compute is not adaptive. Evolutionary orchestration methods such as EvoAgent [13] and Puppeteer [14], restructure agent graphs dynamically; Puppeteer achieves strong results via RL-trained orchestration of a flat pool of parameter-matched models. On the training side, MAPoRL [15] jointly trains multiple LLMs with multi-agent PPO, an influence-aware verification reward, and a GAE critic, establishing that joint co-training is necessary – SFT on expert trajectories alone does not produce collaborative behavior. Liu et al. [16] applied mean-subtracted group advantages (MAGRPO, without std-normalization or clipping) to two-agent homogeneous systems for writing and              
+
+> 1arXiv:2607.10836v1 [cs.AI] 12 Jul 2026 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+> Figure 1. Overview of GRADE .An encoded query passes to a lightweight orchestrator , whose Depth Gate sets the reason-ing depth. The orchestrator routes the query to manager modules, whose per-sub-pool grouping signals bias an Assign-ment Gate that activates only the most relevant expert sub-agents from an expert registry. Experts exchange messages selectively through the Cross-Reading Gate , their outputs are then fused by masked cross-attention, and pass through a
+> Pruning Gate that drops low-utility branches before aggregation. Lightweight adapters and per-agent calibration maps allow experts to be swapped without retraining. CoGRPO jointly optimizes routing, depth, communication, pruning, and aggregation by sampling coordination rollouts, computing a shared group-relative advantage, and updating all partic-ipating gates and agents with a single policy-gradient step.
+
+coding. Both works assume flat, homogeneous pools with symmetric communication and a fixed number of agents; neither handles hierarchical routing, selective inter-agent communication, or heterogeneous expert management. Three limitations recur across prior systems, though none in isolation is entirely without precedent. (i) Limited depth adaptivity : Most systems route every query through the full agent stack regardless of difficulty. Adaptive-computation and early-exit methods adjust per-input depth for single models [17–21], and cost-aware cascades route easy queries to cheaper models [22, 23], but hierarchical depth gating across a heterogeneous multi-agent LLM pool trained end-to-end with a single reward signal has not been studied. (ii) Coarse communication control : Systems either broadcast all agent messages or aggregate without filtering. Learned inter-agent communication has been studied extensively in cooperative MARL literature [24–28], including attention- and gating-based schemes that decide when to communicate, but learning a per-pair communication mask within a jointly trained multi-agent LLM framework remains unexplored. (iii) No recalibration after expert substitution : Prior systems lack mechanisms to recalibrate gate thresholds after an expert swap, so replacing an expert silently invalidates thresholds tuned to the original model’s output distribution. Existing systems rarely combine all three mechanisms within a unified hierarchical framework trained end-to-end. Our methodological contributions are summarized below: 1. Coordination Harness , comprising gates trained jointly via policy gradient, enabling per-query compute alloca-tion, selective communication, and branch pruning within a single forward pass. 2. CoGRPO , a multi-agent adaptation of group-relative policy optimization [29] that requires no critic and assigns advantage to all gates and agents that contributed to a rollout. 3. An Expert Registry that allows individual agent experts to be swapped at inference time using only 64 anchor queries for recalibration, without touching the gates. Figure 1 depicts an overview of the proposed framework. We ask the following questions: 
+
+RQ1: Can a gated hierarchical multi-agent system outperform monolithic models and flat ensembles at a lower active-parameter budget? 
+
+RQ2: What is the marginal contribution of each coordination mechanism in such a system?      
+
+> 2S. Ghosh and T. Chakraborty
+> Table 1. Accuracy (%) across four reasoning benchmarks averaged over three training seeds. Act. Params is the ex-pected active-parameter count per query. Overall is the macro-average across benchmarks. AIME-2025 accuracy is additionally averaged over 16 decoding samples per problem to control small-
+
+N variance (30 problems total). Bold   
+
+> denotes the best result per column. On AIME-2025, Puppeteer’s larger active compute yields the highest accuracy;
+> GRADE leads on all other benchmarks. †MAGRPO [16] originally targets writing/coding with 2
+
+×Qwen3-1.7B; we adapt their algorithm with 2 ×Qwen2.5-7B-Instruct for a fair method comparison on reasoning tasks. ‡MAPoRL [15] uses 3×Qwen2.5-7B-Instruct (original paper: Phi-3-mini) for a fair method comparison. 
+
+Method Act. Params GSM8K MMLUPro GPQA AIME-2025 Overall 
+
+Qwen2.5-7B-Instruct 7B 85 .4 ± 0.4 44 .1 ± 0.7 28 .6 ± 1.6 6.7 ± 2.3 41 .2 ± 1.3
+
+Qwen2.5-7B-Instruct + CoT 7B 88 .7 ± 0.5 50 .3 ± 0.8 33 .8 ± 1.7 9.1 ± 2.8 45 .5 ± 1.5
+
+Self-Refine 7B 90 .2 ± 0.4 56 .7 ± 0.7 38 .2 ± 1.9 12 .4 ± 2.9 49 .4 ± 1.5
+
+Llama-3.1-8B-Instruct 8B 82 .1 ± 0.6 41 .5 ± 0.8 25 .1 ± 1.8 5.4 ± 2.2 38 .5 ± 1.4
+
+Mixtral-8 ×7B ∼13B 79 .3 ± 0.7 43 .0 ± 0.8 28 .4 ± 1.8 5.9 ± 2.4 39 .2 ± 1.4
+
+Ensemble-4 Majority Vote ∼28B 91 .8 ± 0.4 62 .1 ± 0.7 43 .2 ± 1.8 18 .3 ± 3.4 53 .9 ± 1.6
+
+LLM-Blender ∼28B 92 .4 ± 0.3 68 .7 ± 0.6 47 .6 ± 1.9 21 .8 ± 3.6 57 .6 ± 1.6
+
+EvoAgent ∼28B 91 .9 ± 0.4 65 .8 ± 0.7 45 .3 ± 1.9 20 .4 ± 3.5 55 .9 ± 1.6
+
+MAGRPO † ∼14B 91 .2 ± 0.5 65 .2 ± 0.8 44 .8 ± 2.0 18 .9 ± 3.5 55 .0 ± 1.7
+
+MAPoRL ‡ ∼21B 92 .1 ± 0.4 71 .8 ± 0.7 51 .2 ± 2.0 22 .1 ± 3.6 59 .3 ± 1.7
+
+Puppeteer ∼28B 93 .7 ± 0.3 73 .4 ± 0.6 54 .1 ± 1.9 27 .2 ± 3.8 62 .1 ± 1.7 
+
+> GRADE
+
+(Ours) ∼17B 94 .8 ± 0.3 78 .2 ± 0.6 57 .4 ± 1.8 25 .3 ± 3.6 63 .9 ± 1.6
+
+RQ3: Does CoGRPO ’s credit assignment yield better performance than other alternatives? 
+
+RQ4: How robust is GRADE to runtime agent substitution, and does per-agent calibration determine the speed of accuracy recovery? 
+
+RQ5: Do harder tasks recruit more agents and deeper hierarchy levels, and what Cross-Read frequency maximizes accuracy? Our empirical analyses show that GRADE achieves 94 .8 ± 0.3% on GSM8K, 78 .2 ± 0.6% on MMLUPro, and 
+
+57 .4 ± 1.8% on GPQA using only ∼17B average active parameters, outperforming Puppeteer by 4.8 points on MMLUPro and 3.3 on GPQA. On AIME-2025, Puppeteer’s brute-force 4-model ensemble retains a 1.9-point ad-vantage, confirming that raw depth of reasoning with large monolithic models has an edge for olympiad-level mathe-matics. Calibration removal causes an 18-point accuracy drop immediately after a hot-swap and requires 20+ queries to recover, versus 0–9 with calibration. 
+
+# 2 Methodology 
+
+GRADE routes each query through a shared encoder, a lightweight orchestrator M0, and a hierarchical team of managers and sub-agents. Four learned gates select active agents, routing depth, inter-agent communication, and branches to prune. The entire system is trained end-to-end with CoGRPO using a correctness reward. 
+
+2.1 Architecture 
+
+Let x denote an input query (text prompt or numeric embedding). A shared encoder produces a query representation 
+
+h = Enc ϕ(x) ∈ Rd. The system is organized as a three-level hierarchy: • Level 0 – Orchestrator M 0. A small language model that consumes h and emits routing decisions or a direct answer. • Level 1 – Managers. NM =2 manager modules, each a trainable two-layer MLP that projects h to a manager representation hm ∈ Rd. Each oversees a disjoint sub-pool of sub-agents and adds a grouping signal to the As-signment Gate scoring (Section 2.2) for that sub-pool. Managers generate no tokens – generation is done by the     
+
+> 3Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+> Table 2. Accuracy–efficiency trade-off on MMLUPro. Latency is measured wall-clock per query. GRADE reports a latency
+> range because easy queries terminate at depth 0 (
+
+M0 only, ∼3s) while the hardest queries activate all sub-agents ( ∼11s). VRAM is peak GPU memory usage at inference. MAGRPO runs 2 agents in 1 round; MAPoRL runs 3 agents for 3 sequential discussion turns, with all models residing in VRAM. 
+
+Method Act. Params MMLUPro Latency (s) Peak VRAM (GB) 
+
+Qwen2.5-7B-Instruct 7B 44 .1 ± 0.7 1.8 14 Qwen2.5-72B-Instruct 72B 67 .3 ± 0.6 31 144 Self-Refine (Qwen2.5-7B) 7B 56 .7 ± 0.7 8.7 14 Mixtral-8 ×7B ∼13B 43 .0 ± 0.8 2.5 94 Ensemble-4 Majority Vote ∼28B 62 .1 ± 0.7 1.7 56 LLM-Blender ∼28B 68 .7 ± 0.6 14 59 EvoAgent ∼28B 65 .8 ± 0.7 38 56 MAGRPO † ∼14B 65 .2 ± 0.8 4.2 28 MAPoRL ‡ ∼21B 71 .8 ± 0.7 18 42 Puppeteer ∼28B 73 .4 ± 0.6 13 56  
+
+> GRADE
+
+(Ours) ∼17B 78 .2 ± 0.6 3.1–11.4 52     
+
+> Table 3. Hot-swap recovery on MMLUPro (accuracy %). Preswap accuracy before substitution is 78.2%; Acc@
+
+n is accu-racy n batches after substitution; Q2R (Queries to Recover) is the number of evaluation batches until accuracy returns within 0.5% of preswap. All calibration setups calibrate on 64 anchor queries after the swap. 
+
+Swap Type Replaced Replacement Acc@1 Acc@5 Acc@10 Q2R 
+
+Same Model Qwen2.5-7B Qwen2.5-7B 78.1 78.2 78.3 0Same Family Qwen2.5-7B Qwen3-7B-Instruct 75.4 77.8 78.1 4Same Size Qwen2.5-7B Llama-3.1-8B 71.8 75.2 77.9 7Local →API Qwen2.5-7B GPT-4o-mini 74.7 77.8 78.0 3API →Local GPT-4o-mini Qwen2.5-7B 69.3 74.1 77.8 9No Calibration Any Any (calib. off) 60.1 66.8 71.4 >20 
+
+frozen experts – and act as a learnable grouping mechanism that helps multi-domain questions spanning related specialists. • Level 2 – Sub-Agents. Specialized expert agents, each backed by a (possibly distinct) frozen language model drawn from the Expert Registry R. Every sub-agent a carries lightweight trainable components – an adapter Φa
+
+(frozen expert → d-space), an answer head Wa, and a calibration map κa (Section 2.5). The frozen expert of agent 
+
+a is {θa}; agents that resolve to the same model identifier share a single in-memory copy , so VRAM is proportional to the number of distinct models, not the number of agents. We write A = {a1, . . . , a N } and denote agent a’s learned registry descriptor embedding ea ∈ Rd.
+
+2.2 Coordination Gates 
+
+All gates are small two-layer MLPs with GELU activations, parameterized by ψ = {ψA, ψ D, ψ R, ψ P }, jointly opti-mized with the rest of the system via CoGRPO .
+
+(i) Assignment Gate. The Assignment Gate selects which sub-agents are activated for query x. It scores each agent 
+
+a by the affinity between the query and the agent descriptor, plus the grouping signal contributed by the manager m(a)
+
+that oversees a’s sub-pool: 
+
+sa = ⟨W Ah, ea⟩√d + ⟨hm(a), ea⟩√d , (1) 
+
+> 4S. Ghosh and T. Chakraborty
+
+Algorithm 1 CoGRPO Training Step 
+
+Require: Query x, gold y⋆, group size G, clip η, KL weight β, dense-reward weights (λm, λ a, λ c), inner epochs E, frozen registry R
+
+Ensure: Updated parameters Θ = {ϕ, ψ, ω } 
+
+> 1:
+
+h ← Enc ϕ(x) ▷ shared encoding  
+
+> 2:
+
+for i = 1 , . . . , G do ▷ sample group of rollouts  
+
+> 3:
+
+Sample joint action o(i) ∼ πΘ(· | x) via Eq. equation 9  
+
+> 4:
+
+Run agents in S′(i); ˆy(i) ← Combine ω (. . . ) 
+
+> 5:
+
+Compute dense reward R(i) via Eq. equation 10  
+
+> 6:
+
+Store lp (i) = log πΘ(o(i) | x) 
+
+> 7:
+
+end for  
+
+> 8:
+
+ˆA(i) ← (R(i) − μR)/( σR + ε) ∀i ▷ advantage, Eq. equation 11  
+
+> 9:
+
+for e = 1 , . . . , E do ▷ inner PPO epochs  
+
+> 10:
+
+for i = 1 , . . . , G do  
+
+> 11:
+
+ϱ(i) 
+
+> t
+
+← exp (log πΘ(o(i) 
+
+> t
+
+) − lp (i) 
+
+> t
+
+) 
+
+> 12:
+
+Accumulate LCoGRPO (Eq. equation 13) and gate regularizers  
+
+> 13:
+
+end for  
+
+> 14:
+
+Θ ← Θ − α∇ΘL(Θ) via Eq. equation 14  
+
+> 15:
+
+end for 
+
+where m(a) ∈ { 1, . . . , N M } is the unique manager whose sub-pool contains agent a, so hm(a) is the same manager representation (Section 2.1) (every agent in a given sub-pool therefore shares one hm(a)). The manager term biases the scores of a whole sub-pool together, letting a manager recruit its related specialists jointly on multi-domain queries. In dynamic-topology mode, each agent is independently sampled from Bernoulli (σ(sa)) , with at least one agent guaranteed; a fixed top-k mode is also supported for the ablation in Table 4. Load-balance regularization prevents collapse onto a small favorite set: 
+
+Lbal = λbal · N ∑
+
+> a
+
+fapa, (2) where fa is the empirical routing fraction and pa is the mean gate probability for agent a across the batch. 
+
+(ii) Depth Gate. The Depth Gate controls how many hierarchy levels a query traverses, implementing adaptive computation analogous to Mixture of Depths [21] and confident early exit [20]: 
+
+gD = softmax (MLP ψD (h)) ∈ ∆D−1, ℓ⋆ = arg max  
+
+> ℓ∈{ 0,...,D −1}
+
+gDℓ , (3) where D is the number of hierarchy depth levels and ∆D−1 denotes the corresponding probability simplex (the set of categorical distributions over the D levels). In our instantiation D=3 – Depth ℓ⋆=0 terminates at M0 (cheapest path); ℓ⋆=1 involves managers; ℓ⋆=2 involves the full sub-agent pool. At training time, ℓ⋆ is sampled for exploration. A depth penalty Ldepth = λDE[ℓ⋆] discourages unnecessary descent. 
+
+(iii) Cross-Read Gate. Once sub-agents produce message embeddings ma ∈ Rd, the Cross-Read Gate determines which pairs of agents may exchange information before the combination. For each ordered pair (a, b ), it emits a binary read decision via a Gumbel-sigmoid relaxation [30]: 
+
+rab = σ
+
+( 1
+
+> ν
+
+(MLP ψR ([ ma; mb]) + ϵ))
+
+,ϵ ∼ Logistic (0 , 1) ,
+
+(4) 
+
+> 5Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+where ν=0 .5 is a temperature. Agent a may attend to b in the cross-attention step iff rab >0.5. A sparsity penalty 
+
+Lread = λR
+
+∑ 
+
+> a,b
+
+rab keeps communication economical.  
+
+> (iv) Prune Gate.
+
+Before final combination, the Prune Gate assigns each active branch a scalar value estimate: 
+
+va = σ(MLP ψP ([ h; ma]) ) ∈ [0 , 1] , (5) and drops branches with va < τ P =0 .35 , ensuring at least one survives. Pruning removes uninformative branches before the expensive cross-attention combination step, recovering most of the latency advantage in Table 2. 
+
+2.3 Answer Combination 
+
+Let S′(x) denote the set of surviving (assigned and un-pruned) sub-agents. Their calibrated messages ˜ma are stacked into M ∈ R|S ′|× d and fused by a masked multi-head cross-attention module: 
+
+Z = softmax 
+
+( (M W Q)( M W K )⊤
+
+√d ⊙ R
+
+)
+
+(M W V ), (6) where Rab = rab is the Cross-Read mask. The pooled combined representation z = Pool (Z) is decoded to the final answer by a combination head: 
+
+ˆy = Combine ω(z, h, m), (7) where m is a persistent memory buffer updated by an exponential moving average of z within each training batch. Concretely, m ← (1 − α)m + αz is applied after every forward pass in the batch; at evaluation time m is fixed to its end-of-training value and never updated. Therefore, m is a batch-level running statistic and is not conditioned on any individual query’s identity, so it cannot cause cross-example leakage during evaluation on single-turn benchmarks. Its benefit is a stable low-variance context bias for the combination head rather than genuine episodic memory. 
+
+2.4 Training with CoGRPO 
+
+Because all gate decisions are discrete, standard backpropagation does not apply. Reinforcement learning has become the standard way for optimizing non-differentiable objectives in LLMs [31, 32]. We train with CoGRPO , which extends group-relative policy optimization [29, 33] to the multi-agent setting: no critic is needed, and every gate and agent that participated in a rollout receives the same scalar advantage.   
+
+> Joint Policy. GRADE
+
+has trainable parameters Θ = {ϕ, ψ, ω }, where ϕ are the shared encoder layers, ψ = {ψA, ψ D,ψR, ψ P } are the four gate parameter sets, and ω are the combination-head parameters; the agent adapters and answer heads {(Φ a, Wa)} are also in Θ, while all experts {θa} remain frozen. A single rollout for query x is a sequence of stochastic decisions 
+
+ℓ⋆ ∼ πψD (· | h), S ∼ πψA (· | h), r ∼ πψR (· | M ), K ∼ πψP (· | h, M ), (8) where h = Enc ϕ(x) and M ∈ RN ×d stacks the agent messages. Together they define a joint policy over all coordi-nation decisions in one pass: 
+
+πΘ(o | x) = πψD (ℓ⋆ | h) πψA (S | h) πψR (r | M ) πψP (K | h, M ), (9) where o = ( ℓ⋆, S, r, K) is the full joint action and the surviving agent set is S′(x) = S ∩ K . 
+
+> 6S. Ghosh and T. Chakraborty
+> Table 4. RL objective comparison (top) and fixed-
+
+k assignment ablation (bottom). All objectives in the top block are applied to the same GRADE architecture and agent pool; only the training algorithm changes. † Liu et al. [16]’s group-relative advantage with mean-only normalization (no std-norm, no clip, no KL), ported to GRADE ’s joint gate policy.  
+
+> ‡Park et al. [15]’s GAE critic and influence-aware reward adapted to GRADE ’s hierarchical action space; per-agent influ-ence approximated via cross-read frequency differential.
+
+Configuration GSM8K MMLUPro GPQA AIME-2025 Overall  
+
+> CoGRPO
+
+94 .8 ± 0.3 78 .2 ± 0.6 57 .4 ± 1.8 25 .3 ± 3.6 63 .9 ± 1.6
+
+MAGRPO-obj † 93 .9 ± 0.4 76 .0 ± 0.6 55 .3 ± 1.9 23 .8 ± 3.6 62 .3 ± 1.6
+
+Shared Reward 93 .8 ± 0.4 75 .1 ± 0.7 54 .2 ± 1.9 23 .2 ± 3.7 61 .6 ± 1.7
+
+MAPoRL-obj ‡ 93 .5 ± 0.5 73 .2 ± 0.8 52 .8 ± 2.0 22 .9 ± 3.7 60 .6 ± 1.8
+
+MAPPO 93 .1 ± 0.5 72 .6 ± 0.8 51 .8 ± 2.1 22 .4 ± 3.7 60 .0 ± 1.8
+
+REINFORCE 92 .4 ± 0.6 69 .8 ± 0.9 48 .3 ± 2.2 20 .1 ± 3.9 57 .7 ± 1.9
+
+k = 1 (fixed) 90 .2 ± 0.5 64 .3 ± 0.9 42 .1 ± 2.1 14 .7 ± 3.5 52 .8 ± 1.8
+
+k = 2 (fixed) 93 .1 ± 0.4 72 .8 ± 0.7 51 .4 ± 2.0 21 .4 ± 3.6 59 .7 ± 1.7
+
+k = 3 (fixed) 94 .3 ± 0.3 77 .8 ± 0.6 56 .9 ± 1.8 24 .8 ± 3.6 63 .5 ± 1.6
+
+k = 4 (fixed) 94 .3 ± 0.3 77 .1 ± 0.6 56 .2 ± 1.8 24 .3 ± 3.5 63 .0 ± 1.6
+
+k = 5 (fixed) 93 .8 ± 0.4 76 .3 ± 0.6 55 .1 ± 1.9 23 .2 ± 3.6 62 .1 ± 1.6
+
+Dense Reward. For each query x, we sample G=8 joint rollouts. Each rollout o(i) yields an answer ˆy(i), a compute cost c(i), and per-agent answer distributions over the surviving agents S′(i). The reward has four terms: 
+
+R(o; x, y ⋆) = 2 · 1(ˆ y = y⋆)
+
+︸ ︷︷ ︸
+
+> rterminal
+
++ λm log pΘ(y⋆ | x, o)
+
+︸ ︷︷ ︸
+
+> rmargin
+
++ λa 1
+
+> |S ′|
+
+∑
+
+> a∈S ′
+
+log pa(y⋆ | x)
+
+︸ ︷︷ ︸
+
+> ragent
+
+− λc c(o)
+
+︸ ︷︷ ︸ 
+
+> rcost
+
+, (10) where c(o) = token_cost (o)/1000 is the normalized cost and all log-probabilities are clamped to [−5, 0] to prevent exploding gradients when probabilities are near zero. Scaling rterminal to 2 ensures correctness dominates the cost penalty for all query budgets: with λc=0 .05 and a normalized cost c(i) that stays in [0 .1, 2.5] across all task families, the cost term λcc(i) deducts at most ∼0.12 – far smaller than the 2-point unit gap between a correct and an incorrect terminal reward. Without this headroom, early policies that accidentally recruit fewer agents can become locally optimal purely from cost savings, collapsing the Depth and Assignment Gates before the correctness signal stabilizes. Unlike rterminal , the margin term rmargin is non-zero on every rollout, supplying a smooth gradient even when the prediction is wrong; ragent gives each surviving agent’s answer head an independent alignment signal, penalizing free-riding where an agent passes noisy messages and lets the combination head compensate. 
+
+Group-Relative Advantage. Instead of a learned critic, CoGRPO normalizes rewards within each group of G roll-outs: 
+
+ˆA(i) = R(i) − μR
+
+σR + ε , (11) with μR = 1
+
+> G
+
+∑ 
+
+> j
+
+R(j), σR = std j R(j) and ε=10 −4. Every gate and agent that contributed to rollout i receives ˆA(i),which we call collaborative credit assignment . When all G rollouts receive the same reward, σR=0 and ˆA(i)=0 ,producing no update – an indistinguishable group should drive no policy change. Mean-only normalization [16] also vanishes in this case, but its gradient magnitude scales with the absolute reward rather than the within-group contrast; standard normalization decouples gradient magnitude from reward scale, improving stability across tasks. 
+
+Relation to GRPO. CoGRPO differs from vanilla GRPO [29] in two ways specific to the multi-agent setting. GRPO optimizes a single sequential policy; CoGRPO optimizes a joint policy πΘ factored across gate distributions (Eq. equa-        
+
+> 7Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning 01510 15 20
+> Queries Since Swap
+> 60
+> 65
+> 70
+> 75
+> 80
+> Accuracy (%)
+> Preswap (78.2%)
+> Same Model
+> Same Family
+> Same Size
+> Local API
+> API Local
+> No Calibration
+> Figure 2. Accuracy recovery curves after each swap type. MMLUPro accuracy (%) vs. evaluation batches since swap. The “No Calibration” curve remains substantially below preswap accuracy, while calibrated swaps converge within 9 batches.
+
+tion 9), so the importance ratio ϱ(i) 
+
+> t
+
+is decomposed per gate component rather than per output token. GRPO’s group varies only in the output sequence; our group varies in depth, agent assignment, cross-read structure, and pruning de-cisions. A naive application of GRPO to the joint policy would treat the entire forward pass as one action, providing no gradient signal to individual gate decisions; the per-component decomposition below distributes the advantage to each participant. 
+
+Collaborative Credit Assignment. Counterfactual per-gate credit – holding each gate at a do-not-participate base-line and rerunning the pass – would cost O(2 4) forward passes per group. Instead, the group baseline μR absorbs the mean contribution of all components at once: every participant of rollout i – each gate that made a non-trivial decision and each surviving agent a ∈ S ′(i) – shares the same advantage ˆA(i), so the gradient for any participant πk
+
+is 
+
+∇θk LCoGRPO = −Ei,t 
+
+[ ˆA(i) ∇θk log πk(o(i) 
+
+> t
+
+| · )
+
+]
+
+, (12) as in team-reward cooperative MARL [34], but with the group-relative baseline in place of a centralized critic. This credit is noisy but unbiased : a neutral decision (e.g. a cross-read mask that neither helps nor hurts) gets the same ˆA(i)
+
+as a decisive one, and the noise averages out over many (query, group) pairs. Diversity across rollouts is preserved by the auxiliary regularizers – the load-balance loss (Eq. equation 2) prevents routing collapse, the depth penalty prevents all-depth-2 solutions, and the read-sparsity penalty prevents the Cross-Read Gate from setting all rab =1 —so no gate distribution degenerates: in practice ρ ≈ 0.5, mean depth ≈1.9, and mean assignment k ≈ 2−4 throughout training. 
+
+Clipped Surrogate Objective. With per-decision importance ratio ϱ(i) 
+
+> t
+
+= πΘ(o(i) 
+
+> t
+
+)/ πΘold (o(i) 
+
+> t
+
+) computed against the snapshot Θold that generated the rollouts: 
+
+LCoGRPO = −Ei,t 
+
+[
+
+min (ϱ(i) 
+
+> t
+
+ˆA(i), clip (ϱ(i) 
+
+> t
+
+, 1−η, 1+ η) ˆA(i))]
+
++ βDKL 
+
+(πΘ ∥ πref 
+
+), (13) where η=0 .2 is the clip radius and β=0 .02 weights the KL divergence to the frozen reference policy πref . Clipping prevents any single rollout from making an excessively large update, while the KL term prevents catastrophic for-getting of the inductive biases of the pre-trained models. The full training loss adds the gate regularizers and the supervised auxiliary term: 
+
+L = LCoGRPO + Lbal + Ldepth + Lread + 12 Lsup . (14)         
+
+> 8S. Ghosh and T. Chakraborty 00.1 0.25 0.5 0.75 1
+> Cross-Read Target Frequency
+> 72
+> 74
+> 76
+> 78
+> 80
+> Accuracy (%)
+> *= 0.5
+> (78.2%)
+> over-communication
+> With Cross-Read gate
+> Without Cross-Read
+> Figure 3. Cross-Read frequency vs. MMLUPro accuracy. The Cross-Read frequency
+
+ρ is the fraction of permitted agent pairs. ρ=0 .0 is equivalent to no communication; ρ=1 .0 introduces noise from irrelevant cross-agent messages. 
+
+Supervised Auxiliary Loss. The differentiable components (adapters, answer heads, combination head) also re-ceive a cross-entropy loss Lsup on the realized answer, applied only to the combination head’s logits. This stabilizes early training before CoGRPO can provide a useful signal. Lsup gradients are not propagated through the gate sam-pling operations: gates receive gradient only from the policy gradient term. The dense reward components rmargin 
+
+and ragent overlap in intent with Lsup – both encourage high p(y⋆) – but their influence on gate decisions flows through the advantage signal rather than through direct backpropagation, so they are not redundant. Sub-agent experts remain frozen throughout; only gates ψ, adapters, answer heads, combination head ω, and the last two encoder layers ϕ are updated. Table 10 summarizes how CoGRPO differs from related objectives in critic use, standard-normalization, importance-ratio clipping, KL regularization, and multi-agent structure. 
+
+2.5 Calibration for Hot-Swappable Experts 
+
+Sub-agents are drawn from a heterogeneous registry and may be replaced at inference time. A 3B local model and a GPT-4o-mini API model produce embeddings that differ in scale, variance, and alignment; substituting one for the other invalidates the gate thresholds that were fitted during training. Modern neural networks, including pre-trained transformers, are well known to be miscalibrated and sensitive to such distribution shift [35, 36], which a fixed threshold cannot absorb. We address this with a per-agent calibration map κa, a learnable affine normalization that brings each backend’s messages into the shared embedding space: 
+
+˜ma = κa(ma) = γa ⊙ ma − ˆμa
+
+ˆσa
+
++ βa, (15) where ( ˆ μa, ˆσa) are running statistics of agent a’s message embeddings updated with momentum α=0 .05 , and 
+
+(γa, βa) are learned affine parameters. After a swap, only the replaced agent’s κa is re-estimated using 64 anchor queries; everything else stays fixed. Table 3 shows that removing calibration causes an immediate 18-point accuracy drop and requires more than 20 queries to recover. 
+
+# 3 Experiments 
+
+> 9Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+3.1 Experimental Setup  
+
+> Datasets.
+
+We evaluate on four benchmarks of increasing difficulty — GSM8K [37], MMLUPro [38], GPQA [39] and AIME-2025 [40]. All benchmarks are evaluated with zero-shot prompting unless noted; CoT baselines use 8-shot exemplars following Wei et al. [41]. Full prompt templates are listed in Appendix A.2.  
+
+> Agent Pool.
+
+The GRADE pool for our experiment comprises six sub-agents backed by three distinct frozen models: A1–A3 share Qwen2.5-7B-Instruct ; B1–B2 share Phi-3-mini-4K-Instruct [42] (3.8B); and B3 uses Llama-3.2-3B-Instruct [43]. The orchestrator M0 is Qwen2.5-0.5B-Instruct ; the two managers are lightweight trainable MLP grouping modules (Section 2.1) with no language-model backend of their own. We define active parameters per query as the expected total parameters evaluated across all forward passes in a rollout ( M0 and the sub-agents are language models; the managers and gates are parameter-light). This ranges from 0.5B for a depth-0 query ( M0 only) to ∼32B when all six sub-agents run at depth 2, and averages ∼17B per query. 
+
+3.2 Token Usage Over Training  
+
+> Baselines.
+
+We compare against: a single Qwen2.5-7B-Instruct; Qwen2.5-7B with 8-shot chain-of-thought [41]; Self-Refine [8] with three refinement rounds; Llama-3.1-8B-Instruct [43]; Mixtral-8 ×7B [44]; an ensemble of four Qwen2.5-7B instances with majority voting; LLM-Blender [10] with four agents; EvoAgent [13] with four agents; and Puppeteer [14] with four Qwen2.5-7B-Instruct agents (the strongest current system).  
+
+> Training.
+
+We train GRADE for 200 gradient steps with Adam (LR = 10 −4), group size G=8 , clip η=0 .2, KL weight 
+
+β=0 .02 , and cost weight λc=0 .05 . All experiments are run on a single NVIDIA H200 NVL 141GB GPU. We report mean and standard deviation across 3 random seeds. Full hyperparameters are in Appendix A.1. 
+
+3.3 Comparison with Baselines  
+
+> GRADE
+
+achieves the best overall score ( 63 .9 ± 1.6%) versus Puppeteer’s 62 .1 ± 1.7%, at just over half the active parameters (Table 1). The gains over Puppeteer are largest on MMLUPro ( +4 .8 points) and GPQA ( +3 .3 points). On MMLUPro, the Depth Gate skips sub-agent computation on easy queries, and Cross-Read enables targeted sharing on multi-domain questions. On GPQA, the manager layer groups domain-specialist agents before combination, which helps boundary questions that span biology, chemistry, and physics. The GSM8K gap is modest ( +1 .1 points): elementary arithmetic is already near-saturated by a single 7B model. On AIME-2025, Puppeteer’s four 8B agents retain a 1.9-point advantage (27.2 vs. 25.3). Our sub-agents (7B, 3.8B, 3B) are individually weaker at the long, sequential reasoning chains these problems demand, and routing ben-efits do not compensate for lower per-agent capacity. Adding math-specialist backends (e.g., Qwen2.5-Math-7B) to the registry would likely be the natural fix. Table 2 shows GRADE achieving the highest MMLUPro accuracy at 52GB VRAM and a latency range of 3.1–11.4s. The range reflects the Depth Gate: easy queries reach only M0 (∼3s) while hard ones activate the full sub-agent pool (∼11s). Puppeteer runs every query at 13s with a fixed 56GB footprint. 
+
+3.4 Component Ablation 
+
+Table 9 presents the results of leave-one-out ablations of different components.  
+
+> Hierarchy is the most critical component.
+
+Removing the Depth Gate and manager level drops accuracy by 7.2 points. Without the Depth Gate, every query pays for the full sub-agent stack, wasting compute on easy queries                   
+
+> 10 S. Ghosh and T. Chakraborty 050 100 150 200
+> Training Step
+> 1,000
+> 1,500
+> 2,000
+> 2,500
+> Tokens / Query
+> GSM8K
+> 050 100 150 200
+> Training Step
+> 1,500
+> 2,000
+> 2,500
+> 3,000 MMLUPro
+> 050 100 150 200
+> Training Step
+> 1,500
+> 2,000
+> 2,500
+> 3,000
+> 3,500
+> 4,000 GPQA
+> 050 100 150 200
+> Training Step
+> 2,000
+> 3,000
+> 4,000
+> 5,000
+> AIME 2025
+
+Figure 4. Token usage per query at 50-step training checkpoints ( ±1 SD shaded), with the settled budget shown as a dashed reference. GSM8K converges by step 50; MMLUPro and GPQA show a secondary exploration peak near step 100 before settling. AIME-2025 does not converge within 200 steps and trends upward near the end, confirming that harder families require more training to stabilize agent allocation. 
+
+and injecting noise from unnecessary activations. GPQA suffers most as multi-domain expert questions rely on the manager layer to group domain-specialist agents before their outputs are combined. 
+
+Cross-Read enables multi-domain synthesis. Disabling Cross-Read drops overall accuracy 4.2 points, with the sharpest decline on GPQA. The Cross-Read Gate lets agents in different domains share relevant context before combination; without it, a biology-specialist agent cannot inform a chemistry-specialist on boundary questions. 
+
+Memory and dynamic topology are also important. Removing the persistent memory buffer costs 1.7 points. All benchmarks are single-turn, so memory helps mainly on the multi-hop compound questions within GPQA. Switch-ing from Bernoulli routing to a fixed top-k topology costs 1.1 points, confirming that adaptive allocation provides consistent but modest gains. 
+
+3.5 Comparison with Different RL Objectives 
+
+Table 4 compares CoGRPO with different RL objectives. 
+
+Critic-free vs. Critic-based. Both critic-based methods underperform: MAPPO at 60.0 and MAPoRL-obj at 60.6, versus the worst critic-free method (Shared Reward) at 61.6. Fitting a GAE value function over the combinatorial gate-decision space converges slowly; the group average is a cheaper and more stable baseline. MAPoRL-obj closes 0.6 points on MAPPO by adding influence-aware rewards, but still trails CoGRPO by 3.3 points. 
+
+Baseline quality within critic-free objectives. Among critic-free methods, accuracy tracks baseline quality. MAGRPO-obj’s per-query group mean is stronger than a global mean, but without std-normalization the gradient magnitude varies with the absolute reward scale rather than with the relative information content of each rollout. The 1.6-point gap between MAGRPO-obj and CoGRPO isolates the contribution of std-normalization and importance-ratio clipping. On the k sweep, performance peaks at k=3 and falls at k=5 : a sixth agent adds noise once the most skilled specialists are already active. Dynamic routing slightly outperforms every fixed-k setting by matching agent count to query difficulty. 
+
+3.6 Hot-Swap Robustness 
+
+Table 3 and Figure 2 answer RQ4. Removing calibration maps is catastrophic – accuracy falls 18.1 points immediately (78.2 → 60.1) and does not recover within 20 evaluation queries. Among calibrated swaps, the hardest is API →Local (GPT-4o-mini to Qwen2.5-7B, 9 queries to recover) - the local model’s lower output confidence shifts the Prune 
+
+> 11 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+Gate’s value estimates. Same-family swaps (Qwen2.5-7B to Qwen3-7B) recover in 4 queries because both models share similar pretraining. The results confirm that calibration is necessary for safe hot-swapping — without it, gate thresholds fitted to one model’s output scale silently misfire when a replacement with a different distribution is swapped in. 
+
+3.7 Cross-Read Frequency 
+
+The learned Cross-Read Gate settles near ρ=0 .5 in the default configuration (Figure 3). When ρ=1 .0, half the agent pairs produce noisy or redundant messages, and attending to them hurts performance. Token usage trajectories differ by task (Figure 4). GSM8K converges rapidly — tokens fall from ∼2,100 to the 1,250 budget by step 50 with only a minor rebound at step 150. MMLUPro and GPQA both exhibit a secondary peak near step 100 — a brief re-exploration phase as the Prune Gate shifts from coarse branch elimination to fine-grained agent selection — before settling toward their respective budgets of 1,500 and 1,860. AIME-2025 is qualitatively different – after an initial partial decline, token usage plateaus around step 100 and then rises through step 200, reflecting that the gates have not yet learned to reliably prune hard reasoning chains and may require more training steps to converge. Table 8 shows a clear difficulty-aware allocation: GSM8K averages 2.1 agents at depth 1.8, often stopping at M0 or the manager level; AIME-2025 recruits 3.8 agents at depth 2.0, always reaching the sub-agent pool. The gates learn to use agent count and hierarchy depth as implicit signals of query difficulty. 
+
+# 4 Analysis and Discussion  
+
+> Gains come from restraint, not added capacity.
+
+Three independent results point to one mechanism: GRADE 
+
+wins by withholding compute, not by adding it. Dynamic assignment beats every fixed-k setting, and accuracy falls 
+
+from k=3 (63 .5) to k=5 (62 .1) — a sixth agent injects noise once the strongest specialists are active (Table 4). The Cross-Read Gate settles at ρ ≈ 0.5, and forcing full communication ( ρ = 1 .0) costs 2.1 points (Figure 3). The Depth Gate skips the sub-agent pool entirely on easy queries. In each case the learned gate beats the always-on setting, and over-provisioning of agents is harmful rather than only wasteful.  
+
+> Calibration as a safety mechanism.
+
+When an expert is replaced, the gate thresholds τ A and τ P , which were fitted to the original model’s embedding scale, silently misfire on the replacement’s output distribution. Per-agent calibration maps κa absorb this shift using only 64 anchor queries, without touching any other part of the system.   
+
+> Relation to mixture-of-experts. GRADE
+
+differs from sparse MoE routing [45, 46] in three ways — experts are full pretrained LMs, routing is factored across separate learned gates rather than a single top-k function, and training uses collaborative RL rather than supervised prediction with auxiliary losses. 
+
+# 5 Conclusion 
+
+We presented GRADE , a hierarchical multi-agent system that coordinates heterogeneous expert agents through four jointly trained coordination gates: Assignment, Depth, Cross-Read, and Prune. Trained end-to-end with CoGRPO , 
+
+> GRADE
+
+achieves state-of-the-art results on GSM8K, MMLUPro, and GPQA at approximately 17B average active parameters, outperforming the strongest baseline while using just over half the active compute and ∼7% less GPU memory. On AIME-2025, Puppeteer retains a 1.9-point advantage attributable to a stronger individual model capacity. Our hot-swap analysis establishes per-agent calibration as a necessary condition for safe runtime expert substitution, with uncalibrated swaps causing 18-point accuracy drops and needing more than 20 queries to recover. 
+
+> 12 S. Ghosh and T. Chakraborty
+
+# References 
+
+[1] J. Wei, Y. Tay, R. Bommasani, C. Raffel, B. Zoph, S. Borgeaud, D. Yogatama, M. Bosma, D. Zhou, D. Metzler, E. H. Chi, T. Hashimoto, O. Vinyals, P. Liang, J. Dean, and W. Fedus, “Emergent Abilities of Large Language Models,” Transactions on Machine Learning Research , 2022, survey Certification. [Online]. Available: https://openreview.net/forum?id=yzkSU5zdwD [2] Q. Wu, G. Bansal, J. Zhang, Y. Wu, B. Li, E. Zhu, L. Jiang, X. Zhang, S. Zhang, J. Liu, A. H. Awadallah, R. W. White, D. Burger, and C. Wang, “AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversations,” in First Conference on Language Modeling , 2024. [Online]. Available: https://openreview.net/forum?id=BAakY1hNKS [3] S. Hong, M. Zhuge, J. Chen, X. Zheng, Y. Cheng, J. Wang, C. Zhang, Z. Wang, S. K. S. Yau, Z. Lin, L. Zhou, C. Ran, L. Xiao, C. Wu, and J. Schmidhuber, “MetaGPT: Meta Programming for A Multi-Agent Collaborative Framework,” in The Twelfth International Conference on Learning Representations , 2024. [Online]. Available: https://openreview.net/forum?id=VtmBAGCN7o [4] G. Li, H. Hammoud, H. Itani, D. Khizbullin, and B. Ghanem, “CAMEL: Communicative Agents for ”Mind” Exploration of Large Language Model Society,” in Advances in Neural Information Processing Systems ,A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, Eds., vol. 36. Curran Asso-ciates, Inc., 2023, pp. 51 991–52 008. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2023/file/ a3621ee907def47c1b952ade25c67698-Paper-Conference.pdf [5] C. Qian, W. Liu, H. Liu, N. Chen, Y. Dang, J. Li, C. Yang, W. Chen, Y. Su, X. Cong, J. Xu, D. Li, Z. Liu, and M. Sun, “ChatDev: Communicative Agents for Software Development,” in Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , L.-W. Ku, A. Martins, and V. Srikumar, Eds. Bangkok, Thailand: Association for Computational Linguistics, Aug. 2024, pp. 15 174–15 186. [Online]. Available: https://aclanthology.org/2024.acl-long.810/ [6] Y. Du, S. Li, A. Torralba, J. B. Tenenbaum, and I. Mordatch, “Improving Factuality and Reasoning in Language Models through Multiagent Debate,” in Proceedings of the 41st International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, R. Salakhutdinov, Z. Kolter, K. Heller, A. Weller, N. Oliver, J. Scarlett, and F. Berkenkamp, Eds., vol. 235. PMLR, 21–27 Jul 2024, pp. 11 733–11 763. [Online]. Available: https://proceedings.mlr.press/v235/du24e.html [7] T. Liang, Z. He, W. Jiao, X. Wang, Y. Wang, R. Wang, Y. Yang, S. Shi, and Z. Tu, “Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate,” in Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , Y. Al-Onaizan, M. Bansal, and Y.-N. Chen, Eds. Miami, Florida, USA: Association for Computational Linguistics, Nov. 2024, pp. 17 889–17 904. [Online]. Available: https://aclanthology.org/2024.emnlp-main.992/ [8] A. Madaan, N. Tandon, P. Gupta, S. Hallinan, L. Gao, S. Wiegreffe, U. Alon, N. Dziri, S. Prabhumoye, Y. Yang, S. Gupta, B. P. Majumder, K. Hermann, S. Welleck, A. Yazdanbakhsh, and P. Clark, “Self-Refine: Iterative Refinement with Self-Feedback,” in Advances in Neural Information Processing Systems , A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, Eds., vol. 36. Curran Associates, Inc., 2023, pp. 46 534–46 594. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2023/file/91edff07232fb1b55a505a9e9f6c0ff3-Paper-Conference.pdf [9] S. Yao, J. Zhao, D. Yu, N. Du, I. Shafran, K. R. Narasimhan, and Y. Cao, “ReAct: Synergizing Reasoning and Acting in Language Models,” in The Eleventh International Conference on Learning Representations , 2023. [Online]. Available: https://openreview.net/forum?id=WE_vluYUL-X [10] D. Jiang, X. Ren, and B. Y. Lin, “LLM-Blender: Ensembling Large Language Models with Pairwise Ranking and Generative Fusion,” in Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , A. Rogers, J. Boyd-Graber, and N. Okazaki, Eds. Toronto, Canada: Association for Computational Linguistics, Jul. 2023, pp. 14 165–14 178. [Online]. Available: https://aclanthology.org/2023.acl-long.792/ [11] X. Wang, J. Wei, D. Schuurmans, Q. V. Le, E. H. Chi, S. Narang, A. Chowdhery, and D. Zhou, “Self-Consistency Improves Chain of Thought Reasoning in Language Models,” in The Eleventh International Conference on Learning Representations , 2023. [Online]. Available: https://openreview.net/forum?id=1PL1NIMMrw 
+
+> 13 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+[12] J. Wang, J. Wang, B. Athiwaratkun, C. Zhang, and J. Zou, “Mixture-of-Agents Enhances Large Language Model Capabilities,” in The Thirteenth International Conference on Learning Representations , 2025. [Online]. Available: https://openreview.net/forum?id=h0ZfDIrj7T [13] S. Yuan, K. Song, J. Chen, X. Tan, D. Li, and D. Yang, “EvoAgent: Towards Automatic Multi-Agent Generation via Evolutionary Algorithms,” in Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , L. Chiruzzo, A. Ritter, and L. Wang, Eds. Albuquerque, New Mexico: Association for Computational Linguistics, Apr. 2025, pp. 6192–6217. [Online]. Available: https://aclanthology.org/2025.naacl-long.315/ [14] Y. Dang, C. Qian, X. Luo, J. Fan, Z. Xie, R. Shi, W. Chen, C. Yang, X. Che, Y. Tian, X. Xiong, L. Han, Z. Liu, and M. Sun, “Multi-Agent Collaboration via Evolving Orchestration,” in Advances in Neural Information Processing Systems , D. Belgrave, C. Zhang, H. Lin, R. Pascanu, P. Koniusz, M. Ghassemi, and N. Chen, Eds., vol. 38. Curran Associates, Inc., 2025, pp. 165 025–165 059. [Online]. Available: https: //proceedings.neurips.cc/paper_files/paper/2025/file/f1320d2e2842169c6fc89dcbd80e94d0-Paper-Conference.pdf [15] C. Park, S. Han, X. Guo, A. E. Ozdaglar, K. Zhang, and J.-K. Kim, “MAPoRL: Multi-agent post-co-training for collaborative large language models with reinforcement learning,” in Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , W. Che, J. Nabende, E. Shutova, and M. T. Pilehvar, Eds. Vienna, Austria: Association for Computational Linguistics, Jul. 2025, pp. 30 215–30 248. [Online]. Available: https://aclanthology.org/2025.acl-long.1459/ [16] S. Liu, Z. Liang, X. Lyu, and C. Amato, “LLM Collaboration with Multi-Agent Reinforcement Learning,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 40, no. 38. Association for the Advancement of Artificial Intelligence, Mar. 2026, pp. 32 150–32 158. [Online]. Available: https://doi.org/10.1609/aaai.v40i38.40487 [17] A. Graves, “Adaptive computation time for recurrent neural networks,” arXiv preprint arXiv:1603.08983v6 , 2016. [Online]. Available: https://arxiv.org/abs/1603.08983v6 [18] M. Dehghani, S. Gouws, O. Vinyals, J. Uszkoreit, and L. Kaiser, “Universal Transformers,” in International Conference on Learning Representations , 2019. [Online]. Available: https://openreview.net/forum?id=HyzdRiR9Y7 [19] M. Elbayad, J. Gu, E. Grave, and M. Auli, “Depth-Adaptive Transformer,” in International Conference on Learning Representations , 2020. [Online]. Available: https://openreview.net/forum?id=SJg7KhVKPH [20] T. Schuster, A. Fisch, J. Gupta, M. Dehghani, D. Bahri, V. Tran, Y. Tay, and D. Metzler, “Confident Adaptive Language Modeling,” in Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, Eds., vol. 35. Curran Associates, Inc., 2022, pp. 17 456–17 472. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2022/file/6fac9e316a4ae75ea244ddcef1982c71-Paper-Conference.pdf [21] D. Raposo, S. Ritter, B. Richards, T. Lillicrap, P. C. Humphreys, and A. Santoro, “Mixture of depths: Dynamically allocating compute in transformer language models,” arXiv preprint arXiv:2404.02258v1 , 2024. [Online]. Available: https://arxiv.org/abs/2404.02258v1 [22] L. Chen, M. Zaharia, and J. Zou, “FrugalGPT: How to Use Large Language Models While Reducing Cost and Improving Performance,” Transactions on Machine Learning Research , 2024. [Online]. Available: https://openreview.net/forum? id=cSimKw5p6R [23] I. Ong, A. Almahairi, V. Wu, W.-L. Chiang, T. Wu, J. E. Gonzalez, M. W. Kadous, and I. Stoica, “RouteLLM: Learning to Route LLMs from Preference Data,” in The Thirteenth International Conference on Learning Representations , 2025. [Online]. Available: https://openreview.net/forum?id=8sSqNntaMr [24] S. Sukhbaatar, a. szlam, and R. Fergus, “Learning Multiagent Communication with Backpropagation,” in Advances in Neural Information Processing Systems , D. Lee, M. Sugiyama, U. Luxburg, I. Guyon, and R. Garnett, Eds., vol. 29. Curran Associates, Inc., 2016. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2016/file/ 55b1927fdafef39c48e5b73b5d61ea60-Paper.pdf [25] J. Foerster, I. A. Assael, N. de Freitas, and S. Whiteson, “Learning to Communicate with Deep Multi-Agent Reinforcement Learning,” in Advances in Neural Information Processing Systems , D. Lee, M. Sugiyama, U. Luxburg, I. Guyon, and R. Garnett, Eds., vol. 29, 2016. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2016/ file/c7635bfd99248a2cdef8249ef7bfbef4-Paper.pdf 
+
+> 14 S. Ghosh and T. Chakraborty
+
+[26] J. Jiang and Z. Lu, “Learning Attentional Communication for Multi-Agent Cooperation,” in Advances in Neural Information Processing Systems , S. Bengio, H. Wallach, H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett, Eds., vol. 31, 2018. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2018/file/ 6a8018b3a00b69c008601b8becae392b-Paper.pdf [27] A. Singh, T. Jain, and S. Sukhbaatar, “Individualized Controlled Continuous Communication Model for Multiagent Cooperative and Competitive Tasks,” in International Conference on Learning Representations , 2019. [Online]. Available: https://openreview.net/forum?id=rye7knCqK7 [28] A. Das, T. Gervet, J. Romoff, D. Batra, D. Parikh, M. Rabbat, and J. Pineau, “TarMAC: Targeted Multi-Agent Communication,” in Proceedings of the 36th International Conference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach, California, USA , ser. Proceedings of Machine Learning Research, K. Chaudhuri and R. Salakhutdinov, Eds., vol. 97. PMLR, 2019, pp. 1538–1546. [Online]. Available: http://proceedings.mlr.press/v97/das19a.html [29] Z. Shao, P. Wang, Q. Zhu, R. Xu, J. Song, X. Bi, H. Zhang, M. Zhang, Y. K. Li, Y. Wu, and D. Guo, “DeepSeekMath: Pushing the limits of mathematical reasoning in open language models,” arXiv preprint arXiv:2402.03300v3 , 2024. [Online]. Available: https://arxiv.org/abs/2402.03300v3 [30] E. Jang, S. Gu, and B. Poole, “Categorical Reparameterization with Gumbel-Softmax,” in International Conference on Learning Representations , 2017. [Online]. Available: https://openreview.net/forum?id=rkE3y85ee [31] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. Wainwright, P. Mishkin, C. Zhang, S. Agarwal, K. Slama, A. Ray, J. Schulman, J. Hilton, F. Kelton, L. Miller, M. Simens, A. Askell, P. Welinder, P. F. Christiano, J. Leike, and R. Lowe, “Training language models to follow instructions with human feedback,” in Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, Eds., vol. 35. Curran Associates, Inc., 2022, pp. 27 730–27 744. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2022/ file/b1efde53be364a73914f58805a001731-Paper-Conference.pdf [32] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347v2 , 2017. [Online]. Available: https://arxiv.org/abs/1707.06347v2 [33] D. Guo, D. Yang, H. Zhang, J. Song, P. Wang, Q. Zhu, R. Xu, R. Zhang, S. Ma, X. Bi, X. Zhang, X. Yu, Y. Wu, Z. F. Wu, Z. Gou, Z. Shao, Z. Li, Z. Gao, A. Liu, B. Xue, B. Wang, B. Wu, B. Feng, C. Lu, C. Zhao, C. Deng, C. Zhang, C. Ruan, D. Dai, D. Chen, D. Ji, E. Li, F. Lin, F. Dai, F. Luo, G. Hao, G. Chen, G. Li, H. Zhang, H. Bao, H. Xu, H. Wang, H. Ding, H. Xin, H. Gao, H. Qu, H. Li, J. Guo, J. Li, J. Wang, J. Chen, J. Yuan, J. Qiu, J. Li, J. L. Cai, J. Ni, J. Liang, J. Chen, K. Dong, K. Hu, K. Gao, K. Guan, K. Huang, K. Yu, L. Wang, L. Zhang, L. Zhao, L. Wang, L. Zhang, L. Xu, L. Xia, M. Zhang, M. Zhang, M. Tang, M. Li, M. Wang, M. Li, N. Tian, P. Huang, P. Zhang, Q. Wang, Q. Chen, Q. Du, R. Ge, R. Zhang, R. Pan, R. Wang, R. J. Chen, R. L. Jin, R. Chen, S. Lu, S. Zhou, S. Chen, S. Ye, S. Wang, S. Yu, S. Zhou, S. Pan, S. S. Li, S. Zhou, S. Wu, S. Ye, T. Yun, T. Pei, T. Sun, T. Wang, W. Zeng, W. Zhao, W. Liu, W. Liang, W. Gao, W. Yu, W. Zhang, W. L. Xiao, W. An, X. Liu, X. Wang, X. Chen, X. Nie, X. Cheng, X. Liu, X. Xie, X. Liu, X. Yang, X. Li, X. Su, X. Lin, X. Q. Li, X. Jin, X. Shen, X. Chen, X. Sun, X. Wang, X. Song, X. Zhou, X. Wang, X. Shan, Y. K. Li, Y. Q. Wang, Y. X. Wei, Y. Zhang, Y. Xu, Y. Li, Y. Zhao, Y. Sun, Y. Wang, Y. Yu, Y. Zhang, Y. Shi, Y. Xiong, Y. He, Y. Piao, Y. Wang, Y. Tan, Y. Ma, Y. Liu, Y. Guo, Y. Ou, Y. Wang, Y. Gong, Y. Zou, Y. He, Y. Xiong, Y. Luo, Y. You, Y. Liu, Y. Zhou, Y. X. Zhu, Y. Xu, Y. Huang, Y. Li, Y. Zheng, Y. Zhu, Y. Ma, Y. Tang, Y. Zha, Y. Yan, Z. Z. Ren, Z. Ren, Z. Sha, Z. Fu, Z. Xu, Z. Xie, Z. Zhang, Z. Hao, Z. Ma, Z. Yan, Z. Wu, Z. Gu, Z. Zhu, Z. Liu, Z. Li, Z. Xie, Z. Song, Z. Pan, Z. Huang, Z. Xu, Z. Zhang, and Z. Zhang, “DeepSeek-R1: Incentivizing reasoning capability in LLMs via reinforcement learning,” arXiv preprint arXiv:2501.12948v1 , 2025. [Online]. Available: https://arxiv.org/abs/2501.12948v1 [34] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. WU, “The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games,” in Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, Eds., vol. 35. Curran Associates, Inc., 2022, pp. 24 611–24 624. [Online]. Avail-able: https://proceedings.neurips.cc/paper_files/paper/2022/file/9c1535a02f0ce079433344e14d910597-Paper-Datasets_ and_Benchmarks.pdf [35] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On Calibration of Modern Neural Networks,” in Proceedings of the 34th International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, D. Precup and Y. W. Teh, Eds., vol. 70. PMLR, 06–11 Aug 2017, pp. 1321–1330. [Online]. Available: https://proceedings.mlr.press/ v70/guo17a.html 
+
+> 15 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+[36] S. Desai and G. Durrett, “Calibration of Pre-trained Transformers,” in Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP) , B. Webber, T. Cohn, Y. He, and Y. Liu, Eds. Online: Association for Computational Linguistics, Nov. 2020, pp. 295–302. [Online]. Available: https://aclanthology.org/2020.emnlp-main.21/ [37] K. Cobbe, V. Kosaraju, M. Bavarian, M. Chen, H. Jun, L. Kaiser, M. Plappert, J. Tworek, J. Hilton, R. Nakano, C. Hesse, and J. Schulman, “Training verifiers to solve math word problems,” arXiv preprint arXiv:2110.14168v2 , 2021. [Online]. Available: https://arxiv.org/abs/2110.14168v2 [38] Y. Wang, X. Ma, G. Zhang, Y. Ni, A. Chandra, S. Guo, W. Ren, A. Arulraj, X. He, Z. Jiang, T. Li, M. Ku, K. Wang, A. Zhuang, R. Fan, X. Yue, and W. Chen, “MMLU-Pro: A More Robust and Chal-lenging Multi-Task Language Understanding Benchmark,” in Advances in Neural Information Processing Systems ,A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, Eds., vol. 37. Curran Associates, Inc., 2024, pp. 95 266–95 290. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2024/ file/ad236edc564f3e3156e1b2feafb99a24-Paper-Datasets_and_Benchmarks_Track.pdf [39] D. Rein, B. L. Hou, A. C. Stickland, J. Petty, R. Y. Pang, J. Dirani, J. Michael, and S. R. Bowman, “GPQA: A Graduate-Level Google-Proof Q&A Benchmark,” in First Conference on Language Modeling , 2024. [Online]. Available: https://openreview.net/forum?id=Ti67584b98 [40] J. Dekoninck, N. Jovanović, T. Gehrunger, K. Rögnvaldsson, I. Petrov, C. Sun, and M. Vechev, “Beyond benchmarks: Matharena as an evaluation platform for mathematics with LLMs,” in 3rd AI for Math Workshop: Toward Self-Evolving Scientific Agents at ICML 2026 , 2026. [Online]. Available: https://openreview.net/forum?id=DmPE4byHuN [41] J. Wei, X. Wang, D. Schuurmans, M. Bosma, b. ichter, F. Xia, E. Chi, Q. V. Le, and D. Zhou, “Chain-of-Thought Prompting Elicits Reasoning in Large Language Models,” in Advances in Neural Information Processing Systems , S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, Eds., vol. 35. Curran Associates, Inc., 2022, pp. 24 824–24 837. [Online]. Available: https://proceedings.neurips.cc/paper_files/paper/2022/ file/9d5609613524ecf4f15af0f7b31abca4-Paper-Conference.pdf [42] M. I. Abdin, S. Ade Jacobs, A. A. Awan, J. Aneja, A. Awadallah, H. Hassan Awadalla, N. Bach, A. Bahree, A. Bakhtiari, H. Behl, A. Benhaim, M. Bilenko, J. Bjorck, S. Bubeck, M. Cai, C. C. T. Mendes, W. Chen, V. Chaudhary, P. Chopra, A. D. Giorno, G. de Rosa, M. Dixon, R. Eldan, D. Iter, A. Goswami, S. Gunasekar, E. Haider, J. Hao, R. J. Hewett, J. Huynh, M. Javaheripi, X. Jin, P. Kauffmann, N. Karampatziakis, D. Kim, M. Khademi, L. Kurilenko, J. R. Lee, Y. T. Lee, Y. Li, C. Liang, W. Liu, X. E. Lin, Z. Lin, P. Madan, A. Mitra, H. Modi, A. Nguyen, B. Norick, B. Patra, D. Perez-Becker, T. Portet, R. Pryzant, H. Qin, M. Radmilac, C. Rosset, S. Roy, O. Saarikivi, A. Saied, A. Salim, M. Santacroce, S. Shah, N. Shang, H. Sharma, X. Song, O. Ruwase, X. Wang, R. Ward, G. Wang, P. Witte, M. Wyatt, C. Xu, J. Xu, W. Xu, S. Yadav, F. Yang, Z. Yang, D. Yu, C. Zhang, C. Zhang, J. Zhang, L. L. Zhang, Y. Zhang, Y. Zhang, and X. Zhou, “Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone,” Microsoft, Tech. Rep. MSR-TR-2024-12, August 2024. [Online]. Available: https://www.microsoft.com/en-us/research/publication/ phi-3-technical-report-a-highly-capable-language-model-locally-on-your-phone/ [43] A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Kadian, A. Al-Dahle, A. Letman, A. Mathur, A. Schelten, A. Vaughan, A. Yang, A. Fan, A. Goyal, A. Hartshorn, A. Yang, A. Mitra, A. Sravankumar, A. Korenev, A. Hinsvark, A. Rao, A. Zhang, A. Rodriguez, A. Gregerson, A. Spataru, B. Roziere, B. Biron, B. Tang, B. Chern, C. Caucheteux, C. Nayak, C. Bi, C. Marra, C. McConnell, C. Keller, C. Touret, C. Wu, C. Wong, C. C. Ferrer, C. Nikolaidis, D. Allonsius, D. Song, D. Pintz, D. Livshits, D. Wyatt, D. Esiobu, D. Choudhary, D. Mahajan, D. Garcia-Olano, D. Perino, D. Hupkes, E. Lakomkin, E. AlBadawy, E. Lobanova, E. Dinan, E. M. Smith, F. Radenovic, F. Guzmán, F. Zhang, G. Synnaeve, G. Lee, G. L. Anderson, G. Thattai, G. Nail, G. Mialon, G. Pang, G. Cucurell, H. Nguyen, H. Korevaar, H. Xu, H. Touvron, I. Zarov, I. A. Ibarra, I. Kloumann, I. Misra, I. Evtimov, J. Zhang, J. Copet, J. Lee, J. Geffert, J. Vranes, J. Park, J. Mahadeokar, J. Shah, J. van der Linde, J. Billock, J. Hong, J. Lee, J. Fu, J. Chi, J. Huang, J. Liu, J. Wang, J. Yu, J. Bitton, J. Spisak, J. Park, J. Rocca, J. Johnstun, J. Saxe, J. Jia, K. V. Alwala, K. Prasad, K. Upasani, K. Plawiak, K. Li, K. Heafield, K. Stone, K. El-Arini, K. Iyer, K. Malik, K. Chiu, K. Bhalla, K. Lakhotia, L. Rantala-Yeary, L. van der Maaten, L. Chen, L. Tan, L. Jenkins, L. Martin, L. Madaan, L. Malo, L. Blecher, L. Landzaat, L. de Oliveira, M. Muzzi, M. Pasupuleti, M. Singh, M. Paluri, M. Kardas, M. Tsimpoukelli, M. Oldham, M. Rita, M. Pavlova, M. Kambadur, M. Lewis, M. Si, M. K. Singh, M. Hassan, N. Goyal, N. Torabi, N. Bashlykov, N. Bogoychev, N. Chatterji, N. Zhang, O. Duchenne, O. Çelebi, P. Alrassy, P. Zhang, P. Li, P. Vasic, P. Weng, P. Bhargava, P. Dubal, P. Krishnan, P. S. Koura, P. Xu, Q. He, Q. Dong, R. Srinivasan, R. Ganapathy, R. Calderer, R. S. Cabral, R. Stojnic, R. Raileanu, R. Maheswari, R. Girdhar, R. Patel, R. Sauvestre, R. Polidoro, R. Sumbaly, R. Taylor, R. Silva, R. Hou, R. Wang, S. Hosseini, 
+
+> 16 S. Ghosh and T. Chakraborty
+
+S. Chennabasappa, S. Singh, S. Bell, S. S. Kim, S. Edunov, S. Nie, S. Narang, S. Raparthy, S. Shen, S. Wan, S. Bhosale, S. Zhang, S. Vandenhende, S. Batra, S. Whitman, S. Sootla, S. Collot, S. Gururangan, S. Borodinsky, T. Herman, T. Fowler, T. Sheasha, T. Georgiou, T. Scialom, T. Speckbacher, T. Mihaylov, T. Xiao, U. Karn, V. Goswami, V. Gupta, V. Ramanathan, V. Kerkez, V. Gonguet, V. Do, V. Vogeti, V. Albiero, V. Petrovic, W. Chu, W. Xiong, W. Fu, W. Meers, X. Martinet, X. Wang, X. Wang, X. E. Tan, X. Xia, X. Xie, X. Jia, X. Wang, Y. Goldschlag, Y. Gaur, Y. Babaei, Y. Wen, Y. Song, Y. Zhang, Y. Li, Y. Mao, Z. D. Coudert, Z. Yan, Z. Chen, Z. Papakipos, A. Singh, A. Srivastava, A. Jain, A. Kelsey, A. Shajnfeld, A. Gangidi, A. Victoria, A. Goldstand, A. Menon, A. Sharma, A. Boesenberg, A. Baevski, A. Feinstein, A. Kallet, A. Sangani, A. Teo, A. Yunus, A. Lupu, A. Alvarado, A. Caples, A. Gu, A. Ho, A. Poulton, A. Ryan, A. Ramchandani, A. Dong, A. Franco, A. Goyal, A. Saraf, A. Chowdhury, A. Gabriel, A. Bharambe, A. Eisenman, A. Yazdan, B. James, B. Maurer, B. Leonhardi, B. Huang, B. Loyd, B. D. Paola, B. Paranjape, B. Liu, B. Wu, B. Ni, B. Hancock, B. Wasti, B. Spence, B. Stojkovic, B. Gamido, B. Montalvo, C. Parker, C. Burton, C. Mejia, C. Liu, C. Wang, C. Kim, C. Zhou, C. Hu, C.-H. Chu, C. Cai, C. Tindal, C. Feichtenhofer, C. Gao, D. Civin, D. Beaty, D. Kreymer, D. Li, D. Adkins, D. Xu, D. Testuggine, D. David, D. Parikh, D. Liskovich, D. Foss, D. Wang, D. Le, D. Holland, E. Dowling, E. Jamil, E. Montgomery, E. Presani, E. Hahn, E. Wood, E.-T. Le, E. Brinkman, E. Arcaute, E. Dunbar, E. Smothers, F. Sun, F. Kreuk, F. Tian, F. Kokkinos, F. Ozgenel, F. Caggioni, F. Kanayet, F. Seide, G. M. Florez, G. Schwarz, G. Badeer, G. Swee, G. Halpern, G. Herman, G. Sizov, Guangyi, Zhang, G. Lakshminarayanan, H. Inan, H. Shojanazeri, H. Zou, H. Wang, H. Zha, H. Habeeb, H. Rudolph, H. Suk, H. Aspegren, H. Goldman, H. Zhan, I. Damlaj, I. Molybog, I. Tufanov, I. Leontiadis, I.-E. Veliche, I. Gat, J. Weissman, J. Geboski, J. Kohli, J. Lam, J. Asher, J.-B. Gaya, J. Marcus, J. Tang, J. Chan, J. Zhen, J. Reizenstein, J. Teboul, J. Zhong, J. Jin, J. Yang, J. Cummings, J. Carvill, J. Shepard, J. McPhie, J. Torres, J. Ginsburg, J. Wang, K. Wu, K. H. U, K. Saxena, K. Khandelwal, K. Zand, K. Matosich, K. Veeraraghavan, K. Michelena, K. Li, K. Jagadeesh, K. Huang, K. Chawla, K. Huang, L. Chen, L. Garg, L. A, L. Silva, L. Bell, L. Zhang, L. Guo, L. Yu, L. Moshkovich, L. Wehrstedt, M. Khabsa, M. Avalani, M. Bhatt, M. Mankus, M. Hasson, M. Lennie, M. Reso, M. Groshev, M. Naumov, M. Lathi, M. Keneally, M. Liu, M. L. Seltzer, M. Valko, M. Restrepo, M. Patel, M. Vyatskov, M. Samvelyan, M. Clark, M. Macey, M. Wang, M. J. Hermoso, M. Metanat, M. Rastegari, M. Bansal, N. Santhanam, N. Parks, N. White, N. Bawa, N. Singhal, N. Egebo, N. Usunier, N. Mehta, N. P. Laptev, N. Dong, N. Cheng, O. Chernoguz, O. Hart, O. Salpekar, O. Kalinli, P. Kent, P. Parekh, P. Saab, P. Balaji, P. Rittner, P. Bontrager, P. Roux, P. Dollar, P. Zvyagina, P. Ratanchandani, P. Yuvraj, Q. Liang, R. Alao, R. Rodriguez, R. Ayub, R. Murthy, R. Nayani, R. Mitra, R. Parthasarathy, R. Li, R. Hogan, R. Battey, R. Wang, R. Howes, R. Rinott, S. Mehta, S. Siby, S. J. Bondu, S. Datta, S. Chugh, S. Hunt, S. Dhillon, S. Sidorov, S. Pan, S. Mahajan, S. Verma, S. Yamamoto, S. Ramaswamy, S. Lindsay, S. Lindsay, S. Feng, S. Lin, S. C. Zha, S. Patil, S. Shankar, S. Zhang, S. Zhang, S. Wang, S. Agarwal, S. Sajuyigbe, S. Chintala, S. Max, S. Chen, S. Kehoe, S. Satterfield, S. Govindaprasad, S. Gupta, S. Deng, S. Cho, S. Virk, S. Subramanian, S. Choudhury, S. Goldman, T. Remez, T. Glaser, T. Best, T. Koehler, T. Robinson, T. Li, T. Zhang, T. Matthews, T. Chou, T. Shaked, V. Vontimitta, V. Ajayi, V. Montanez, V. Mohan, V. S. Kumar, V. Mangla, V. Ionescu, V. Poenaru, V. T. Mihailescu, V. Ivanov, W. Li, W. Wang, W. Jiang, W. Bouaziz, W. Constable, X. Tang, X. Wu, X. Wang, X. Wu, X. Gao, Y. Kleinman, Y. Chen, Y. Hu, Y. Jia, Y. Qi, Y. Li, Y. Zhang, Y. Zhang, Y. Adi, Y. Nam, Yu, Wang, Y. Zhao, Y. Hao, Y. Qian, Y. Li, Y. He, Z. Rait, Z. DeVito, Z. Rosnbrick, Z. Wen, Z. Yang, Z. Zhao, and Z. Ma, “The Llama 3 herd of models,” arXiv preprint arXiv:2407.21783v3 , 2024. [Online]. Available: https://arxiv.org/abs/2407.21783v3 [44] A. Q. Jiang, A. Sablayrolles, A. Roux, A. Mensch, B. Savary, C. Bamford, D. S. Chaplot, D. de las Casas, E. B. Hanna, F. Bressand, G. Lengyel, G. Bour, G. Lample, L. R. Lavaud, L. Saulnier, M.-A. Lachaux, P. Stock, S. Subramanian, S. Yang, S. Antoniak, T. L. Scao, T. Gervet, T. Lavril, T. Wang, T. Lacroix, and W. E. Sayed, “Mixtral of experts,” arXiv preprint arXiv:2401.04088v1 , 2024. [Online]. Available: https://arxiv.org/abs/2401.04088v1 [45] N. Shazeer, A. Mirhoseini, K. Maziarz, A. Davis, Q. Le, G. Hinton, and J. Dean, “Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer,” in International Conference on Learning Representations , 2017. [Online]. Available: https://openreview.net/forum?id=B1ckMDqlg [46] W. Fedus, B. Zoph, and N. Shazeer, “Switch transformers: scaling to trillion parameter models with simple and efficient sparsity,” Journal of Machine Learning Research , vol. 23, no. 120, pp. 1–39, Jan. 2022. [Online]. Available: http://jmlr.org/papers/v23/21-0998.html 
+
+> 17 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning
+
+# A Additional Experimental Details 
+
+A.1 Hyperparameters 
+
+Table 5 lists the full set of hyperparameters for the main GRADE configuration; all experiments use these values unless stated otherwise.  
+
+> Table 5. Full training hyperparameters for the main experimental configuration.
+
+Hyperparameter Value 
+
+Model dimension d 64 Group size G 8Inner epochs (PPO) 2Clip parameter η 0.2 KL weight β 0.02 Cost weight λc 0.05 Margin weight λm 0.10 Agent-align weight λa 0.05 Log-prob clamp −5.0
+
+Load-balance λbal 0.01 Depth penalty λD 0.02 Read sparsity λR 0.01 Prune threshold τ P 0.35 Calibration momentum α 0.05 Anchor query count (swap) 64 Adam LR 1 × 10 −4
+
+Training steps 200 Batch size 48 
+
+A.2 Prompt Templates 
+
+Table 6 specifies the prompt templates used for different tasks, components, and baselines. 
+
+A.3 Agent Pool Specification 
+
+Table 7 specifies the sub-agents, their models, and the resulting memory footprint. Agents that resolve to the same expert share a single in-memory copy. 
+
+# B Additional Figures and Tables 
+
+Table 9 reports the full leave-one-out component ablation, Table 8 reports the mean agent count and hierarchy depth per task, and Table 10 reports a feature-level comparison of CoGRPO with related policy-optimization algorithms. Table 11 reports the significance tests of GRADE against the strongest baseline. 
+
+> 18
+
+S. Ghosh and T. Chakraborty 
+
+Table 6. Prompt templates for GRADE components and the prompted baselines. Slots in braces (e.g. {question} ) are filled per query; {format} is the benchmark-specific answer-format string in the middle block. Frozen sub-agent ex-perts and the orchestrator share the same system instruction. 
+
+Component Template 
+
+GRADE components 
+
+Sub-agent expert (system) You are a domain expert. Reason step by step, then end with your final answer on a new line as ANSWER: <value>. 
+
+Sub-agent expert (user) Question: {question} {format} 
+
+Orchestrator M0 (depth 0) Answer the question directly and concisely. Question: {question} {format} 
+
+Answer-format slot {format} (benchmark-specific) 
+
+GSM8K Give only the final numeric answer after ANSWER:, with no units. 
+
+MMLUPro Choose one option (A--J). Respond with ANSWER: <letter>. 
+
+GPQA Choose one option (A--D). Respond with ANSWER: <letter>. 
+
+AIME-2025 The answer is an integer in [0, 999]. Respond with ANSWER: <integer>. 
+
+Prompted baselines 
+
+CoT (8-shot) Solve the problem with step-by-step reasoning, following the examples. {8 worked exemplars} Question: {question} {format} 
+
+Self-Refine (critique) Review the draft for errors. List concrete problems, or output NO ISSUES if it is correct. Question: {question} Draft: {draft} 
+
+Self-Refine (revise) Revise the solution using the feedback. Question: {question} Draft: {draft} Feedback: {feedback} {format} 
+
+Table 7. Agent pool specification. “Shared” experts load a single model to memory regardless of how many agents reference them. VRAM is measured on a NVIDIA H200 141GB GPU. 
+
+Agent(s) Backend Provider Params 
+
+M0 (orchestrator) Qwen2.5-0.5B-Instruct HuggingFace 0.5B Manager 1, 2 MLP grouping module — trainable head A1, A2, A3 (shared) Qwen2.5-7B-Instruct HuggingFace 7B (×1 copy) B1, B2 (shared) Phi-3-mini-4K-Instruct HuggingFace 3.8B (×1 copy) B3 Llama-3.2-3B-Instruct HuggingFace 3B Peak VRAM ∼52 GB Avg. active / query ∼17B 
+
+19 Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning 
+
+Table 8. Mean agents recruited and mean hierarchy depth per task. Harder benchmarks reliably recruit more agents and reach the deepest hierarchy level, confirming that the gates learn difficulty-aware allocation. 
+
+Task #Agents Std Mean depth 
+
+GSM8K 2.1 0.3 1.8 MMLUPro 2.3 0.3 1.9 GPQA 3.1 0.4 2.0 AIME-2025 3.8 0.4 2.0 
+
+Table 9. Component ablation (leave-one-out). Each row removes one component from the full system and retrains from scratch. Hierarchy removal has the largest overall impact ( −7.2 points), followed by Cross-Read ( −4.2 points) and Cross-Attention ( −3.1 points). 
+
+Variant GSM8K MMLUPro GPQA AIME-2025 Overall 
+
+Full Setup 94 .8 ± 0.3 78 .2 ± 0.6 57 .4 ± 1.8 25 .3 ± 3.6 63 .9 ± 1.6
+
+− Hierarchy 92 .5 ± 0.5 68 .4 ± 0.8 46 .8 ± 2.1 19 .2 ± 3.8 56 .7 ± 1.8
+
+− Memory 94 .1 ± 0.4 75 .9 ± 0.7 54 .8 ± 1.9 23 .9 ± 3.7 62 .2 ± 1.7
+
+− Cross-Read 93 .7 ± 0.4 72 .8 ± 0.7 50 .3 ± 1.9 22 .1 ± 3.7 59 .7 ± 1.7
+
+− Cross-Attention 94 .0 ± 0.4 74 .3 ± 0.7 52 .1 ± 1.9 22 .8 ± 3.6 60 .8 ± 1.7
+
+− Dynamic Topology 94 .4 ± 0.3 76 .7 ± 0.6 55 .9 ± 1.8 24 .1 ± 3.6 62 .8 ± 1.6
+
+Table 10. Algorithmic comparison. StdNorm : whether within-group standard deviation is used to normalize advan-tages. Clipping : importance-ratio clipping. Multi-agent : flat = same-level homogeneous pool; hier. = heterogeneous hierarchy. CoGRPO is the only critic-free, standard-normalized, clipped objective designed for hierarchical multi-agent coordination.                                          
+
+> Algorithm Critic StdNorm Clipping KL Multi-agent
+> REINFORCE 77777
+> PPO [32] 333opt. 7
+> GRPO [29] 73337
+> DeepSeek-R1 [33] 73337
+> MAGRPO [16] 7777flat MAPoRL [15] 3333flat
+> CoGRPO (Ours) 7333hier.
+
+Table 11. Statistical significance of GRADE compared with Puppeteer (the strongest baseline) on each benchmark. A pooled two-sample (equal-variance) t-test was performed using the three-seed summary statistics (mean and stan-dard deviation). ∆ denotes the mean accuracy difference ( GRADE − Puppeteer), and p is the two-sided p-value from the per-benchmark test (each benchmark is a single GRADE -vs-Puppeteer comparison, multiple-comparison correction not applied). Significance levels are ∗p < 0.05 , ∗∗ p < 0.01 , ∗∗∗ p ≤ 0.001 ; ns denotes not significant. 
+
+Benchmark ∆ t df p Sig. 
+
+GSM8K +1 .1 4.49 4.0 0.011 *MMLUPro +4 .8 9.80 4.0 0.001 *** GPQA +3 .3 2.18 4.0 0.095 ns AIME-2025 −1.9 −0.63 4.0 0.899 ns
