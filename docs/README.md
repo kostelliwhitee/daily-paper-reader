@@ -6,40 +6,52 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-14
-- 运行时间：2026-07-14 21:40:26 UTC
+- 最新运行日期：2026-07-15
+- 运行时间：2026-07-15 21:32:30 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：2
-- 速读区：4
+- 本次总论文数：10
+- 精读区：1
+- 速读区：9
 
 ### 今日简报（AI）
-今日6篇论文聚焦多智能体系统核心瓶颈，提出状态算子抽象、探索失败诊断及高效推理新方案。  
-精读推荐【AAFLOW+】的零拷贝KV缓存编排与【Multi-Agent LLMs Fail to Explore Each Other】的协作探索失效分析，两者均获8.0高分，直指分布式部署与交互短板。  
-建议普通读者优先关注探索失败论文，它揭示了当前多智能体LLM的常见误区，对设计更鲁棒的协作系统有直接启发。
-- 详情：[/202607/14/README](/202607/14/README)
+今日推荐10篇论文，精读聚焦自适应向量量化注意力机制（AVQ-Attention），速读覆盖AI代理规范、缓存优化与分布式协作。  
+最值得关注的方向：AVQ-Attention实现高效注意力计算，以及面向多智能体的规范强化与容错协作系统。  
+建议优先深入AVQ-Attention的量化原理，并探索MemDecay的KV缓存策略如何提升代理推理效率。
+- 详情：[/202607/15/README](/202607/15/README)
 
 ### 精读区论文标签
-1. [[AAFLOW+] Stateful Operator Abstraction with Zero-Copy Distributed KV Cache Orchestration for Multi-Agent Workflows](/202607/14/2607.10987v1-aaflow-stateful-operator-abstraction-with-zero-copy-distributed-kv-cache-orchestration-for-multi-agent-workflows)  
+1. [AVQ-Attention: Adaptive Vector-Quantized Attention](/202607/15/2607.12789v1-avq-attention-adaptive-vector-quantized-attention)  
    标签：评分：8.0/10、query:ma-la
-   evidence：分布式KV缓存实现可扩展多智能体工作流
-2. [Multi-Agent LLMs Fail to Explore Each Other](/202607/14/2607.11250v1-multi-agent-llms-fail-to-explore-each-other)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：多智能体探索动力学
+   evidence：自适应向量量化注意力降低复杂度
 
 ### 速读区论文标签
-1. [KV-PRM: Efficient Process Reward Modeling via KV-Cache Transfer for Multi-Agent Test-Time Scaling](/202607/14/2607.09153v1-kv-prm-efficient-process-reward-modeling-via-kv-cache-transfer-for-multi-agent-test-time-scaling)  
+1. [Norm Enforcement for AI Agents: Robustly Shaping Behavior in Multi-Agent Systems](/202607/15/2607.09766v1-norm-enforcement-for-ai-agents-robustly-shaping-behavior-in-multi-agent-systems)  
    标签：评分：7.0/10、query:ma-la
-   evidence：通过KV缓存传输实现多智能体系统的可扩展注意力
-2. [CoDiMAD: Diffusion-Based Privileged Distillation for Communication-Free Multi-Robot Coordination](/202607/14/2607.09587v1-codimad-diffusion-based-privileged-distillation-for-communication-free-multi-robot-coordination)  
+   evidence：通过规范塑造多智能体行为
+2. [MemDecay: Region-Aware KV Cache Eviction for Efficient LLM Agent Inference](/202607/15/2607.10582v1-memdecay-region-aware-kv-cache-eviction-for-efficient-llm-agent-inference)  
    标签：评分：7.0/10、query:ma-la
-   evidence：无通信多机器人协调
-3. [Route, Communicate, and Reason: Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning](/202607/14/2607.10836v1-route-communicate-and-reason-gated-routing-and-adaptive-depth-for-efficient-multi-agent-reasoning)  
+   evidence：提出面向LLM智能体的区域感知KV缓存淘汰策略，利用注意力信号
+3. [Distributed Agent System: Fault-Tolerant Collaboration Among Embodied Agents](/202607/15/2607.10811v1-distributed-agent-system-fault-tolerant-collaboration-among-embodied-agents)  
    标签：评分：7.0/10、query:ma-la
-   evidence：门控智能体间通信与自适应深度多智能体推理
-4. [Interpreting Rewards from Inverse Reinforcement Learning](/202607/14/biorxiv-10-64898-2026-07-08-736783-v1-interpreting-rewards-from-inverse-reinforcement-learning)  
+   evidence：分布式多智能体系统中的容错跨智能体通信
+4. [Unveiling Complex Collective Behaviors from Simple Rewards](/202607/15/2607.12861v1-unveiling-complex-collective-behaviors-from-simple-rewards)  
    标签：评分：7.0/10、query:ma-la
-   evidence：通过奖励解释推断多智能体社交交互中的潜在动机
+   evidence：从简单奖励解释MARL中集体行为，揭示智能体交互模式
+5. [Transplant-Agents: A Multi-Agent Artificial Intelligence Framework for Reproducibility Assessment of Post-Transplant Risk Prediction and Rejection Biomarkers](/202607/15/biorxiv-10-1101-2025-07-10-664265-v2-transplant-agents-a-multi-agent-artificial-intelligence-framework-for-reproducibility-assessment-of-post-transplant-risk-prediction-and-rejection-biomarkers)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：多智能体框架通过结构化对话进行通信
+6. [MechAInistic: An LLM-guided Multi-Agent System for Reasoning over Genome-Scale Constraint-Based Metabolic Models](/202607/15/biorxiv-10-64898-2026-05-11-723319-v3-mechainistic-an-llm-guided-multi-agent-system-for-reasoning-over-genome-scale-constraint-based-metabolic-models)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：采用架构师-评审者模式的多智能体系统，用于科学推理
+7. [World Models as Adversaries: Multi-Agent Self-Play Fine-Tuning for Robust Motion Planning](/202607/15/2607.10630v1-world-models-as-adversaries-multi-agent-self-play-fine-tuning-for-robust-motion-planning)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：用于鲁棒运动规划的多智能体自博弈
+8. [LOGOS: A Living Logic for AI Agent Teams That Evolve With Humans](/202607/15/2607.10878v1-logos-a-living-logic-for-ai-agent-teams-that-evolve-with-humans)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体团队的治理与通信层
+9. [How to Realize Recursively Self-Improving Agents and Personal Singularity: A Goal-, Scope-, Tool-, and Benchmark-Driven Multi-Agent Architecture](/202607/15/2607.12254v1-how-to-realize-recursively-self-improving-agents-and-personal-singularity-a-goal--scope--tool--and-benchmark-driven-multi-agent-architecture)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：用于自我改进的多智能体架构
 
 
 <div class="dpr-home-promo-card">
