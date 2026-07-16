@@ -1,0 +1,318 @@
+Title: COLMAR: Cooperative View Policy Learning for Multi-Agent Active 3D Reconstruction
+
+URL Source: https://arxiv.org/pdf/2607.13524v1
+
+Published Time: Thu, 16 Jul 2026 00:55:13 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# COLMAR: Cooperative View Policy Learning for Multi-Agent Active 3D Reconstruction 
+
+Phu Pham 1, Damon Conover 2, Aniket Bera 11Department of Computer Science, Purdue University 2DEVCOM Army Research Laboratory 
+
+{phupham, aniketbera }@purdue.edu, damon.m.conover.civ@army.mil 
+
+Abstract — Active 3D reconstruction requires selecting infor-mative viewpoints under limited sensing budgets. In multi-agent settings, coordination inefficiencies such as redundant observations and spatial clustering can significantly reduce reconstruction quality. We present COLMAR, a cooperative view policy learning framework for multi-agent active 3D reconstruction. COLMAR formulates viewpoint allocation as a shared policy optimization over map-centric observations and introduces a reconstruction-aware objective that promotes overlap-aware coverage, team-level discovery, and collision-safe exploration. Dense feedback derived from incremental reconstruction updates aligns exploration behavior with down-stream geometric quality. The policy is trained using parameter-sharing Proximal Policy Optimization (PPO) with independent per-agent action selection at deployment, conditioned on a fused team map and without inter-agent message passing for deci-sion making. Selected viewpoints are then reconstructed with 3D Gaussian Splatting (3DGS) for high-fidelity photometric evaluation. Experiments on GLEAM and Replica demonstrate consistent improvements over heuristic and non-cooperative baselines, achieving up to 54% higher reconstruction accuracy and 49% greater coverage under matched sensing budgets. 
+
+I. INTRODUCTION Autonomous 3D reconstruction has become a core capa-bility for inspection, digital twinning, search-and-rescue, and embodied intelligence. The active variant of this problem requires a robot to decide where to observe next so that a fixed sensing budget yields maximal reconstruction qual-ity. Classical solutions are typically built on frontier/utility heuristics [1] and next-best-view (NBV) criteria [2]. While these methods are practical and robust, they are often brittle under complex geometry, partial observability, and nontrivial motion constraints, where handcrafted scoring terms can produce myopic or redundant trajectories. Recent learning-based active reconstruction methods have shown that policy learning can outperform fixed NBV heuris-tics in difficult scenes. For example, GenNBV [3] learns a generalizable reinforcement learning (RL) policy for active reconstruction in free-space actions. GLEAM [4] further improves generalization for active mapping in complex 3D indoor scenes. In parallel, reconstruction backends have advanced rapidly, from neural implicit simultaneous local-ization and mapping (SLAM) [5], [6] to efficient Gaussian representations [7]. Recent multi-agent SLAM systems such as MNE-SLAM [8], [9], [10] further highlight this trend. Active reconstruction systems such as ActiveGAMER [11] also strengthen the case for tighter integration between mapping state and cooperative view planning.  
+
+> Fig. 1. Illustration of COLMAR for cooperative multi-agent active 3D reconstruction. Agents leverage a shared map context to coordinate view selection, reducing redundancy and improving reconstruction quality under fixed sensing budgets.
+
+Despite this progress, two gaps remain for multi-agent active 3D reconstruction. First, many approaches still op-timize per-agent exploration with limited coordination sig-nals, leading to duplicated observations and inefficient team-level coverage [12], [13]. Second, policy learning is often supervised only by final or coarse rewards, whereas rich reconstruction diagnostics, such as local coverage growth, under-explored-region cues, and motion validity, are not fully leveraged during training [3], [11]. As a result, coordination quality and policy stability can degrade as scene complexity and team size increase. To address these issues, we present COLMAR, a cooper-ative view policy learning framework for multi-agent active 3D reconstruction. COLMAR trains a shared map-aware pol-icy with reconstruction-driven rewards that explicitly encour-ages informative, complementary, and safe view selection. The policy is trained with truncated signed distance function (TSDF) mapping for occupancy, frontier, and reward signals. 3D Gaussian Splatting (3DGS) is used only afterward for photorealistic reconstruction and rendering-based evaluation, and does not affect the learned view policy. As illustrated in Fig. 1, COLMAR enables agents to leverage a shared map context to coordinate view selection, reducing overlap while improving reconstruction quality. The main contributions are:  
+
+> •
+
+We formulate multi-agent active 3D reconstruction as cooperative policy learning over map-centric observa-tions, enabling agents to coordinate viewpoint allocation arXiv:2607.13524v1 [cs.RO] 15 Jul 2026 through a shared policy.  
+
+> •
+
+We introduce a reconstruction-aware objective that com-bines policy optimization with reward components tied to local coverage gain, under-explored-region discovery, and collision-aware behavior.  
+
+> •
+
+We provide a scalable training and evaluation pipeline and show that COLMAR improves reconstruction qual-ity and exploration efficiency against strong heuristic and learning-based baselines under matched sensing budgets. II. RELATED WORK 
+
+A. Active View Planning and Next-Best-View 
+
+Classical exploration and NBV methods are rooted in frontier expansion and utility-based scoring, where candidate views are selected to maximize expected map gain while sat-isfying geometric constraints [1], [2]. Recent robotics work has improved online NBV planning for practical platforms, including mobile manipulators and aerial systems [14], [15]. These methods are effective and interpretable, but their hand-crafted criteria and planner-specific assumptions can limit adaptability across scene types, sensor regimes, and action spaces. 
+
+B. Multi-Agent Exploration and Coordination 
+
+Multi-robot exploration research has long emphasized task allocation, redundancy reduction, and communication-aware coordination [16], [17], [18]. In practice, however, many systems still rely on decoupled per-agent utility assignment, which can underutilize shared map context when the team size grows or visibility is highly nonuniform. Collaborative dense mapping systems with online inter-agent pose opti-mization [12] showed that consistent global fusion across agents is feasible at building scale. More recent cooperative systems such as MAC-Ego3D [13] and CORE [19] demon-strate stronger team coordination through map sharing and coordination-aware planning. These results highlight both the opportunity and the challenge of learning coordinated view allocation policies that improve exploration efficiency and reconstruction fidelity. 
+
+C. Learning-Based Active Reconstruction and Mapping 
+
+Learning-based active exploration has shown that policy optimization can outperform static heuristics in complex environments. Active Neural SLAM [20] demonstrated this direction in map-based embodied exploration. For active mapping and reconstruction, GenNBV [3] introduced a gen-eralizable RL policy with freer action parameterization, while GLEAM [4] emphasized broad cross-scene generalization in complex indoor layouts. In parallel, reconstruction back-bones have advanced from neural implicit mapping (e.g., NICE-SLAM [5]) to efficient 3D Gaussian representations [7], [21], [22]. Multi-agent systems including MNE-SLAM [8], MAGiC-SLAM [9], and GRAND-SLAM [10] show strong progress in consistency and rendering quality. Still, these advances do not fully resolve coordinated multi-agent view allocation under reconstruction-driven objectives. 
+
+D. Training Paradigms for Multi-Agent Policy Learning 
+
+Cooperative multi-agent RL is commonly instantiated with centralized training and decentralized execution (CTDE) actor-critic methods (e.g., MADDPG [23], MAPPO [24], [25]), value-decomposition methods (e.g., QMIX [26]), or decentralized parameter-sharing policies. In parallel, large-scale distributed policy optimization has been shown to improve sample throughput and stability via actor-learner de-coupling and synchronized updates [27]. CTDE can improve credit assignment, but it usually requires additional cen-tralized inputs and training machinery. Value-decomposition methods are powerful, but they are often tied to factored value assumptions and discrete coordination structure. We instead adopt cooperative parameter-sharing PPO with de-centralized execution and distributed optimization, which matches our setting where agents share motion and ob-servation structure and must scale across many parallel reconstruction episodes. Unlike prior approaches that either optimize heuristic coordination or treat mapping feedback as a weak training signal, COLMAR is designed around a reconstruction-native learning objective: map-centric policy inputs and explicit reconstruction-aware rewards aligned with coordination-critical behaviors (local coverage progress, under-explored-region preference, and collision-aware motion). Our main contribution is the specific reconstruction-aligned coopera-tive formulation. It combines overlap-aware unique cover-age, TSDF-derived view-space gain, and a practical train-ing/inference split (geometry-focused RL training, photore-alistic 3DGS inference). III. METHOD 
+
+A. Problem Formulation a) Environment and Agents: We consider active re-construction in a 3D indoor scene s ∈ S with a team of 
+
+N agents, A = {1, . . . , N }. At time step t, each agent i
+
+receives a local observation oit and executes an action ait.The action is selected from a discrete motion primitive set with translation along x, y, and z, and rotation in yaw and pitch. Roll is disabled. The joint action is at = ( a1 
+
+> t
+
+, . . . , a Nt ).Episodes terminate at horizon T or when an environment-specific stopping condition is met. 
+
+b) State and Mapping Context: Each observation is map-centric and contains both perception and mapping con-text. In our implementation, the policy input for agent i
+
+includes current pose, rendered depth, ego-centric occupancy map, and recent pose history. A mapping backend maintains a shared scene representation fused from all agents’ mea-surements. During training, this representation is a shared TSDF volume held by the mapping backend. It supplies occupancy and frontier features in each agent’s observa-tion and provides the reconstruction-aware reward for PPO. During deployment, policy parameters are frozen. Agents continue to observe map-centric occupancy and frontier context derived from the fused team map and select actions independently. Collected viewpoints are then used for final Fig. 2. Overview of COLMAR. During training, a shared TSDF provides map-centric observations and reconstruction-aware rewards for PPO. During deployment, the learned policy selects views independently per agent. Selected trajectories are reconstructed with 3DGS for photorealistic evaluation. 3DGS is not used to train or update the policy. 
+
+3DGS reconstruction and photometric evaluation. Decentral-ization therefore refers to decision making, not the absence of map fusion. Coordination arises from shared map evolution and shared policy parameters. 
+
+B. Architecture Overview 
+
+Figure 2 summarizes the overall architecture. During training, multiple agents collect map-centric observations from a shared TSDF maintained by the mapping backend, a shared policy predicts cooperative view actions, and TSDF updates yield reconstruction-aware rewards for PPO. During deployment, the frozen policy performs independent per-agent view planning from the same map-centric observation interface, and the resulting trajectories are used for final 3DGS reconstruction and rendering-based evaluation. 
+
+C. Policy Input and Network Architecture 
+
+We structure the policy input into spatial and temporal 
+
+modalities. For agent i, the spatial input contains rendered depth, ego-centric occupancy map, and a global map that summarizes visited/free/occupied/frontier information. The temporal input contains the current pose descriptor and a short history of recent poses. The network uses two encoding branches. The spatial tensors are channel-wise stacked and encoded by a convo-lutional neural network (CNN) into a spatial latent hi
+
+> sp
+
+. The pose history is encoded by a gated recurrent unit (GRU) into a trajectory latent, which is concatenated with the current pose and mapped by a multi-layer perceptron (MLP) to a vector latent hi
+
+> vec
+
+. This yields 
+
+hi 
+
+> sp
+
+= CNN( xi
+
+> sp
+
+), hi 
+
+> vec
+
+= GRU( xi
+
+> temp
+
+) (1) We then fuse both latents with a lightweight token-fusion module. In the default setting, a transformer encoder per-forms self-attention over modality tokens, and then projects to a shared representation hi. This representation is con-sumed by actor-critic heads: 
+
+zit = A(hi), V it = C(hi), (2) where zit are discrete-action logits and V it is the state-value estimate. The actor therefore outputs a categorical policy over motion primitives, while the critic provides the value target used by PPO. 
+
+D. Cooperative View Policy Learning 
+
+COLMAR uses a shared policy across all agents and environments. This subsection describes policy optimization only. All observation features and reward signals below come from the shared TSDF during training. 3DGS is not used in the policy forward pass or PPO update, and appears only later for photorealistic evaluation of the selected trajectories. At step t, each agent i receives map-centric observation oit
+
+and predicts discrete action logits 
+
+zit = fθ (oit), zit ∈ RK , (3) where fθ (·) is the shared policy network with parameters θ,
+
+oit is agent i’s observation at step t, zit are action logits, and 
+
+K is the number of discrete actions. The policy is modeled as a categorical distribution over this action set: 
+
+πθ (ait | oit) = Cat  zit
+
+ . (4) Here πθ (ait | oit) is the probability of selecting action ait given 
+
+oit, and Cat( ·) denotes a categorical distribution parameter-ized by logits. The discrete action space contains motion primitives for translation in x, y, and z, and orientation changes in yaw and pitch. In all experiments, the maximum translation increment per action is 0.25 m and the maximum rotation increment per action is 15 ◦ (yaw/pitch), with roll disabled. Fig. 3. Training dynamics of COLMAR shown as running averages over training rollouts. From left to right, top to bottom: policy entropy, mean episode reward, mean frontier ratio, and mean map quality versus training updates. 
+
+Actions are sampled independently per agent at deploy-ment with frozen policy parameters. Cooperation emerges from shared map context and from shared policy parameters learned jointly during training. Compared with peer-to-peer action messaging or a centralized planner, each agent sam-ples its own action independently. Map fusion and overlap-aware rewards provide an implicit coordination signal. Policy parameters are updated with the standard PPO objective [28] on trajectories collected from all agents and environments. The importance ratio 
+
+ρt(θ) = πθ (at | ot)
+
+πθold (at | ot) (5) measures how much the updated policy probability of sam-pled action at at observation ot deviates from the behavior policy πθold used to collect rollouts. Advantages are estimated with generalized advantage estimation: 
+
+ˆAt = 
+
+> T−t−1
+
+X
+
+> l=0
+
+(γλ )l δt+l, δt = rt + γV (ot+1 ) − V (ot).
+
+(6) Using ρt(θ) and ˆAt, we define 
+
+L1(θ) = ρt(θ) ˆAt,
+
+L2(θ) = clip( ρt(θ), 1 − ϵ, 1 + ϵ) ˆAt. (7) The PPO clipped objective is then 
+
+Lclip (θ) = Et[min( L1(θ), L2(θ))] . (8) The final training objective combines this policy term with a value-regression loss and entropy regularization, optimized over shuffled mini-batches for multiple epochs per rollout. This stabilizes updates during training. At deployment, only independent per-agent action selection is required. 
+
+E. Reconstruction-Aware Reward 
+
+To couple active view planning with downstream recon-struction progress, we shape a dense cooperative reward from incremental TSDF updates. The design encourages each agent to acquire non-redundant observations that expand the reconstructed surface while maintaining safe, well-spread team behavior. For readability, we omit the time index t when the dependence on the current step is clear. Concretely, each agent i receives 
+
+ri = wucov gi 
+
+> ucov
+
++ bteam − pi 
+
+> stag
+
+− pi 
+
+> col
+
+− pi
+
+> crowd
+
+. (9) Here gi 
+
+> ucov
+
+is an overlap-aware unique coverage gain and bteam 
+
+is a team-level discovery bonus shared across agents. The penalty terms capture different failure modes. pi 
+
+> stag
+
+grows when an agent makes little effective progress, as indicated by weak step motion and inefficient recent trajectories (e.g., back-and-forth motion with small net displacement). pi
+
+> col
+
+increases under unsafe contacts, including geometric colli-sions inferred from map evidence and motion-level collision checks. pi 
+
+> crowd
+
+grows when agents cluster too tightly in space, based on nearest-neighbor spacing, to encourage spatial dispersion and reduce redundant sensing. Unique coverage is computed from step-wise coverage growth and a measure of inter-agent overlap: 
+
+gi 
+
+> lcov
+
+= ∆ coverage i, (10) 
+
+gi 
+
+> ucov
+
+= gi
+
+> lcov
+
+overlap i + bnew 1new-cell 
+
+overlap i (11) 
+
+∆coverage i denotes the step-wise reconstruction progress attributable to agent i’s action. In our implementation, we measure this as a view-space gain computed from TSDF renders: after fusing the current depth measurement, a pixel contributes if the rendered depth from the fused TSDF becomes closer than before (i.e., dafter (u, v ) < d before (u, v )). 
+
+∆coverage i is the fraction of such pixels. overlap i quantifies how many agents concurrently attend to the same region. Dividing by overlap i implements a soft credit assignment that favors complementary viewpoints when multiple agents com-pete for similar observations. The new-cell bonus bnew 1new-cell 
+
+further emphasizes first-time discovery, biasing exploration toward previously unseen areas. This ratio form provides a lightweight credit-allocation mechanism: for equal raw gain, rewards decrease as more agents overlap on the same region, so specialization is preferred over redundant co-observation. The team bonus is 
+
+bteam = wteam 
+
+nnew 
+
+nalive 
+
+, (12) where nnew is the number of newly discovered cells by the team at the current step, nalive is the number of active agents, and wteam controls the strength of this shared signal. Normalizing by nalive keeps reward magnitudes comparable across different team sizes. Together, these terms provide dense feedback for long-horizon coordination by rewarding novel map growth at both individual and team levels while penalizing oscillatory, un-safe, or redundant behaviors. Under static-scene assumptions and consistent TSDF fusion, maximizing incremental view-space gain serves as a practical proxy for reducing unseen surface area and improving geometric reconstruction quality. Training dynamics further indicate stable optimization. As shown in Figure 3, policy entropy decreases smoothly while TABLE I MAIN QUANTITATIVE COMPARISON ON REPLICA . H IGHER IS BETTER FOR COVERAGE , A CCURACY , PSNR, AND SSIM. L OWER IS BETTER FOR                                                      
+
+> CHAMFER , LPIPS, AND DEPTH L1.Method Coverage (%) Accuracy (%) ↑Chamfer (cm) ↓PSNR ↑SSIM ↑LPIPS ↓Depth L1(cm) ↓
+> Random Policy 55.4 58.1 14.4 25.42 0.8375 0.1641 12.84 Greedy Coverage 63.9 70.7 10.7 27.88 0.9018 0.0806 7.17 Frontier-Based 67.6 68.0 9.30 33.24 0.8989 0.0927 5.79 Single-Agent PPO (shared at test) 74.8 77.6 6.80 30.11 0.9132 0.0574 2.52
+> COLMAR (ours) 82.6 89.4 4.57 37.61 0.9786 0.0312 1.25
+
+reward and map-quality metrics improve, suggesting a grad-ual exploration-to-exploitation transition without premature collapse. IV. EXPERIMENTAL SETUP 
+
+A. Datasets and Splits 
+
+We train and evaluate the policy primarily on GLEAM [4]. In our setup, GLEAM provides two training splits (512 scenes each) and one evaluation split (128 scenes). The scenes are preprocessed with texture removed following the GLEAM protocol [4]. To test domain transfer, we addi-tionally evaluate zero-shot generalization on Replica [29], a synthetic indoor dataset with 18 scenes, without policy finetuning. 
+
+B. Baselines 
+
+We compare COLMAR against heuristic and learn-ing baselines under matched sensing budgets and action spaces: (1) random action sampling from the same action space, (2) greedy one-step coverage maximization over dis-crete candidates, (3) frontier-driven exploration using oc-cupancy/frontier maps, and (4) a single-agent PPO policy variant used as a non-cooperative learning baseline. 
+
+C. Implementation Details 
+
+All methods use the same discrete action parameteriza-tion (translation in x, y, z , rotation in yaw and pitch) and identical rendering settings. During policy training, a shared TSDF maintained by the mapping backend provides online occupancy and frontier features as well as reconstruction-aware rewards, keeping geometry signals stable inside the RL loop. At deployment, agents observe the same class of map-centric features derived from fused team measurements. The reported photorealistic results use 3DGS for final recon-struction and photometric evaluation. Training uses PPO with learning rate 1 × 10 −4, clip ϵ =0.1, γ = 0 .99 , λ = 0 .95 , entropy coefficient 0.01 , value coefficient 0.5, 2 PPO epochs per update, and 128 rollout steps per update. Per-GPU memory footprint is typically in the ∼ 4–6 GB range under our default training configuration. 
+
+D. Metrics and Protocol 
+
+We evaluate each method with fixed episode budgets and fixed team size settings. Main multi-agent comparisons use 
+
+N ∈ { 1, 2, 4}, and scaling experiments sweep N = 1 , 2, 3, 4.Budget-efficiency analysis sweeps sensing horizon T ∈{50 , 100 , 150 , 200 , 300 }. For each scene, we run multiple                   
+
+> TABLE II SCALING WITH TEAM SIZE ON GLEAM. # Agents Coverage (%) Accuracy (%) ↑Chamfer (cm) ↓
+> 172.4 82.2 6.48 277.1 85.2 5.61 379.4 86.8 5.22 480.9 88.2 4.96
+
+evaluation episodes and report the mean. Primary metrics are mean global coverage gain, accuracy, and Chamfer distance. Final reconstruction quality is evaluated with peak signal-to-noise ratio (PSNR), structural similarity index measure (SSIM), learned perceptual image patch similarity (LPIPS), and depth L1 error (cm). Accuracy (%) is defined as the percentage of reconstructed points whose nearest-neighbor distance to ground-truth (GT) points is below threshold τ . We report the results with τ = 5 cm. Chamfer distance (cm) is the symmetric average of nearest-neighbor distances in both directions, dCD = 12 (drecon →GT + dGT →recon ), summarizing overall geometric reconstruction error. V. RESULTS 
+
+A. Main Quantitative Comparison 
+
+Since GLEAM assets are texture-free, photometric recon-struction metrics (PSNR/SSIM/LPIPS) are not meaningful there. Therefore, Table I reports the main quantitative com-parison on Replica, where textured ground-truth appearance is available. The main comparison on Replica shows that COLMAR consistently outperforms heuristic baselines and the non-cooperative PPO variant under the same sensing budget. Improvements are evident in reconstruction geometry metrics (higher Accuracy and lower Chamfer), indicating that coop-erative view allocation improves both exploration efficiency and final surface quality. Final 3DGS rendering quality also improves, with better PSNR/SSIM and lower LPIPS/ L1-depth errors. Consistent with the abstract summary, the relative gains reach approximately 54% in reconstruction accuracy and approximately 49% in coverage ratio against weaker baselines. COLMAR achieves 89 .4% accuracy and 
+
+4.57 cm Chamfer, improving over single-agent PPO ( 77 .6% ,
+
+6.8 cm). It also delivers the strongest photometric quality, with PSNR 37 .61 and LPIPS 0.0312 .Step 10 Step 100 Step 200                          
+
+> Occupancy map RGB
+> Fig. 4. Step-wise qualitative reconstruction progress under COLMAR at Steps 10, 100, and 200. Occupancy maps show explored space (red: occupied, light blue: free, green: frontier, white: unknown), and the corresponding RGB renderings are produced from the fused TSDF volume. As exploration proceeds, known regions expand and reconstructions become more complete and consistent. Black patches are rendering artifacts and do not reflect reconstruction errors. TABLE III BUDGET -EFFICIENCY TREND FOR COLMAR ON GLEAM. Budget TCoverage (%) Accuracy (%) ↑Chamfer (cm) ↓
+> 50 65.1 78.1 7.95 100 72.2 82.7 6.48 150 76.6 85.4 5.72 200 79.1 86.9 5.25 300 80.9 88.2 4.96
+
+B. Scaling With Number of Agents 
+
+As the number of agents increases, performance improves consistently: coverage rises from 72 .4% (N = 1 ) to 80 .9% 
+
+(N = 4 ), and Chamfer drops from 6.48 cm to 4.96 cm. Gains are strongest at small team sizes and then begin to saturate. 
+
+C. Quality-Efficiency Trade-off 
+
+Under matched budget sweeps, COLMAR shows clear efficiency gains: from T = 50 to T = 300 , coverage improves from 65 .1% to 80 .9% and Chamfer drops from 
+
+7.95 cm to 4.96 cm. Improvements remain monotonic but slow down at larger budgets. 
+
+D. Cross-Dataset Generalization 
+
+Training on GLEAM and evaluating zero-shot on Replica demonstrates good transfer. Replica is slightly better than GLEAM (e.g., 4.57 vs 4.96 cm Chamfer), consistent with simpler scene geometry. 
+
+E. Qualitative Results 
+
+Qualitative results confirm the coordination behavior learned by COLMAR. In Figure 4, the occupancy maps (top row) show steady growth of known free/occupied space and shrinking frontier pockets from Step 10 to Step 200, while the rendered reconstructions (bottom row) become more complete with fewer visible holes and artifacts. Compared with non-cooperative trajectories, agents in COLMAR spread to complementary frontiers instead of repeatedly revisiting                  
+
+> TABLE IV CROSS -DATASET TRANSFER FROM GLEAM TO REPLICA .Setting Coverage ↑Accuracy ↑Chamfer ↓
+> (%) (%) (cm) In-domain (GLEAM eval) 80.9 88.2 4.96 Zero-shot (Replica) 82.6 89.4 4.57
+
+the same local region, which improves both map growth and final rendering consistency. Failure cases are mostly observed in cluttered corners and thin-structure regions, where occlusion and long-horizon credit assignment still limit view allocation quality. Figure 5 further indicates the coordination pattern induced by COLMAR. Rather than collapsing to overlapping trajec-tories, agents distribute themselves across different parts of the scene and repeatedly observe their assigned regions from complementary angles. This spatial specialization improves local surface consolidation while preserving team-level cov-erage diversity, leading to stronger agreement between re-constructed RGB/depth and GT across agent groups. VI. ABLATION STUDIES We conduct ablation studies to understand the effect of each component and justify the key design choices. All ablations follow the same protocol as the main experi-ments for fair comparison, including identical dataset split, sensing budget, episode horizon, action space, and opti-mization schedule. Each variant modifies only one factor under study (reward component, training regime, or input scope) and is evaluated under the same multi-agent settings (N ∈ {1, 2, 4}) and seed protocol. We report accuracy, final coverage, and Chamfer distance, with collision statistics additionally reported for reward-component analysis. 
+
+A. Reward Components 
+
+Starting from the full reward, we remove one component at a time and retrain with the same policy architecture and Agent 1 Agent 2 Agent 3                         
+
+> GT RGB GT Depth Recon RGB Recon Depth
+> Fig. 5. Agent-wise qualitative reconstruction under COLMAR (two snapshots per agent). Columns are grouped by agent to visualize role specialization. The grouped views show that cooperative planning yields spatially complementary trajectories: agents spread out over distinct scene regions, which reduces inter-agent redundancy and improves reconstruction completeness. TABLE V REWARD COMPONENT ABLATION .Variant Accuracy Coverage Chamfer Collision (%) (%) (cm) Rate
+> Full reward 88.2 80.9 4.96 0.07
+> - unique coverage 86.8 79.0 5.33 0.08 - team bonus 87.4 79.6 5.19 0.08 - all penalties 82.1 74.9 6.31 0.14
+
+PPO schedule. This study isolates the contribution of cooperative utility and regularization terms in the reward. The full reward per-forms best ( 88 .2% accuracy and 4.96 cm Chamfer distance), while removing all penalties causes the largest degradation (82 .1% , 6.31 cm) and doubles collision rate (from 0.07 to 
+
+0.14 ). 
+
+B. Cooperative vs Non-Cooperative Training 
+
+The cooperative variant is trained jointly with multi-agent rollouts, whereas the non-cooperative baseline is trained in a single-agent setting and then reused independently by all agents at test time. This comparison quantifies the effect of joint multi-agent optimization. Multi-agent training improves both geometry and coverage, reducing Chamfer from 5.89 
+
+cm to 4.96 cm and increasing coverage from 73 .8% to 
+
+80 .9% .                       
+
+> TABLE VI COOPERATIVE VS NON -COOPERATIVE TRAINING .Training Scenario Accuracy (%) Cov. (%) Chamfer (cm) Single-agent 84.5 73.8 5.89
+> Multi-agent 88.2 80.9 4.96
+> TABLE VII GLOBAL VS LOCAL INPUT ABLATION .Input scope to policy Accuracy Coverage Chamfer (%) (%) (cm) Depth + Ego Occupancy (local) 86.7 79.2 5.35 Pose-grid/map cues (global) 85.9 78.3 5.58
+> Full (local + global) 88.2 80.9 4.96
+
+C. Global vs Local Input Ablation 
+
+We keep the same backbone and training schedule, and mask input channels to retain only local cues, only global cues, or both. The full input set performs best ( 88 .2% , 4.96 
+
+cm). Local-only input degrades performance, and global-only is worst ( 5.58 cm), confirming that local geometry and global coordination cues are complementary. VII. DISCUSSION AND LIMITATIONS COLMAR is most effective in static indoor scenes where cooperative view allocation can exploit complementary vis-ibility under fixed sensing budgets, improving geometric quality and exploration efficiency over heuristic and non-cooperative baselines through overlap-aware rewards and shared policy learning. Nevertheless, the current study is limited to static environ-ments; dynamic changes, sensor noise, calibration errors, and domain shift may degrade performance. Failure cases arise in narrow or heavily occluded layouts, and gains saturate as team size increases. Real-world deployment additionally requires robust multi-agent localization, reliable communi-cation, and safety-aware low-level control. VIII. CONCLUSION We presented COLMAR, a cooperative view policy learning framework for multi-agent active 3D reconstruc-tion. The method combines map-centric policy inputs with reconstruction-aware reward design to promote complemen-tary exploration, reduce redundancy, and improve recon-struction quality under limited sensing budgets. Across benchmark evaluations, COLMAR consistently outperforms heuristic and learning baselines in both geometric and pho-tometric metrics, and shows favorable scaling with team size and sensing budget. Future work can investigate real-robot deployment with improved robustness to sensor noise and calibration drift, communication-aware coordination under bandwidth constraints, and extensions to dynamic scenes with temporally consistent mapping and reward design. REFERENCES [1] B. Yamauchi, “A frontier-based approach for autonomous exploration,” in Proceedings 1997 IEEE International Symposium on Computational Intelligence in Robotics and Automation CIRA’97. ’Towards New Computational Principles for Robotics and Automation’ , 1997, pp. 146–151. [2] A. Bircher, M. Kamel, K. Alexis, H. Oleynikova, and R. Siegwart, “Receding horizon ”next-best-view” planner for 3d exploration,” in 
+
+2016 IEEE International Conference on Robotics and Automation (ICRA) , 2016, pp. 1462–1468. [3] X. Chen, Q. Li, T. Wang, T. Xue, and J. Pang, “Gennbv: Generalizable next-best-view policy for active 3d reconstruction,” in 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) .IEEE, 2024, pp. 16 436–16 445. [4] X. Chen, T. Wang, Q. Li, T. Huang, J. Pang, and T. Xue, “Gleam: Learning generalizable exploration policy for active mapping in com-plex 3d indoor scene,” in Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , October 2025, pp. 5558– 5568. [5] Z. Zhu, S. Peng, V. Larsson, W. Xu, H. Bao, Z. Cui, M. R. Oswald, and M. Pollefeys, “Nice-slam: Neural implicit scalable encoding for slam,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , June 2022. [6] A. Rosinol, J. J. Leonard, and L. Carlone, “Nerf-slam: Real-time dense monocular slam with neural radiance fields,” in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2023, pp. 3437–3444. [7] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3d gaussian splatting for real-time radiance field rendering,” ACM Transactions on Graphics , vol. 42, no. 4, pp. 139:1–139:14, 2023. [8] T. Deng, G. Shen, C. Xun, S. Yuan, T. Jin, H. Shen, Y. Wang, J. Wang, H. Wang, D. Wang, and W. Chen, “Mne-slam: Multi-agent neural slam for mobile robots,” in 2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025, pp. 1485–1494. [9] V. Yugay, T. Gevers, and M. R. Oswald, “MAGiC-SLAM: Multi-agent gaussian globally consistent slam,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) ,2025, pp. 6741–6750. [10] A. Thomas, A. Sonawalla, A. Rose, and J. P. How, “Grand-slam: Local optimization for globally consistent large-scale multi-agent gaussian slam,” IEEE Robotics and Automation Letters , vol. 10, no. 12, pp. 13 129–13 136, 2025. [11] L. Chen, H. Zhan, K. Chen, X. Xu, Q. Yan, C. Cai, and Y. Xu, “Activegamer: Active gaussian mapping through efficient rendering,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 16 486–16 497. [12] S. Golodetz, T. Cavallari, N. A. Lord, V. A. Prisacariu, D. W. Murray, and P. H. S. Torr, “Collaborative large-scale dense 3d reconstruction with online inter-agent pose optimisation,” IEEE Transactions on Visualization and Computer Graphics , vol. 24, no. 11, pp. 2895–2905, 2018. [13] X. Xu, F. Xue, S. Zhao, Y. Pan, S. Scherer, and X. Huang, “Mac-ego3d: Multi-agent gaussian consensus for real-time collaborative ego-motion and photorealistic 3d reconstruction,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 854– 863. [14] M. Naazare, F. G. Rosas, and D. Schulz, “Online next-best-view planner for 3d-exploration and inspection with a mobile manipulator robot,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 3779– 3786, 2022. [15] A. Batinovic, A. Ivanovic, T. Petrovic, and S. Bogdan, “A shadowcasting-based next-best-view planner for autonomous 3d ex-ploration,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 2969–2976, 2022. [16] W. Burgard, M. Moors, C. Stachniss, and F. Schneider, “Coordinated multi-robot exploration,” IEEE Transactions on Robotics , vol. 21, no. 3, pp. 376–386, 2005. [17] P. Pham and A. Bera, “Optimizing crowd-aware multi-agent path finding through local communication with graph neural networks,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2024, pp. 8913–8913. [18] D. Patel, P. Pham, K. Tiwari, and A. Bera, “Dream: Decentralized re-inforcement learning for exploration and efficient energy management in multi-robot systems,” arXiv preprint arXiv:2309.17433 , 2023. [19] B. Wang, L. Zhang, Z. Wang, Y. Zhao, and T. Zhou, “Core: Coopera-tive reconstruction for multi-agent perception,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2023, pp. 8710–8720. [20] D. S. Chaplot, D. Gandhi, S. Gupta, A. Gupta, and R. Salakhutdinov, “Learning to explore using active neural slam,” in International Conference on Learning Representations (ICLR) , 2020. [21] H. Matsuki, R. Murai, P. H. J. Kelly, and A. J. Davison, “Gaussian Splatting SLAM,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2024. [22] P. Pham, D. Conover, and A. Bera, “Flashslam: Accelerated rgb-d slam for real-time 3d scene reconstruction with gaussian splatting,” arXiv preprint arXiv:2412.00682 , 2024. [23] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environ-ments,” Neural Information Processing Systems (NIPS) , 2017. [24] G. Lan, S. Zhang, T. Wang, Y. Zhang, D. Zhang, X. Wei, X. Pan, H. Zhang, D.-J. Han, and C. G. Brinton, “Mappo: Maximum a pos-teriori preference optimization with prior knowledge,” arXiv preprint arXiv:2507.21183 , 2025. [25] C. Yu, A. Velu, E. Vinitsky, Y. Wang, A. M. Bayen, and Y. Wu, “The surprising effectiveness of MAPPO in cooperative, multi-agent games,” CoRR , vol. abs/2103.01955, 2021. [Online]. Available: https://arxiv.org/abs/2103.01955 [26] T. Rashid, M. Samvelyan, C. S. De Witt, G. Farquhar, J. Foerster, and S. Whiteson, “Monotonic value function factorisation for deep multi-agent reinforcement learning,” J. Mach. Learn. Res. , vol. 21, no. 1, Jan. 2020. [27] L. Espeholt, H. Soyer, R. Munos, K. Simonyan, V. Mnih, T. Ward, Y. Doron, V. Firoiu, T. Harley, I. Dunning, S. Legg, and K. Kavukcuoglu, “IMPALA: Scalable distributed deep-rl with im-portance weighted actor-learner architectures,” in Proceedings of the International Conference on Machine Learning (ICML) , 2018, pp. 1407–1416. [28] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proximal policy optimization algorithms,” arXiv preprint arXiv:1707.06347 , 2017. [29] J. Straub, T. Whelan, L. Ma, and et al., “The replica dataset: A digital replica of indoor spaces,” arXiv preprint arXiv:1906.05797 , 2019.
