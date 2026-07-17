@@ -1,0 +1,3084 @@
+Title: From Self-Attention to Connection Laplacian: A Unified Operator View of Transformers
+
+URL Source: https://arxiv.org/pdf/2607.10677v1
+
+Published Time: Tue, 14 Jul 2026 01:08:24 GMT
+
+Number of Pages: 29
+
+Markdown Content:
+From Self-Attention to Connection Laplacian 
+
+From Self-Attention to Connection Laplacian: A Unified Operator View of Transformers 
+
+Binbin Lin binbinlin@zju.edu.cn 
+
+School of Software Technology, Zhejiang University, China 
+
+Wei Chen weichen.cw@zju.edu.cn 
+
+College of Computer Science and Technology, Zhejiang University, China 
+
+Yalun Li yalunli@zju.edu.cn 
+
+College of Computer Science and Technology, Zhejiang University, China 
+
+Wenxiao Wang wenxiaowang@zju.edu.cn 
+
+School of Software Technology, Zhejiang University, China 
+
+Jieping Ye yejieping.ye@alibaba-inc.com 
+
+Alibaba Cloud, China 
+
+Xiaofei He xiaofeihe@cad.zju.edu.cn 
+
+College of Computer Science and Technology, Zhejiang University, China 
+
+Abstract 
+
+Self-attention is a ubiquitous primitive in modern sequence models, yet its operator-level geometry is only partially understood. We view a token sequence as a vector field over the token-position graph and identify attention as a connection walk : messages are aggregated by a nonnegative walk matrix while being transported along each edge by a learned linear map. Within this framework, we prove that single-head attention (SHA) is exactly a connection propagation step with constant transport, and that multi-head attention (MHA) 
+
+is exactly a single edge-dependent connection walk whose effective transport is an attention-gated mixture of headwise transports. We further clarify the conditions under which the corresponding generator reduces to a random-walk connection Laplacian , highlighting the roles of stochasticity, reversibility, and metric-compatible transports. Empirically, we find that trained Transformers across scales (from 124M to 8B) and structures (encoder/decoder) exhibit geometric structure consistent with our theory: effective attention graphs converge to stable geometric operators in deeper layers, learned transports self-organize into approximate scaled isometries, and both phenomena strengthen consistently with scale. Overall, the paper provides a precise connection-walk formalism that links self-attention to classical geometric operators, along with a set of operator-level tools for analyzing transformer models from a geometric perspective. 
+
+Keywords: connection Laplacian, self-attention, multi-head attention, transformers, geometric deep learning 
+
+1 Introduction 
+
+Transformers and their self-attention mechanism (Vaswani et al., 2017) have reshaped modern deep learning by enabling models to capture long-range dependencies across tokens. In self-attention, each token attends to other tokens through a learned similarity measure, producing a weighted aggregation of value vectors. The resulting attention matrix can be interpreted as a directed weighted graph where edges encode information flow. This paper 
+
+1arXiv:2607.10677v1 [cs.LG] 12 Jul 2026 Lin, Chen, Li, Wang, Ye and He 
+
+gives an operator-level geometric interpretation of self-attention: token representations form a vector field over the token-position graph (the token graph, for short), and attention acts as a connection walk that mixes tokens while transporting features along edges. Developing this operator view, we clarify the operator structure underlying multi-head attention (MHA), the depthwise behavior, and the geometry of token interactions .
+
+1.1 Related work 
+
+Existing literature examines attention through various theoretical lenses, which we categorize into graph, tensor, dynamical, energy, kernel, and geometric perspectives. 
+
+Graph operator view. Self-attention can be viewed as a data-dependent linear operator that mixes token features via the attention matrix. This formulation aligns with graph transformers, where full attention implies all-to-all communication and sparse attention recovers local aggregation (Yun et al., 2019). Analytic approaches often symmetrize or normalize the attention-induced graph and interpret updates in terms of graph Laplacian smoothing, spectral bias, or oversmoothing (Kreuzer et al., 2021; Wu et al., 2024). These works primarily analyze the scalar mixing graph; in contrast, our operator view also incorporates the value-output maps that transport feature vectors between token fibers. 
+
+Tensor operator view. A parallel line of research treats attention blocks as struc-tured tensor operators, aiming to preserve multi-way correlations or enhance efficiency. Representative approaches include extending attention to tensor inputs via matricization to couple information across multiple modes (Babiloni et al., 2020), and employing tensor decompositions to reduce parameter complexity (Ma et al., 2019). Related work further explores higher-order or multilinear attention variants that alter the algebraic formulation of similarity and aggregation (Zhang et al., 2025). This line is complementary to ours: tensor methods change or compress the algebra of attention, whereas we identify the connection-walk structure already present in standard MHA. 
+
+PDE and dynamical-systems view. Several works study attention by taking con-tinuous limits, interpreting layerwise updates as discretizations of differential equations. Continuous-depth Transformer variants make this explicit by treating block parameters as functions of depth and analyzing the resulting non-autonomous neural ODE (Tong et al., 2025). Related formulations view the Transformer as a forward-Euler discretization and add trajectory-level regularization to stabilize the evolution (Kan et al., 2025). Our connection-walk formulation supplies an operator-level decomposition whose reversible, directed, and local deformation components naturally align with advection–diffusion–reaction (ADR) effects. 
+
+Energy-functional view. Attention also relates to energy-based updates and associative memory dynamics. Modern Hopfield network formulations derive attention-like retrieval from an energy function with fixed points corresponding to stored patterns, connecting attention to iterative minimization and memory retrieval (Ramsauer et al., 2021; Farooq, 2025). This view clarifies stability and retrieval capacity, and motivates nonlinear variants of attention. This perspective targets the fixed-point dynamics of retrieval, whereas our operator view characterizes the connection-walk transport enacted by a single attention step. 
+
+Kernel and approximation view. Dot-product attention is also interpreted as a data-dependent kernel operator. Performer-style methods approximate softmax attention 
+
+> 2From Self-Attention to Connection Laplacian
+
+with positive random features to achieve linear-time complexity (Choromanski et al., 2021), and surveys systematize a broader family of efficient variants (Tay et al., 2023). Theoretical analyses characterize attention as learning non-Mercer kernels on Banach spaces, providing representer-style results and universal approximation (Wright and Gonzalez, 2021). Comple-mentary work also studies learning explicit Transformer kernels (Chowdhury et al., 2021). These works primarily focus on the scalar affinity kernel or its approximation, whereas our formulation separates walk weights from edgewise feature transports. 
+
+Geometric and gauge-equivariant view. In geometric deep learning, transport 
+
+and connections appear explicitly when comparing features across local frames. Gauge-equivariant networks formalize how local frame changes act on features and constrain valid operators (Cohen et al., 2019; Bronstein et al., 2021). On the spectral-geometry side, vector diffusion maps and the graph connection Laplacian provide a principled framework for diffusion on vector fields with transports (Singer and Wu, 2012; Bandeira et al., 2013). Sheaf neural networks and neural sheaf diffusion equip graphs with vector spaces and linear maps and then define diffusion through sheaf or connection Laplacians (Bodnar et al., 2022; Barbero et al., 2022). These works construct graph neural architectures from prescribed or learned sheaves, while we show that ordinary MHA already induces a connection-valued walk whose effective transport is an attention-gated mixture of headwise value-output maps. Taken together, these perspectives provide valuable interpretations of attention; yet, to the best of our knowledge, prior work does not explicitly identify standard multi-head attention as a single edge-dependent connection-walk operator on a vector field over the token graph. This requires jointly analyzing the query-key walk weights and the value-output transports, rather than only the attention probabilities or individual heads. Motivated by this gap, we investigate the precise relationship between self-attention and connection walks and use it to interpret multi-head transport, depthwise behavior, and operator-level diagnostics. Concretely, we prove that single-head attention (SHA) and MHA are each exactly a connection-walk step ( §4) and identify when the induced generator reduces to a random-walk connection Laplacian ( §5); we then turn these operators into diagnostics and report their behavior across trained Transformers from 124M to 8B parameters ( §7). 
+
+2 Preliminaries: Notation and Attention Operators 
+
+Notation. Let X ∈ Rn×d collect n token vectors (rows) in Rd, i.e., Xi ∈ R1×d is the feature row at position i. We use row-consistent stacking to switch between matrix form and a single long vector. Define row-stacking operator vec r as vec r(X) def 
+
+=
+
+
+
+X⊤
+
+> 1
+
+...
+
+X⊤
+
+> n
+
+ ∈ Rnd . (1) Equivalently, vec r(X) = vec (X⊤) where vec (·) denotes the standard column-stacking vector-ization. We use this convention for convenience because right-multiplication of row vectors becomes left-multiplication after stacking. For A ∈ Rn×n (mixing across token positions) and M ∈ Rd×d (mixing across channels), vec r(AXM ) = ( A ⊗ M ⊤) vec r(X). (2) 
+
+> 3Lin, Chen, Li, Wang, Ye and He
+
+Since vec r(X) = vec (X⊤) and ( AXM )⊤ = M ⊤X⊤A⊤, the identity follows from vec (U BV ) = (V ⊤ ⊗ U ) vec( B). 
+
+Single-head attention (SHA). Let WQ ∈ Rd×dq , W K ∈ Rd×dq , W V ∈ Rd×dv and 
+
+WO ∈ Rdv ×d. Define Q = XW Q, K = XW K , V = XW V , and the attention (row-wise) probabilities A = softmax  (QK ⊤)/τ  ∈ Rn×n, where softmax is applied row-wise (optionally after adding a mask), and τ > 0 is the temperature. With row-wise softmax , each row of A sums to one on its support, so A is row-stochastic in the unmasked (full-support) case and row-stochastic on the admissible set under masking. The SHA head output is 
+
+Y = A V W O = A X (WV WO). 
+
+Definition (Transport Matrix). We define the transport matrix as the composite linear map: 
+
+M def 
+
+= WV WO ∈ Rd×d.
+
+Attention performs message passing on the token graph: token i aggregates messages from tokens j weighted by Aij . We term M the transport matrix as it is the per-head channel map transporting each token’s features into message space, which is then mixed across positions by A. Writing the output row-wise as Yi = Pnj=1 Aij Xj M reveals that M acts as a shared linear transport across all edges within a head. 
+
+Remark 1 The term “transport” highlights the functional role of M as a message trans-formation and does not imply orthogonality or invertibility. In MHA, different heads yield multiple transported message types mixed in parallel. 
+
+In operator form, SHA is a composition of position mixing by A, followed by a shared 
+
+channel transport by M :vec r(Y ) = TSHA vec r(X), T SHA = A ⊗ M ⊤.
+
+Multi-head attention (MHA). MHA extends this formulation to H parallel heads. For each head h ∈ { 1, . . . , H }, let A(h) be the attention matrix induced by query-key pairs (W (h) 
+
+> Q
+
+, W (h) 
+
+> K
+
+). Let the output projection WO ∈ RHd v ×d be partitioned row-wise into blocks 
+
+W (h) 
+
+> O
+
+∈ Rdv ×d. The MHA output is the sum of headwise transformations: 
+
+Y =
+
+> H
+
+X
+
+> h=1
+
+A(h)X  W (h) 
+
+> V
+
+W (h)
+
+> O
+
+| {z }
+
+> Mh
+
+(3) where Mh ∈ Rd×d is the transport matrix for head h. Applying the row-stacking operator yields the sum of Kronecker products structure: vec r(Y ) = TMHA vec r(X), T MHA =
+
+> H
+
+X
+
+> h=1
+
+A(h) ⊗ M ⊤ 
+
+> h
+
+. (4) 
+
+3 Connection Walk and Connection Laplacian on Token Graphs 
+
+We model token positions as vertices V = {1, . . . , n }, and admissible interactions by a directed graph G = ( V, E ). Full attention corresponds to the complete directed graph, and 
+
+> 4From Self-Attention to Connection Laplacian
+
+sparse attention corresponds to a pruned neighborhood. The matrix entry Aij is read as the nonnegative weight used when updating node i using information from node j; row i
+
+collects incoming contributions from sources j.A walk weight is a nonnegative matrix A ∈ Rn×n with support consistent with E, i.e., 
+
+Aij > 0 ⇒ (j → i) ∈ E. In random-walk, A is row-stochastic: Pnj=1 Aij = 1, so Aij is a probability distribution over sources j for each i.
+
+3.1 Vector field over the position graph. 
+
+A discrete d-dimensional vector field on G assigns a feature vector to each vertex: X ∈ Rn×d,with row vector Xi ∈ R1×d attached to position i. To compare or aggregate vectors located at different vertices, we equip each oriented edge ( j → i) with a linear map 
+
+Oij ∈ End (Rd) ∼= Rd×d called an edge transport from node j to node i. With our row-vector convention, Oij acts by right multiplication: Xj 7 → Xj Oij . When such maps are invertible, orthogonal, or approximately orthogonal, the operator approaches the usual setting of a metric connection; however, invertibility is not required for exact attention identification below. 
+
+3.2 Connection propagation operator 
+
+Given ( A, O ) and a vector field X, the connection propagation operator T (A, O ) defines one step of message passing: (T (A, O )X)i def 
+
+=
+
+> n
+
+X
+
+> j=1
+
+Aij Xj Oij . (5) When Oij ≡ Id, this reduces to ordinary random-walk averaging: ( T (A, I )X)i = P 
+
+> j
+
+Aij Xj .
+
+3.3 Random-walk connection Laplacian 
+
+The random-walk connection Laplacian measures discrepancy between Xi and transported average from neighbors: (Lrw  
+
+> c
+
+(A, O )X)i def 
+
+= Xi −
+
+> n
+
+X
+
+> j=1
+
+Aij Xj Oij 
+
+= ( I − T (A, O )) X. 
+
+(6) If A is row-stochastic, then any parallel section satisfying Xi = Xj Oij for all j with Aij > 0lies in ker( Lrw  
+
+> c
+
+(A, O )), 
+
+X
+
+> j
+
+Aij Xj Oij = X
+
+> j
+
+Aij Xi = Xi
+
+X
+
+> j
+
+Aij = Xi.
+
+3.4 Block operator form (token stacking) 
+
+Define block matrix T (A, O ) ∈ Rnd ×nd with d × d blocks 
+
+T (A, O )ij def 
+
+= Aij O⊤ 
+
+> ij
+
+. (7) 
+
+> 5
+
+Lin, Chen, Li, Wang, Ye and He 
+
+Due to the row-stacking convention vec r(X) = vec (X⊤), the transport maps appear as transposes in the blocks: (T (A, O )X)⊤ 
+
+> i
+
+= X
+
+> j
+
+Aij O⊤ 
+
+> ij
+
+X⊤ 
+
+> j
+
+.
+
+Consequently, vec r(T (A, O )X) = T (A, O ) vec r(X).
+
+4 Self-Attention as Connection Propagation 
+
+Let G be the directed token graph on V = {1, . . . , n }. We use the term connection walk 
+
+for connection propagation with edge transports Oij ∈ End (Rd). Note that we do not assume Oij ∈ GL (d); standard attention transports can be low-rank or singular because the value-output pathway may factor through a lower-dimensional head space. 
+
+4.1 SHA as connection walk propagation Theorem 2 Assume A is row-stochastic and the edge transport is constant, Oij ≡ M for all active edges (j → i). Then the single-head attention (SHA) Y = AXM is exactly the connection propagation step 
+
+Y = T (A, O )X. 
+
+Equivalently, in stacked form, TSHA = T (A, O ) = A ⊗ M ⊤.
+
+Proof For every target token i,
+
+Yi = X
+
+> j
+
+Aij Xj M = X
+
+> j
+
+Aij Xj Oij ,
+
+which is Eq. (5) with Oij ≡ M . The Kronecker representation follows from Eq. (7). 
+
+4.2 MHA as edge-dependent connection walk 
+
+We next show that multi-head attention (MHA) is exactly a single connection propagation step with an edge-dependent transport. Recall from Eq. (4) that vec r(Y ) = TMHA vec r(X), T MHA =
+
+> H
+
+X
+
+> h=1
+
+ A(h) ⊗ M ⊤
+
+> h
+
+.
+
+Define the effective walk weights (mean attention) by 
+
+Aeff (i, j ) def 
+
+= 1
+
+H
+
+> H
+
+X
+
+> h=1
+
+A(h) 
+
+> ij
+
+≥ 0. (8) When Aeff (i, j ) > 0, define the effective edge transport by the Aeff -weighted average 
+
+Oeff 
+
+> ij
+> def
+
+=
+
+> 1
+> H
+
+PHh=1 A(h) 
+
+> ij
+
+Mh
+
+Aeff (i, j ) ∈ Rd×d. (9) 
+
+6From Self-Attention to Connection Laplacian 
+
+If Aeff (i, j ) = 0, Oeff  
+
+> ij
+
+can be chosen arbitrarily, for instance as Id, because the edge carries zero weight. 
+
+Theorem 3 (Exact reduction to a scaled edge-dependent connection step) Let TMHA 
+
+be given by Eq. (4) . Let Aeff and Oeff be defined by Eqs. (8) –(9) . Then, with T (·, ·) defined in Eq. (7) ,
+
+TMHA = H · T (Aeff , O eff ). (10) 
+
+Equivalently, the MHA output satisfies 
+
+Yi = H
+
+> n
+
+X
+
+> j=1
+
+Aeff (i, j ) Xj Oeff 
+
+> ij
+
+= H (T (Aeff , O eff )X)i.
+
+(11) 
+
+Proof We verify the equality block-wise. By Eq. (4) , the ( i, j ) block of TMHA equals 
+
+PHh=1 A(h) 
+
+> ij
+
+M ⊤ 
+
+> h
+
+.
+
+Case 1: active edge ( Aeff (i, j ) > 0). Taking the transpose of Eq. (9), 
+
+Oeff  
+
+> ij
+> ⊤
+
+=
+
+> 1
+> H
+
+P 
+
+> h
+
+A(h) 
+
+> ij
+
+M ⊤
+
+> h
+
+Aeff (i, j ) .
+
+Multiplying by HA eff (i, j ) yields 
+
+HA eff (i, j )Oeff  
+
+> ij
+> ⊤
+
+=
+
+> H
+
+X
+
+> h=1
+
+A(h) 
+
+> ij
+
+M ⊤ 
+
+> h
+
+,
+
+which matches the MHA block. 
+
+Case 2: inactive edge ( Aeff (i, j ) = 0 ). Since A(h) 
+
+> ij
+
+≥ 0, the zero average implies 
+
+A(h) 
+
+> ij
+
+= 0 for all heads h. The MHA block is therefore zero, and the connection block 
+
+HA eff (i, j )Oeff  
+
+> ij
+> ⊤
+
+is also zero. Thus, every block matches, proving Eq. (10). 
+
+Remark 4 (Scale convention) The factor H is a bookkeeping consequence of defining 
+
+Aeff as the average attention over heads. Equivalently, one may absorb this scalar into the effective transports. Our geometric diagnostics focus on normalized walk weights and relative transport geometry. 
+
+5 From Connection Walks to Connection Laplacians 
+
+Theorem 3 identifies MHA exactly as a scaled connection walk with edge-dependent trans-ports. We now discuss several spectral and geometric properties of induced operator, and relate them to classical metric connection Laplacian. 
+
+7Lin, Chen, Li, Wang, Ye and He 
+
+5.1 Effective attention weights Row-stochasticity. Each head weight matrix A(h) is produced by a row-wise softmax, with masking restricting support, hence P 
+
+> j
+
+A(h) 
+
+> ij
+
+= 1 on its admissible set. Averaging preserves row sums, so P 
+
+> j
+
+Aeff (i, j ) = 1. Consequently, Aeff 1 = 1 and the spectral radius of Aeff is 1 for the finite-state row-stochastic walk. Increasing ∥Aeff ∥F should therefore be interpreted as increasing the concentration of the walk. Singular-value amplification can occur for non-normal or column-concentrated directed walks. 
+
+Asymmetry and reversibility. In general, Aeff is not symmetric: causal masking makes the graph directed by construction, and even in bidirectional encoders, the learned weights need not satisfy Aeff (i, j ) = Aeff (j, i ). A useful structural notion is reversibility: if π
+
+is a stationary distribution of Aeff , then Aeff is reversible iff 
+
+πiAeff (i, j ) = πj Aeff (j, i ) ∀ i, j. (12) Reversibility is the discrete condition that restores self-adjoint spectral theory. Without it, the walk is a directed or non-reversible diffusion , and the generator is generally non-normal, consistent with directed Laplacian frameworks (Chung, 2005; Veerman and Lyons, 2020). 
+
+5.2 Effective transport Orthogonality. The classical metric graph connection Laplacian assumes transports in O(d)or SO (d) so that Oij preserves inner products and lengths (Singer and Wu, 2012; Bandeira et al., 2013). In our identification, the analogous sufficient condition is Oeff 
+
+> ij
+> ⊤
+
+Oeff  
+
+> ij
+
+≈ μij Id
+
+on active edges, with μij > 0 allowing a scaled-isometric diagnostic. Since Oeff  
+
+> ij
+
+is a linear combination of the head transports Mh, it is not necessarily invertible or orthogonal in general. This makes the empirical emergence of approximate scaled-isometry in Section 7 nontrivial. 
+
+Metric deformation and separability. When Oeff  
+
+> ij
+
+is not orthogonal, propagation can alter norms and angles, inducing metric deformation. If Oeff  
+
+> ij
+
+is nonsingular, the polar decomposition gives 
+
+Oeff  
+
+> ij
+
+= Rij Sij , Rij ∈ O(d), Sij ⪰ 0.Rij captures length-preserving transport (pure connection diffusion), while Sij captures 
+
+anisotropic scaling and shearing (metric deformation). For singular transports, the same decomposition uses a partial isometry. In practice, the extent to which deformation is realized inside attention is an empirical question measured by the diagnostics in Section 7. 
+
+5.3 When does the attention connection walk become a connection Laplacian? 
+
+Let the normalized MHA propagator in block form be ¯TMHA = TMHA /H = T (Aeff , O eff ), and define generator 
+
+Lmix = I − ¯TMHA , (13) which is a well-defined generator in the form I − (one-step propagator) . However, with-out reversibility and metric-compatible transports, Lmix is generally not self-adjoint and 
+
+⟨X, L mix X⟩π need not be nonnegative. It’s thus better understood as a directed connection-walk generator rather than a classical metric connection Laplacian. Under a weighted inner 
+
+> 8From Self-Attention to Connection Laplacian
+
+product ⟨X, Y ⟩π = P 
+
+> i
+
+πi⟨Xi, Y i⟩, one may decompose the generator into symmetric and skew components: the symmetric part governs dissipation, while the skew part captures directed drift, advection-like behavior, and transient growth typical of non-reversible operators. A central benefit of a metric connection Laplacian is an associated nonnegative Dirichlet form. If (i) the walk is reversible as in Eq. (12) and (ii) transports are metric-compatible with inverse consistency, e.g., Oeff  
+
+> ji
+
+= ( Oeff  
+
+> ij
+
+)−1 on bidirectional edges, then T (Aeff , O eff ) is self-adjoint in the corresponding geometry and the generator becomes PSD. In that regime, 
+
+Eπ(X) def 
+
+= 12
+
+X
+
+> i,j
+
+πiAeff (i, j ) ∥Xi − Xj Oeff  
+
+> ij
+
+∥22 (14) is the standard connection Dirichlet energy and vanishes exactly on parallel vector fields (Lin et al., 2013). For generic directed and non-isometric attention, we use analogous energy quantities only as diagnostics, not as PSD quadratic forms of a self-adjoint Laplacian. 
+
+6 Operator-Level Interpretation, Dynamics and Diagnostics 
+
+Identifying (multi-head) self-attention as a connection walk on a token graph transforms it into an explicit operator family on fields, enabling geometric design levers (parame-terizations, constraints, regularizers) and diagnostics (energy, curvature and holonomy, metric-compatibility) that are hard to motivate from “similarity + aggregation” alone. 
+
+6.1 Attention-level vs. block-level interpretation 
+
+The exact connection-walk identification is an attention-sublayer statement. A full Trans-former block additionally contains residual connections, normalization layers, and pointwise nonlinear FFNs. For a pre-norm block, a common schematic form is 
+
+U = X + Attn(LN( X)) , Y = U + FFN(LN( U )) .
+
+These components are essential for optimization and representation, but have a different operator order on the token graph. LayerNorm and FFN act independently at each token within a layer, so their Jacobians are block diagonal across token positions. They do not introduce same-layer cross-token edges as attention. Nevertheless, they reshape local fiber coordinates and therefore influence the Q/K/V maps and the realized connection geometry in subsequent layers. For example, for a row vector xi, LayerNorm has the form LN( xi) = γ ⊙ xi − μi1⊤
+
+q
+
+σ2 
+
+> i
+
++ ϵ
+
++ β, μ i = 1 
+
+> d
+
+xi1,
+
+with variance computed across channels. Thus its Jacobian over a sequence is blkdiag (JLN 1 , . . . , J LN  
+
+> n
+
+). Similarly, for an FFN f (x) = ϕ(xW 1 + b1)W2 + b2 in row-vector notation, the local lineariza-tion around a layer state has Jacobian 
+
+Jf (X) = blkdiag( J1, . . . , J n),Ji = W1Dϕ′(xiW1+b1)W2.
+
+This is the discrete analog of a zero-order reaction term: it transforms the fiber at each node without adding new edges. 
+
+> 9Lin, Chen, Li, Wang, Ye and He
+
+6.2 Design and diagnostics 
+
+A connection-walk attention layer specifies two coupled objects: (i) a walk Aeff on the token graph, and (ii) an edge transport Oeff  
+
+> ij
+
+that maps features between fibers. MHA provides an efficient parameterization of edge-dependent transports: heads form a low-dimensional 
+
+transport dictionary , while attention performs edgewise dictionary selection . Increasing the number of heads enlarges the admissible family of edge transports without learning a full per-edge matrix. The operator view also reveals that MHA is an implementation of a connection walk, and the design problem becomes: how should one parameterize a stable yet expressive family of mixing operators and edge transports? 
+
+This opens a broader implementation space. For example, spectral and functional-calculus constructions, kernelized parameterizations that control locality and approximate global mixing, and structured or constraint-preserving transports (near-isometries, inverse consistency) that bias the operator toward a metric connection Laplacian regime. More generally, the “dictionary” perspective extends beyond heads: one may mix over any low-dimensional operator basis (polynomial/spectral modes, wavelet-like primitives, learned linear dynamical modes), trading per-edge flexibility for parameter efficiency, stability, and interpretability. For diagnostics, the operator view suggests layerwise or headwise measurements: metric-compatibility scores such as ∥Oeff 
+
+> ij
+> ⊤
+
+Oeff  
+
+> ij
+
+− μij I∥; reversibility and symmetrizability tests for Aeff ; inverse-consistency tests for Oeff ; and curvature or holonomy proxies via loop-consistency of transports along short cycles. Such quantities may help identify outlier layers or heads and provide principled signals for future pruning, normalization, or regularization studies. 
+
+6.3 Extension to higher-order tensor data: connection walks beyond vector fields 
+
+The same connection-walk formalism extends from node vectors xi ∈ Rd to matrix- and tensor-valued fibers by specifying the fiber space and transports. Concretely, replace Rd
+
+by a representation space F, such as Rd1×d2 , and let transports act through appropriate representations, such as Kronecker-structured actions. In vision and video, the base graph can be a grid or a space-time graph; Aeff encodes the domain topology, while transports align local frames across space-time. Curvature then measures alignment inconsistency around loops, providing a principled notion of non-flat representation geometry for tensor-structured modalities. 
+
+6.4 ADR view of Transformer blocks 
+
+A connection walk layer mixes neighbors and transports features across edges. Its action naturally decomposes into three effects. Diffusion arises from the symmetric or reversible 
+
+component of the walk, smoothing and spreading information across tokens. Advection 
+
+arises from the antisymmetric, drift-like component, producing directed, non-reversible flow. 
+
+Reaction captures local reshaping , including non-isometric parts of Oeff  
+
+> ij
+
+and pointwise 
+
+> 10 From Self-Attention to Connection Laplacian
+
+nonlinearities (e.g., FFNs), which amplify, contract, or rotate features in place. Thus, a connection walk can be read as an ADR operator on a vector field over the token graph. The most faithful continuous analog of attention is generally nonlocal: for a continuous token-position variable s and feature field u(t, s ), a connection-walk propagator is (Ttu)( s) = 
+
+Z
+
+at(s, s ′) Ot(s, s ′) u(t, s ′) ds ′.
+
+When the kernel localizes, the generator admits a local ADR approximation 
+
+Ft(v) = ∇∗(Dt∇v) − bt · ∇ v + Ctv + Φ t(v),
+
+where Dt is a diffusion tensor, bt is drift, Ct captures linear zero-order effects such as non-isometric transport, and Φ t captures nonlinear reaction. A pre-LN block is naturally modeled as a normalized-forcing evolution 
+
+∂tu = Ft(LN( u)) ,
+
+where the residual state evolves in ambient feature space while the vector field is evaluated on normalized inputs. A post-LN block is better viewed as a projected evolution 
+
+∂tu = JLN (u)Ft(u),
+
+where normalization projects the infinitesimal ADR update onto the tokenwise normalization manifold. These continuous formulations are interpretive; the theorem-level exactness remains the attention-sublayer connection-walk result. The ADR view suggests measurable geometric quantities, such as connection-energy residuals and loop-consistency penalties, that may monitor depthwise stabilization or inspire future low-curvature objectives. We treat such objectives as future directions rather than validated replacements. 
+
+7 Experiments 
+
+In this section, we empirically investigate the geometric properties of multi-head attention in trained Transformers. We combine quantitative analysis across model families (from 124M to 8B parameters) with direct operator visualization. Specifically, we examine the following properties: 1. Geometric Stability: Whether the graph topology induced by the learned effective walk weights Aeff (row-stochastic by nature) stabilizes across layers and whether the distribution sharpens (more concentrated). 2. Transport Rigidity: Whether the learned effective transports Oeff approximate scaled orthogonal operators, suggesting geometry-preserving transformations. 3. Scaling Robustness: How these geometric properties vary with model scale and context length. We hypothesize that the geometric properties may vary across layer regimes. Since the initial and final layers perform embedding transformations and task-specific projections, we focus our analysis on the middle layers , where the evolution of internal representations occurs primarily. 
+
+> 11
+
+Lin, Chen, Li, Wang, Ye and He 0 2 4 6 8 10      
+
+> Layer Index
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> Drift ( 1 − cos  similarity)
+> Attention Geometric Drift
+> Stable Regime
+> (Middle Layers)
+> 0246810
+> Layer Index
+> 3
+> 4
+> 5
+> 6
+> 7
+> Frobenius Norm
+> Effective Attention Frobenius Norm
+> Stable Regime
+> (Middle Layers)
+
+(a) GPT-2 Small: Geometric Drift 0 5 10 15 20 25 30        
+
+> Layer Index
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> Drift ( 1 − cos  similarity)
+> Attention Geometric Drift
+> Stable Regime
+> (Middle Layers)
+> 0510 15 20 25 30
+> Layer Index
+> 4.5
+> 5.0
+> 5.5
+> 6.0
+> 6.5
+> 7.0
+> Frobenius Norm
+> Effective Attention Frobenius Norm
+> Stable Regime
+> (Middle Layers)
+
+(b) Llama-3-8B: Geometric Drift 0 2 4 6 8 10      
+
+> Layer Index
+> 0.00
+> 0.10
+> 0.20
+> 0.30
+> 0.40
+> 0.50
+> Orthogonality Deviation
+> Transport Orthogonality Deviation ( δorth )
+> Stable Regime
+> (Middle Layers)
+> 0246810
+> Layer Index
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> Scale Factor
+> Transport Scale Factor ( μscale )
+> Stable Regime
+> (Middle Layers)
+
+(c) GPT-2 Small: Orthogonality Deviation 0 5 10 15 20 25 30        
+
+> Layer Index
+> 0.00
+> 0.10
+> 0.20
+> 0.30
+> 0.40
+> 0.50
+> Orthogonality Deviation
+> Transport Orthogonality Deviation ( δorth )
+> Stable Regime
+> (Middle Layers)
+> 0510 15 20 25 30
+> Layer Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Scale Factor
+> Transport Scale Factor ( μscale )
+> Stable Regime
+> (Middle Layers)
+
+(d) Llama-3-8B: Orthogonality Deviation 
+
+Figure 1: Layerwise diagnostics of effective walks and transports. Shaded re-gions indicate the initial and final layers, which are often dominated by embedding and output-projection effects; the discussion focuses on the stable middle-layer regime . (a, b) Geometric Drift: Both models exhibit stabilization patterns. GPT-2 Small shows higher variance, whereas Llama-3-8B reaches a lower-drift middle-layer regime ( dℓ→ℓ+1 
+
+A ≈ 0). (c, d) Transport Orthogonality: Llama-3-8B has lower orthogonality deviation under the scaled-isometry diagnostic ( δorth ≈ 0.05 in middle layers), whereas GPT-2 Small exhibits larger deviation. 
+
+7.1 Experimental setup Models and data. The main study evaluates decoder-only Transformers across several model families: GPT-2 (Small, Medium, Large, XL), Qwen2.5 (3B, 7B), Qwen3 (4B, 8B), Llama-3.2 (3B), and Llama-3 (8B). Experiments are conducted on the WikiText-2 dataset 1.We randomly sample 1,024 sequences, truncate them to a context length of 64 tokens unless otherwise specified, and report average statistics. Appendix B.4 additionally reports encoder-only BERT diagnostics, and Appendix F reports connection-energy measurements. 
+
+Metrics. We track the layerwise evolution of the effective operators defined in Eqs. (8) –(9). 
+
+• Geometric drift ( dA). To measure stability of the token graph, we compute the cosine distance between effective attention matrices of layers over a support mask M:
+
+dℓ→ℓ+1 
+
+A = 1 − cos sim(vec M(Aℓ+1 eff ), vec M(Aℓ
+
+eff )) .
+
+For decoder-only models, M is causal lower-triangular support, so this reduces to flattening tril (Aeff ). For bidirectional encoders like BERT, M is the full valid non-special-token attention mask. We also monitor ∥Aℓ
+
+eff ∥F ; for row-stochastic Aeff , a larger Frobenius norm indicates a more localized walk distribution. 
+
+• Transport orthogonality ( δorth ). To quantify closeness to a scaled orthogonal matrix, define the local Gram matrix Gℓij = Oeff ,ℓ ij 
+
+⊤Oeff ,ℓ ij and mean scale μℓ
+
+scale (i, j ) = 1
+
+d Tr (Gℓij ). We report the relative deviation 
+
+δℓ
+
+orth (i, j ) = ∥Gℓij − μℓ
+
+scale (i, j )Id∥F
+
+μℓ
+
+scale (i, j ) d . (15) 
+
+1. https://huggingface.co/datasets/Salesforce/wikitext. 
+
+12 From Self-Attention to Connection Laplacian Key Position         
+
+> Query Position
+> Layer 0: Aeff
+> Key Position
+> Query Position
+> Layer 4: Aeff
+> Key Position
+> Query Position
+> Layer 5: Aeff
+> Key Position
+> Query Position
+> Layer 6: Aeff
+> Key Position
+> Query Position
+> Layer 7: Aeff
+> Key Position
+> Query Position
+> Layer 8: Aeff
+> Key Position
+> Query Position
+> Layer 9: Aeff
+> Key Position
+> Query Position
+> Layer 11: Aeff
+
+(a) Evolution of Effective Walk Weights Aeff (First token attention sink removed) First 128 Dimensions         
+
+> First 128 Dimensions
+> Layer 0: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 4: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 5: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 6: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 7: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 8: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 9: Avg Gij
+> First 128 Dimensions
+> First 128 Dimensions
+> Layer 11: Avg Gij
+
+(b) Evolution of Transport Gram Matrix Gij (Subset of 128 channels) 
+
+Figure 2: Visualization of Learned Operators (GPT-2 Small). (a) Effective walk weights ( Aeff ): With the attention sink removed, middle layers exhibit a coherent structure, consistent with a stable local-to-global topology. (b) Transport Gram structure ( Gij ): 
+
+The Gram matrix is strongly diagonal-dominant. The suppression of off-diagonal elements is consistent with approximate scaled-isometry under the proposed diagnostic, while not ruling out non-isometric deformation in general. The normalization yields a per-entry RMS deviation, making the metric comparable across hidden dimensions. We report weighted means across valid token pairs. 
+
+7.2 Evolution of token geometry and transport 
+
+We examine the layerwise evolution of geometric properties, comparing a small early model (GPT-2 Small) and a large modern model (Llama-3-8B) to assess the universality of our findings. Full results are presented in Appendix B. 
+
+Geometric stability. As shown in Figure 1 (Top), the geometric drift dA exhibits a stabilization pattern across both models, with a more pronounced low-drift middle-layer regime in Llama-3-8B. GPT-2 Small shows higher variance, whereas Llama-3-8B rapidly enters a regime where adjacent-layer effective walks are highly similar. This suggests that the topology of token interactions can become approximately stationary across depth. Additionally, we observe that Aℓ
+
+eff F consistently increases with depth. This implies that while the geometry stabilizes, the diffusion process becomes progressively more concentrated, preserving distinct features rather than oversmoothing them. 
+
+Transport rigidity. Figure 1 (Bottom) shows that Oeff approaches an approximate scaled-isometric regime under the diagnostic in Eq. (15) . In Llama-3-8B, the middle-layer orthogonality deviation can be as low as δorth ≈ 0.05. GPT-2 Small exhibits larger deviations, whereas the larger modern model in this comparison has lower scaled-isometry deviation under the same diagnostic. Note that this observation is descriptive: it does not establish that lower δorth causes better downstream performance. 
+
+7.3 Visualizing the effective operators 
+
+To provide intuition beyond scalar metrics, we directly visualize the learned operators Aeff 
+
+and the averaged Gram matrix of the transports Gij for GPT-2 Small in Figure 2. 
+
+13 Lin, Chen, Li, Wang, Ye and He 
+
+Table 1: Quantitative analysis of Transport Orthogonality ( δorth ) across model families. We report deviations from scaled isometry across the initial, middle, and final layers. Lower values indicate closer agreement with this diagnostic, not necessarily better downstream task performance.                             
+
+> Relative Layer Depth Model Initial (20%) Middle (60%) Final (20%)
+> GPT-2 Family
+> Small (124M) 0.152 0.096 0.284 Medium (355M) 0.180 0.089 0.228 Large (774M) 0.102 0.066 0.206 XL (1.5B) 0.089 0.065 0.112
+> Qwen2.5 Family
+> Base 3B 0.083 0.084 0.114 Base 7B 0.066 0.067 0.094
+> Qwen3 Family
+> Base 4B 0.079 0.057 0.053 Base 8B 0.064 0.052 0.051
+> Llama-3 Family
+> Base 8B 0.062 0.057 0.052
+
+Attention as walk weights ( Aeff ). Figure 2a visualizes the effective walk weights after removing the first-token attention sink. Middle layers exhibit a coherent structure, consistent with a stable local-to-global topology rather than random sparse mixing. 
+
+Transport Gram structure ( Gij ). Figure 2b visualizes the observed diagonal dom-inance of the mean transport Gram matrix. Quantitatively, diagonal elements are ap-proximately 15–20 × larger than off-diagonal elements across many middle-layer regimes (Appendix C). This is consistent with approximate scaled-isometry under our diagnostic, while still allowing non-isometric deformation in general. 
+
+7.4 Analysis across scales and context lengths 
+
+Finally, we systematically analyze how these geometric properties correlate with model capacity and context length. 
+
+Scaling with Model Size. Table 1 reports the mean orthogonality deviation across different model families. We observe a robust scaling trend: larger models tend to learn more rigid geometric transports. Deviations generally decrease as model size increases, with larger, modern models (Qwen3, Llama-3) achieving lower deviations ( ≈ 0.05). This trend suggests that the emergence of quasi-isometric transport is not an accidental artifact of small models, but rather a structural preference that stronger models exhibit more distinctly, while we do not present this as a general downstream performance predictor. 
+
+Sensitivity to context length. Figure 3 evaluates GPT-2 Small as context length varies from 16 to 1 ,024 tokens. Longer contexts increase early-layer drift and mildly weaken orthogonality, which is expected because maintaining a coherent geometry over a larger 
+
+> 14
+
+From Self-Attention to Connection Laplacian 0 2 4 6 8 10      
+
+> Layer Index
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> Drift (1 - cosine similarity)
+> Attention Geometry Drift Comparison
+> Sequence Length
+> Length 1024
+> Length 512
+> Length 256
+> Length 128
+> Length 96
+> Length 64
+> Length 32
+> Length 16
+> 0246810
+> Layer Index
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Orthogonality Deviation
+> Transport Orthogonality Comparison
+> Sequence Length
+> Length 1024
+> Length 512
+> Length 256
+> Length 128
+> Length 96
+> Length 64
+> Length 32
+> Length 16
+
+Figure 3: Sensitivity to context length (GPT-2 Small). We vary the input context length from 16 to 1 ,024 tokens. Longer contexts increase early-layer drift and mildly affect orthogonality, while deeper layers recover a similar low-drift and low-deviation profile in this tested range. graph is more difficult. However, the overall profile remains similar: deeper layers recover a low-drift and low-deviation regime within the tested range. Appendix D reports full-length ablations across model families, and Appendix G provides a supporting extended-range diagnostic. 
+
+Encoder-only and energy diagnostics. Appendix B.4 reports BERT experiments using the full valid bidirectional non-special-token mask, and Appendix F reports connection-energy diagnostics for GPT-2 Small and BERT. These results suggest that the diagnostic phenomena are not limited to decoder-only models, although layerwise patterns remain architecture-dependent and descriptive. In summary, the experiments show diagnostic signatures captured by the connection-walk formalism: effective walks often stabilize across depth, and effective transports often approach an approximate scaled-isometric regime .
+
+8 Limitations 
+
+First, the exact operator identification is an attention-sublayer result. A full Transformer block also contains residual connections, LayerNorm or RMSNorm, and pointwise nonlinear FFNs. We interpret these as local or zero-order components in an ADR view, but we do not provide a complete theorem for the full nonlinear block composition. Second, the empirical study is descriptive and diagnostic. We do not establish that lower drift or more orthogonal transports causally improve downstream performance, nor do we show that enforcing these properties yields better models. Third, the main empirical evaluation focuses on pretrained models under controlled text probes. Additional encoder-only and longer-context diagnostics broaden the scope, but a systematic study of encoder-decoder models, multimodal settings, and task-level behavior remains future work. Fourth, computing effective edge transports can be expensive, and our diagnostics rely on sampled sequences and practical normalizations. These measurements should be understood as probes of trained operator geometry rather than complete summaries of model behavior. 
+
+15 Lin, Chen, Li, Wang, Ye and He 
+
+9 Conclusion 
+
+We provided a geometric, operator-level identification of self-attention by modeling token representations as a vector field over the token graph and showing that single-head attention is exactly a connection walk with constant transport, while multi-head attention 
+
+is exactly a single edge-dependent connection propagation step whose effective transport is an attention-gated mixture of head transports. Empirically, across trained decoder-only Transformers from 124M to 8B parameters, we observe consistent geometric signatures predicted by the theory: effective walks stabilize across depth, effective transports approach scaled isometries in middle layers, and both phenomena strengthen as model scales. Looking forward, this connection walk perspective suggests geometry-aware objectives (energy and holonomy regularization), constraint-preserving parameterizations (near-orthogonal or group-valued transports, inverse consistency, symmetrizable walks), and diagnostic-driven pruning or routing of heads and edges, as well as extensions to tensor-valued fibers on grids and space-time graphs for vision and video, and a deeper analysis of depth dynamics via continuous and ADR limits for non-reversible, non-isometric operators. 
+
+Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here. 
+
+> 16 From Self-Attention to Connection Laplacian
+
+Appendix A. Connection Laplacians: Continuous Background 
+
+Let ( M, g ) be a Riemannian manifold and let E → M be a rank-d vector bundle with a metric-compatible connection ∇. For a section X ∈ Γ( E), the (rough) connection Laplacian 
+
+is ∆∇X = ∇∗∇X = − tr g ∇2X. 
+
+It generates diffusion of vector fields via the heat equation 
+
+∂tX(t, ·) = − ∆∇X(t, ·), X(0 , ·) = X0.
+
+The corresponding heat kernel is a family of linear maps Kt(x, y ) : Ey → Ex with X(t, x ) = R 
+
+> M
+
+Kt(x, y ) X0(y) dvol g(y) and the semigroup Kt+s(x, z ) = R Kt(x, y )Ks(y, z ) dvol g(y). For small t, Kt(x, y ) concentrates near geodesics and factors (to leading order) into a scalar Gaussian weight times the parallel transport along the geodesic. Parallel transport Pγ :
+
+Eγ(0) → Eγ(1) is the path-ordered exponential of ∇, and its closed-loop product (holonomy) encodes curvature. Row-stochastic A provides the heat (diffusion) weights ; the one-step propagator is 
+
+I − Lrw  
+
+> c
+
+= T (A, O ). Discrete k-step diffusion is T k, whose entries sum over paths (random walk weights Q A times cumulative transport Oγ ). In continuous time, e−tL rw  
+
+> c
+
+is the vector-valued heat kernel on the graph. 
+
+> 17 Lin, Chen, Li, Wang, Ye and He
+
+Appendix B. Complete Evolution Plots 
+
+We provide a detailed layerwise breakdown for each model. For every model, we present two side-by-side plots: 
+
+• Left: Geometric Drift ( dA) and Frobenius Norm ( ∥Aeff ∥F ). 
+
+• Right: Transport Orthogonality Deviation ( δorth ) and Scale Factor ( μscale ). This layout supports visual comparison between the stabilization of the token graph topology and the transport-orthogonality diagnostic. 
+
+B.1 GPT-2 Series (from 124M to 1.5B) 
+
+The GPT-2 family (Figure 4) illustrates the effect of scaling within an older architecture. 
+
+Observation: GPT-2 Small (Row 1) exhibits significant variance in orthogonality deviation (δorth ≈ 0.15) and slower geometric stabilization. As we scale up to GPT-2 XL (Row 4), the curves become noticeably smoother, and the orthogonality deviation drops to ≈ 0.06, resembling modern large models. This suggests a scale-associated trend toward lower transport deviation in this controlled sample. 
+
+B.2 Qwen Series (2.5 & 3) 
+
+Figure 5 shows the results for the Qwen2.5 and Qwen3 families. Observation: These modern architectures display a characteristic “U-shape” in drift, with low drift in the deep middle layers. Qwen3-8B achieves low orthogonality deviation under the scaled-isometry diagnostic. 
+
+B.3 Llama Series (3.2 & 3) 
+
+Figure 6 displays the Llama-3 family results. Observation: Llama-3-8B has among the lowest transport deviations in our evaluation, with δorth consistently below 0 .06 for the majority of layers. The drop in drift (Left) and stabilization of orthogonality (Right) are particularly clear in this model. 
+
+B.4 Encoder-Only BERT 
+
+Figure 7 reports the same operator diagnostics for BERT-base-uncased. Unless otherwise stated, the setup uses WikiText-2 test samples and a length-64 truncation. For BERT, we remove [CLS] , [SEP] , and [PAD] positions before computing token-graph diagnostics, and we use the full valid bidirectional mask rather than a causal lower-triangular support. 
+
+Observation: BERT shows high adjacent-layer similarity overall, but its drift profile is less cleanly stabilized than the decoder-only GPT-2 probe. Its transport orthogonality deviation decreases in later layers, suggesting that the scaled-isometry diagnostic is not limited to decoder-only self-attention while remaining architecture-dependent. 
+
+> 18
+
+From Self-Attention to Connection Laplacian 0 2 4 6 8 10 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 2 4 6 8 10 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(a) GPT-2 Small: Geometric Drift 0 2 4 6 8 10 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 2 4 6 8 10 
+
+Layer Index 
+
+0
+
+250 
+
+500 
+
+750 
+
+1000 
+
+1250 
+
+1500 
+
+1750 
+
+2000 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (b) GPT-2 Small: Orthogonality 0 5 10 15 20 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(c) GPT-2 Medium: Geometric Drift 0 5 10 15 20 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 
+
+Layer Index 
+
+0
+
+250 
+
+500 
+
+750 
+
+1000 
+
+1250 
+
+1500 
+
+1750 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (d) GPT-2 Medium: Orthogonality 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(e) GPT-2 Large: Geometric Drift 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (f) GPT-2 Large: Orthogonality 0 10 20 30 40 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 10 20 30 40 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(g) GPT-2 XL: Geometric Drift 0 10 20 30 40 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 10 20 30 40 
+
+Layer Index 
+
+0
+
+5
+
+10 
+
+15 
+
+20 
+
+25 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (h) GPT-2 XL: Orthogonality 
+
+Figure 4: GPT-2 Series Evolution. Comparison of geometric stability (Left) and transport orthogonality (Right) across four model sizes. The larger variants in this controlled family show smoother curves and lower orthogonality deviation. 0 2 4 6 8 10 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+0.60 
+
+0.70 
+
+> Drift (1 - cosine similarity)
+
+Attention Geometry Drift 
+
+Middle Regime 
+
+0 2 4 6 8 10 
+
+Layer Index 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+3.0 
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Middle Regime 
+
+(a) Effective-walk drift and ∥Aeff ∥F .0 2 4 6 8 10 
+
+Layer Index 
+
+0.00 
+
+0.02 
+
+0.04 
+
+0.06 
+
+0.08 
+
+0.10 
+
+0.12 
+
+0.14 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation 
+
+Middle Regime 
+
+0 2 4 6 8 10 
+
+Layer Index 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+3.0 
+
+3.5 
+
+4.0 
+
+> Scale Factor
+
+Transport Scale Factor 
+
+Middle Regime (b) Transport orthogonality and scale. 
+
+Figure 7: BERT-base-uncased operator diagnostics using the full valid bidirectional non-special-token mask. 
+
+19 Lin, Chen, Li, Wang, Ye and He 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(a) Qwen2.5-3B: Geometric Drift 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (b) Qwen2.5-3B: Orthogonality 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+2.5 
+
+3.0 
+
+3.5 
+
+4.0 
+
+4.5 
+
+5.0 
+
+5.5 
+
+6.0 
+
+6.5 
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(c) Qwen2.5-7B: Geometric Drift 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+14 
+
+16 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (d) Qwen2.5-7B: Orthogonality 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(e) Qwen3-4B: Geometric Drift 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+12 
+
+14 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (f) Qwen3-4B: Orthogonality 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+3
+
+4
+
+5
+
+6
+
+7
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(g) Qwen3-8B: Geometric Drift 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+5
+
+10 
+
+15 
+
+20 
+
+25 
+
+30 
+
+35 
+
+40 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (h) Qwen3-8B: Orthogonality 
+
+Figure 5: Qwen Series Evolution. Both Qwen2.5 and Qwen3 show low middle-layer drift under the geometric diagnostic. 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+4
+
+5
+
+6
+
+7
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(a) Llama-3.2-3B: Geometric Drift 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5 
+
+2.0 
+
+2.5 
+
+3.0 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (b) Llama-3.2-3B: Orthogonality 0 5 10 15 20 25 30 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift 
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 
+
+Layer Index 
+
+4.5 
+
+5.0 
+
+5.5 
+
+6.0 
+
+6.5 
+
+7.0 
+
+> Frobenius Norm
+
+Effective Attention Frobenius Norm 
+
+Stable Regime 
+
+(Middle Layers) 
+
+(c) Llama-3-8B: Geometric Drift 0 5 10 15 20 25 30 
+
+Layer Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Orthogonality Deviation
+
+Transport Orthogonality Deviation ( δorth )
+
+Stable Regime 
+
+(Middle Layers) 
+
+0 5 10 15 20 25 30 
+
+Layer Index 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+1.2 
+
+1.4 
+
+> Scale Factor
+
+Transport Scale Factor ( μscale )
+
+Stable Regime 
+
+(Middle Layers) (d) Llama-3-8B: Orthogonality 
+
+Figure 6: Llama Series Evolution. Llama models show low drift and low transport deviation under the proposed diagnostics. 
+
+20 From Self-Attention to Connection Laplacian 
+
+Appendix C. Statistical Analysis of Transport Matrices 
+
+C.1 Diagonal Dominance 
+
+We quantitatively assess the “scaled isometry” hypothesis by examining the structure of the local Gram matrix Gℓij = Oeff ,ℓ ij 
+
+> ⊤
+
+Oeff ,ℓ ij . We report the mean absolute magnitude of diagonal versus off-diagonal elements across three depth regimes: Initial (0–20%), Middle 
+
+(20–80%), and Final (80–100%). As detailed in Table 2, the transport matrices exhibit consistent diagonal dominance 
+
+across all model families. Focusing on the stable “Middle” regime: 
+
+• For GPT-2 Small , the diagonal mean (133 .8) is approximately 15x larger than the off-diagonal mean (9 .0). 
+
+• For Llama-3-8B , the diagonal mean (0 .1412) is over 20x larger than the off-diagonal mean (0 .0068). Intermediate models, including the Qwen series and larger GPT-2 variants, consistently fall within this range, maintaining high diagonal-to-off-diagonal ratios (typically > 10 ×) as shown in Table 2. This dominance indicates that the learned transport operator Oeff  
+
+> ij
+
+is closer to a scaled or rotational map than to an arbitrary dense shear map under this aggregate diagnostic. These metrics corroborate the visual sparsity observed in Figure 2, while not ruling out non-isometric effects on individual edges. Table 2: Quantitative analysis of Transport Gram Matrix Gij . We report the mean magnitude of diagonal vs. off-diagonal elements. The “Middle” regime (layers from 20% to 80% depth) highlights strong diagonal dominance (approx. 15x–20x ratio), consistent with approximate scaled-isometry under this diagnostic.                                                                     
+
+> Initial (20%) Middle (60%) Final (20%) Model Diag Off-Diag Diag Off-Diag Diag Off-Diag GPT-2 (124M) 131.98 6.49 133.81 9.00 699.14 19.10 GPT-2 Medium (335M) 81.15 4.20 155.00 10.64 496.23 15.47 GPT-2 Large (774M) 3.00 0.25 8.71 0.58 18.54 0.89 GPT-2 XL (1.5B) 2.21 0.18 5.93 0.40 12.35 1.16 Qwen2.5-3B 1.59 0.10 2.53 0.16 3.66 0.24 Qwen2.5-7B 1.10 0.06 1.76 0.09 7.51 0.46 Qwen3-4B 10.40 0.61 5.67 0.29 6.57 0.35 Qwen3-8B 26.73 1.45 16.23 0.76 14.97 0.69 Llama-3.2-3B 0.34 0.01 0.40 0.02 1.69 0.08 Llama-3-8B 0.08 0.004 0.14 0.007 0.61 0.03
+> 21
+
+Lin, Chen, Li, Wang, Ye and He 
+
+Appendix D. Ablation Study: Sequence Length 
+
+We investigate the robustness of geometric stability and orthogonality under varying context lengths. The main text extends GPT-2 Small to 1 ,024 tokens in Figure 3; Figure 8 reports the broader model-family comparison for context lengths L ∈ { 16 , 32 , 64 , 96 , 128 , 256 }.0 2 4 6 8 10 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 2 4 6 8 10 
+
+Layer Index 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+(a) GPT-2 Small 0 5 10 15 20 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 
+
+Layer Index 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 (b) GPT-2 Medium 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+(c) GPT-2 Large 0 10 20 30 40 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 10 20 30 40 
+
+Layer Index 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 (d) GPT-2 XL 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.08 
+
+0.10 
+
+0.12 
+
+0.14 
+
+0.16 
+
+0.18 
+
+0.20 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+(e) Qwen2.5-3B 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+0.06 
+
+0.08 
+
+0.10 
+
+0.12 
+
+0.14 
+
+0.16 
+
+0.18 
+
+0.20 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 (f) Qwen2.5-7B 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.04 
+
+0.06 
+
+0.08 
+
+0.10 
+
+0.12 
+
+0.14 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+(g) Qwen3-4B 0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 30 35 
+
+Layer Index 
+
+0.040 
+
+0.045 
+
+0.050 
+
+0.055 
+
+0.060 
+
+0.065 
+
+0.070 
+
+0.075 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 (h) Qwen3-8B 0 5 10 15 20 25 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 
+
+Layer Index 
+
+0.040 
+
+0.045 
+
+0.050 
+
+0.055 
+
+0.060 
+
+0.065 
+
+0.070 
+
+0.075 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+(i) Llama-3.2-3B 0 5 10 15 20 25 30 
+
+Layer Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+0.40 
+
+> Drift ( 1 − cos  similarity)
+
+Attention Geometric Drift Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 
+
+0 5 10 15 20 25 30 
+
+Layer Index 
+
+0.04 
+
+0.05 
+
+0.06 
+
+0.07 
+
+0.08 
+
+0.09 
+
+> Orthogonality Deviation ( δorth )
+
+Transport Orthogonality Comparison 
+
+Sequence Length 
+
+Length 256 
+
+Length 128 
+
+Length 96 
+
+Length 64 
+
+Length 32 
+
+Length 16 (j) Llama-3-8B 
+
+Figure 8: Impact of Sequence Length. Comparing drift and orthogonality across model families for context lengths L = 16 to L = 256. Across the tested architectures, deeper layers often recover lower drift despite increased initial drift for longer sequences. 
+
+22 From Self-Attention to Connection Laplacian 
+
+Appendix E. LayerNorm and FFN Details for the Block-Level ADR View 
+
+This appendix expands the block-level discussion in Section 6.1. The exact theorem-level statement of the paper concerns the attention sublayer, while residual connections, normalization, and FFNs determine how such attention sublayers are composed across depth. For a pre-norm Transformer block, the schematic form is 
+
+U = X + Attn(LN( X)) , Y = U + FFN(LN( U )) .
+
+For a post-norm block, a schematic form is 
+
+U = LN( X + Attn( X)) , Y = LN( U + FFN( U )) .
+
+In both cases, attention is the component that introduces same-layer cross-token edges. LayerNorm and FFN are tokenwise maps: their Jacobians are block diagonal over token positions, although they can be highly data-dependent inside each token fiber. Under continuous-depth scaling, a pre-LN block is naturally modeled as a normalized-forcing evolution 
+
+∂tu = Ft(LN( u)) ,
+
+where Ft is the nonlocal connection-ADR vector field induced by attention and FFN. A post-LN block is better modeled as a projected evolution 
+
+∂tu = JLN (u)Ft(u),
+
+where the infinitesimal update is projected through the normalization Jacobian. This distinction is interpretive and does not change the exact attention-sublayer connection-walk theorem. 
+
+> 23
+
+Lin, Chen, Li, Wang, Ye and He 
+
+Appendix F. Connection-Energy Diagnostic 
+
+For a directed and generally non-isometric attention operator, the classical PSD Dirichlet-form interpretation need not hold. Nevertheless, the following normalized nonnegative residual is useful as a diagnostic: 
+
+E(ℓ)norm ,off =
+
+P
+
+i̸=j A(ℓ)eff (i, j ) x(ℓ)
+
+i − x(ℓ)
+
+j bO(ℓ)
+
+ij 
+
+221
+
+|V |
+
+P
+
+k∈V ∥x(ℓ)
+
+k ∥22 + ϵ , bO(ℓ)
+
+ij = Oeff ,(ℓ)
+
+ij 
+
+q
+
+μ(ℓ)scale (i, j )
+
+. (16) The self-loop terms are removed so that the diagnostic focuses on cross-token transport, and the scale-normalized transport bOij removes the scalar factor from an approximately scaled-orthogonal map. Figure 9 reports the off-diagonal energy measurements for GPT-2 Small and BERT-base-uncased. GPT-2 shows comparatively low normalized energy in its middle layers relative to boundary layers, while BERT shows a broad depthwise decrease. The raw energy and off-diagonal mass panels help separate residual magnitude from attention-mass effects. 0 2 4 6 8 10           
+
+> Layer Index
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> 2.25
+> 2.50
+> 2.75
+> 3.00
+> Normalized Off-diagonal Energy
+> Normalized Off-diagonal Energy
+> GPT-2 Small
+> BERT-base
+> 0246810
+> Layer Index
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> Raw Off-diagonal Energy
+> Raw Off-diagonal Energy
+> GPT-2 Small
+> BERT-base
+> 0246810
+> Layer Index
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Off-diagonal Mass
+> Off-diagonal Attention Mass
+> GPT-2 Small
+> BERT-base
+
+Figure 9: Connection-energy diagnostics for GPT-2 Small and BERT-base-uncased. The panels report normalized off-diagonal energy, raw off-diagonal energy, and off-diagonal attention mass across layers. 
+
+24 From Self-Attention to Connection Laplacian 
+
+Appendix G. Extended Context-Length Diagnostic 
+
+The main-text ablation (Figure 3) probes context lengths up to 1 ,024 tokens for GPT-2 Small. Figure 10 provides a supporting diagnostic across the same extended range. The qualitative trend is stable across this range: longer contexts mildly increase early-layer drift and orthogonality deviation, but the deeper-layer low-drift, low-deviation profile remains visible within the tested regime. These are descriptive observations on a single model and probe, not a causal claim about long-context competence. 0 2 4 6 8 10 
+
+> Layer Index
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> Drift (1 - cosine similarity)
+
+Attention Geometry Drift Comparison      
+
+> Sequence Length
+> Length 1024
+> Length 512
+> Length 256
+> Length 128
+> Length 96
+> Length 64
+> Length 32
+> Length 16
+> 0246810
+> Layer Index
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> Orthogonality Deviation
+
+Transport Orthogonality Comparison 
+
+> Sequence Length
+> Length 1024
+> Length 512
+> Length 256
+> Length 128
+> Length 96
+> Length 64
+> Length 32
+> Length 16
+
+Figure 10: Extended context-length diagnostic for GPT-2 Small, probing context lengths up to 1 ,024 tokens. Longer contexts mildly increase early-layer drift and orthogonality deviation; the deeper-layer stable regime remains visible in the tested range. 
+
+25 Lin, Chen, Li, Wang, Ye and He 
+
+Appendix H. Cross-Attention and Encoder–Decoder Extension 
+
+The connection-walk formalism also extends to cross-attention by replacing the single token graph with a directed bipartite or block-structured graph. Encoder tokens are source nodes and decoder tokens are target nodes. For a single head with encoder states XE and decoder queries, the cross-attention update has the form 
+
+YD = AD←E XE M, 
+
+where AD←E is row-stochastic over encoder sources for each decoder target. Thus (YD)i = X
+
+> j
+
+AD←E (i, j )( XE )j Oij .
+
+The multi-head derivation follows the same blockwise averaging argument as Theorem 3, with an effective cross-walk Across eff and cross-edge transports Ocross ,eff  
+
+> ij
+
+. In a combined encoder-decoder block operator, cross-attention occupies an off-diagonal block from encoder-source fibers to decoder-target fibers. A systematic empirical study of this setting remains future work. 
+
+> 26 From Self-Attention to Connection Laplacian
+
+References 
+
+Francesca Babiloni, Ioannis Marras, Gregory G. Slabaugh, and Stefanos Zafeiriou. TESA: tensor element self-attention via matricization. In 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2020, Seattle, WA, USA, June 13-19, 2020 , pages 13942–13951. Computer Vision Foundation / IEEE, 2020. doi: 10.1109/ CVPR42600.2020.01396. Afonso S. Bandeira, Amit Singer, and Daniel A. Spielman. A cheeger inequality for the graph connection laplacian. SIAM J. Matrix Anal. Appl. , 34(4):1611–1630, 2013. doi: 10.1137/120875338. URL https://doi.org/10.1137/120875338 .Federico Barbero, Cristian Bodnar, Haitz S´ aez de Oc´ ariz Borde, Michael M. Bronstein, Petar Velickovic, and Pietro Li` o. Sheaf neural networks with connection laplacians. In 
+
+Proceedings of Topological, Algebraic, and Geometric Learning Workshops 2022 , volume 196 of Proceedings of Machine Learning Research , pages 28–36. PMLR, 2022. URL 
+
+https://proceedings.mlr.press/v196/barbero22a.html .Cristian Bodnar, Francesco Di Giovanni, Benjamin Paul Chamberlain, Pietro Li` o, and Michael M. Bronstein. Neural sheaf diffusion: A topological perspective on heterophily and oversmoothing in gnns. In Advances in Neural Information Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 , pages 18527–18541, 2022. URL 
+
+https://openreview.net/forum?id=vbPsD-BhOZ .Michael M. Bronstein, Joan Bruna, Taco Cohen, and Petar Velickovic. Geometric deep learning: Grids, groups, graphs, geodesics, and gauges. CoRR , abs/2104.13478, 2021. URL https://arxiv.org/abs/2104.13478 .Krzysztof Marcin Choromanski, Valerii Likhosherstov, David Dohan, Xingyou Song, Andreea Gane, Tam´ as Sarl´ os, Peter Hawkins, Jared Quincy Davis, Afroz Mohiuddin, Lukasz Kaiser, David Benjamin Belanger, Lucy J. Colwell, and Adrian Weller. Rethinking attention with performers. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net, 2021. Sankalan Pal Chowdhury, Adamos Solomou, Avinava Dubey, and Mrinmaya Sachan. On learning the transformer kernel. CoRR , abs/2110.08323, 2021. URL https://arxiv.org/ abs/2110.08323 .Fan Chung. Laplacians and the cheeger inequality for directed graphs. Annals of Combina-torics , 9(1):1–19, 2005. Taco Cohen, Maurice Weiler, Berkay Kicanaoglu, and Max Welling. Gauge equivariant convolutional networks and the icosahedral CNN. In Kamalika Chaudhuri and Ruslan Salakhutdinov, editors, Proceedings of the 36th International Conference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach, California, USA , volume 97 of 
+
+Proceedings of Machine Learning Research , pages 1321–1330. PMLR, 2019. 
+
+> 27 Lin, Chen, Li, Wang, Ye and He
+
+Ahmed Farooq. A framework for non-linear attention via modern hopfield networks. CoRR ,abs/2506.11043, 2025. doi: 10.48550/ARXIV.2506.11043. URL https://doi.org/10. 48550/arXiv.2506.11043 .Kelvin Kan, Xingjian Li, and Stanley J. Osher. Ot-transformer: A continuous-time transformer architecture with optimal transport regularization. CoRR , abs/2501.18793, 2025. doi: 10.48550/ARXIV.2501.18793. URL https://doi.org/10.48550/arXiv.2501. 18793 .Devin Kreuzer, Dominique Beaini, William L. Hamilton, Vincent L´ etourneau, and Prudencio Tossou. Rethinking graph transformers with spectral attention. In Marc’Aurelio Ranzato, Alina Beygelzimer, Yann N. Dauphin, Percy Liang, and Jennifer Wortman Vaughan, editors, Advances in Neural Information Processing Systems 34: Annual Conference on Neural Information Processing Systems 2021, NeurIPS 2021, December 6-14, 2021, virtual ,pages 21618–21629, 2021. Binbin Lin, Xiaofei He, Chiyuan Zhang, and Ming Ji. Parallel vector field embedding. 
+
+J. Mach. Learn. Res. , 14(1):2945–2977, 2013. doi: 10.5555/2567709.2567755. URL 
+
+https://dl.acm.org/doi/10.5555/2567709.2567755 .Xindian Ma, Peng Zhang, Shuai Zhang, Nan Duan, Yuexian Hou, Ming Zhou, and Dawei Song. A tensorized transformer for language modeling. In Hanna M. Wallach, Hugo Larochelle, Alina Beygelzimer, Florence d’Alch´ e-Buc, Emily B. Fox, and Roman Garnett, editors, Advances in Neural Information Processing Systems 32: Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, December 8-14, 2019, Vancouver, BC, Canada , pages 2229–2239, 2019. Hubert Ramsauer, Bernhard Sch¨ afl, Johannes Lehner, Philipp Seidl, Michael Widrich, Lukas Gruber, Markus Holzleitner, Thomas Adler, David P. Kreil, Michael K. Kopp, G¨ unter Klambauer, Johannes Brandstetter, and Sepp Hochreiter. Hopfield networks is all you need. In 9th International Conference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net, 2021. Amit Singer and H-T Wu. Vector diffusion maps and the connection laplacian. Communica-tions on pure and applied mathematics , 65(8):1067–1144, 2012. Yi Tay, Mostafa Dehghani, Dara Bahri, and Donald Metzler. Efficient transformers: A survey. ACM Comput. Surv. , 55(6):109:1–109:28, 2023. doi: 10.1145/3530811. URL 
+
+https://doi.org/10.1145/3530811 .Anh Tong, Thanh Nguyen-Tang, Dongeun Lee, Duc Nguyen, Toan M. Tran, David Leo Wright Hall, Cheongwoong Kang, and Jaesik Choi. Neural ODE transformers: Analyzing internal dynamics and adaptive fine-tuning. In The Thirteenth International Conference on Learning Representations, ICLR 2025, Singapore, April 24-28, 2025 . OpenReview.net, 2025. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Isabelle Guyon, Ulrike 
+
+> 28 From Self-Attention to Connection Laplacian
+
+von Luxburg, Samy Bengio, Hanna M. Wallach, Rob Fergus, S. V. N. Vishwanathan, and Roman Garnett, editors, Advances in Neural Information Processing Systems 30: Annual Conference on Neural Information Processing Systems 2017, December 4-9, 2017, Long Beach, CA, USA , pages 5998–6008, 2017. J. J. P. Veerman and Robert Lyons. A primer on laplacian dynamics in directed graphs. Nonlinear Phenomena in Complex Systems , 23(2):196–206, 2020. doi: 10.33581/ 1561-4085-2020-23-2-196-206. Matthew A. Wright and Joseph E. Gonzalez. Transformers are deep infinite-dimensional non-mercer binary kernel machines. CoRR , abs/2106.01506, 2021. URL https://arxiv. org/abs/2106.01506 .Xinyi Wu, Amir Ajorlou, Yifei Wang, Stefanie Jegelka, and Ali Jadbabaie. On the role of attention masks and layernorm in transformers. In Amir Globersons, Lester Mackey, Danielle Belgrave, Angela Fan, Ulrich Paquet, Jakub M. Tomczak, and Cheng Zhang, editors, Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 , 2024. Seongjun Yun, Minbyul Jeong, Raehyun Kim, Jaewoo Kang, and Hyunwoo J. Kim. Graph transformer networks. In Hanna M. Wallach, Hugo Larochelle, Alina Beygelzimer, Florence d’Alch´ e-Buc, Emily B. Fox, and Roman Garnett, editors, Advances in Neural Information Processing Systems 32: Annual Conference on Neural Information Processing Systems 2019, NeurIPS 2019, December 8-14, 2019, Vancouver, BC, Canada , pages 11960–11970, 2019. Yifan Zhang, Yifeng Liu, Huizhuo Yuan, Zhen Qin, Yang Yuan, Quanquan Gu, and Andrew Chi-Chih Yao. Tensor product attention is all you need. CoRR , abs/2501.06425, 2025. doi: 10.48550/ARXIV.2501.06425. URL https://doi.org/10.48550/arXiv.2501. 06425 .
