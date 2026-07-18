@@ -6,38 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-17
-- 运行时间：2026-07-17 21:30:47 UTC
+- 最新运行日期：2026-07-18
+- 运行时间：2026-07-18 21:04:01 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：1
-- 速读区：5
+- 本次总论文数：1
+- 精读区：0
+- 速读区：1
 
 ### 今日简报（AI）
-今日收录6篇论文，以精读《MIND-CAVs》多智能体协商决策系统为代表。值得重点关注自动驾驶意图驱动协商与Transformer的拉普拉斯算子统一视角两个方向。建议先精读《MIND-CAVs》理解多智能体协同机制，再结合《Connection Laplacian》理论深化Transformer理解。
-- 详情：[/202607/17/README](/202607/17/README)
+今日速读1篇行人轨迹预测论文，聚焦可解释性。
+方向：时空团注意力机制提升多模态预测可解释性。
+建议：后续可对比其他模型，关注实际场景应用效果。
+- 详情：[/202607/18/README](/202607/18/README)
 
 ### 精读区论文标签
-1. [MIND-CAVs: Multi-Intelligence Negotiation and Decision System for CAVs based on Intent-Driven Autonomy](/202607/17/2607.14688v1-mind-cavs-multi-intelligence-negotiation-and-decision-system-for-cavs-based-on-intent-driven-autonomy)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：联网自动驾驶车辆的多智能体谈判与协调
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [From Self-Attention to Connection Laplacian: A Unified Operator View of Transformers](/202607/17/2607.10677v1-from-self-attention-to-connection-laplacian-a-unified-operator-view-of-transformers)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：注意力的统一算子视角，包含线性传输
-2. [BAT-RM: A Boundary-Aware Transformer with Region-Aware Multi-Directional Mamba for Clinically Deployed Cervical Cancer Radiotherapy Auto-Contouring](/202607/17/2607.11949v1-bat-rm-a-boundary-aware-transformer-with-region-aware-multi-directional-mamba-for-clinically-deployed-cervical-cancer-radiotherapy-auto-contouring)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：用于长程上下文的线性复杂度Mamba模块
-3. [The Energy Society: A Simulation Environment for Studying Agent Cooperation under Survival Pressure](/202607/17/2607.14865v1-the-energy-society-a-simulation-environment-for-studying-agent-cooperation-under-survival-pressure)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：模拟生存压力下多智能体合作的实验环境
-4. [SearchOS-V1: Towards Robust Open-Domain Information-Seeking Agent Collaboration](/202607/17/2607.15257v1-searchos-v1-towards-robust-open-domain-information-seeking-agent-collaboration)  
+1. [TSCA-Net: Temporal-Spatial Clique Attention for Interpretable Multimodal Pedestrian Trajectory Prediction](/202607/18/2607.11939v1-tsca-net-temporal-spatial-clique-attention-for-interpretable-multimodal-pedestrian-trajectory-prediction)  
    标签：评分：6.0/10、query:ma-la
-   evidence：多智能体协作信息检索
-5. [EcoXAI: Autonomous Agentic Ecosystem for Explainable Artificial Intelligence and Biomedical Discovery](/202607/17/biorxiv-10-64898-2026-07-08-737358-v1-ecoxai-autonomous-agentic-ecosystem-for-explainable-artificial-intelligence-and-biomedical-discovery)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：模块化多智能体数据分析系统，含智能体通信
+   evidence：用于多智能体行人轨迹预测的时空团注意力
 
 
 <div class="dpr-home-promo-card">

@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-07-18 <!--dpr-date:20260718-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202607/18/2607.11939v1-tsca-net-temporal-spatial-clique-attention-for-interpretable-multimodal-pedestrian-trajectory-prediction" data-sidebar-item="{&quot;title&quot;: &quot;TSCA-Net: Temporal-Spatial Clique Attention for Interpretable Multimodal Pedestrian Trajectory Prediction&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2607.11939v1-tsca-net-temporal-spatial-clique-attention-for-interpretable-multimodal-pedestrian-trajectory-prediction&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;ma-la&quot;}], &quot;evidence&quot;: &quot;用于多智能体行人轨迹预测的时空团注意力&quot;}">TSCA-Net: Temporal-Spatial Clique Attention for Interpretable Multimodal Pedestrian Trajectory Prediction</a>
   * 2026-07-17 <!--dpr-date:20260717-->
     * 精读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202607/17/2607.14688v1-mind-cavs-multi-intelligence-negotiation-and-decision-system-for-cavs-based-on-intent-driven-autonomy" data-sidebar-item="{&quot;title&quot;: &quot;MIND-CAVs: Multi-Intelligence Negotiation and Decision System for CAVs based on Intent-Driven Autonomy&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2607.14688v1-mind-cavs-multi-intelligence-negotiation-and-decision-system-for-cavs-based-on-intent-driven-autonomy&quot;, &quot;score&quot;: &quot;8.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;ma-la&quot;}], &quot;evidence&quot;: &quot;联网自动驾驶车辆的多智能体谈判与协调&quot;}">MIND-CAVs: Multi-Intelligence Negotiation and Decision System for CAVs based on Intent-Driven Autonomy</a>
