@@ -6,26 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-18
-- 运行时间：2026-07-18 21:04:01 UTC
+- 最新运行日期：2026-07-19
+- 运行时间：2026-07-19 21:10:25 UTC
 - 运行状态：成功
-- 本次总论文数：1
+- 本次总论文数：3
 - 精读区：0
-- 速读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日速读1篇行人轨迹预测论文，聚焦可解释性。
-方向：时空团注意力机制提升多模态预测可解释性。
-建议：后续可对比其他模型，关注实际场景应用效果。
-- 详情：[/202607/18/README](/202607/18/README)
+今天速读了3篇论文，涵盖集体觅食鲁棒性、机器人长期共存及LLM Agent系统设计。  
+最值得关注的是7.0分的《Frequent errors are the worst》，揭示了群体觅食中个体频繁错误会显著降低整体表现。  
+建议优先精读这篇论文，深入理解错误模式对群体决策效率的影响机制。
+- 详情：[/202607/19/README](/202607/19/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [TSCA-Net: Temporal-Spatial Clique Attention for Interpretable Multimodal Pedestrian Trajectory Prediction](/202607/18/2607.11939v1-tsca-net-temporal-spatial-clique-attention-for-interpretable-multimodal-pedestrian-trajectory-prediction)  
+1. [Frequent errors are the worst: robustness to individual failures in collective foraging](/202607/19/biorxiv-10-64898-2026-07-12-738017-v1-frequent-errors-are-the-worst-robustness-to-individual-failures-in-collective-foraging)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：集体觅食中个体错误影响的多智能体交互动力学
+2. [A Glimpse into Long-term Physical Coexistence with Intelligent Robots](/202607/19/2607.11377v1-a-glimpse-into-long-term-physical-coexistence-with-intelligent-robots)  
    标签：评分：6.0/10、query:ma-la
-   evidence：用于多智能体行人轨迹预测的时空团注意力
+   evidence：多机器人系统，长期共存中的跨机器人协调
+3. [MyAG: A Graph-Based Framework for Designing and Analyzing Composable LLM Agent Systems](/202607/19/2607.13474v1-myag-a-graph-based-framework-for-designing-and-analyzing-composable-llm-agent-systems)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：基于图的可组合LLM智能体系统框架
 
 
 <div class="dpr-home-promo-card">
