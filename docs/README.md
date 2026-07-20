@@ -6,32 +6,24 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-19
-- 运行时间：2026-07-19 21:10:25 UTC
+- 最新运行日期：2026-07-20
+- 运行时间：2026-07-20 21:31:27 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：1
 - 精读区：0
-- 速读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今天速读了3篇论文，涵盖集体觅食鲁棒性、机器人长期共存及LLM Agent系统设计。  
-最值得关注的是7.0分的《Frequent errors are the worst》，揭示了群体觅食中个体频繁错误会显著降低整体表现。  
-建议优先精读这篇论文，深入理解错误模式对群体决策效率的影响机制。
-- 详情：[/202607/19/README](/202607/19/README)
+今日速读1篇论文，从信息瓶颈视角探讨多智能体系统何时真正有效。该文得分6.0/10，为多智能体协作的适用条件提供了理论分析。建议关注多智能体系统的读者速读此文，了解其性能边界。
+- 详情：[/202607/20/README](/202607/20/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Frequent errors are the worst: robustness to individual failures in collective foraging](/202607/19/biorxiv-10-64898-2026-07-12-738017-v1-frequent-errors-are-the-worst-robustness-to-individual-failures-in-collective-foraging)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：集体觅食中个体错误影响的多智能体交互动力学
-2. [A Glimpse into Long-term Physical Coexistence with Intelligent Robots](/202607/19/2607.11377v1-a-glimpse-into-long-term-physical-coexistence-with-intelligent-robots)  
+1. [When Do Multi-Agent Systems Help? An Information Bottleneck Perspective](/202607/20/2607.16133v1-when-do-multi-agent-systems-help-an-information-bottleneck-perspective)  
    标签：评分：6.0/10、query:ma-la
-   evidence：多机器人系统，长期共存中的跨机器人协调
-3. [MyAG: A Graph-Based Framework for Designing and Analyzing Composable LLM Agent Systems](/202607/19/2607.13474v1-myag-a-graph-based-framework-for-designing-and-analyzing-composable-llm-agent-systems)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：基于图的可组合LLM智能体系统框架
+   evidence：多智能体交互动力学
 
 
 <div class="dpr-home-promo-card">

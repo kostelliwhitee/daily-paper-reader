@@ -1,6 +1,9 @@
 * <a class="dpr-sidebar-root-link" href="#/">首页</a>
 * <a class="dpr-sidebar-root-link dpr-sidebar-noactive-link" href="javascript:void(0)" data-dpr-hash="#/tutorial/README">使用教程</a>
 * Daily Papers
+  * 2026-07-20 <!--dpr-date:20260720-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202607/20/2607.16133v1-when-do-multi-agent-systems-help-an-information-bottleneck-perspective" data-sidebar-item="{&quot;title&quot;: &quot;When Do Multi-Agent Systems Help? An Information Bottleneck Perspective&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/2607.16133v1-when-do-multi-agent-systems-help-an-information-bottleneck-perspective&quot;, &quot;score&quot;: &quot;6.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;ma-la&quot;}], &quot;evidence&quot;: &quot;多智能体交互动力学&quot;}">When Do Multi-Agent Systems Help? An Information Bottleneck Perspective</a>
   * 2026-07-19 <!--dpr-date:20260719-->
     * 速读区
       * <a class="dpr-sidebar-item-link dpr-sidebar-item-structured" href="#/202607/19/biorxiv-10-64898-2026-07-12-738017-v1-frequent-errors-are-the-worst-robustness-to-individual-failures-in-collective-foraging" data-sidebar-item="{&quot;title&quot;: &quot;Frequent errors are the worst: robustness to individual failures in collective foraging&quot;, &quot;link&quot;: &quot;https://arxiv.org/abs/biorxiv-10-64898-2026-07-12-738017-v1-frequent-errors-are-the-worst-robustness-to-individual-failures-in-collective-foraging&quot;, &quot;score&quot;: &quot;7.0&quot;, &quot;tags&quot;: [{&quot;kind&quot;: &quot;query&quot;, &quot;label&quot;: &quot;ma-la&quot;}], &quot;evidence&quot;: &quot;集体觅食中个体错误影响的多智能体交互动力学&quot;}">Frequent errors are the worst: robustness to individual failures in collective foraging</a>
