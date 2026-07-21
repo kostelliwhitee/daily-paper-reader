@@ -1,0 +1,1150 @@
+Title: The Optimization Trilemma: Efficiency, Comfort and Fairness in Decentralized Multi-agent Coordination
+
+URL Source: https://arxiv.org/pdf/2607.17311v1
+
+Published Time: Tue, 21 Jul 2026 01:12:10 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# The Optimization Trilemma: Efficiency, Comfort and Fairness in Decentralized Multi-agent Coordination 
+
+Jovan Nikol´ ıc ∗, Maciej Krzysztof Zuziak †, Evangelos Pournaras †‡ ∗ Google, Zurich, 8002 Zurich, Switzerland. E-mail: jovannikolic@google.com 
+
+† School of Computer Science, University of Leeds, Leeds, UK. E-mail: {M.Zuziak,E.Pournaras }@leeds.ac.uk 
+
+‡ School of Energy Systems, LUT University, 53850 Lappeenranta, Finland 
+
+Abstract —The problem of fair multi-agent coordination in decentralized settings is one of the most pressing challenges for building efficient collaborative systems. Resource allocation is based on optimized collective arrangements accounting for agents’ needs. Such coordination should not only be compu-tationally efficient but also account for fairness, i.e., equitable redistribution of costs incurred by all agents. Recent literature has proposed several algorithms that efficiently determine op-timal plan combinations balancing system-wide efficiency and individual discomfort of agents in a centralized setting. However, these works do not address equitable resource optimization in fully decentralized scenarios, specifically, the optimized redistri-bution of discomfort among coordinating agents so that none experiences a discomfort level that could lead to loss of incentive or polarization that can disrupt planned operations. In this work, we study the problem of optimizing three objectives: (i) system-wide efficiency, (ii) individuals’ comfort and (iii) fairness (i.e., balancing of incurred discomfort costs) in decentralized multi-agent coordination. We design a novel model to optimize those three orthogonal objectives, without any substantial increase in communication and computational overhead. Through experi-ments on two real-world datasets, we validate the model and demonstrate that it can achieve fairer optimization outcomes, while satisfying agents’ preferences and system goals. 
+
+Index Terms —Decentralized Optimization, Combinatorial Op-timization, Fairness, Multi-Agent Systems, Multi-Agent Opti-mization, Coordination, Collective Learning 
+
+I. I NTRODUCTION 
+
+Efficient use of resources [1] with active participation and cooperation of citizens in collective decision-making [2] are fundamental characteristics of sustainable complex systems, in which resource allocation is most effective when it ac-counts for the dynamically evolving needs and preferences of participants. Efficient resource consumption can be achieved via cooperation: prompt, impactful decisions resulting from collaboration among individuals that adapt to dynamic en-vironmental conditions, saving resources and reducing costs. For example, in bike-sharing systems, costs of manual bike relocations can be reduced through cyclists’ cooperation, by choosing the station to pick up and which to park at, based on others’ choices. Electricity bills of households connected to a Smart Grid can be reduced by collaborative appliance scheduling during periods when electricity prices are lower, e.g., at night or when renewable energy availability is higher. The notion of efficient resource use may differ between the individual and system perspectives, leading to discrepancies in the level of discomfort experienced by particular agents. For bike-sharing operators, efficiency means minimal manual bike relocation costs; from cyclists’ perspectives, it means picking up a bike at the nearest bike station. In the Smart Grid scenario, scheduling appliances at times when it is unsuitable for residents is inefficient from their perspective, but it reduces the risk of a blackout. Such a discrepancy may lead to substantial unfairness in the system, in which optimization towards only the global objective results in some agents incurring higher participation costs than others. This can yield to rebound effects with dropouts that can also in turn influence system-wide efficiency. Previous work on combinatorial planning in decentralized multi-agent settings has considered either single-objective [3], [4] or multi-objective [5] scenarios. However, none of the works to date has considered fairness in the distribution of incurred costs across agents, so that no agent suffers dispropor-tionate discomfort, or the system creates an imbalanced allo-cation that discourages some agents from participation. Since the system assumes collaboration among agents, those who are treated unfairly may lack a rational incentive to continue collaborating [6], [7]. On the other hand, even agents which are placed in an advantageous position may be unsatisfied with the outcome of the allocation, either because of the inequity aversion [8] or reciprocity principles [9]. The minimization of unfairness in decentralized systems is further perplexed by the lack of access to complete information about the distribution of discomfort costs among agents, which can be reconstructed only from messages exchanged between them. In line with this, we design a multi-agent system that efficiently manages trade-offs in a distributed manner across multiple objectives: (i) system-wide efficiency (global 1
+
+inefficiency cost), (ii) comfort (local 2 discomfort cost), and 
+
+> 1
+
+The terms inefficiency and global cost are used interchangeably. 
+
+> 2
+
+Similarly, the terms discomfort and local cost are used interchangeably. arXiv:2607.17311v1 [cs.MA] 19 Jul 2026 (iii) the fairness of agents’ selections, by reusing messages already passed by the agents to optimize the primary system-wide objective (i.e. efficiency), thereby significantly reducing communication bottleneck. Subsequently, we empirically ana-lyze the impact of the proposed model on real-world datasets, demonstrating the effect of unequal distribution of discomfort costs among agents and how the proposed framework can steer the system towards more equitable optimization solutions. 
+
+A. Contribution 
+
+This work establishes the following contribution: 1) A model for fairness that augments distributed multi-objective optimization, accounting for three, often or-thogonal, goals: system-wide efficiency, comfort, and fairness in how discomfort is distributed. 2) A cost-effective application of the model for fairness to the collective learning approach of I-EPOS, the iterative Economic Planning and Optimized Selections [5], [10], expanding the optimization capabilities with negligible communication and computational cost. 3) New insights from an empirical evaluation of the frame-work using one synthetic and two real-world datasets on how the unequal distribution of agents’ discomfort costs influence the system and how the proposed model can yield optimized solutions that are fairer for agents. 4) An open-source software implementation 3 into the EPOS software release for further experimentation, re-search and applicability by the broader community. In the light of this contributions, we make the following advances to state of the art [11]–[17]: (i) The proposed model can scale to thousands of agents, where the impact of inequalities is becoming profound. (ii) The communication and computational cost is negligible given that the optimization of fairness is incepted as a built-in element of existing general-purpose multi-agent coordination and therefore, no additional mechanism is required to bridge the information gap in decen-tralized settings. (iii) Fairness can be co-optimized jointly and adaptively with system-wide efficiency and individuals’ com-fort, providing a modular and reconfigurable multi-objective optimization for large-scale decentralized multi-agent systems. 
+
+B. Structure of the Work 
+
+The rest of the work is structured as follows: Section II illustrates the most relevant approaches to single and multi-objective combinatorial optimization, including multi-agent approaches that account for fairness. Section III formulates the multi-agent combinatorial optimization problem, while Section IV introduces the model for optimizing fairness in decentralized multi-objective optimization. Section V shows how fairness minimization is incorporated into a state-of-the-art collective learning approach without additional communi-cation cost. Section VI illustrates the experimental evaluation of the proposed model and the trade-offs of optimizing the      
+
+> 3Available at https://github.com/epournaras/EPOS (last accessed: July 2026).
+
+three orthogonal objectives. Finally, conclusions and future work are drawn in Section VII. II. R ELATED WORK 
+
+The problem introduced in this work assumes an adaptive, decentralized optimization of three objectives that are often orthogonal [5]: system-wide efficiency, individuals’ comfort, and the fairness of comfort distribution. In this section, we illustrate multi-agent approaches to multi-objective combina-torial optimization (Subsection II-A) and prior approaches to fairness optimization in multi-agent systems (Section II-B). 
+
+A. Decentralized Multi-agent Combinatorial Optimization 
+
+Solutions to many well-known combinatorial optimization problems can be obtained in a multi-agent setting. While multi-agent systems allow for autonomy of agents’ compu-tations that can run in parallel and on multiple machines, resulting in a shorter runtime and more efficient resource uti-lization, they also require additional synchronization schemes and message passing protocols that increase their complex-ity. For example, the multi-agent version of Particle Swarm Optimization with agents of different types [18] is used to solve the flexible job-shop scheduling problem, which is NP-hard. The same problem was solved using the multi-agent version of the genetic algorithm coupled with Tabu search, a memory-based local search scheme that potentially accepts worse solutions if no improvements are available in near proximity [19]. Community detection in complex networks is also NP-hard, and it is solved in a multi-agent setting using a genetic algorithm, assuming a lattice-like agent topology [20]. Some multi-agent approaches allow solving multiple different problems simultaneously, by abstracting scheduling and rout-ing problems [21] using ontologies and two types of agents: a launcher agent that converts the problem into an ontology and initializes others, and metaheuristic agents that implement metaheuristic solution search specified in the ontology. Finally, the power supply restoration problem in Smart Grids, another variation of the knapsack problem that is also NP-hard, is solved in a multi-agent setting via Lagrangian relaxation [22]. The majority of these solutions adopt a centralized ap-proach, whereas only a few consider adaptive decentralized approaches. The Combinatorial Optimization Heuristic for Distributed Agents (COHDA) [3] can solve multi-agent combi-natorial problems without assuming a centralized orchestrator, but it accounts only for a single objective. It considers an arbi-trary network topology, in which each agent exchanges config-urations with all adjacent agents. EPOS can optimize a single objective while leveraging the agents’ tree hierarchy [4]. The following work on I-EPOS extends this to multi-objective op-timization, while agents rely on a tree hierarchy to efficiently coordinate their decision making [5], [10]. Our model can accommodate any decentralized combinatorial optimization algorithm designed for multiple objectives simultaneously. As a proof of concept, we demonstrate the applicability of our model to I-EPOS as an exemplary algorithm with outstanding performance and practical use. Earlier work has also shown the gap on optimizing fairness [23], [24]. 
+
+B. Fairness in Multi-Agent Optimization 
+
+The problem of fairness in multi-agent systems dates back to a cake-cutting problem – a common metaphor for the division of an heterogeneous divisible good [25], [26], where the good may be the allocation of resources, such as slots in the power grid schedule or the use of cycling stations. Fairness in such systems is a direct relaxation of the perfect rationality assumption [27], where the agent can take into account choices that are not perfectly rational in the sake of satisfying some of their pre-defined normative principles. From the perspective of the individual agent, fairness can be connected directly to the principle of reciprocity [9], [28], where agents act in a certain way because they assume that their action is reciprocated by other agents. This assumption is often a logical prerequisite for envisaging collective action that exists without direct monetary reward [29]. If the system is not spontaneous (i.e. it is designed to steer agents towards a certain goal), the fairness of the multi-agent system can also be assessed from the system designer’s perspective [30]. In several systems, such as routing [31], traffic control [32], or cloud computing [33], fairness of resource allocation is an essential element for ensuring that system function is not interrupted, leaving particular agents depleted or without access to a service. Fairness in this use-case scenario is often associated with the concept of load-balancing [34], [35]. In recent years, multiple works have studied fairness as either an emergent property or the optimization criterion in multi-agent systems [11]–[13], with several of them focus-ing on proportional fairness, envy-freeness [12], maxim fair-ness [11] and proportionality rewards [13] as some prominent examples. The Nash social welfare notion of fairness has also been studied in the context of multi-agent sequential decision making in centralized [36] and decentralized [14] settings, showing that it can limit information aggregation and slow down convergence. In contrast, this work separate efficiency and fairness, while also supports the optimization of agents’ comfort. This three-dimensional optimization provides more flexibility for system operators, as well as for agents to adapt to different scenarios and explore appropriate trade-offs. In multi-agent reinforcement learning problems, the legico-graphic max-min, generalized Gini social welfare function and proportional fairness have been studied in an architecture with two neural sub-networks that co-optimize efficiency and eq-uity [15]. The reciprocal of the coefficient of variation has been studied in the transport domain to optimize for equal distances traveled [16], while inter-agent communication is introduced to optimize for temporal fairness using the expected scalarized return (ESR) rather than scalarized expected return (SER) to ensure fairness within and across each time step [17]. These approaches are limited to a very low number of agents, in contrast to this work that provides a model and its applicability to scale optimization to thousands of agents. III. S YSTEM OPTIMIZATION MODELING 
+
+This section illustrates the modeling of the problem and the formulation of the agents’ behavior. Subsection III-A shows the general overview of the model, while Section III-B introduces the precise formalization of the model. 
+
+A. Scenario Modeling 
+
+This work assumes multiple agents collectively planning their actions, taking into account the impact of those actions on system-wide efficiency (global cost) and the level of their individual discomfort (local cost) they experience. In such a model, each agent self-determines a set of options (plans) from which it can choose, representing the operational flexibility of the agent. The agent’s choice is communicated to other agents in the network. All agents optimize their respective choices, taking into account (i) system-wide efficiency (impact of the plan selection on the system performance) and (ii) the level of their individual discomfort caused by the selection (how much comfort they are sacrificing by this selection). This model is relevant for various scenarios in collaborative planning, including Smart Grid scenarios, in which the goal is to schedule household appliances over a day in accordance with citizens’ preferences, with the aim of reducing the like-lihood of a blackout 4 [37]. Each household (agent) has a set of options: energy profiles or schedules , that represent energy demand throughout the day and correspond to the energy consumption of appliances scheduled for different time points or consumption levels [37]. The schedule (energy profile) is defined as energy consumption over time. The profiles can be ranked by their convenience (i.e. thermal/temperature), a measure that expresses the comfort of using each schedule. The sum of all selected energy demand profiles in the grid should not exceed the blackout threshold, i.e., the total energy consumption in the grid should be stabilized over time. Simi-larly, the same framework can be used to model a bike-sharing scenario over time, in which an agent represents a citizen. The goal is to reduce the number of manual bike relocations, which are costly and time-consuming, by regulating where citizens pick up and return bikes, while accounting for the total relocation distance. In both cases, the agent selection is guided not only by the discomfort cost but also by the choices of other agents that co-determine system performance. 
+
+B. Problem Formulation 
+
+Table I introduces the mathematical notations used through-out this paper. Assume a network of N agents embedded in an arbitrary graph structure. Let a denote an agent and A,
+
+(|A| = N ), a set of all agents in the network. An agent a ∈ A 
+
+self-determines a set of possible plans Pa which represents a set of options an agent can choose from. Multiple plans are the flexibility that each agent contributes to the system to optimize. A possible plan p ∈ P a is a vector of length d (p ∈ Rd) and represents one option, e.g. a schedule for appliances in a Smart 
+
+> 4We assume blackouts when energy peaks exceed a certain threshold.
+
+Grid scenario 5, or a trip in a bike-sharing scenario [10]. All agents have possible plans of the same length d. Each possible plan is associated with a cost . Let l(p) be a discomfort cost function of the plan p, defined as follows: l : Rd −→ R and its value when applied to plan p is referred to as the cost of the plan p. The discomfort cost may be expressed as the distance to the preferred biking station. It can represent the price or the required resources to execute a certain plan. TABLE I: Table of notation used throughout this work.                                                                                 
+
+> Symbol Definition
+> NNumber of agents
+> TNumber of iterations
+> ASet of agents
+> PaSet of possible plans for agent a
+> TaSet of children of agent aa, r ∈ A Agent a, root agent rpa,c∈ T aParent and child of agent a
+> p∈ P aPlan from a set of possible plans for agent as(t)
+> a∈ P aPlan selected by agent aat iteration t∈T
+> ˜s(t)
+> a∈ P aPreliminary plan selected by agent aat iteration t∈T
+> g(t)Global response (sum of all plans)
+> g,lInefficiency and discomfort cost function ( Rd→R)
+> G,L,UInefficiency, average discomfort and unfairness cost
+> a(t)
+> aAggregated response of agent aat time t
+> ˜a(t)
+> aPreliminary aggregated response of agent aat time tk(t)
+> aAggregated plan cost of agent aat time t
+> ˜k(t)
+> aPreliminary aggregated plan cost of agent aat time tK(t)
+> aAggregated squared plan cost of agent aat time t
+> ˜K(t)
+> aPreliminary aggregated squared plan cost of agent aat time tγ, β, α ∈RWeights for inefficiency, discomfort and unfairness cost
+> i(t)
+> a∈ { 0,1}|T a|Binary acceptance vector of client aat round t
+> ˆi(t)
+> a∈ { 0,1}|T a|Preliminary binary acceptance vector of client aat round t
+
+We further assume that agents reassess their selected plans iteratively. At each iteration t ∈ T , each agent a selects one of the possible plans, referred to as the selected plan and noted as s(t) 
+
+> a
+
+∈ P a. The sum of selected plans of all agents in the network is referred to as a global response , g(t) ∈ Rd:
+
+g(t) = X
+
+> a∈A
+
+s(t) 
+
+> a
+
+. (1) Intuitively, in the energy domain, the global response g(t)
+
+may represent the total power consumption over 24h in the Smart Grid. Alternatively, in the bike sharing scenario, it may represent all the incoming and outgoing bikes in a bike sharing station. The global response is constructed via cooperation of agents with respect to one or more objectives, i.e. depending on objective(s), a global response with different characteristics can be constructed, by self-regulating selections at each agent. The fitness of the agent selections is evaluated according to one or more objectives. The efficiency objective is abstracted by a cost function g : Rd −→ R that takes the global response 
+
+g(t) as input. The value of the function g applied to global response at time t, g(t), is referred to as the inefficiency cost :
+
+G(t) = g(g(t)) = g(X
+
+> a∈A
+
+s(t) 
+
+> a
+
+). (2) 
+
+> 5
+
+Since schedules may represent energy consumption over time, different plans represent a demand shift [37]. 
+
+The discomfort objective is assessed by the average discomfort cost , L(t) ∈ R, defined as the average over individual discom-fort costs of the agents’ selected plans, or more formally: 
+
+L(t) = 1
+
+N
+
+X
+
+> a∈A
+
+l(s(t) 
+
+> a
+
+). (3) We assume that agents can communicate with each other to adapt their plan choices and collaboratively optimize the objectives. Communication and coordination are necessary, especially when the inefficiency and discomfort cost functions are nonlinear and minimizing independently these costs func-tions does not necessarily yield a system-wide minimum [5]. An agent a summarizes the knowledge from all other agents with which it exchanges messages (denoted as Ta ⊂ A), including itself, via aggregation . Given a possible plan and its discomfort cost, the aggregated knowledge is constructed by computing the following: (i) aggregated response , the sum of all received plans and (ii) aggregated plan cost , used by the discomfort cost function. The aggregated response of an agent a at time t, a ta ∈ Rd, is a sum of selected plans of agent 
+
+a and all the agents that is connected with: 
+
+a(t) 
+
+> a
+
+= X
+
+> c∈T a
+
+s(t) 
+
+> c
+
+, (4) where c ∈ T a is an agent linked with agent a. The aggregated plan cost at time t is a sum of discomfort costs of the selected plans of agent a and all the agents that is connected with: 
+
+k(t) 
+
+> a
+
+= X
+
+> c∈T a
+
+l(s(t) 
+
+> c
+
+). (5) IV. M ODELING FAIRNESS OPTIMIZATION 
+
+This section introduces the optimization model of fairness and how it can complement a multi-objective optimization of efficiency and comfort. 
+
+A. Unfairness Minimization 
+
+The model illustrated above takes into consideration the inefficiency cost (Equation 2) and average discomfort cost (Equation 3). However, it does not account for the distribution of discomfort costs across the agents. It is possible that although the inefficiency and average discomfort costs are minimized, the distribution is heavily skewed, causing to a selected subset of agents much higher discomfort levels than the rest of the set. Formally, the unfairness cost, U (t) ∈ R
+
+is defined as the standard deviation between the costs of the selected plans, or more formally: 
+
+U (t) =
+
+s 1
+
+N
+
+X
+
+> c∈A
+
+(l(s(t) 
+
+> c
+
+) − L(t))2. (6) The dispersion and equality of discomfort costs can also be calculated with other metrics [38]. For instance, the coefficient of variation is scale invariant, while the Jain’s fairness index and the Gini coefficient are both scale invariant and bounded. We show here how the Equation 6 can be calculated and optimized in decentralized settings and the principle can be extended to other measures as well (see Appendix A). Minimizing unfairness (Equation 6) requires knowledge of the discomfort costs of all agents in A, which is not available a priori to each individual agent in a decentralized network. However, we show that Equation 6 can be rewritten using only 
+
+k(t) 
+
+> a
+
+and K(t) 
+
+> a
+
+(aggregated and aggregated squared plan costs). Since each agent a computes those only with respect to other agents with which it is linked as Ta ⊆ A , this yields an approx-imation of system-wide unfairness. Since agents can adjust their plan selections to minimize costs, this approximation can also iteratively improve. Moreover, since the aggregated plan cost k(t) 
+
+> a
+
+is locally available to agents to calculate the average discomfort cost, no additional communication overhead is required for the fairness calculation. We introduce though a low-cost local computation of the aggregated squared plan cost at time t, K(t) 
+
+> a
+
+∈ R, that represents the sum of squared 
+
+discomfort costs of the selected plans of agent a and all the agents that it is connected with: 
+
+K(t) 
+
+> a
+
+= X
+
+> c∈T a
+
+(l(s(t) 
+
+> c
+
+)) 2. (7) We show below that it is possible to rewrite Equation 6 using only the quantities of aggregated plan cost and aggre-gated squared plan cost, which are in direct disposition of each agent. Moreover, once rewritten in that form, the Equation 6 is a square root of the (biased) sample variance, and it converges to the true sample variance as the sample size increases. To this end, we introduce the following lemma and its corollary: 
+
+Lemma 1. The aggregated plan cost k(t) 
+
+> a
+
+, aggregated squared plan cost K(t) 
+
+> a
+
+and the number of agents N are sufficient for agents connected in a tree network to compute unfairness as: 
+
+U (t) =
+
+s
+
+1
+
+N K(t) 
+
+> a
+
+−
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
+,
+
+where k(t) 
+
+> a
+
+and K(t) 
+
+> a
+
+are defined in Equations 5 and 7 and evaluated over Ta = A for N = |A| .Proof. Expanding on the square of Equation 6, we get: 
+
+(U (t))2 = 1
+
+N
+
+X
+
+> c∈A
+
+ l(s(t) 
+
+> c
+
+) − L(t)2
+
+= 1
+
+N
+
+X
+
+> c∈A
+
+l(s(t) 
+
+> c
+
+)2 − 2L(t) · 1
+
+N
+
+X
+
+> c∈A
+
+l(s(t) 
+
+> c
+
+) +  L(t)2
+
+= 1
+
+N K(t) 
+
+> a
+
+− 2L(t) · 1
+
+N
+
+X
+
+> c∈A
+
+l(s(t) 
+
+> c
+
+) +  L(t)2
+
+= 1
+
+N K(t) 
+
+> a
+
+− 2L(t) · 1
+
+N k(t) 
+
+> a
+
++  L(t)2
+
+= 1
+
+N K(t) 
+
+> a
+
+− 2 · 1
+
+N k(t) 
+
+> a
+
+· 1
+
+N k(t) 
+
+> a
+
++
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
+= 1
+
+N K(t) 
+
+> a
+
+− 2
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
++
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
+= 1
+
+N K(t) 
+
+> a
+
+−
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
+.
+
+Since U (t) ≥ 0, taking the square root of both sides gives 
+
+U (t) =
+
+s
+
+1
+
+N K(t) 
+
+> a
+
+−
+
+ 1
+
+N k(t)
+
+> a
+
+2
+
+.
+
+Corollary 1. Let X be a real-valued random variable with 
+
+E[X2] < ∞, and let the plan costs Xc = l(s(t) 
+
+> c
+
+), c ∈ A ,
+
+|A| = N , be independent and identically distributed samples from the distribution of X. Then (U (t))2 is the (biased) sample variance of X1, . . . , X N , and as N → ∞ , it almost surely holds that: 
+
+(U (t))2 a.s. 
+
+−−→ Var( X), U (t) a.s. 
+
+−−→ pVar( X).
+
+Proof. By Lemma 1, (U (t))2 = 1
+
+> N
+
+P 
+
+> c∈T a
+
+X2 
+
+> c
+
+−
+
+  1
+
+> N
+
+P 
+
+> c∈T a
+
+Xc
+
+2, which is the (biased) sample variance of X1, . . . , X N . Since E[X2] < ∞, the strong law of large numbers gives: 
+
+1
+
+N
+
+X
+
+> c∈T a
+
+Xca.s. 
+
+−−→ E[X], 1
+
+N
+
+X
+
+> c∈T a
+
+X2
+
+> ca.s.
+
+−−→ E[X2].
+
+Therefore: 
+
+(U (t))2 a.s. 
+
+−−→ E[X2] − (E[X]) 2
+
+= E(X − E[X]) 2
+
+= Var( X).
+
+Taking square roots yields: U (t) a.s. 
+
+−−→ pVar( X).Given the above results, it becomes clear that the variance of the incurred discomfort costs (i) can be directly computed (approximated) from the information already in possession of each agent, without any additional messages, and (ii) converges to the true variance as N increases. Furthermore, the same approach using only the aggregated plan cost and aggregated squared plan cost can be used to derive more complex fairness measures. In Appendix A we illustrate one additional measure of fairness, namely the Jain’s fairness index [39]. It should be noted that Corollary 1 relies on the assumption of independent and identically distributed samples, which may not be strictly satisfied in the decentralized setting where agents make coupled decisions to minimize a shared objective. In practice though, the derived formula serves as a tractable proxy for system-wide unfairness, enabling its estimation without any additional communication overhead. 
+
+B. Multi-objective Optimization 
+
+The model combines three (orthogonal) objectives: mini-mizing inefficiency cost (Equation 2), discomfort cost (Equa-tion 3) and unfairness cost (Equation 6). The objectives are scalarized, i.e. costs are linearly combined into a single additive complex cost. The optimization problem to solve is then formulated ∀a ∈ A as follows: 
+
+s(t) 
+
+> a
+
+= arg min 
+
+> pa∈P a
+
+γG (t) + αU (t) + βL (t),G(t) = g X
+
+> a∈A
+
+pa
+
+!
+
+,L(t) = 1
+
+N
+
+X
+
+> a∈A
+
+l(pa),U (t) =
+
+s 1
+
+N
+
+X
+
+> a∈A
+
+ l(pa) − L(t)2,
+
+(8) where s(t) 
+
+> a
+
+∈ P a is the plan selected by agent a ∈ A , and 
+
+α, β, γ ∈ R are weights such that 0 ≤ α, β, γ ≤ 1 and α +
+
+β + γ = 1 . The weights indicate preference towards a certain goal. They can be uniformly selected for the whole system or each agent can set its own preference towards certain goals. In this case, αa, β a, γ a are a triplet of weights that expresses the preference of agent a towards certain optimization goals. Agents are assumed to have intrinsic or extrinsic incentives (e.g. monetary rewards) to be altruistic, i.e. high γ, α values and low β value. For instance, this may include environmental friend energy consumers prioritizing low thermal comfort and high responsiveness to the availability of renewable energy resources, or responsiveness to low energy prices. Since the objectives are scalarized and plans are discrete, the problem becomes a standard multi-objective combinatorial problem, where we search for a plan sa ∈ Pa for each agent a ∈ A that minimizes Equation 8. The formulation is solver-agnostic and can be integrated to any combinatorial op-timization method. To assess the model applicability, we apply the model to I-EPOS [5], [10], which supports decentralized combinatorial optimization in a collaborative manner. V. M ODEL APPLICABILITY TO COLLECTIVE LEARNING 
+
+The I-EPOS [5] algorithm has been supporting decentralized combinatorial optimization of two or more objectives. As such we select it as a basis of assessing the applicability of the pro-posed model, extending it to optimize for fairness as illustrated in Section IV-A. Another alternative algorithm for applicability is COHDA [3]. We focus here on I-EPOS, mostly because in COHDA, agents exchange their full knowledge, unlike I-EPOS agents that iteratively adjust their plan selections based on the aggregated selection of others members in the network. One advantage of COHDA is that it accounts for arbitrary graph structures, whereas I-EPOS relies on agents that (self-)organize into hierarchical tree topologies for efficient infor-mation aggregation and incremental decision making [4]. Organizing agents in a tree topology can be achieved using multiple published algorithms, including AETOS [4], and thus constitutes an acceptable relaxation of the assumptions presented in Section III. Given the tree topology, one of the agents a ∈ A occupies the position of a root agent r, while the rest |A|− 1 agents are placed on a lower level of the tree 6. The agents (i) send messages to a set of child agents and (ii) receive messages from the parent agent (denoted as pa). The I-EPOS algorithm iteratively optimizes the plan selections, firstly by propagating preliminary plans from the bottom of the tree up to the root agent ( the bottom-up phase ) and then by propagating knowledge about accepted (or rejected) plans from the root agent down to the bottom of the tree ( the top-down phase ). Both of those phases are outlined in Section V-A and V-B. 
+
+A. Bottom-up Phase 
+
+In the bottom-up phase, agents make preliminary plan choices that may be accepted based on the received feedback from the agents placed above them in the tree, or may revert to the earlier selection. Formally, every iteration t ∈ T starts from the agent receiving a preliminary aggregated response from its children, i.e. ˜a(t) 
+
+> a
+
+= P 
+
+> c∈T a
+
+˜s(t) 
+
+> c
+
+. Those aggregated plans are used to calculate all preliminary values of the cost functions, including the preliminary aggregated plan cost 
+
+˜k(t) 
+
+> a
+
+= P 
+
+> c∈T a
+
+l(˜ s(t) 
+
+> c
+
+) and preliminary aggregated squared plan cost ˜K(t) 
+
+> a
+
+= P 
+
+> c∈T a
+
+(l(˜ s(t) 
+
+> c
+
+)) 2. Since the plan is preliminary, it is communicated to the agent’s parent, but the agent may revert to previously selected plans if this reduces costs, jointly with other agent selections. The process begins from the bottom of the tree, hence referred to as the bottom-up phase .Formally, since the topology of the tree remains stable during the optimization, each agent is able to track the progress by keeping the previous 7 values of its own selected plan 
+
+s(t−1)  
+
+> a
+
+and aggregated responses of all its children a(t−1)  
+
+> c
+
+.Let ˜i(t) 
+
+> a
+
+denote the binary acceptance vector of agent a at iteration i and let ˜i(t) 
+
+> ac
+
+denote the element of this vector that corresponds to a child c ∈ T a. During the preliminary bottom-up phase, each agent performs a limited-size brute-force search over a discrete space I = {0, 1}|T a|, selecting such ˜i∗(t) 
+
+> a
+
+that minimizes 8 the scalarized objective as shown below:     
+
+> 6In the subsequent parts of this article, we assume a balanced tree topology with the same branching factor for all nodes of the tree.
+> 7For the first iteration t= 0 , no previous plan information is considered.
+> 8At the first iteration t= 0 , all proposed changes are accepted.
+
+i∗ = arg min 
+
+> i∈I
+
+γa · g(gt−1 + Φ ac )+ αa ·
+
+r 1
+
+N (K(t−1)  
+
+> r
+
++ Λ ac ) − 1
+
+N 2 (k(t−1)  
+
+> r
+
++ Γ ac )2
+
++ βa · 1
+
+N (k(t−1)  
+
+> r
+
++ Γ ac ),
+
+Φac = X
+
+> c∈T a
+
+iac · ∆˜ a(t) 
+
+> c
+
+,
+
+Γac = X
+
+> c∈T a
+
+iac · ∆˜k(t) 
+
+> c
+
+,
+
+Λac = X
+
+> c∈T a
+
+iac · ∆ ˜K(t) 
+
+> c
+
+,
+
+(9) where ∆˜ a(t) 
+
+> c
+
+= ˜a(t) 
+
+> c
+
+− a(t−1)  
+
+> c
+
+and respectively for ∆˜k(t)
+
+> c
+
+and ∆ ˜K(t) 
+
+> c
+
+. Moreover αa, β a, γ a are the importance weights corresponding to agent a such that 0 ≤ γa, α a, β a ≤ 1 with 
+
+γa + αa + βa = 1 . Each agent accepts the proposed (aggre-gated) change of its children only when it is improving the scalarized objective. Similarly, the proposed plan ˜s(t) 
+
+> a
+
+∈ Pa is selected to minimize the scalarized cost function together with an acceptance vector ˜
+
+i(t) 
+
+> a
+
+. Finally, the aggregated preliminary response ˜a(t) 
+
+> a
+
+= ˜ s(t) 
+
+> a
+
++ P 
+
+> c∈T a
+
+a(t−1)  
+
+> c
+
++ P
+
+> c∈T a
+
+˜i(t) 
+
+> ac
+
+∗ ∆˜ a(t) 
+
+> c
+
+is sent upwards to the parent. The process iteratively continues until the aggregated responses reach the root agent. 
+
+B. Top-Down Phase 
+
+In the top-down phase, agents determine whether the pre-liminary plan should be accepted and treated as effective , or they should revert to the last accepted plan. The decision is based on information received from the parent (acceptance of the parent) and the agent’s own decision. The process starts from the root agent r and continues to the bottom of the tree. This phase accounts for the information gap of agents during the bottom-up phase: agents coordinate and optimize plan selections based on information they have for the agents below. However, they do not have information about the agents above. Therefore, the top-down phase is another opportunity of the agents to improve their plan selections by keeping their preliminary selection or switching back to the earlier one. A top-down phase begins when preliminary aggregates ˜a(t)
+
+> a
+
+reach the root agent r. The root agent automatically accepts its preliminary acceptance vector and plan, i.e. ˜i(t) 
+
+> r
+
+= i(t) 
+
+> r
+
+∧
+
+˜s(t) 
+
+> r
+
+= s(t) 
+
+> r
+
+. The effective acceptance vector i(t) 
+
+> c
+
+(together with effective global response, effective aggregated plan cost and effective aggregated squared plan cost) is communicated to children of the root agent c ∈ T r . Each agent a computes their effective acceptance vector by taking a Hadamard prod-uct of their own preliminary vector and an effective vector communicated by its parent pa, i.e. i(t) 
+
+> a
+
+= ˜i(t) 
+
+> a
+
+⊙ i(t) 
+
+> pa
+
+. In other words, each agent accepts changes proposed by the child only if: (i) it has accepted those changes (preliminary) during the optimization stage and (ii) those changes are also accepted by its parent. In this way, the knowledge propagates from the root agent r to the bottom of the tree. Both phases of the extended I-EPOS protocol are presented in Figure 1. VI. E XPERIMENTAL EVALUATION 
+
+The experiments are designed to evaluate three key aspects of the proposed solution: (i) the convergence of the plan se-lection using three possibly orthogonal objectives (inefficiency and discomfort costs combined with unfairness minimization), (ii) impact of the orthogonal objectives on the frontier of possible solutions found by the agents and (iii) improvement of fairness in discomfort distribution. Section B of Appendix outlines the datasets used for conducting the experiments, details of experimental settings and threats to validity. The design of the experiments (including hyperparameter tuning) is illustrated in Section VI-B. Results (together with discussions on them) are shown in Section VI-C. 
+
+A. Datasets 
+
+This work employs three different datasets. The synthetic dataset serves as a baseline for assessing the feasibility of the proposed solution [5]. It consists of 1000 agent, each having 16 possible plans. The dataset generation is outlined in Appendix B-C. To further assess the optimality of the solutions found, two additional real-world datasets are used. The Smart Grid Scenario emulates the zonal power transmission in the Pacific Northwest project [40]. It includes 5600 agents, each with exactly 10 possible plans. The precise specification of the dataset is found in Appendix B-A. The bike-sharing use case relies on data obtained from the Hubway Data Visualization Challenge [5] as shown in Appendix B-B. 
+
+B. Design 
+
+The experiments leverage the fact that the scalarized objec-tive gives flexibility to fine-tune the optimization preferences via the weights γ, α and β. Recall that a higher weight value indicates a stronger preference towards minimizing it. Formally, each solution z is defined as a 3-dimensional vector, z = ( z1, z 2, z 3) ∈ R3, whose elements correspond to the values of the inefficiency, discomfort and unfairness cost, respectively, as measured at convergence (last iteration of the algorithm), z = (G(T ), L (T ), U (T )). The set of all possible solutions z is referred to as the feasible region and denoted as Z. Given the possible trade-off between the costs of inefficiency, discomfort and unfairness, we can assess the Pareto frontier of the returned solution set Z. The solutions from the Pareto frontier are particularly relevant since they are the ones that express the trade-off, i.e., they exactly show how improving the value of one objective deteriorates another objective and to what extent. The lowest possible cost values of each objective are in the Pareto frontier. For the experimental setting, agents of I-EPOS organize into a balanced binary tree. Moreover, we set the efficiency objective as a minimization of load imbalances defined as 
+
+g(g(t)) = 1
+
+> N
+
+Pdj=1 (g(t) 
+
+> j
+
+− μ)2 with μ = 1
+
+> n
+
+Pdj=1 g(t) 
+
+> j
+
+.Since the second objective of the experiments is to explore the trade-offs between three potentially conflicting objectives, preliminary     
+
+> acceptance or
+> rejections of
+> selections in
+> subtrees
+> +preliminary
+> plan selection
+> ++
+> effective
+> selections
+> t - 1 t - 1
+> tt
+> t
+> t - 1
+> preliminary
+> selections
+> reject
+> t
+> t - 1
+> BOTTOM-UP
+> TOP-DOWN
+> t
+> t - 1
+> preliminary
+> aggregated
+> knowledge
+> accept
+> global
+> knowledge
+> prelimina ry s e l e c t i o n s
+> L
+> R
+> L
+> R
+> aggregated knowledge
+> LR
+> current
+> previous
+> possible plans
+> ^selected plan
+> ROOT AGENT
+> +accept
+> reject
+> LR
+> L
+> RR
+> L
+
+Fig. 1: Sequence diagram of the augmented I-EPOS protocol on a balanced tree topology during an iteration. In the bottom-up phase, each agent sends its preliminary plan selection together with the aggregated plan cost ˜k(t) 
+
+> a
+
+and aggregated squared plan cost ˜K(t) 
+
+> a
+
+to its parent to locally optimize the scalarized cost function of the three objectives. In the top-down phase, each agent sends the effective acceptance vectors i(t) alongside the updated global response, aggregated plan cost, and aggregated squared plan cost, allowing each agent to either confirm its preliminary selection or revert to the previous accepted plan. the design should also allow for an approximation of the feasible region. The feasible region Z is approximated by a grid-search over the parameters in the following way: first, the values of parameters α (controlling the unfairness) and β
+
+(controlling the discomfort cost) are both varied between 0 and 1 with step 0.01, creating 5151 possible combinations of parameters for which γ + α + β = 1 (γ is always computed when α and β are already determined). One combination of parameters is referred to as a parameter triplet , (γ, α, β ). Note that during one I-EPOS run, all agents are initialized with the same parameter triplet, which does not change during runtime. Then, I-EPOS runs with each triplet and fed by the possible plans from three different datasets. The full values of all parameters are shown in Appendix B-D. 
+
+C. Results 
+
+The convergence of all three objectives in relation to exe-cuted iterations is displayed in Figure 2. Only the γ and α
+
+values are activated with values of 0.5, i.e. the inefficiency cost, while trying to minimize the unequal distribution of the discomfort costs (unfairness). As presented in the Figure 2, all three objectives are optimized in the span of no more than 35 iterations, with some datasets (synthetic and energy dataset) reaching the plateau of the efficiency cost function in around 10 to 15 iterations. The unfairness cost function exhibits different behavior as it depends on the distribution of the discomfort costs. It remains stable for the synthetic and bicycle datasets, while it drops sharply for the energy dataset. This behavior can be linked with how unequal the distribution of the discomfort costs is. In the case of the energy dataset, the minimization of unfairness is prominent due to the unequal distribution of the discomfort costs, while for the bicycle dataset, that distribution is uniform from the beginning, hence not leaving much room for further improvement. Figure 3 illustrates the discomfort costs of the agents over the hierarchical tree topology, when optimizing for each of the three objectives, i.e. γ = 1, β = 1 or α = 1. For clarity, only trees with 100 agents are visualized. We observe that optimizing for efficiency ( γ = 1 ) yields inequalities to how discomfort cost is experienced by different agents (left column). Minimizing the discomfort cost ( β = 1 ) results in equal discomfort costs but inefficiency is ignored and there is no system-wide coordination among agents (middle column). Yet, once we optimize for fairness (α = 1), significant efficiency is preserved, while agents show a much higher homogeneous experience of discomfort cost (right column). The Pareto frontier and the set of Pareto non-optimal solutions for all three datasets are visualized in Figure 4. Each solution is represented as a point in a 3-dimensional space, with each axis corresponding to one objective. The spread of values and the respective Pareto frontier provide insights of the trade-off between those objectives. These values are generated from the grid search of the weights as shown in Figure 5. The costs of the solutions for each parameter combination are 110 100 0 5 10 15 20 25 30 35 Performance Iterations Global Cost Unfairness Local Cost 110 100 0 5 10 15 20 25 30 35 Performance Iterations (a) Synthetic 0.01 0.1 110 0 5 10 15 20 25 30 35 Performance Iterations Global Cost Unfairness Local Cost 0.01 0.1 110 0 5 10 15 20 25 30 35 Performance Iterations (b) Bicycle 0.01 0.1 110 100 0 5 10 15 20 25 30 35 Performance Iterations Global Cost Unfairness Local Cost 0.01 0.1 110 100 0 5 10 15 20 25 30 35 Performance Iterations (c) Energy 
+
+Fig. 2: Convergence of three objectives over I-EPOS runtime for γ = 0 .5, α = 0 .5, β = 0 and for the (a) synthetic, (b) bicycle and (c) energy datasets. Inefficiency (global), discomfort (local) and unfairness cost reduction represent performance (y-axis). Local Cost  
+
+> MIN MAX
+
+Synthetic 
+
+(a) Efficiency ( γ = 1 ) (b) Comfort ( β = 1 ) (c) Fairness ( α = 1 )
+
+Bicycle 
+
+(d) Efficiency ( γ = 1 ) (e) Comfort ( β = 1 ) (f) Fairness ( α = 1 )
+
+Energy 
+
+(g) Efficiency ( γ = 1 ) (h) Comfort ( β = 1 ) (i) Fairness ( α = 1 )
+
+Fig. 3: Discomfort (local) cost within the tree topology at the last optimization iteration and for different datasets. shown along with the marked Pareto frontier solutions. For the bicycle dataset (Figure 4b and Figure 5d-5f), the solutions are densely concentrated in one region with 17 solutions (0.33%) comprising the Pareto frontier. On average, the spread between different solutions is limited across all three axes, with the majority of solutions grouped in one region of the Pareto frontier. A similar observation is made for the energy dataset (Figure 4c and Figure 5g-5i). However, the variation in unfairness across the frontier is far more pronounced, as the Pareto front extends primarily along the unfairness axis. Finally, the synthetic dataset (Figure 4a and Figure 5a-5c) illustrates a trade-off among the three objectives. The goal of employing synthetic data is to visualize such a trade-off in a controlled environment. For the observed orthogonality of the three objectives, the Pareto frontier is spread across the unfairness and inefficiency cost objectives. 
+
+D. Discussion 
+
+The results allow us to draw a few fundamental conclusions. As shown and discussed in Section VI-C, all three cost functions converge in no more than 35 iterations. This proves the fact that it is possible to minimize the inefficiency and discomfort costs in a collaborative (decentralized) manner, while keeping the system balanced, without the need to place significant disproportional burden on specific agents. Results are robust against threats to validity as shown in Section B-E. The second observation can be made regarding the trade-off between orthogonal objectives. Depending on the characteris-tics of the dataset, such as the magnitudes of the costs and the values in the plans, optimization may be more sensitive to certain values of the weights. In the three available datasets, the trade-off between the objectives can be best controlled by fine-tuning the values of the weights in the range [0.9, 1]. A strong polarization in the inefficiency cost values is noticeable in all three datasets, and occurs for the same set of parameter triplets. The reason for this is the different orders of magnitude for the unfairness and discomfort cost compared to the inefficiency cost. Consequently, the inefficiency cost is the most dominant term that governs minimization, but as γ → 0,the other two terms gain dominance. This shows the need of 3 4 5 6 7Global Cost 1234Unfairness 02468Local Cost Pareto Non-optimal Solutions Pareto Frontier (a) Synthetic 0.3 0.4 0.5 0.6 Global Cost 0.005 0.01 0.015 0.02 Unfairness 0.0032 0.0034 0.0036 0.0038 0.004 0.0042 0.0044 Local Cost Pareto Non-optimal Solutions Pareto Frontier (b) Bicycle 0.1 0.15 0.2 0.25 Global Cost 0.1 0.2 0.3 0.4 Unfairness 0.8 0.85 0.9 0.95 Local Cost Pareto Non-optimal Solutions Pareto Frontier (c) Energy 
+
+Fig. 4: The feasible regions visualized for the (a) synthetic, (b) bicycle and (c) energy datasets. Inefficiency (global), discomfort (local) and unfairness cost are the three dimensions of the optimization space. 
+
+Synthetic 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0 
+
+> βα
+> Pareto Optimal
+> 10 100 1000 Global Cost
+
+(a) Inefficiency cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 246Local Cost
+
+(b) Discomfort cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 1234Unfairness
+
+(c) Unfairness cost 
+
+Bicycle 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0 
+
+> βα
+> Pareto Optimal
+> 110 100 Global Cost
+
+(d) Inefficiency cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 0.003 0.0035 0.004 Local Cost
+
+(e) Discomfort cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 0.005 0.006 0.007 0.008 Unfairness
+
+(f) Unfairness cost 
+
+Energy 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0 
+
+> βα
+> Pareto Optimal
+> 0.1 110 100 1000 Global Cost
+
+(g) Inefficiency cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 0.75 0.8 0.85 0.9 0.95 1Local Cost
+
+(h) Discomfort cost 00.2 0.4 0.6 0.8 1.0 0 0.2 0.4 0.6 0.8 1.0  
+
+> βα
+> Pareto Optimal
+> 0.01 0.1 Unfairness
+
+(i) Unfairness cost 
+
+Fig. 5: Feasible regions of the three datasets with respect to the three objectives. the introduced fairness model, i.e. how optimization that takes into consideration only system-wide efficiency and agents’ comfort may lead to a distribution of discomfort among agents that is heavily skewed towards a small subset of the agents, creating a strong system polarization. The findings also empirically showcase how the proposed approach can mitigate against uneven distribution of discomfort between agents and how the unfairness weight α influences this distribution. VII. C ONCLUSION AND FUTURE WORK 
+
+This article illustrates a model for adaptive optimization of three orthogonal objectives in a collaborative manner. Al-though the calculation of unfairness requires knowledge of the average discomfort cost of the agents’ choice, we prove that it is possible to minimize unfairness using approximations, hence reusing information already available without adding unnec-essary communication bottleneck. By applying the model to I-EPOS as an exemplary algorithm, we demonstrate that it is possible to simultaneously optimize system-wide efficiency, individuals’ comfort, and the equitable distribution of discom-fort costs in a fully decentralized way. Via experiments on one synthetic and two real-world datasets, we show that all three objectives converge reliably within fewer than 35 iterations. Unfairness minimization pre-vents selective overburdening of individual agents. This is a prominent behavior in the bicycle dataset, where optimiz-ing for system-wide efficiency alone causes disproportionate discomfort for a small subset of agents, creating risks for system operations. The Pareto frontier analysis confirms that the three objectives are indeed orthogonal across all datasets. Fine-tuning the objective weights is key to control trade-offs. Future work will study alternative fairness measures, hetero-geneous prioritization of objectives within the population of agents, and how fairer optimization solutions can incentivize more altruistic behavior, meaning agents that are ready to accept higher discomfort values to improve efficiency. ACKNOWLEDGMENT 
+
+This research is supported by a UKRI Future Leaders Fellowship (MR-/W009560/1): Digitally Assisted Collective Governance of Smart City Commons–ARTIO and the EPSRC IAA project Collective Learning Optimisation Algorithm .REFERENCES [1] R. G. Hollands, “Will the real smart city please stand up? intelligent, progressive or entrepreneurial?” City , vol. 12, no. 3, pp. 303–320, 2008. [2] M. Deakin, Smart cities: governing, modelling and analysing the tran-sition . Routledge, 2013. [3] C. Hinrichs, S. Lehnhoff, and M. Sonnenschein, “COHDA: A combi-natorial optimization heuristic for distributed agents,” in International Conference on Agents and Artificial Intelligence . Springer, 2013, pp. 23–39. [4] E. Pournaras, “Multi-level reconfigurable self-organization in overlay services,” Master’s thesis, TU Delft, 2013. [5] E. Pournaras, P. Pilgerstorfer, and T. Asikis, “Decentralized collective learning for self-managed sharing economies,” ACM Transactions of Autonomous and Adaptive Systems , 2018. [6] M. K. Zuziak, O. Hinrichs, A. Abdrassulova, and S. Rinzivillo, “Data collaboratives with the use of decentralised learning,” in 2023 ACM Conference on Fairness, Accountability, and Transparency . ACM, 2023, pp. 615–625. [7] R. Khalid and E. Pournaras, “Cooperative flexibility exchange: fair and comfort-aware decentralized resource allocation,” EPJ Data Science ,vol. 15, no. 1, p. 43, 2026. [8] A. Dannenberg, T. Riechmann, B. Sturm, and C. Vogt, “Inequity aversion and individual behavior in public good games: An experimental inves-tigation,” ZEW - Centre for European Economic Research Discussion Papers , no. 991555, 2007. [9] E. Fehr and S. G¨ achter, “Fairness and retaliation: The economics of reciprocity,” The Journal of Economic Perspectives , vol. 14, no. 3, pp. 159–181, 2000. [10] E. Pournaras, “Collective learning: A 10-year odyssey to human-centered distributed intelligence,” in 2020 IEEE International Confer-ence on Autonomic Computing and Self-Organizing Systems (ACSOS) .IEEE, 2020, pp. 205–214. [11] C. Zhang and J. A. Shah, “Fairness in multi-agent sequential decision-making,” in Advances in Neural Information Processing Systems , vol. 27. Curran Associates, Inc., 2014. [12] J. Jiang and Z. Lu, “Learning fairness in multi-agent systems,” Advances in Neural Information Processing Systems , vol. 32, 2019. [13] A. Kumar and W. Yeoh, “DECAF: Learning to be fair in multi-agent resource allocation,” ArXiv , no. arXiv:2502.04281, 2025. [14] J. Wang and M. Xu, “Multi-objective multi-agent bandits: From learning efficiency to fairness optimization,” arXiv preprint arXiv:2605.06864 ,2026. [15] M. Zimmer, C. Glanois, U. Siddique, and P. Weng, “Learning fair poli-cies in decentralized cooperative multi-agent reinforcement learning,” in International conference on machine learning . PMLR, 2021, pp. 12 967–12 978. [16] J. J. Aloor, S. N. Nayak, S. Dolan, and H. Balakrishnan, “Cooper-ation and fairness in multi-agent reinforcement learning,” Journal on Autonomous Transportation Systems , vol. 2, no. 2, pp. 1–25, 2024. [17] F. Chouaki, A. Beynier, N. Maudet, and P. Viappiani, “Fairness in cooperative multi-objective multi-agent reinforcement learning using expected utility,” in 25th International Conference on Autonomous Agents and Multiagent Systems (AAMAS 2026) , 2026. [18] M. Nouiri, A. Bekrar, A. Jemai, S. Niar, and A. C. Ammari, “An effective and distributed particle swarm optimization algorithm for flexible job-shop scheduling problem,” Journal of Intelligent Manufacturing , vol. 29, no. 3, pp. 603–615, 2018. [19] A. Azzouz, M. Ennigrou, B. Jlifi, and K. Ghedira, “Combining tabu search and genetic algorithm in a multi-agent system for solving flexible job shop problem,” in Artificial Intelligence (MICAI), 2012 11th Mexican International Conference on . IEEE, 2012, pp. 83–88. [20] Z. Li and J. Liu, “A multi-agent genetic algorithm for community detection in complex networks,” Physica A: Statistical Mechanics and its Applications , vol. 449, pp. 336–347, 2016. [21] S. Martin, D. Ouelhadj, P. Beullens, E. Ozcan, A. A. Juan, and E. K. Burke, “A multi-agent based cooperative approach to scheduling and routing,” European Journal of Operational Research , vol. 254, no. 1, pp. 169–178, 2016. [22] P. Agrawal, A. Kumar, and P. Varakantham, “Near-optimal decentralized power supply restoration in smart grids,” in Proceedings of the 2015 International Conference on Autonomous Agents and Multiagent Sys-tems . International Foundation for Autonomous Agents and Multiagent Systems, 2015, pp. 1275–1283. [23] E. Pournaras, M. Vasirani, R. E. Kooij, and K. Aberer, “Measuring and controlling unfairness in decentralized planning of energy demand,” in 
+
+The 3rd IEEE International Energy Conference (EnergyCon” 14) , no. EPFL-CONF-197293, 2014. [24] E. Pournaras, S. Jung, S. Yadhunathan, H. Zhang, and X. Fang, “Socio-technical smart grid optimization via decentralized charge control of electric vehicles,” Applied soft computing , vol. 82, p. 105573, 2019. [25] Y. Chen, J. K. Lai, D. C. Parkes, and A. D. Procaccia, “Truth, justice, and cake cutting,” Games and Economic Behavior , vol. 77, no. 1, pp. 284–297, 2013. [26] L. E. Dubins and E. H. Spanier, “How to cut a cake fairly,” The American Mathematical Monthly , vol. 68, no. 1, pp. 1–17, 1961. [27] S. d. Jong, K. Tuyls, and K. Verbeeck, “Fairness in multi-agent systems,” 
+
+The Knowledge Engineering Review , vol. 23, no. 2, pp. 153–180, 2008. [28] E. Fehr and K. M. Schmidt, “Fairness, incentives, and contractual choices,” European Economic Review , vol. 44, no. 4, pp. 1057–1068, 2000. [29] D. Kahan, “The logic of reciprocity: Trust, collective action, and law,” 
+
+Michigan Law Review , vol. 102, no. 1, pp. 71–103, 2003. [30] L. Hunt, “The Origin and Scope of Hayek’s Idea of Spontaneous Order,” in Liberalism, Conservatism, and Hayek’s Idea of Spontaneous Order .Palgrave Macmillan US, 2007. [31] J. Jiang, C. Dun, T. Huang, and Z. Lu, “Graph convolutional reinforce-ment learning,” in International Conference on Learning Representa-tions , 2020. [32] B. Bakker, S. Whiteson, L. Kester, and F. C. A. Groen, “Traffic light control by multiagent reinforcement learning systems,” in Interactive Collaborative Information Systems , R. Babuˇ ska and F. C. A. Groen, Eds. Springer Berlin Heidelberg, 2010, vol. 281, pp. 475–510, series Title: Studies in Computational Intelligence. [33] D. Minarolli and B. Freisleben, “Virtual machine resource allocation in cloud computing via multi-agent fuzzy control,” in 2013 International Conference on Cloud and Green Computing , 2013, pp. 188–194. [34] Y. Bejerano, S.-J. Han, and B. Laboratories, “Fairness and load balancing in wireless LANs using association control,” IEEE/ACM Transactions on Networking , vol. 15, 2007. [35] J. Kleinberg, Y. Rabani, and E. Tardos, “Fairness in routing and load balancing,” Journal of Computer and System Sciences , vol. 63, no. 1, pp. 2–20, 2001. [36] S. Hossain, E. Micha, and N. Shah, “Fair algorithms for multi-agent multi-armed bandits,” Advances in Neural Information Processing Sys-tems , vol. 34, pp. 24 005–24 017, 2021. [37] F. Fanitabasi and E. Pournaras, “Appliance-level flexible scheduling for socio-technical smart grid optimization,” IEEE Access , vol. 8, pp. 119 880–119 898, 2020. [38] V. Xinying Chen, “A guide to formulating fairness in an optimization model,” Annals of Operations Research , vol. 326, no. 1, pp. 581–619, 2023. [39] A. B. Sediq, R. H. Gohary, and H. Yanikomeroglu, “Optimal tradeoff between efficiency and Jain’s fairness index in resource allocation,” in 2012 IEEE 23rd International Symposium on Personal, Indoor and Mobile Radio Communications - (PIMRC) , 2012, pp. 577–583, ISSN: 2166-9589. [40] E. Pournaras, M. Yao, and D. Helbing, “Self-regulating supply–demand systems,” Future Generation Computer Systems , vol. 76, pp. 73–91, 2017. [41] J. Nikolic and E. Pournaras, “Structural self-adaptation for decentralized pervasive intelligence,” in 2019 22nd Euromicro Conference on Digital System Design (DSD) . IEEE, 2019, pp. 562–571. 
+
+APPENDIX AOTHER FAIRNESS MEASURES 
+
+A. Jain’s Fairness Index 
+
+Raj Jain’s fairness index [39] was developed to determine fair resource allocation in shared systems. It can be expressed directly in terms of the aggregated quantities defined in Section III as J : Rd 
+
+> +
+
+→ [ 1 
+
+> N
+
+, 1] :
+
+J(t) =
+
+
+
+k(t)
+
+> a
+
+2
+
+N · K(t)
+
+> a
+
+where K(t) 
+
+> a
+
+= P 
+
+> c∈T a
+
+(l(s(t) 
+
+> c
+
+)) 2 and k(t) 
+
+> a
+
+= P 
+
+> c∈T a
+
+l(s(t) 
+
+> c
+
+). A value of J(t) = 1 indicates perfect fairness, while J(t) = 1
+
+> N
+
+indicates maximum unfairness. 
+
+Lemma 2 (Consistency of Jain’s Fairness Index) . Under the same conditions as Corollary 1, with E[X2] > 0,
+
+J(t) a.s. 
+
+−−→ (E[X]) 2
+
+E[X2] as N → ∞ .
+
+Proof. By definition, 
+
+J(t) =
+
+ 1 
+
+> N
+
+k(t)
+
+> a
+
+21 
+
+> N
+
+K(t)
+
+> a
+
+.
+
+By the strong law of large numbers, 1 
+
+> N
+
+k(t) 
+
+> aa.s.
+
+−−→ E[X] and  
+
+> 1
+> N
+
+K(t) 
+
+> aa.s.
+
+−−→ E[X2]. Since E[X2] > 0 by assumption, the denominator is bounded away from zero almost surely, and the result follows by the continuous mapping theorem. APPENDIX BDATASETS AND THREATS TO VALIDITY 
+
+A. Energy 
+
+This dataset was obtained by disaggregation [40] of the 
+
+simulated zonal power transmission in the Pacific Northwest 
+
+dataset. The resulting dataset contains power loads of 5600 users. Each agent has exactly 10 possible plans, each of length 144. The first is the original disaggregated load; the next 3 are obtained by applying the SHUFFLE generation scheme to the original; the next 3 are obtained by applying the SWAP-15 generation scheme; and the final 3 are obtained by applying the SWAP-30 generation scheme. The first plan is the most preferred, as it is the only real-world plan and therefore has a preference score of 1.0. The SHUFFLE generation scheme randomly shuffles the values in the first plan. Since this scheme perturbs all 144 values of the original plan, the SHUFFLE plans have the lowest preference score, equal to 1144 . The SWAP-15 generation scheme randomly selects 15 pairs of values of the original plan to swap, and their preference is adjusted to 115 . Similarly, the SWAP-30 scheme randomly selects 30 pairs to swap, and their preference score is 130 .Consequently, the mean and the standard deviation of the possible plans are constant for each agent. The preference scores are used for discomfort cost opti-mization, which entails selecting plans with high preference scores relative to the other efficinecy objectives. As I-EPOS is a minimization algorithm, preference scores are converted to their respective complements called costs as follows: if the preference score is h, then its cost is 1 − h. Note that each cost value is between 0 and 1. 
+
+B. Bicycle 
+
+This dataset was generated from the data obtained from the 
+
+Hubway Data Visualization Challenge 9 that consists of the      
+
+> 9Hubway Data Challenge, Hubway, Accessible at: http://hubwaydatachallenge.org. Last accessed in July 2026.
+
+trip records of the Hubway bike-sharing system in Paris. The original data do not contain user identification, but include more general user information, such as zip code, year of birth, and gender. All records with the same values of these three identification keys are assumed to be one user, and a subset of 1000 such users is included in the dataset. A possible plan is a sequence of values, one for each bike station, that indicates the difference between the numbers of incoming and outgoing trips at that station. For example, if a user cycled between stations 1 and 3, the corresponding possible plan is 
+
+(−1, 0, 1, 0, ... ). Different trips for a single user are encoded as distinct possible plans. Finally, each possible plan (a trip) is assigned a score indicating the likelihood that a user does not make the trip. Note that scores of all plans in the whole dataset belong to the range [0 , 1] .
+
+C. Synthetic 
+
+The values in this dataset are drawn from a Normal dis-tribution. The dataset consists of 1000 agents, each having 16 possible plans. The possible plan is a vector of length 100. Each possible plan is coupled with a score that indicates the index of the possible plan, and this score is used as the discomfort cost of the plan. In other words, the first plan has the score of 0, the second one the score of 1 and so on. It is used as a proof of concept since it is the most flexible dataset. 
+
+D. Additional Experimental Details 
+
+TABLE II: Experimental settings for obtaining the feasible region as presented in Section VI.                                                            
+
+> Parameters Datasets
+> Bicycle Energy Synthetic Efficnecy objective gVariance Weights γ,αand βare varied between 0 and 1 with step 0.01,
+> γ+α+β= 1 ,γ,αand βare constant over time and for all agents Number of agents |N|= 1000 |N|= 1000 |N|= 1000
+> Number of plans |P a| ≤ 23 ,∀a∈ A |P a|= 10 ,∀a∈ A |P a|= 16 ,∀a∈ A
+> Dimensions of plans d= 98 d= 144 d= 100
+> Number of children n= 2 n= 2 n= 2
+> Number of iterations T= 40 T= 40 T= 40
+
+E. Threats to Validity 
+
+All experiments are repeated 1000 times with different initial relative positions of the agents in the hierarchy. This means that the order of coordination is controlled as a factor of influencing the performance. Experimental evidence is pro-vided for for both synthetic and real-world data. The influence of other factors such as the number of children per agent, the number of plans and size of plans are studied in earlier work [5], [41] and are not expected to alter the conclusions of the paper.
