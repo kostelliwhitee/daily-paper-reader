@@ -1,0 +1,870 @@
+Title: Beyond Transformers: Linear Attention Policy for Open-Vocabulary Object Goal Navigation
+
+URL Source: https://arxiv.org/pdf/2607.18794v1
+
+Published Time: Wed, 22 Jul 2026 00:44:50 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Beyond Transformers: Linear Attention Policy for Open-Vocabulary Object Goal Navigation 
+
+## Jiahong Zhang 1,2 ∗, Yifan Lin 1,3 ∗, Yandong Zhang 4, Sijun Shen 1,3 , Kexin Wang 1,2 , Yuqi Pan 1,2 ,Hongjuan Pei 5, Wei Wang 4, Guoqi Li 1†
+
+> 1
+
+Institute of Automation, Chinese Academy of Sciences, Beijing 100045, China 
+
+> 2
+
+School of Artificial Intelligence, University of Chinese Academy of Sciences, Beijing 100049, China 
+
+> 3
+
+State Key Laboratory of Media Convergence and Communication, Communication University of China, Beijing 100024, China 
+
+> 4
+
+Beihang University, Beijing 100191, China 
+
+> 5
+
+University of Chinese Academy of Sciences, No.19A Yuquan Road, Beijing 100049, China zhangjiahong2023@ia.ac.cn, lyfgin1002@gmail.com, yandongzhang@buaa.edu.cn, sijun.shen@mails.cuc.edu.cn, wangkexin2021@ia.ac.cn, panyuqi2024@ia.ac.cn, peihongjuan@ucas.ac.cn, w.wang@buaa.edu.cn, guoqi.li@ia.ac.cn 
+
+Abstract 
+
+Open-Vocabulary Object Goal Navigation (OVON) requires agents to operate under partial observability, making effective internal state updates critical for navigation performance. This update is implemented by the policy network, where recent approaches adopt Transformer-based backbones with self-attention over a context window to integrate temporal informa-tion. However, our controlled experiments show that perfor-mance does not scale with context length under Transformer-based policies, questioning the suitability of self-attention for state integration in navigation. To this end, we propose Linear Attention-based Navigation (LANav), which adopts linear at-tention(LA) as the policy backbone to maintain a structured state update rather than self-attention over the context win-dow. Across multiple LA variants evaluated under identical settings, LANav consistently outperforms Transformer-based baselines. Performance improves as state update mechanisms become more structured and regulated, highlighting the im-portance of state update design. To improve state update ef-fectiveness, we introduce Weighted State-Expansion Linear Attention (WSLA), which expands each attention head’s state into multiple sub-states and uses learnable weighted read-out to aggregate expanded sub-states. Equipped with WSLA, LANav achieves 36.4% average success rate (SR) on HM3D-OVON, outperforming Transformer-based counterparts by 6.3 percentage points in macro-averaged SR, while maintain-ing computational efficiency. Distance-stratified results show larger gains in long-distance episodes, while HSSD transfer and fine-tuning demonstrate robustness across scene distri-butions. Real-world deployment on a Unitree Go2 further achieves an 82% success rate over 50 trials, supporting the practical feasibility and sim-to-real transfer of LANav. 
+
+## Introduction 
+
+Object Goal Navigation (ObjectNav) serves as a represen-tative benchmark in embodied intelligence, where an agent must explore an unseen environment and locate an object be-longing to a specified target category (Anderson et al. 2018). 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+Such exploration under partial observability requires the pol-icy to maintain an internal state that summarizes past obser-vations. Navigation agents therefore commonly adopt recur-rent neural networks (RNNs) as the policy backbone, where temporal information is encoded into compact hidden states for action execution (Ye et al. 2021; Ramrakhya et al. 2023; Wasserman et al. 2024). However, recurrent architectures such as Long Short-Term Memory (LSTM) (Hochreiter and Schmidhuber 1997) and Gated Recurrent Units (GRU) (Cho et al. 2014) struggle to preserve dependencies over extended trajectories (Fang et al. 2019; Fortunato et al. 2019). To ad-dress these limitations, Transformer-based policies introduce explicit self-attention (Vaswani et al. 2017) over a fixed-length context window, enabling direct interaction among historical observations (Fukushima et al. 2022; Li et al. 2023). Despite this design, their performance remains limited on the challenging Open-Vocabulary Object Goal Navigation (OVON) (Yokoyama et al. 2024). Open-Vocabulary settings introduce greater semantic am-biguity and generalization difficulty, placing higher demands on effective state updating of agents. Our controlled study of Transformer-based policies on OVON reveals that per-formance does not improve as the context length increases. This finding motivates us to explore alternative state update mechanisms for improving performance. This work investigates LA that replaces self-attention in Transformers with kernelized or state-space formulations, enabling structured state updates over the context win-dow (Katharopoulos et al. 2020; Yang et al. 2024a; Chou et al. 2024). LA was originally proposed to reduce the com-putational complexity of standard Transformers, and has demonstrated strong scalability in long-sequence tasks such as language modeling (Yang et al. 2024b; Sun et al. 2023; Yang, Kautz, and Hatamizadeh 2025) and decision model-ing (David et al. 2022; Dai et al. 2024; Sun and Yoshiyasu 2025). This paper examines LA from a different perspective. We show that its state update mechanism is better suited for integration of historical information in navigation. Our em-arXiv:2607.18794v1 [cs.RO] 21 Jul 2026 pirical study reveals three key findings: (i) LA-based policies consistently outperform both RNN and Transformer base-lines. (ii) LA benefits from larger training context lengths, whereas Transformer-based policies do not gain from longer training contexts. (iii) Among different LA variants, models with more effective state update mechanisms achieve stronger performance. Based on these findings, we introduce Linear Attention-based Navigation (LANav), which adopts LA as the policy backbone. We further design a Weighted State-Expansion Linear Attention (WSLA) to improve state update effective-ness in navigation. WSLA is inspired by prior studies on state expansion and multi-state modeling in linear-time sequence models (Liu, Gao, and Chen 2025; Wang et al. 2025; Pan et al. 2025b). It expands each attention head into multiple sub-states and introduces learnable weighting to regulate their readout contributions, thereby enhancing state expressivity in navigation. Built upon WSLA, LANav achieves superior per-formance on Habitat-Matterport3D Open-Vocabulary Ob-jectNav (HM3D-OVON) (Yokoyama et al. 2024) while main-taining favorable computational efficiency and scalability. The contributions of this work are summarized as follows: (1) We introduce LA as the policy backbone for OVON, termed LANav . Through controlled comparisons under matched architectures and training settings, we show that LA backbones consistently outperform both RNN and Trans-former baselines. These findings establish LA as an effective mechanism for sequential navigation decision-making and reveal a promising design direction for future embodied pol-icy. (2) We provide a comprehensive comparison within the LA family, including Linear Transformer (Schlag, Irie, and Schmidhuber 2021), DeltaNet (Yang et al. 2024b), and Gated DeltaNet (Yang, Kautz, and Hatamizadeh 2025). Our study reveals that progressively more structured and regulated state update rules lead to consistent performance improvements in navigation. (3) We propose WSLA , which expands the state of LA into multiple sub-states and introduces learnable weighting to regulate sub-state contributions during readout. Built upon WSLA, LANav achieves an average SR of 36.4% on HM3D-OVON, outperforming the strongest Transformer-based base-line (30.1%) under comparable settings. 
+
+## Related Work 
+
+Policy Backbones for Open-Vocabulary Object Goal Navigation 
+
+OVON extends ObjectNav to language-specified categories that may be unseen during training or described by novel names and synonyms (Yokoyama et al. 2024), making effec-tive policy state updates under partial observability critical for long-horizon navigation. Existing OVON-related meth-ods include map-based and mapless learned policies. Map-based methods maintain explicit spatial or semantic repre-sentations for exploration and planning (Chaplot et al. 2020). Recent open-vocabulary systems further combine vision-language models with detectors, segmenters, or structured exploration modules (Zemskova et al. 2025; Ziliotto et al. 2025; Zhu et al. 2025). However, these systems often dif-fer in sensors, external modules, supervision, and training protocols, making controlled backbone comparison difficult. Mapless policies predict actions from egocentric observa-tion sequences and rely on the policy network to maintain an implicit state. Recurrent backbones such as GRU and LSTM are widely used in navigation policies (Mirowski et al. 2017; Wijmans et al. 2020; Ramrakhya et al. 2023; Chen et al. 2025; Ramrakhya et al. 2022; Yadav et al. 2023), but struggle with long-range dependencies (Fang et al. 2019; Fortunato et al. 2019). Transformer-based policies use self-attention over a context window and have been explored in visual naviga-tion and control (Ye et al. 2021; Chen et al. 2021; Li et al. 2023; Lawson and Qureshi 2023; Wang, Tan, and Nejat 2024; Zeng et al. 2025). In OVON, they outperform recurrent base-lines (Yokoyama et al. 2024; Zemskova et al. 2025), yet how temporal backbones should integrate extended histories re-mains underexplored. Our work addresses this gap by isolating the policy back-bone as the key variable. By fixing the visual and language encoders, navigation data, and training pipeline, we study how different temporal backbones update policy states under partial observability. This enables a controlled comparison of RNN, Transformer, and linear-attention backbones for his-tory integration in OVON. 
+
+Linear Attention for Decision-Making 
+
+LA was introduced to reduce the quadratic cost of Trans-former self-attention by replacing softmax attention with kernelized or gated formulations (Schlag, Irie, and Schmid-huber 2021; Katharopoulos et al. 2020; Yang et al. 2024a). Its recurrent form updates an internal state incrementally, reducing the attention complexity from O(l2) to O(l) with respect to the context length l. This property has made LA effective for long-sequence modeling (Sun et al. 2023; Pan et al. 2025a). Linear-time sequence models have also been studied in decision-making and reinforcement learning. Decision Transformer (Chen et al. 2021) shows the benefit of sequence modeling for control, while Decision S4 (David et al. 2022) and Decision Mamba (Ota et al. 2024) demonstrate that state-space or selective-scan updates can improve efficiency while retaining competitive performance. Different from prior work that mainly emphasizes effi-ciency, we study linear attention as a state-update mechanism for embodied navigation. RNNs compress history into a sin-gle hidden state, while Transformers perform self-attention over a fixed context window. LA offers a third design choice by maintaining structured state updates derived from atten-tion factorization, which may better support history integra-tion in partially observable navigation. 
+
+## Method 
+
+Problem Formulation 
+
+We study the OVON task, where a mobile agent navigates in an indoor environment to find an object specified by lan-guage. Unlike closed-set ObjectNav, the target category may be unseen during training or described by a novel name or a Action   
+
+> Embedding
+> Text
+> Encoder
+> Vision
+> Encoder
+> Start Agent
+> End
+> Open-Vocabulary Objectgoal Navigation
+> Policy Network
+> Action Head
+
+## ... 
+
+## 𝐀 𝐀 𝐀 𝐀 −(𝐀 −2)𝐀 𝐀 −(𝐀 −1)
+
+## 𝐀 𝐀 𝐀 𝐀 𝐀 −1
+
+Concatenate 
+
+## 𝐀 𝐀 
+
+## 𝐀 𝐀 −(𝐀 −1) 𝐀 𝐀 −(𝐀 −2) ...                         
+
+> Transformer-based Policy
+> Linear attention-based Policy (LANav)
+> Self attention
+> x
+> Q
+> K
+> V
+> Softmax y
+> x
+> Q
+> K
+> V
+> State
+> y
+> •Global attention
+> Linear attention
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> 𝐀 ×𝐀
+> •Memory state
+> •𝐀 (𝐀 2)attention complexity
+> •𝐀 (𝐀 )attention complexity
+> Action Head Action Head
+> Bed
+> L-Shaped
+> Couch
+
+Figure 1: Overview of LANav. Left: Open-Vocabulary Object Goal Navigation task. Middle: At step t, the RGB observation It,goal description G, and previous action at−1 are encoded by a vision encoder, a text encoder, and an action embedding module, respectively. The resulting features form a per-step embedding ˜ot. A context window consisting of the most recent embeddings 
+
+{˜ot−(l−1) , . . . , ˜ot} is processed by the policy backbone to produce the current representation and predict the action at. Right: 
+
+Comparison of policy backbones. Transformer-based policies perform self-attention over the full context, whereas LA-based policies maintain an internal state that is incrementally updated. semantically related synonym. The agent must therefore gen-eralize beyond a fixed goal vocabulary. Partial observability further increases the difficulty. The agent only receives ego-centric observations, and goal-relevant cues may appear only briefly during exploration. Meanwhile, many observations can be redundant or unrelated to the target. A navigation pol-icy must retain useful semantic evidence while limiting the influence of irrelevant history. At each decision step t, the agent receives an egocentric RGB observation It, a language-specified goal category G,and the previous action at−1. Following the policy setting of DAgRL (Yokoyama et al. 2024), no explicit pose or ego-motion observation is provided to the policy. The per-step policy input is defined as: 
+
+xt = ( It, G, a t−1), (1) The action space A is discrete and consists of move-forward, turn-left, turn-right, look-up, look-down, and stop. At each step, the policy selects an action at ∈ A . The episode terminates when stop is issued or the maximum step limit is reached, and is considered successful if the stop action is issued within a predefined distance threshold of any object instance from the goal category. OVON can be formulated as a partially observable Markov decision process (POMDP). Since the complete scene layout and object locations are not fully observable, the agent cannot reliably select actions from the current observation alone. Instead, the action distribution is predicted from all inputs available up to step t, including the current observation, the language-specified goal, and previous interactions: 
+
+at ∼ Fθ (· | I1: t, G, a 0: t−1) = Fθ (· | x≤t) . (2) Here, Fθ denotes the navigation policy, with θ representing its learnable parameters. The shorthand x≤t collects the pol-icy inputs available up to step t, including the current input 
+
+xt and the historical inputs x<t . To effectively model such sequential policy inputs, we introduce LANav, which uses linear attention to efficiently aggregate historical informa-tion and update the policy representation over time. 
+
+Overview of LANav 
+
+Figure 1 illustrates the LANav architecture, which follows the DAgRL policy design (Yokoyama et al. 2024) by separating visual encoding, goal encoding, previous-action embedding, temporal information integration, and action prediction. At each step t, the RGB observation It is processed by a frozen SigLIP RGB encoder (Zhai et al. 2023), yielding 
+
+vt = fvis (It) ∈ R768 . The goal description G is encoded by a frozen SigLIP text encoder as g = ftext (G) ∈ R768 .The goal embedding is computed once and remains fixed throughout the episode. To provide behavioral context, the previous action at−1 is mapped to a 32 -dimensional vector by a learnable embedding layer, eat = fact (at−1) ∈ R32 .The visual, goal, and previous-action embeddings are con-catenated and linearly projected to the backbone hidden di-mension d:
+
+˜ot = Wo[vt; g; eat ] + bo, (3) where Wo ∈ Rd×1568 and bo ∈ Rd are learnable parame-ters. We set the backbone hidden dimension to d = 512 .Let l denote the maximum context length and Lt =min( l, t ). The policy network receives up to the Lt most recent projected embeddings: 
+
+Zt = [˜ ot−Lt+1 , . . . , ˜ot] ∈ RLt×d. (4) This definition also covers the beginning of an episode, when fewer than l observations are available. The resulting sequence is processed by a four-layer decoder-only Transformer or LA backbone Φ( ·):
+
+yt = Φ( Zt) 
+
+> Lt
+
+∈ Rd, (5) where yt is the backbone output corresponding to the most recent time step. Finally, the action head projects yt to a categorical distribution over the discrete action space: 
+
+πθ (· | I1: t, G, a 0: t−1) = Softmax ( Wayt + ba) , (6) where Wa ∈ R|A|× d and ba ∈ R|A| are learnable parame-ters of the action head. 
+
+Policy Backbones 
+
+The policy backbone Φ( ·) in Eq. (5) integrates sequential policy inputs and produces the policy representation yt at the current navigation step. We compare a standard causal Transformer with linear-attention backbones and examine how they differ in maintaining and accessing historical infor-mation. 
+
+Transformer backbone. We use a lightweight decoder-only Transformer with causal self-attention as the baseline. Let zτ denote the token representation at step τ in the current backbone layer; at the first layer, zτ = ˜ oτ . Each attention head h projects the token into query, key, and value vectors: 
+
+q(h) 
+
+> τ
+
+= W(h) 
+
+> q
+
+zτ , k(h) 
+
+> τ
+
+= W(h) 
+
+> k
+
+zτ , v(h) 
+
+> τ
+
+= W(h) 
+
+> v
+
+zτ .
+
+(7) Here, q(h) 
+
+> τ
+
+, k(h) 
+
+> τ
+
+∈ Rdk and v(h) 
+
+> τ
+
+∈ Rdv are internal attention features. We omit the layer index for simplicity. At step t, the Transformer attends over the context window 
+
+Ct = {t − Lt + 1 , . . . , t }. The current query is compared with every key in this window: 
+
+α(h) 
+
+> t,τ
+
+= softmax τ ∈C t
+
+q(h)⊤ 
+
+> t
+
+k(h)
+
+> τ
+
+√dk
+
+!
+
+, (8) and the corresponding head output is 
+
+o(h) 
+
+> t
+
+= X 
+
+> τ∈C t
+
+α(h) 
+
+> t,τ
+
+v(h) 
+
+> τ
+
+. (9) The outputs of all heads are combined and passed through the subsequent backbone layers to obtain yt. In this formulation, historical information is accessed through explicit interac-tions between queries and the tokens stored in the context window. Consequently, computing self-attention over a se-quence requires a quadratic number of token interactions with respect to the context length. 
+
+Linear-attention backbone. LANav instead uses linear attention to integrate navigation history through recurrent state updates. Rather than retaining historical tokens and re-peatedly computing attention over them, each attention head maintains a state matrix S(h) 
+
+> t
+
+∈ Rdk ×dv whose size is inde-pendent of the context length. At each navigation step, the state is updated using the current key-value pair: 
+
+S(h) 
+
+> t
+
+= Update 
+
+
+
+S(h)
+
+> t−1
+
+, k(h) 
+
+> t
+
+, v(h)
+
+> t
+
+
+
+. (10) The current query then reads from the updated state: 
+
+o(h) 
+
+> t
+
+= q(h)⊤ 
+
+> t
+
+S(h) 
+
+> t
+
+. (11) Thus, the Transformer retrieves historical information from an explicit token sequence, whereas linear attention com-presses past key-value information into a recurrent state and updates this state as new observations arrive. This replaces full-window pairwise attention with incremental state up-dates, making the policy naturally compatible with sequential navigation. Within this framework, different linear-attention back-bones mainly differ in how S(h) 
+
+> t
+
+is updated. Linear Trans-former (Schlag, Irie, and Schmidhuber 2021) directly accu-mulates key-value associations into the state. DeltaNet (Yang et al. 2024b) updates the state according to the prediction er-ror of the existing memory, with a learned write coefficient controlling the correction strength. Gated DeltaNet (Yang, Kautz, and Hatamizadeh 2025) further introduces a data-dependent retention gate to regulate how much of the previ-ous state is preserved. Detailed formulations of these existing update rules are provided in the Supplementary Material S1 .These differences are particularly important for OVON. During navigation, consecutive egocentric observations can be highly redundant, goal-relevant objects or scene cues may be visible for only a few steps, and previously observed ev-idence may lose relevance as the agent moves through the environment. Therefore, effectively modeling navigation his-tory requires more than accumulating a longer sequence of observations. The policy must determine how historical evi-dence is written into memory, how long it should be retained, and how it is used for current action prediction. To better model these processes, we further introduce WSLA, which maintains multiple linear-attention sub-states and combines their outputs through a learned weighted readout. 
+
+WSLA To enhance the expressivity of LA, we propose WSLA. Building upon the head-wise state expansion mech-anism (Liu, Gao, and Chen 2025) to increase state capacity, WSLA further introduces a learnable weighting mechanism over expanded sub-heads, enabling the model to regulate the readout contributions of expanded sub-states. The Analysis of WSLA subsection analyzes the effect of this design. Specifically, we make the head index explicit and denote the per-head recurrent state of the gated linear-attention back-bone as S(h) 
+
+> t
+
+∈ Rdk ×dv . WSLA increases intra-head capacity by expanding each head into E independent sub-head states. For each of the H original heads h, linear projections expand the corresponding query and key vectors into E independent sub-heads: 
+
+˜q(h) 
+
+> t
+
+= Wexp  
+
+> q,h
+
+q(h) 
+
+> t
+
+∈ RE×dk , (12) 
+
+˜k(h) 
+
+> t
+
+= Wexp  
+
+> k,h
+
+k(h) 
+
+> t
+
+∈ RE×dk . (13) where Wexp  
+
+> q,h
+
+, Wexp  
+
+> k,h
+
+∈ R(E·dk )×dk are expansion matrices. We denote the e-th sub-head vectors as q(h,e ) 
+
+> t
+
+and k(h,e ) 
+
+> t
+
+.To maintain parameter efficiency, the value vector v(h) 
+
+> t
+
+is replicated and shared across sub-heads. Table 1: Policy backbone comparison on HM3D-OVON. Reproduced models follow the same DAgRL (Yokoyama et al. 2024) setting except for the policy backbone, and results are mean ±std over three seeds. EALM (Zemskova et al. 2025) uses a different training strategy and reports official results. Attention-based reproduced models use l = 500 . Avg is the average SR over three splits; EALM is marked N/A because VAL SEEN SYN is not reported. Category Method VAL SEEN VAL SEEN SYN VAL UNSEEN Avg SR( ↑) SPL( ↑) SR( ↑) SPL( ↑) SR( ↑) SPL( ↑) SR( ↑)RNN-based GRU 39.0 ±0.3 15.0 ±0.3 29.3 ±0.3 11.5 ±0.1 11.7 ±0.3 3.8 ±0.1 26.7 ±0.2
+
+Transformer-based Transformer (Touvron et al. 2023) 41.5 ±0.3 21.0 ±0.3 29.9 ±0.3 14.5 ±0.1 19.0 ±0.3 7.1 ±0.1 30.1 ±0.2
+
+DAgRL (Yokoyama et al. 2024) 41.3 ±0.3 21.2 ±0.3 29.4 ±0.3 14.4 ±0.1 18.3 ±0.3 7.9 ±0.1 29.7 ±0.2
+
+EALM (Zemskova et al. 2025) 42.5 ±0.4 21.3 ±0.2 N/A N/A 20.2 ±0.5 8.8 ±0.2 N/A LANav (ours) Linear Transformer (Schlag, Irie, and Schmidhuber 2021) 42.9 ±0.5 18.8 ±0.4 31.8 ±0.4 12.9 ±0.2 19.2 ±0.3 7.1 ±0.1 31.3 ±0.2
+
+DeltaNet (Yang et al. 2024b) 45.3 ±0.5 21.2 ±0.4 35.0 ±0.4 15.1 ±0.2 21.5 ±0.4 7.5 ±0.3 33.9 ±0.3
+
+Gated DeltaNet (Yang, Kautz, and Hatamizadeh 2025) 46.6 ±0.3 22.4 ±0.3 36.6 ±0.4 15.5 ±0.2 20.5 ±0.3 7.5 ±0.2 34.6 ±0.2
+
+WSLA (ours) 47.8 ±0.4 22.9 ±0.3 39.8 ±0.5 16.2 ±0.3 21.6 ±0.4 7.9 ±0.3 36.4 ±0.3
+
+Each sub-head (h, e ) maintains its own state S(h,e ) 
+
+> t
+
+∈
+
+Rdk ×dv . In WSLA, the gating factors are predicted inde-pendently for each sub-head, yielding per-sub-head gates 
+
+β(h,e ) 
+
+> t
+
+, γ (h,e ) 
+
+> t
+
+∈ (0 , 1) using the same gate parameterization as Gated DeltaNet. For each sub-head, we first decay the previous state and compute the prediction error with respect to the retained state: 
+
+eS(h,e ) 
+
+> t−1
+
+= γ(h,e ) 
+
+> t
+
+S(h,e ) 
+
+> t−1
+
+,
+
+∆v(h,e ) 
+
+> t
+
+= v(h) 
+
+> t
+
+−
+
+eS(h,e )
+
+> t−1
+
+⊤
+
+k(h,e ) 
+
+> t
+
+.
+
+(14) The gated delta update is then applied to each sub-head state: 
+
+S(h,e ) 
+
+> t
+
+= eS(h,e ) 
+
+> t−1
+
++ β(h,e ) 
+
+> t
+
+k(h,e ) 
+
+> t
+
+∆v(h,e )⊤ 
+
+> t
+
+. (15) The sub-head readout is then: 
+
+o(h,e ) 
+
+> t
+
+= q(h,e )⊤ 
+
+> t
+
+S(h,e ) 
+
+> t
+
+∈ Rdv . (16) While state expansion enhances intra-head capacity, dif-ferent sub-heads tend to capture heterogeneous aspects of historical observations. We therefore use a learnable logit vector λ ∈ RE shared across heads and time to regulate their readout contributions, with λ(e) denoting its e-th en-try. The output of head h is a softmax-normalized weighted combination of its expanded sub-heads: 
+
+u(h) 
+
+> t
+
+=
+
+> E
+
+X
+
+> e=1
+
+exp( λ(e))
+
+PEj=1 exp( λ(j)) o(h,e ) 
+
+> t
+
+∈ Rdv (17) The head outputs {u(h) 
+
+> t
+
+}Hh=1 are concatenated as ut =Concat( u(1)  
+
+> t
+
+, . . . , u(H) 
+
+> t
+
+), which is then RMS-normalized and modulated by an input-dependent SiLU gate: 
+
+ut = RMSNorm( ut) ⊙ SiLU( Wg zt). (18) The resulting gated representation replaces the attention out-put in each backbone layer. In our implementation, we use H = 4 and E = 4 in WSLA, which maintains a parameter count and computa-tional cost (FLOPs) comparable to the other backbones. 
+
+## Simulation Experiment 
+
+Experimental Settings 
+
+Benchmarks We evaluate different methods on HM3D-OVON (Yokoyama et al. 2024), which provides three valida-tion splits for semantic generalization: 
+
+• VAL SEEN: goal categories observed during training, 
+
+• VAL SEEN SYN: unseen but semantically similar goal names, 
+
+• VAL UNSEEN: semantically distinct unseen categories. 
+
+Evaluation Metrics We report Success Rate (SR) and Suc-cess weighted by Path Length (SPL) (Anderson et al. 2018). SR measures task completion, while SPL additionally penal-izes inefficient exploration. 
+
+Training Details We follow the two-stage training pipeline of DAgRL (Yokoyama et al. 2024). In the first stage, policies are pre-trained for 150M steps using DAgger (Ross, Gordon, and Bagnell 2011). In the second stage, policies are fine-tuned for an additional 100M steps using PPO, initialized from the DAgger pre-trained checkpoint. All methods are trained across 8 NVIDIA A100 80GB GPUs with 32 parallel environments per GPU, utilizing Vari-able Experience Rollout (Wijmans, Essa, and Batra 2022), where the rollout length is set to match the context length 
+
+l, alongside 16 mini-batches per update. We use Adam with learning rate 2.5 × 10 −4, ϵ = 10 −5 and gradient clipping at 0.2. The code will be made publicly available to facilitate reproducibility. 
+
+Linear Attention vs. Transformer 
+
+We compare RNN-, Transformer-, and LA-based policy backbones on HM3D-OVON under matched settings when-ever the models are reproduced. This comparison isolates the temporal policy backbone while keeping the visual en-coder, language encoder, training pipeline, and optimization settings fixed. As shown in Table 1, LA-based backbones consistently achieve higher SR than RNN- and Transformer-based base-lines. The advantage is clear on VAL SEEN SYN, indicating stronger generalization to semantically related but unseen 100 200 300 400 500 600 700 800 900 1000     
+
+> Test-time context length ltest
+> 26
+> 28
+> 30
+> 32
+> Overall SR (%)
+> Train-time ltrain =100
+> Train-time ltrain =300
+> Train-time ltrain =500
+> Peak
+
+(a) Transformer 100 200 300 400 500 600 700 800 900 1000      
+
+> Test-time context length ltest
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> 32.5
+> Overall SR (%)
+> Train-time ltrain =100
+> Train-time ltrain =300
+> Train-time ltrain =500
+> Peak
+
+(b) Linear Transformer 100 200 300 400 500 600 700 800 900 1000      
+
+> Test-time context length ltest
+> 28
+> 30
+> 32
+> 34
+> 36
+> 38
+> Overall SR (%)
+> Train-time ltrain =100
+> Train-time ltrain =300
+> Train-time ltrain =500
+> Peak
+
+(c) WSLA Figure 2: Effect of context length. Overall SR (averaged across validation splits) as a function of test-time context length ltest .Each curve corresponds to a model trained with ltrain ∈ { 100 , 300 , 500 }.goal names. Within the LA family, performance improves from Linear Transformer to DeltaNet, Gated DeltaNet, and finally WSLA, suggesting that more structured and regulated state updates lead to better navigation performance. 
+
+Analysis of Linear Attention in OVON 
+
+To understand why LA improves navigation performance in OVON, we analyze its behavior from three complemen-tary perspectives: context-length scaling, state update mech-anisms, and distance-stratified navigation performance. 
+
+Effect of Context Length We examine whether temporal backbones can exploit longer observation histories in OVON. Policies use training context lengths of 100, 300, or 500 and test context lengths from 100 to 1000 in increments of 100. Only the length used to construct zt−(l−1): t varies, and we report overall SR averaged across all validation splits. As shown in Fig. 2, Transformer policies do not ben-efit from larger training contexts and can even degrade when ltrain = 500 , suggesting limited ability to exploit ex-tended histories under this setting. In contrast, LA backbones achieve higher peak SR, improve consistently with larger 
+
+ltrain , and remain stable across different ltest values. These results indicate that LA provides a more effective and robust mechanism for integrating historical observations in OVON. 
+
+State Update Mechanism We further examine how state update design influences navigation performance. As shown in Table 1, LA-based backbones consistently outperform both RNN-based and Transformer-based backbones under matched settings. However, the vanilla Linear Transformer brings only marginal improvements over the standard Trans-former, suggesting that replacing quadratic self-attention with a linear formulation alone is not sufficient. The gains become more pronounced as the update rule becomes more structured and regulated, as evidenced by the progressive improvements from Linear Transformer to DeltaNet, Gated DeltaNet, and finally WSLA. These results highlight the im-portance of state-update design, beyond simply increasing the available context length. Table 2: Distance-stratified evaluation on HM3D-OVON. 
+
+All evaluation episodes are grouped by the initial geodesic distance from the start location to the nearest goal instance. 
+
+∆ denotes the absolute difference between WSLA and the Transformer (WSLA − Transformer). 
+
+Distance Metric WSLA Transformer ∆
+
+0–8m SR 41.04 34.33 +6.71 SPL 17.00 15.64 +1.36 8–15m SR 24.52 17.60 +6.92 SPL 13.13 9.75 +3.38 15m+ SR 14.36 6.68 +7.68 SPL 7.88 3.67 +4.21 
+
+Table 3: Ablation study of WSLA. 
+
+State Expansion Weighted SR ↑
+
+34.6 
+
+✓ 35.2 
+
+✓ ✓ 36.4 Distance-Based Evaluation. We group HM3D-OVON evaluation episodes by their initial geodesic distance to the nearest goal instance and compare WSLA with the Trans-former baseline in each range. As shown in Table 2, WSLA consistently outperforms the Transformer across all distance bins. Moreover, both SR and SPL gains increase from short-to long-distance episodes, suggesting that WSLA supports more effective and efficient navigation when extended ex-ploration is required. We provide a trajectory analysis of WSLA compared with the Transformer baseline in Fig. 3. These examples illustrate that, during inference, the Trans-former either repeatedly explores a limited local region or ter-minates prematurely near the start, whereas WSLA sustains exploration over longer horizons and successfully reaches the target. Additional paired trajectory diagnostics are provided in the Supplementary Material S3 .Find a Clothes Dryer     
+
+> Transformer: Failure
+> WSLA: Success (SPL = 0.92)
+> Find a Refrigerator
+> Transformer: Failure
+> WSLA: Success (SPL = 0.70)
+> Goal View Goal View
+> Transformer WSLA Start End
+
+Figure 3: Qualitative comparison of navigation behaviors on HM3D-OVON. Trans LT GDN WSLA        
+
+> Model
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> Parameters (M)
+> 100 300 500 1000
+> Context length
+> 10 1
+> 10 0
+> 10 1
+> Online FLOPs / action (G)
+> Transformer (Trans) Linear Transformer (LT) Gated DeltaNet (GDN) WSLA (Ours)
+
+Figure 4: Parameter count and computational cost. Model parameters (left) and online FLOPs (right) of different policy backbones under identical architectural settings. 
+
+Analysis of WSLA We conduct ablation studies to ana-lyze the effects of state expansion and weighted aggregation in WSLA. As shown in Table 3, expanding the state represen-tation improves SR while keeping the parameter size nearly unchanged, indicating that increasing intra-head capacity en-hances the expressivity of the policy backbone. Furthermore, introducing learnable weights to regulate the contributions of expanded sub-heads leads to additional performance gains. This suggests that sub-states contribute unequally to navi-gation decisions, and that learned weighting to emphasize informative sub-states improves navigation performance. 
+
+Efficiency Analysis 
+
+We compare model size and online FLOPs per action under identical architectural settings. As shown in Fig. 4, WSLA incurs only a moderate parameter increase from state expan-sion. Transformer FLOPs rise from 3.52G at l = 100 to 42.53G at l = 1000 because the full context is recomputed at every step. LA backbones instead update cached states using only the current token, keeping the cost nearly con-stant. WSLA remains around 0.048G FLOPs/action. WSLA incurs slightly higher online FLOPs per action than other LA variants, but remains considerably below the Transformer. Meanwhile, it achieves the best navigation performance, sug-gesting a favorable balance between effectiveness and online computational cost. 
+
+Generalization and Adaptation to HSSD 
+
+To examine whether WSLA generalizes beyond HM3D-OVON, we compare it with the Transformer on the Habi-tat Synthetic Scenes Dataset (HSSD) ObjectNav bench-mark (Khanna et al. 2024), whose different scene distribu-tion provides a complementary test of dataset-level robust-Table 4: Generalization and adaptation results on HSSD. 
+
+Setting Method SR ↑ SPL ↑
+
+Zero-shot Transformer 19.55 7.13 WSLA (ours) 29.17 8.44 
+
+HSSD FT Transformer 56.17 23.50 WSLA (ours) 64.50 33.67 
+
+Figure 5: Real-world validation. Deployment of LANav with the WSLA backbone on a physical robot for open-vocabulary object-goal navigation. ness. We evaluate zero-shot transfer and 60M-step HSSD fine-tuning with matched policy inputs, action space, context length, and metrics. As shown in Table 4, WSLA improves over the Transformer by 9.62 SR and 1.31 SPL in zero-shot transfer and by 8.33 SR and 10.17 SPL after fine-tuning. The larger SPL gain indicates more efficient adaptation, demon-strating WSLA’s robustness to dataset shift and effectiveness beyond HM3D-OVON. 
+
+Real-World Validation 
+
+To evaluate sim-to-real transfer, we deploy LANav with the WSLA backbone on a Unitree Go2 robot in an indoor en-vironment, as shown in Fig. 5. The policy receives similar inputs as in HM3D-OVON: an egocentric RGB observation, a language-specified object goal, and the previous action. At each step, it predicts a discrete navigation action, which is converted into robot motion commands by a lightweight action adapter. We evaluate five object-goal categories, including a trash bin, box, plant, chair, and table, from two distinct starting lo-cations. Each target-start pair is repeated five times, resulting in 50 trials. LANav succeeds in 41 trials, achieving an overall SR of 82%. These results demonstrate the feasibility of de-ploying LANav on a physical robot and provide evidence of effective sim-to-real transfer. More implementation details and videos are provided in the Supplementary Material S3 .
+
+## Conclusion 
+
+We investigate LA as a policy backbone for OVON and propose LANav and WSLA, which use structured state up-dates and weighted sub-state aggregation. Under matched settings, LA backbones outperform RNN and Transformer baselines, benefit from longer training contexts, and remain stable across test-time lengths. These results highlight the importance of state-update design. WSLA achieves strong HM3D-OVON performance with favorable computational scaling, while HSSD and real-world evaluations demonstrate transferability. There are still limitations, including the use of shallow backbones and bounded context windows. Future work will scale model capacity and horizons and conduct broader real-world evaluation. 
+
+## References 
+
+Anderson, P.; Chang, A.; Chaplot, D. S.; Dosovitskiy, A.; Gupta, S.; Koltun, V.; Kosecka, J.; Malik, J.; Mottaghi, R.; Savva, M.; et al. 2018. On evaluation of embodied navigation agents. arXiv preprint arXiv:1807.06757 .Chaplot, D. S.; Gandhi, D.; Gupta, A.; Gupta, S.; and Salakhutdinov, R. 2020. Object Goal Navigation using Goal-Oriented Semantic Exploration. In Advances in Neural In-formation Processing Systems .Chen, L.; Lu, K.; Rajeswaran, A.; Lee, A.; Grover, A.; Abbeel, P.; Gupta, A.; and Levine, S. 2021. Decision Trans-former: Reinforcement Learning via Sequence Modeling. In 
+
+Advances in Neural Information Processing Systems .Chen, Z.; Zhang, J.; Shen, S.; Fu, W.; and Cao, L. 2025. Memory-Augmented Continuous-Time Neural Policy for Vision-Guided Embodied Navigation. In Proceedings of the 7th ACM International Conference on Multimedia in Asia ,MMAsia ’25 Workshops. New York, NY, USA: Association for Computing Machinery. ISBN 9798400722479. Cho, K.; Van Merriënboer, B.; Gulçehre, Ç.; Bahdanau, D.; Bougares, F.; Schwenk, H.; and Bengio, Y. 2014. Learn-ing phrase representations using RNN encoder–decoder for statistical machine translation. In Proceedings of the 2014 Conference on Empirical Methods in Natural Language Pro-cessing , 1724–1734. Chou, Y.; Yao, M.; Wang, K.; Pan, Y.; Zhu, R.-J.; Wu, J.; Zhong, Y.; Qiao, Y.; Xu, B.; and Li, G. 2024. Metala: Unified optimal linear approximation to softmax attention map. Advances in Neural Information Processing Systems ,37: 71034–71067. Dai, Y.; Ma, O.; Zhang, L.; Liang, X.; Hu, S.; Wang, M.; Ji, S.; Huang, J.; and Shen, L. 2024. Is mamba compatible with trajectory optimization in offline reinforcement learn-ing? Advances in Neural Information Processing Systems ,37: 51474–51502. David, S. B.; Zimerman, I.; Nachmani, E.; and Wolf, L. 2022. Decision S4: Efficient sequence-based RL via state spaces layers. In The Eleventh International Conference on Learning Representations .Fang, K.; Toshev, A.; Fei-Fei, L.; and Savarese, S. 2019. Scene memory transformer for embodied agents in long-horizon tasks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 538–547. Fortunato, M.; Tan, M.; Faulkner, R.; Hansen, S.; Puig-domènech Badia, A.; Buttimore, G.; Deck, C.; Leibo, J. Z.; and Blundell, C. 2019. Generalization of reinforcement learners with working and episodic memory. Advances in Neural Information Processing Systems , 32. Fukushima, R.; Ota, K.; Kanezaki, A.; Sasaki, Y.; and Yoshiyasu, Y. 2022. Object memory transformer for ob-ject goal navigation. In 2022 International Conference on Robotics and Automation , 11288–11294. Hochreiter, S.; and Schmidhuber, J. 1997. Long short-term memory. Neural Computation , 9(8): 1735–1780. Katharopoulos, A.; Vyas, A.; Pappas, N.; and Fleuret, F. 2020. Transformers are RNNs: Fast autoregressive trans-formers with linear attention. In International Conference on Machine Learning , 5156–5165. Khanna, M.; Mao, Y.; Jiang, H.; Haresh, S.; Shacklett, B.; Batra, D.; Clegg, A.; Undersander, E.; Chang, A. X.; and Savva, M. 2024. Habitat Synthetic Scenes Dataset (HSSD-200): An Analysis of 3D Scene Scale and Realism Tradeoffs for ObjectGoal Navigation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 16384–16393. Lawson, D.; and Qureshi, A. H. 2023. Control transformer: Robot navigation in unknown environments through prm-guided return-conditioned sequence modeling. In 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems , 9324–9331. Li, W.; Hong, R.; Shen, J.; Yuan, L.; and Lu, Y. 2023. Trans-former memory for interactive visual navigation in cluttered environments. IEEE Robotics and Automation Letters , 8(3): 1731–1738. Liu, K.; Gao, J.; and Chen, K. 2025. Scaling up the state size of RNN LLMs for long-context scenarios. In Proceedings of the 63rd Annual Meeting of the Association for Computa-tional Linguistics (Volume 1: Long Papers) , 11516–11529. Mirowski, P.; Pascanu, R.; Viola, F.; Soyer, H.; Ballard, A.; Banino, A.; Denil, M.; Goroshin, R.; Sifre, L.; Kavukcuoglu, K.; et al. 2017. Learning to Navigate in Complex Environ-ments. In International Conference on Learning Represen-tations .Ota, K.; et al. 2024. Decision Mamba: Reinforcement Learn-ing via Sequence Modeling with Selective State Spaces. In 
+
+Advances in Neural Information Processing Systems .Pan, Y.; An, Y.; Li, Z.; Chou, Y.; Zhu, R.; Wang, X.; Wang, M.; Wang, J.; and Li, G. 2025a. Scaling Linear Attention with Sparse State Expansion. arXiv preprint arXiv:2507.16577 .Pan, Y.; Feng, Y.; Zhuang, J.; Ding, S.; Xu, H.; Liu, Z.; Sun, B.; Chou, Y.; Qiu, X.; Deng, A.; et al. 2025b. Spiking-Brain: Spiking Brain-inspired Large Models. arXiv preprint arXiv:2509.05276 .Ramrakhya, R.; Batra, D.; Wijmans, E.; and Das, A. 2023. PIRLNav: Pretraining with imitation and RL finetuning for ObjectNav. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 17896–17906. Ramrakhya, R.; Undersander, E.; Batra, D.; and Das, A. 2022. Habitat-web: Learning embodied object-search strate-gies from human demonstrations at scale. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 5173–5183. Ross, S.; Gordon, G. J.; and Bagnell, J. A. 2011. A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. arXiv:1011.0686. Schlag, I.; Irie, K.; and Schmidhuber, J. 2021. Linear trans-formers are secretly fast weight programmers. In Interna-tional Conference on Machine Learning , 9355–9366. Sun, L.; and Yoshiyasu, Y. 2025. Memory-MambaNav: Enhancing object-goal navigation through integration of spatial–temporal scanning with state space models. Image and Vision Computing , 158: 105522. Sun, Y.; Dong, L.; Huang, S.; Ma, S.; Xia, Y.; Xue, J.; Wang, J.; and Wei, F. 2023. Retentive network: A succes-sor to transformer for large language models. arXiv preprint arXiv:2307.08621 .Touvron, H.; Lavril, T.; Izacard, G.; Martinet, X.; Lachaux, M.-A.; Lacroix, T.; Rozière, B.; Goyal, N.; Hambro, E.; Azhar, F.; Rodriguez, A.; Joulin, A.; Grave, E.; and Lample, G. 2023. LLaMA: Open and Efficient Foundation Language Models. arXiv:2302.13971. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. Attention is all you need. Advances in Neural Information Processing Systems , 30. Wang, H.; Tan, A. H.; and Nejat, G. 2024. NavFormer: A transformer architecture for robot target-driven navigation in unknown and dynamic environments. IEEE Robotics and Automation Letters , 9(8): 6808–6815. Wang, K.; Chou, Y.; Shang, D.; Mei, S.; Zhang, J.; Huang, Y.; Yao, M.; Xu, B.; and Li, G. 2025. Mmdend: Dendrite-inspired multi-branch multi-compartment parallel spiking neuron for sequence modeling. In Proceedings of the 63rd Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , 27459–27470. Wasserman, J.; Chowdhary, G.; Gupta, A.; and Jain, U. 2024. Exploitation-guided exploration for semantic embodied nav-igation. In 2024 IEEE International Conference on Robotics and Automation , 2901–2908. Wijmans, E.; Essa, I.; and Batra, D. 2022. VER: Scaling On-Policy RL Leads to the Emergence of Navigation in Em-bodied Rearrangement. arXiv:2210.05064. Wijmans, E.; Kadian, A.; Morcos, A.; Lee, S.; Essa, I.; Parikh, D.; Savva, M.; and Batra, D. 2020. DD-PPO: Learning Near-Perfect PointGoal Navigators from 2.5 Bil-lion Frames. In International Conference on Learning Rep-resentations .Yadav, K.; Ramrakhya, R.; Majumdar, A.; Berges, V.-P.; Kuhar, S.; Batra, D.; Baevski, A.; and Maksymets, O. 2023. Offline visual representation learning for embodied naviga-tion. In Workshop on Reincarnating Reinforcement Learning at ICLR 2023 .Yang, S.; Kautz, J.; and Hatamizadeh, A. 2025. Gated Delta Networks: Improving Mamba2 with Delta Rule. In Interna-tional Conference on Learning Representations .Yang, S.; Wang, B.; Shen, Y.; Panda, R.; and Kim, Y. 2024a. Gated Linear Attention Transformers with Hardware-Efficient Training. In International Conference on Machine Learning .Yang, S.; Wang, B.; Zhang, Y.; Shen, Y.; and Kim, Y. 2024b. Parallelizing linear transformers with the delta rule over se-quence length. Advances in Neural Information Processing Systems , 37: 115491–115522. Ye, J.; Batra, D.; Das, A.; and Wijmans, E. 2021. Auxil-iary tasks and exploration enable ObjectGoal navigation. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 16117–16126. Yokoyama, N.; Ramrakhya, R.; Das, A.; Batra, D.; and Ha, S. 2024. HM3D-OVON: A Dataset and Benchmark for Open-Vocabulary Object Goal Navigation. In 2024 IEEE/RSJ In-ternational Conference on Intelligent Robots and Systems ,5543–5550. Zemskova, T.; Staroverov, A.; Yudin, D.; and Panov, A. 2025. OVSegDT: Segmenting Transformer for Open-Vocabulary Object Goal Navigation. arXiv:2508.11479. Zeng, K.-H.; Zhang, Z.; Ehsani, K.; Hendrix, R.; Salvador, J.; Herrasti, A.; Girshick, R.; Kembhavi, A.; and Weihs, L. 2025. PoliFormer: Scaling On-Policy RL with Transformers Results in Masterful Navigators. In Conference on Robot Learning , 408–432. Zhai, X.; Mustafa, B.; Kolesnikov, A.; and Beyer, L. 2023. Sigmoid loss for language image pre-training. In Proceed-ings of the IEEE/CVF International Conference on Computer Vision , 11975–11986. Zhu, Z.; Wang, X.; Li, Y.; Zhang, Z.; Ma, X.; Chen, Y.; Jia, B.; Liang, W.; Yu, Q.; Deng, Z.; Huang, S.; and Li, Q. 2025. Move to Understand a 3D Scene: Bridging Visual Ground-ing and Exploration for Efficient and Versatile Embodied Navigation. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 8120–8132. Ziliotto, F.; Campari, T.; Serafini, L.; and Ballan, L. 2025. TANGO: Training-free Embodied AI Agents for Open-world Tasks. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , 24603–24613. Supplementary Material 
+
+## S1 Detailed Update Rules for Linear-Attention Baselines 
+
+This section provides the update rules of the baseline recurrent-state models used in our experiments. For all re-currence definitions, the associative state is initialized as 
+
+S0 = 0.
+
+Linear Transformer. The kernelized baseline uses the positive feature map ϕ(x) = ELU( x) + 1 and maintains a key–value accumulator At together with a normalizer rt:
+
+At = At−1 + ϕ(kt)v⊤ 
+
+> t
+
+, rt = rt−1 + ϕ(kt),
+
+(S1.1) 
+
+ot = A⊤ 
+
+> t
+
+ϕ(qt)max( ϕ(qt)⊤rt, 10 −6) . (S1.2) Unlike the gated rules below, this recurrence contains no learned retention or write coefficient. 
+
+DeltaNet. For each attention head h, the query and key pro-jections in Eq. (7) are passed through a SiLU activation and independently ℓ2-normalized. For notational simplicity, the resulting vectors are still denoted by q(h) 
+
+> t
+
+and k(h) 
+
+> t
+
+. DeltaNet predicts a scalar write coefficient from the current-layer to-ken representation zt and computes the prediction error at the current key: 
+
+β(h) 
+
+> t
+
+= σ
+
+
+
+W(h) 
+
+> β
+
+zt
+
+
+
+,
+
+bv(h) 
+
+> t
+
+=
+
+
+
+S(h)
+
+> t−1
+
+⊤
+
+k(h) 
+
+> t
+
+, ∆v(h) 
+
+> t
+
+= v(h) 
+
+> t
+
+− bv(h) 
+
+> t
+
+.
+
+(S1.3) Here, W(h) 
+
+> β
+
+∈ R1×d and β(h) 
+
+> t
+
+∈ (0 , 1) is the write coefficient of head h. The state is then updated using the prediction-error correction: 
+
+S(h) 
+
+> t
+
+= S(h) 
+
+> t−1
+
++ β(h) 
+
+> t
+
+k(h)
+
+> t
+
+
+
+∆v(h)
+
+> t
+
+⊤
+
+,
+
+o(h) 
+
+> t
+
+=
+
+
+
+q(h)
+
+> t
+
+⊤
+
+S(h) 
+
+> t
+
+.
+
+(S1.4) The coefficient β(h) 
+
+> t
+
+controls how strongly the value asso-ciated with the current key is corrected toward v(h) 
+
+> t
+
+. Un-like Gated DeltaNet, DeltaNet does not use a separate state-retention coefficient. 
+
+Gated DeltaNet. For every token and head, a retention coefficient and a write coefficient are predicted from the pre-normalized layer input: 
+
+gt = − exp( Alog ) softplus([ Wazt] + b∆) ,γt = exp( gt),βt = σ([ Wβ zt] + bβ ) .
+
+(S1.5) Decay is applied before the prediction error is formed: 
+
+eSt−1 = γtSt−1, ∆vt = vt − eS⊤
+
+> t−1
+
+kt,
+
+St = eSt−1 + βtkt∆v⊤ 
+
+> t
+
+. (S1.6) Find a TV         
+
+> Transformer: Success (SPL = 0.03)
+> WSLA: Success (SPL = 0.68)
+> Find a Washer-Dryer
+> Transformer: Success (SPL = 0.17)
+> WSLA: Success (SPL = 1.00)
+> Goal View Goal View
+> Transformer WSLA Start End Find a Table
+> Transformer: Success (SPL = 0.25)
+> WSLA: Success (SPL = 0.80)
+> Find a Sink
+> Transformer: Success (SPL = 0.46)
+> WSLA: Success (SPL = 0.92)
+> Goal View Goal View
+> Transformer WSLA Start End
+
+Figure S1: Additional HM3D-OVON VAL SEEN episodes. After the recurrent readout, Gated DeltaNet applies the normalized value-channel gate 
+
+ot = RMSNorm( ot) ⊙ SiLU( Wg zt). (S1.7) This gate affects the emitted representation but not the recur-rent state in Eq. (S1.6). 
+
+## S2 Additional Paired Trajectory Diagnostics 
+
+The following figures provide additional qualitative trajec-tory comparisons between Transformer and WSLA. Within each pair, the two policies receive the same episode, initial pose, and goal, and act deterministically under a 500-step cap. Red and teal paths denote Transformer and WSLA, re-spectively; orange circles mark the shared starting positions, crosses indicate the terminal positions, and yellow annota-tions identify the goal-view locations. 
+
+S2.1 HM3D-OVON: Matched Success 
+
+Figure S1 isolates route efficiency. In each case, WSLA uses a shorter, less repetitive route. The most visually pronounced looping behavior occurs in the TV episode, where the Trans-former repeatedly revisits the same local region. 
+
+S2.2 HSSD: Zero-Shot Transfer and Fine-Tuned Policies 
+
+The zero-shot examples use HM3D-trained policies eval-uated without HSSD adaptation. The fine-tuned examples compare the two policies after matched HSSD adaptation. Figure S2 places the two settings in two compact rows. Find a Chair         
+
+> Transformer: Success (SPL = 0.38)
+> WSLA: Success (SPL = 0.58)
+> Find a Couch
+> Transformer: Failure
+> WSLA: Success (SPL = 0.25)
+> Goal View Goal View
+> Transformer WSLA Start End Find a Chair
+> Transformer: Failure
+> WSLA: Success (SPL = 0.71)
+> Find a Couch
+> Transformer: Failure
+> WSLA: Success (SPL = 0.37)
+> Goal View Goal View
+> Transformer WSLA Start End
+
+Figure S2: HSSD trajectory comparisons. Top: zero-shot transfer of HM3D-trained policies. Bottom: policies after matched HSSD fine-tuning. 
+
+## S3 Real-World Deployment 
+
+This section records the hardware configuration, physical ac-tion interface, state initialization, and visual evidence needed to interpret the real-world experiment. 
+
+S3.1 Robot and Observation Interface 
+
+The physical system uses a Unitree Go2 EDU equipped with an external Intel RealSense D435i. The camera cap-tures 640 × 480 RGB frames at 15 fps and is mounted ap-proximately 0.45 m above the ground with zero pitch. The policy encodes the egocentric frames with SigLIP. The lan-guage goal remains fixed within an episode, whereas the previous-action symbol changes after each policy decision. At the beginning of every trial, the WSLA recurrent state is reinitialized. External photographs and recordings serve as third-person documentation of the setup and rollout. As shown in Figure S3, each physical target instance is paired with a representative robot–target view. The indoor test area combines reflective hard flooring, glass and metal doors, narrow passages, and movable furniture. These sur-faces and obstacles introduce appearance and local-geometry variation that is absent from a target-only photograph. 
+
+S3.2 Closed-Loop Action Execution 
+
+The physical adapter exposes four executable commands: move forward, turn left, turn right, and stop. Look-up and look-down actions are not used on the robot. Forward motion uses a linear velocity of 0.5 m/s, while turns use an angular-velocity magnitude of 0.35 rad/s. The control loop runs at 10 Hz. A stop command sets both linear and angular velocities to zero. The Go2 built-in obstacle-avoidance mode is disabled. At policy cycle t, a camera frame is encoded with the fixed episode goal and previous-action symbol. The selected phys-ical command is then passed to the adapter, and the resulting action symbol enters the temporal context for cycle t + 1 .This preserves a closed sense–infer–act loop while keeping robot-specific velocity commands outside the learned policy. Table S1: Deployment-specific configuration. 
+
+Aspect Supplementary detail Robot Unitree Go2 EDU Camera External Intel RealSense D435i; 640 ×480 
+
+RGB at 15 fps Camera mount Approximately 0.45 m high; 0◦ pitch Visual encoding SigLIP Episode reset WSLA recurrent state reinitialized before every trial Physical actions Forward, left, right, and stop; no look ac-tions Motion commands 0.5 m/s forward; 0.35 rad/s turn; stop zeros both velocities Update rate 10 Hz Built-in avoidance Disabled Scene factors Reflective floor; glass/metal doors; narrow passages; movable furniture Visual record Five paired target and robot–target views (a) Chair 
+
+> (b) Table
+> (c) Trash Bin
+> (d) Box
+> (e) Plant
+
+Figure S3: Physical target instances (left) paired with repre-sentative robot–target views (right): (a) Chair, (b) Table, (c) Trash Bin, (d) Box, and (e) Plant.
