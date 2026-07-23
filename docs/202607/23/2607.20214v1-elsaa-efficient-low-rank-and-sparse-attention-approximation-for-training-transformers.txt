@@ -1,0 +1,1608 @@
+Title: ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers
+
+URL Source: https://arxiv.org/pdf/2607.20214v1
+
+Published Time: Thu, 23 Jul 2026 01:01:10 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Mahdi Heidari 1 Mohammad Mahdi Rahimi 2 Jaekyun Moon 1
+
+# Abstract 
+
+The quadratic N × N attention score matrix re-mains a central obstacle to extending Transform-ers to longer input lengths. Existing efficient at-tention methods usually reduce this bottleneck by either imposing sparsity, so that each query at-tends to only a small subset of keys, or by using low-rank/kernel sketches, so that global interac-tions are compressed into a lower-dimensional representation. We propose ELSAA , an efficient low-rank and sparse approximation of attention. Importantly, ELSAA does not decompose the learned projection or output matrices of the Trans-former into sparse and low-rank factors. Instead, after dense projections produce Q, K, V , ELSAA approximates the induced attention score opera-tor itself: a sparse branch captures selected high-similarity interactions, while a low-rank branch summarizes diffuse global interactions. Since the two branches can be normalized over supports with very different denominator mass, ELSAA introduces a denominator-aware fusion term that scales the sparse branch according to its estimated attention mass relative to the low-rank branch. This gives a practical framework for constructing low-rank and sparse attention outputs without ma-terializing the full quadratic score matrix, aiming to enable longer-context training while preserv-ing both sharp token-level interactions and broad contextual mixing. 
+
+# 1. Introduction 
+
+Transformers have become the dominant architecture for language, vision, and multimodal modeling, largely because self-attention can adaptively mix information across all pairs 
+
+> 1
+
+School of Electrical Engineering, KAIST, Daejeon 34141, Re-public of Korea 2Department of Electrical Engineering and Com-puter Science, Daegu Gyeongbuk Institute of Science and Technol-ogy (DGIST), Daegu 42988, Republic of Korea. Correspondence to: Mahdi Heidari <mahdi.heidari.ee.sut@kaist.ac.kr >.
+
+Preprint. July 23, 2026. 
+
+of tokens (Vaswani et al., 2017; Devlin et al., 2019; Brown et al., 2020; Dosovitskiy et al., 2021; Touvron et al., 2023). However, this pairwise interaction is also the main barrier to extending models to longer input lengths. For a sequence of length N , standard attention forms the score matrix 
+
+Z = QK ⊤/pdh, P = softmax( Z), (1) where P ∈ RN ×N is applied to the value matrix V . Equiv-alently, for a single query token i, dense attention computes 
+
+di =
+
+> N
+
+X
+
+> j=1
+
+exp( zij ), oi = 1
+
+diNX
+
+> j=1
+
+exp( zij )vj . (2) Here di is the attention denominator, and it determines the scale on which the weighted value average is normalized. The memory and compute cost of this dense N ×N operator grows quadratically with context length. Systems advances such as FlashAttention improve the IO efficiency and practi-cal runtime of exact dense attention, but they do not change the fact that exact attention still represents all pairwise to-ken interactions (Dao et al., 2022; Dao, 2023). Therefore, algorithmic approximations of the attention operator remain essential for training and serving models with substantially longer contexts. A large body of work reduces the cost of attention by exploit-ing either sparsity or low-rank structure . Sparse attention methods restrict each query to a subset of keys, using local windows, global tokens, random patterns, routing, cluster-ing, hashing, or large-entry detection (Child et al., 2019; Beltagy et al., 2020; Zaheer et al., 2020; Kitaev et al., 2020; Roy et al., 2021; Daras et al., 2020; Han et al., 2024b; Jiang et al., 2024). These methods are especially appealing when the attention distribution is low-entropy, peaked, or dominated by a small number of relevant keys. In such regimes, most of the denominator in Equation (2) may be contributed by only a small fraction of the full key set, and computing the corresponding high-mass interactions exactly can preserve the sharp token-level behavior of dense attention. In contrast, low-rank, kernel, and sketch-based methods approximate the dense attention operator through compressed features or landmarks, enabling global mixing without explicitly constructing the full matrix (Wang et al., 2020; Katharopoulos et al., 2020; Choromanski et al., 2021; 1arXiv:2607.20214v1 [cs.LG] 22 Jul 2026 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Peng et al., 2021; Xiong et al., 2021). These methods are attractive when attention is high-entropy or diffuse, so that information is spread over many tokens and global con-text is better represented by a compressed dense summary. However, either assumption alone can be brittle: sparse methods may miss weak but globally important interactions, while low-rank methods may smooth out sharp, high-mass token-token dependencies. This complementarity suggests that attention should often be approximated as a combination of sparse and low-rank components. Prior work has provided strong evidence for this view, showing that the two approximation families can excel in different regimes of the attention matrix (Chen et al., 2021). Classical robust PCA also motivates the broader idea that many matrices can be represented as the sum of a low-rank term and a sparse residual (Cand `es et al., 2011; Chan-drasekaran et al., 2011). Nevertheless, combining these structures inside attention is subtle. A naive addition of sparse attention and low-rank attention can double-count se-lected interactions, and Scatterbrain’s entrywise correction handles this issue at the level of an unnormalized attention estimator by correcting selected entries exactly (Chen et al., 2021). However, an entrywise correction alone does not answer how two separately normalized branches should be balanced during training. In particular, a sparse branch and a low-rank branch may have very different denominator masses, so their outputs can live on different scales even when both branches are useful. We propose ELSAA : Efficient Low-rank and Sparse 
+
+Approximation of Attention. ELSAA is built around a sim-ple principle: use a sparse branch for high-confidence inter-actions and a low-rank branch for global residual context. The sparse branch selects keys that are likely to be highly relevant to a given query and computes attention over the selected support. Different sparse key-finding mechanisms can instantiate this principle, including locality-sensitive hashing, routing or clustering, learned or dynamic sparse pat-terns, and approximate large-entry detection (Kitaev et al., 2020; Roy et al., 2021; Daras et al., 2020; Han et al., 2024b; Jiang et al., 2024; Tang et al., 2024). The low-rank branch summarizes global key/value information in a compressed representation and produces a query-dependent global con-text vector without materializing all pairwise scores. For a given query token i, ELSAA forms a fused output 
+
+Oi = gsparse ,i msparse ,i Osparse ,i + glr ,i Olr ,i . (3) where osparse  
+
+> i
+
+is the sparse-branch output, olowrank  
+
+> i
+
+is the low-rank-branch output, and gsparse and glowrank are learned gates. Let dsparse  
+
+> i
+
+denote the estimated denominator mass covered by the sparse branch, and let dlowrank  
+
+> i
+
+denote the denominator estimate associated with the low-rank branch. We introduce the denominator-aware correction 
+
+msparse ,i = dsparse 
+
+> i
+
+dsparse  
+
+> i
+
++ λd lowrank  
+
+> i
+
++ ε , (4) where λ can be fixed or learned. Several empirical studies of long-context attention and KV-cache compression observe that a small fraction of critical tokens or sparse attention patterns can dominate the attention outcome (Zhang et al., 2023; Xiao et al., 2024; Tang et al., 2024; Jiang et al., 2024). However, directly adding a sparse output to a low-rank out-put can distort the scale of the true attention computation, especially when the two branches are normalized by denom-inators of different magnitudes. The role of msparse ,i is to rescale the sparse contribution according to its estimated denominator mass, so that the two outputs are fused on a more comparable scale. Thus, ELSAA does not merely add two attention approximations; it explicitly accounts for their relative normalization scales. We emphasize a distinction from sparse plus low-rank 
+
+weight parameterizations. Recent work has shown that rep-resenting learned matrices using both low-rank and sparse components can improve parameter and memory efficiency for compression, fine-tuning, or pretraining (Li et al., 2023; Han et al., 2024a; Mozaffari et al., 2024). ELSAA addresses a different object. We keep the learned Transformer projec-tions dense and instead approximate the induced N × N
+
+attention operator after Q, K, V have been formed. This distinction is important for long-context modeling: the bottleneck we target is not the number of parameters in 
+
+WQ, W K , W V , W O , but the quadratic attention matrix that appears for every input sequence. Combining these two or-thogonal directions is also an interesting future research path: one may approximate the learned projection and output matrices in parameter space while simultaneously approximating the input-dependent attention matrix in se-quence space. Our contributions are as follows. First, we formulate long-context attention as a low-rank and sparse operator construc-tion rather than as a decomposition of learned projection matrices. Second, we combine an LSH-selected exact sparse branch with a RACE-style low-rank sketch branch, target-ing both sharp local/similar-token interactions and diffuse global context. Third, we introduce denominator-aware fusion through mexact , with optional learnable λ, to ad-dress scale mismatch between sparse and sketch attention branches during training. 
+
+# 2. Related Work 
+
+Efficient attention for long sequences. Efficient Trans-formers aim to overcome the quadratic cost of dense self-attention (Tay et al., 2020; 2022). One line of work keeps exact or nearly exact attention but improves practical execu-2ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+tion. FlashAttention uses IO-aware tiling to avoid material-izing the full attention matrix in high-bandwidth memory, providing major speed and memory improvements for exact attention (Dao et al., 2022; Dao, 2023). This is comple-mentary to ELSAA: FlashAttention optimizes the compu-tation of dense or block attention, while ELSAA changes the attention operator to avoid constructing all pairwise in-teractions. Another line of work imposes sparse attention patterns. Sparse Transformer uses structured sparse patterns (Child et al., 2019); Longformer and BigBird combine local, global, and random attention to support long documents (Beltagy et al., 2020; Zaheer et al., 2020); Reformer uses LSH to reduce attention cost (Kitaev et al., 2020); Rout-ing Transformer and SMYRF use clustering or asymmetric hashing to identify relevant key blocks (Roy et al., 2021; Daras et al., 2020); and HyperAttention uses LSH-style de-tection of large entries to obtain near-linear long-context attention under appropriate structure (Han et al., 2024b). More recent long-context inference methods also exploit dynamic sparse attention or query-aware critical-token se-lection, further supporting the view that only part of the full attention matrix may be necessary for many inputs (Zhang et al., 2023; Xiao et al., 2024; Tang et al., 2024; Jiang et al., 2024). These methods are effective when attention is sparse or structured, but sparse selection alone may not capture diffuse background interactions across the entire sequence. 
+
+Low-rank, kernel, and sketch attention. A second fam-ily of efficient attention methods approximates the dense attention operator with low-dimensional features. Linformer projects the sequence dimension and assumes that atten-tion matrices are approximately low-rank (Wang et al., 2020). Linear Transformer rewrites attention using ker-nel feature maps so that computation can be associated as 
+
+ϕ(Q)( ϕ(K)⊤V ) (Katharopoulos et al., 2020). Performer uses positive random features to approximate softmax at-tention with linear complexity (Choromanski et al., 2021), while Random Feature Attention studies related random-feature approximations for autoregressive modeling (Peng et al., 2021). Nystr ¨omformer approximates attention us-ing landmark-based Nystr¨ om methods (Xiong et al., 2021). RACE attention uses differentiable hash-sketch summaries, where keys are softly assigned to buckets, bucket statistics are accumulated, and queries read out from these summaries (Joshi et al., 2026). Such methods provide global context at subquadratic or linear cost, but they can struggle to represent sharp, high-confidence entries of the attention distribution. ELSAA uses the low-rank branch for global coverage while delegating high-mass interactions to a sparse branch. 
+
+Sparse plus low-rank attention. The idea that attention may require both sparse and low-rank structure is closely re-lated to sparse plus low-rank matrix decomposition. Robust PCA studies decompositions of a matrix into a low-rank component and a sparse component (Cand `es et al., 2011; Chandrasekaran et al., 2011). Scatterbrain applies this per-spective to attention and shows that sparse and low-rank approximations can be complementary across attention en-tropy regimes (Chen et al., 2021). Its construction uses a low-rank random feature approximation together with a sparse LSH-selected correction so that selected entries match the unnormalized exponential attention exactly, while non-selected entries are approximated by the low-rank com-ponent. This provides an elegant entrywise estimator with unbiasedness and reduced variance. However, its analysis is primarily entrywise and does not directly provide a gen-eral output-level variance or scale analysis for combining attention branches that may be normalized by different de-nominators. ELSAA takes a related but distinct view: rather than correcting a single unnormalized matrix estimator, we study a training-time architecture with two separately nor-malized attention-like branches. In this setting, the main issue is not only entrywise unbiasedness, but also how to bal-ance branch outputs whose denominator masses and scales can differ. The factor msparse ,i in Equation (4) is designed for this branch-scale mismatch. 
+
+Sparse plus low-rank parameterization of model weights. 
+
+Sparse plus low-rank structure has also been used to pa-rameterize, compress, or adapt the learned weights of neu-ral networks. LoRA represents fine-tuning updates with low-rank factors (Hu et al., 2022), while subsequent work studies quantized low-rank adaptation, weight-decomposed low-rank adaptation, restarted low-rank training, and low-rank gradient projection (Dettmers et al., 2023; Liu et al., 2024; Lialin et al., 2024; Zhao et al., 2024). Other work explicitly combines sparsity with low-rank structure in pa-rameter space: LoSparse compresses model weights using low-rank and sparse approximations (Li et al., 2023); SLoPe augments sparse LLM pretraining with low-rank adapters (Mozaffari et al., 2024); and SLTrain parameterizes weight matrices with a learned low-rank component together with a learned sparse component, improving parameter and mem-ory efficiency during pretraining (Han et al., 2024a). Sparse low-rank adaptation methods also study how sparsity can be incorporated into low-rank fine-tuning updates (Ding et al., 2023). This direction is orthogonal to ELSAA. We do not replace WQ, W K , W V , or WO by sparse plus low-rank fac-tors. Instead, our goal is to approximate the input-dependent attention operator induced by dense projections, thereby re-ducing the sequence-length bottleneck and enabling longer contexts. In short, SL-style methods decompose learned matrices in parameter space, whereas ELSAA constructs a sparse plus low-rank approximation in attention space. 3ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers                                                                                           
+
+> Table 1. Comparison of attention methods across long-context classification tasks.
+> ArXiv @ 32K Oxford-IIIT Pet @ 16K Flowers-102 @ 16K Food-101 @ 16K Average Method Train ↑Test ↑Train ↑Test ↑Train ↑Test ↑Train ↑Test ↑Train ↑Test ↑
+> ELSAA 99.97% 93.93% 91.55% 22.51% 97.84% 42.45% 76.43% 28.33% 91.45% 46.81%
+> Sort LSH 95.41% 84.94% 23.96% 12.65% 77.25% 37.25% 59.63% 19.03% 64.06% 38.47% RACE 100.00% 95.05% 59.89% 16.13% 91.66% 35.49% 67.57% 24.00% 79.78% 42.67% Sort Lsh RACE 99.95% 93.60% 76.76% 19.00% 95.98% 42.65% 76.05% 26.67% 87.19% 45.48% Exactflash 81.77% 70.11% 92.60% 24.66% 97.81% 48.13% 78.93% 29.96% 87.78% 43.22%
+> Table 2. Text Retrieval @ 64K
+> Method Train Acc. ↑Test Acc. ↑
+> ELSAA 94.73% 65.34% RACE 94.95% 66.30%
+> Sort Lsh RACE 94.28% 66.00% Exactflash ≈50 ≈50
+
+# 3. Methodology 
+
+We instantiate ELSAA inside each attention layer by replac-ing dense attention with a sparse–low-rank hybrid operator that avoids constructing the full N × N score matrix. In this work, we use RACE attention as the low-rank global branch (Joshi et al., 2026), and use sorted Hamming LSH to identify highly correlated query-key pairs with high probability. This follows a line of efficient-attention methods that use hash-ing, kernel-density estimation, or large-entry detection to avoid materializing all pairwise attention scores, including KDEformer and HyperAttention (Zandieh et al., 2023; Han et al., 2024b). The sparse branch captures high-similarity query-key interactions exactly, while the low-rank branch supplies global context through compressed bucket statis-tics. Future variants should also consider sliding-window, global-token, and learned top-k sparse selectors; these are natural alternatives but require careful implementation to preserve efficiency. We describe the method for one attention head. Multi-head ELSAA applies the same procedure independently per head and concatenates the outputs as in standard Transformers. Let Q, K, V ∈ RN ×dh be the query, key, and value matrices. Dense attention computes Oi =       
+
+> PNj=1 exp( Q⊤
+> iKj/√dh)Vj
+> PNj=1 exp( Q⊤
+> iKj/√dh)
+
+,
+
+which requires all N 2 query-key scores. ELSAA instead computes two outputs, Olr and Osparse , together with de-nominator proxies dlr , d sparse , and combines them through a denominator-aware fusion rule. 
+
+3.1. Low-rank branch: RACE attention 
+
+RACE replaces the dense attention matrix with soft hash-bucket summaries. Each table softly assigns queries and keys to hypercube buckets, accumulates key/value statistics inside these buckets, and lets each query read from the re-sulting summaries. For a fixed number of tables, buckets, and head dimension, this gives a linear-time global branch in the sequence length N . We use the normalized ratio form because it directly provides both a low-rank output Olr and a denominator proxy dlr , which are both needed by the EL-SAA fusion rule. For the causal setting, we extend RACE by partitioning the sequence into fixed-size chunks and de-composing the output into an inter-chunk contribution— bucket statistics accumulated from all strictly prior chunks via prefix sums—and a causally-masked intra-chunk con-tribution, preserving linear complexity. Full pseudocode for the non-causal and causal variants is given in Section A and Algorithms 2 and 3. 
+
+3.2. Sparse branch: sortLSH exact attention 
+
+The sparse branch is designed to preserve sharp token-level interactions that the low-rank branch may smooth. We use a sortLSH selector: queries and keys are hashed, sorted by their hash values, and grouped into equal-size blocks. After sorting, high-similarity query-key interactions are ex-pected to concentrate near diagonal blocks of the permuted attention matrix. This lets us compute exact attention inside selected blocks using dense block matrix multiplications, without constructing the full N × N attention matrix. The branch returns a normalized sparse output Osparse and its denominator dsparse . For the causal setting, we adopt a re-cursive divide-and-conquer structure (Han et al., 2024b): the sequence is split into past and future halves, the diag-onal blocks are processed by recursive causal calls, and the future–past off-diagonal block is handled by standard non-causal sortLSH since all its keys precede all its queries; the two future contributions are merged via a log-sum-exp-aware combination that preserves exact softmax normaliza-tion. Full pseudocode for the non-causal and causal variants is given in Section A and Algorithms 4 and 5. 
+
+3.3. Denominator-aware sparse–low-rank fusion 
+
+The two branches are complementary but live on different normalization scales. The sparse branch computes selected high-confidence interactions exactly, but its support may cover only part of the row denominator. The low-rank branch provides global coverage, but may smooth sharp interactions. Therefore, directly adding the two outputs can 4ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Table 3. Comparison of attention methods on IMDB and Fashion-MNIST. 
+
+IMDB @ 512 Fashion-MNIST @ 784 Average Method Train ↑ Test ↑ Train ↑ Test ↑ Train ↑ Test ↑
+
+ELSAA 90.68% 75.93% 87.79% 88.25% 89.24% 82.09% Sort LSH 70.45% 66.14% 82.11% 83.15% 76.28% 74.65% RACE 89.93% 77.41% 89.79% 89.43% 89.86% 83.42% 
+
+Sort Lsh RACE 90.20% 77.71% 85.43% 86.39% 87.82% 82.05% Exactflash 89.54% 78.67% 85.95% 85.81% 87.75% 82.24% 
+
+Table 4. NIAH task test accuracy across input lengths. OOM indicates out-of-memory. 
+
+Method 512 1024 2048 4096 8192 16384 32768 65536 Avg. 
+
+Exact Flash 100.0% 100.0% 100.0% 100.0% 100.0% 100.0% OOM OOM 100.0% ELSAA 100.0% 100.0% 100.0% 100.0% 100.0% 100.0% 98.8% 84.2% 97.88% 
+
+Sparse LSH 24.6% 100.0% 100.0% 100.0% 100.0% 100.0% 100.0% 100.0% 90.58% RACE 11.0% 100.0% 100.0% 52.0% 13.4% 6.4% 4.8% 2.2% 36.23% Performer 19.2% 100.0% 88.2% 87.6% 88.2% 87.4% 83.2% 83.4% 79.65% 
+
+Table 5. Comparison of causal attention methods across long-context classification tasks. 
+
+ArXiv @ 32K ArXiv @ 64K Tiny ImageNet @ 1024 Average Method Train ↑ Test ↑ Train ↑ Test ↑ Train ↑ Test ↑ Train ↑ Test ↑
+
+ELSAA 100% 88.90% 100% 91.47% 94.44% 36.07% 98.15% 72.15% 
+
+RACE 99.97% 87.84% 99.88% 91.46% 93.41% 36.39% 97.75% 71.90% Exactflash 99.97% 87.96% 99.83% 87.44% 96.59% 37.32% 98.80% 70.91% 
+
+over-amplify the sparse branch or double count overlapping mass. ELSAA introduces a denominator-aware sparse multiplier 
+
+msparse ,i = dsparse ,i 
+
+dsparse ,i + λidlr ,i + ε , (5) where λi > 0 can be fixed, a learnable scalar shared across tokens, or a query-dependent coefficient. The final ELSAA output uses two learned gates: 
+
+(gsparse ,i , g lr ,i ) = σ(Gθ (qi)) ∈ (0 , 1) 2.
+
+The fused output for token i is 
+
+Oi = gsparse ,i msparse ,i Osparse ,i + glr ,i Olr ,i . (6) The factor msparse ,i scales the sparse branch according to its estimated denominator mass relative to the low-rank branch, while the gates learn how much each branch should contribute to the final representation. 
+
+Practical notes. The RACE branch can be implemented with different reduction modes using the same bucket statis-tics, while the sparse branch can be replaced by any efficient important-key selector that returns an exact sparse output and a denominator. In this work, we use sortLSH blocks because sorting makes the selected attention matrix block-diagonal after permutation, enabling efficient exact block attention without materializing the full N × N matrix. 
+
+# 4. A Rank View of Sparse + Low-Rank Attention 
+
+We study hybrid sparse–low-rank attention operators of the form cM = SΩ + BA , where SΩ ∈ Rn×n is sparse and BA ∈ Rn×n has rank at most r, with B ∈ Rn×r ,
+
+A ∈ Rr×n. The sparse support Ω ⊆ [n] × [n] is generated by angular collisions. 
+
+Definition 4.1 (Angular collision probability) . For nonzero 
+
+Qi, K j ∈ Rd, define 
+
+ρij := 1 − 1
+
+π arccos Q⊤ 
+
+> i
+
+Kj
+
+∥Qi∥2∥Kj ∥2
+
+∈ [0 , 1] .
+
+For γ > 0, the single-trial collision probability is πij := ργij .With Ls independent sparse hash trials, including (i, j ) after at least one collision gives 
+
+qij := 1 − (1 − πij )Ls = 1 − (1 − ργij )Ls .
+
+Let M ⋆ ∈ Rn×n denote the exact attention score/kernel matrix, e.g., M ⋆ij = exp( Q⊤ 
+
+> i
+
+Kj ), and define SΩ := Ω ⊙
+
+M ⋆.
+
+Definition 4.2 (Sparse collision graph and matching defi-ciency) . The support Ω defines the bipartite graph GΩ =([ n]row , [n]col , Ω) , where edge (i, j ) ∈ Ω connects row i
+
+to column j. Let ν(Ω) be its maximum matching size and define the matching deficiency d(Ω) := n − ν(Ω) .5ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Algorithm 1 ELSAA: Efficient Low-Rank and Sparse Ap-proximation of Attention 
+
+1: Input: hidden states X ∈ RN ×d, projections 
+
+WQ, W K , W V , W O , RACE parameters Ls, γ, β , sortLSH block size b, gate network Gθ , coefficient rule λi > 0,numerical floor ε > 0
+
+2: Output: hybrid attention output O ∈ RN ×d
+
+3: Project to one attention head 
+
+Q ← XW Q, K ← XW K , V ← XW V .
+
+4: Run the low-rank branch 
+
+(Olr , d lr ) ← RACE( Q, K, V ; Ls, γ, β, ε ).
+
+5: Run the sparse exact branch 
+
+(Osparse , d sparse ) ← sortLSH( Q, K, V ; b, ε ).
+
+6: Compute denominator-aware sparse multiplier 
+
+msparse ,i ← dsparse ,i 
+
+dsparse ,i + λidlr ,i + ε , i = 1 , . . . , N. 
+
+7: Compute token-wise gates 
+
+(gsparse , g lr ) ← σ(Gθ (Q)) .
+
+8: Fuse branch outputs 
+
+Ohead ← gsparse ⊙ msparse ⊙ Osparse + glr ⊙ Olr .
+
+9: Return O ← Ohead WO
+
+Assumption 4.3 (Independent angular edge model) . Condi-tioned on Q, K , we analyze the idealized model Ωij ∼
+
+Bernoulli( qij ) independently over i, j , preserving the marginal angular collision probabilities. 
+
+Assumption 4.4 (Generic sparse values and generic low-rank factors) . The nonzero entries of SΩ are in general position on their support, and B, A are drawn independently from absolutely continuous distributions. 
+
+Proposition 4.5 (Sparse matching deficiency plus low rank) .
+
+Under Theorem 4.4, for fixed Ω,
+
+rank( SΩ + BA ) = min {n, ν (Ω) + r} a.s. 
+
+Hence, if ν(Ω) ≥ n − r, then rank( SΩ + BA ) = n almost surely. 
+
+Thus, the sparse component contributes rank through the maximum matching of its support graph, while the rank-r
+
+branch fills up to r missing directions. 
+
+Theorem 4.6 (Full rank from angular sparse collisions and rank-r low rank) . Condition on Q, K , and suppose Theo-rems 4.3 and 4.4 hold. Let R := r + 1 , and for I, U ⊆ [n]
+
+define 
+
+Λ( I, U ) := X
+
+> i∈I, j ∈U
+
+qij ,
+
+∆r (Q, K ) := X     
+
+> I,U ⊆[n]
+> |I|≥ R, |U|≥ R, |I|+|U|≥ n+R
+
+e−Λ( I,U ).
+
+Then 
+
+P[rank( SΩ + BA ) = n | Q, K ] ≥ 1 − ∆r (Q, K ).
+
+The sets I, U in ∆r (Q, K ) are Hall-deficiency cuts: failure occurs when a large query set has no sparse edges into a large key set. The quantity Λ( I, U ) is the expected number of sampled sparse entries in that rectangle, so full rank holds when every Hall-relevant rectangle has enough expected angular collision mass. We prove the theoretical claims from this section in Sec-tion B. In Section C, we further analyze settings that simplify Theorem 4.6 to P[rank( SΩ + BA ) = n | Q, K ] ≥ 1−n−c.
+
+These results show that SΩ + BA can be full rank with high probability under natural sparse-coverage conditions, motivating further study of sparse–low-rank attention rank behavior. 
+
+# 5. Experimental Setup 
+
+We evaluate ELSAA across classification and retrieval tasks to test whether the sparse–low-rank attention structure is useful beyond a single modality or dataset. Since our main motivation is efficient long-context modeling, we prioritize settings with relatively long input sequences or large to-kenized inputs whenever possible. The benchmark suite includes long-document text classification, sentiment clas-sification, fine-grained image classification, low-resolution image classification, and text retrieval. For all tasks, we compare attention variants under the same training and eval-uation settings, and we report top-1 accuracy. Full task-specific hyperparameters, including learning rates, batch sizes, sequence lengths, model sizes, and training schedules, are reported in Section D. 
+
+Datasets and tasks. We evaluate on text, image, and re-trieval benchmarks: ArXiv for scientific text classification, IMDB for binary sentiment classification (Maas et al., 2011), Food-101 (Bossard et al., 2014), Fashion-MNIST (Xiao et al., 2017), Flowers-102 (Nilsback & Zisserman, 2008), and Oxford-IIIT Pet (Parkhi et al., 2012). For ArXiv clas-sification, the model predicts the document subject class; for text retrieval, two ArXiv documents are paired into a 64K-token sequence and the model performs binary same-class prediction. We also evaluate on a synthetic Needle-in-a-Haystack (NIAH) benchmark, where a key-value nee-dle is inserted at a random position in a long distractor context and the model must recall the value at sequence end. NIAH probes content-based retrieval across lengths 6ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+{512 , 1024 , 2048 , 4096 , 8192 , 16384 , 32768 , 65536 }, with a separate model trained on length 1024. Finally, we evaluate the causal variants of Algorithm 6 on autoregres-sive long-context classification: packed ArXiv at N ∈{32 ,000 , 64 ,000 }, where the classification head reads the last valid token under strict left-to-right access, and Tiny Im-ageNet (200 classes, 64 × 64 ) using a causal ViT with patch size 2 ( N = 1024 tokens, raster-order causal mask, class token at position 0). Together these tasks span long text, tokenized vision, retrieval, and causal aggregation across a wide range of sequence lengths. 
+
+Attention variants. We compare Exactflash as the full-attention baseline, RACE as the low-rank base-line, Sort Lsh as the sparse baseline, and ELSAA as our proposed sparse–low-rank method. We also in-clude Sort Lsh RACE as an ablation that combines both branches but sets msparse = 1 , removing denominator-aware rescaling. For the causal experiments, Sort Lsh and Sort Lsh RACE are omitted, as their sparse branch is re-placed by the recursive causal sortLSH of Algorithm 5— which is precisely the sparse branch inside causal ELSAA— making them non-comparable baselines. In all result tables, we bold the highest accuracy among efficient attention vari-ants, excluding Exactflash as it does not reduce the quadratic computation cost. 
+
+Hardware and evaluation protocol. All experiments were run on an NVIDIA RTX PRO 6000 Blackwell GPU with 48 GB of memory. Within each task, all attention variants use the same model, training budget, optimizer, and evaluation protocol. Unless otherwise stated, we report top-1 accuracy. The source code is available here. 
+
+# 6. Complexity of ELSAA 
+
+We analyze the attention-mixing cost for a non-causal se-quence of length N , suppressing constants from batch size and number of heads. Exactflash attention computes all query–key interactions: 
+
+CExactflash = Θ( N 2), MExactflash = Θ( N 2).
+
+In Sort Lsh , tokens are sorted by angular LSH and exact attention is computed only within fixed-size sorted blocks of size s. Therefore each query attends to at most s keys: 
+
+CSort Lsh = Θ( N s ), MSort Lsh = Θ( N s ).
+
+With r neighboring sorted blocks, this becomes Θ( N (2 r +1) s). In our main setting r = 0 , so the branch cost is 
+
+Θ( N s ).For Race , let Ls be the number of hash tables and γ be the number of hash bits per table. Each table has 2γ buckets, hence the total number of bucket features is 
+
+SR = Ls2γ .
+
+Race does not materialize an N × N matrix; it builds global bucket summaries and each query reads from these SR fea-tures: 
+
+CRace = Θ( N L s2γ ), MRace = Θ( N L s2γ ).
+
+ELSAA combines Sort Lsh and Race, with denominator-aware sparse rescaling: 
+
+CELSAA = Θ  N s + N L s2γ  = Θ  N (s + Ls2γ ),
+
+MELSAA = Θ  N (s + Ls2γ ).
+
+The ablation Sort Lsh RACE has the same asymptotic cost as ELSAA, but removes the rescaling term by setting 
+
+msparse = 1 .For fixed s, Ls, and γ, Sort Lsh, Race, Sort Lsh RACE, and ELSAA are linear in N , while Exactflash attention is quadratic. 
+
+Complexity summary. ELSAA reduces the quadratic N 2
+
+attention interaction cost by combining a sparse branch with O(N s ) selected query–key interactions and a low-rank RACE branch with O(N L s2γ ) bucket interactions, where s
+
+is the sparse block budget, Ls is the number of hash tables, and γ is the number of hash bits. Thus, ignoring lower-order hashing and sorting overhead, the attention-interaction cost scales as 
+
+O(N (s + Ls2γ )) 
+
+instead of O(N 2). We provide a concrete numerical exam-ple in Section E, showing that ELSAA reduces attention interactions by approximately 99%. 
+
+# 7. Results and Discussion 
+
+Tables 5–4 compare ELSAA with sparse, low-rank, hybrid, and exact full-attention baselines across long-context vi-sion, long-context text, retrieval, short-sequence, and length-extrapolation settings. We organize the discussion around four observations: (i) ELSAA improves on Sort Lsh RACE consistently, isolating the contribution of the denominator-aware correction; (ii) the relative strength of the sparse and low-rank branches reflects a fundamental structural differ-ence between vision and long-text tasks; (iii) exact full at-tention is not merely expensive at very long contexts but can fail to optimize at all; and (iv) ELSAA is the only method that extrapolates reliably across all lengths on NIAH, includ-ing lengths shorter than training. 7ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Isolating the denominator-aware correction. One im-portant ablation compares Sort Lsh RACE with ELSAA. These two methods share identical architecture, branches, gates, and hyperparameters; the only difference is that Sort Lsh RACE sets msparse = 1 , while ELSAA computes the denominator-aware multiplier of Equation (5). Any per-formance gap is therefore attributable solely to this single term. On the long-context benchmarks of Table 5, ELSAA achieves an average test accuracy of 46 .81% versus 45 .48% 
+
+for Sort Lsh RACE, a consistent +1 .33 pp improvement obtained without changing parameter count, branch com-plexity, or optimization budget. The improvement is most visible on structured vision tasks (Oxford-IIIT Pet: 22 .51% 
+
+vs. 19 .00% ; Food-101: 28 .33% vs. 26 .67% ), supporting our central claim: when two branches are normalized over supports of very different denominator mass, naive addition distorts the fused output, and msparse corrects this with a principled rescaling rather than a learned heuristic. 
+
+Vision is structured; long-text classification is diffuse. 
+
+The most striking pattern in Table 5 is that the relative ranking of RACE, Sort LSH, and ELSAA changes system-atically between long text and long vision. On long vision tasks ELSAA dominates, improving over RACE by +6 .4pp on Oxford-IIIT Pet, +7 .0pp on Flowers-102, and +4 .3pp on Food-101. On ArXiv @ 32K, RACE alone ( 95 .05% )marginally outperforms ELSAA ( 93 .93% ). This dichotomy is structural: vision attention is locally peaked, dominated by a small support of high-mass interactions that an uncon-ditional low-rank approximation smooths away, whereas long-document topic classification requires aggregating dif-fuse weak evidence across the sequence, making a low-rank summary not only sufficient but preferable. ELSAA handles both regimes within a single architecture, consistent with the rank perspective of Section 4. 
+
+Exact attention fails at very long context. The Text Retrieval @ 64K results in Table 2 are decisive. Exact-Flash collapses to approximately 50% on both train and test—random performance on a binary task—while ELSAA reaches 65 .34% and RACE 66 .30% . Dense attention at 
+
+N = 64 ,000 spreads gradient signal across ≈ 4 × 10 9 pair-wise interactions per layer, the vast majority uninformative. Approximate attention acts as an implicit structural prior that focuses the model on a tractable subset of interactions and stabilizes optimization, enabling a regime that exact attention cannot reach. The broad-aggregation nature of retrieval again favors the low-rank branch slightly, with RACE outperforming ELSAA by ≈ 1pp—consistent with the structural argument above. 
+
+Short tasks do not require hybrid structure. Table 3 confirms the natural complement: at N = 512 and N =784 , ELSAA, RACE, and ExactFlash are all within 1–2pp of each other. The relevant observation is not that ELSAA wins, but that it degrades gracefully rather than failing— an important property for a general-purpose attention layer deployed across heterogeneous workloads. 
+
+NIAH: length extrapolation and the role of each branch. 
+
+Table 4 reports NIAH accuracy when all models are trained at N = 1024 and evaluated across lengths 
+
+{512 , . . . , 65536 }, probing both shorter-than-training and longer-than-training generalization. Several findings stand out. First, RACE fails catastrophically beyond the train-ing length: accuracy collapses from 100% at 1024 to 52% 
+
+at 4096 and near-random ( 2.2% ) at 65536 . This confirms that the low-rank bucket summaries, while globally expres-sive at seen lengths, cannot locate a specific needle token when the sequence length shifts the effective bucket den-sity. Second, ExactFlash achieves perfect accuracy up to 
+
+16384 but runs out of memory at 32768 and beyond, high-lighting the wall exact attention hits at extreme lengths. Third, Sparse LSH extrapolates well at long lengths ( 100% 
+
+at 32768 and 65536 ) because content-based hashing is in-herently position-independent, but it fails at N = 512 —shorter than training—with only 24 .6% accuracy, suggest-ing that its block structure becomes degenerate when the sequence is too short to populate meaningful hash buckets. ELSAA, by contrast, achieves 100% at N = 512 , outper-forming Sparse LSH at this sub-training length: the low-rank RACE branch provides reliable global context when the sparse branch’s bucket structure is under-populated, and the denominator-aware gate learns to up-weight it accord-ingly. At the long end, ELSAA reaches 98 .8% at 32768 and 
+
+84 .2% at 65536 —well above RACE and Performer, and within reach of Sparse LSH—demonstrating that the hybrid structure preserves the content-based retrieval strength of the sparse branch while preventing the catastrophic failure of the low-rank branch alone. 
+
+Causal ELSAA matches or exceeds baselines across lengths and modalities. Table 5 (causal) shows that causal ELSAA achieves the highest average test accuracy (72 .15% ) across ArXiv @ 32K, ArXiv @ 64K, and Tiny ImageNet @ 1024, outperforming causal RACE ( 71 .90% )and causal ExactFlash ( 70 .91% ). On the two long-text set-tings, all three methods are competitive, consistent with the diffuse-attention argument above. On Tiny ImageNet, causal ExactFlash leads slightly in test accuracy ( 37 .32% 
+
+vs. 36 .07% for ELSAA and 36 .39% for RACE), suggesting that at N = 1024 the quadratic baseline remains viable and the sparse branch’s advantage is modest. Crucially, at ArXiv @ 64K causal ExactFlash lags ELSAA by 4pp ( 87 .44% 
+
+vs. 91 .47% ), confirming that the optimization difficulty of dense attention at very long contexts persists in the causal setting. 8ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+# 8. Future Work 
+
+Scaling laws. Our experiments fix the model size and sweep over sequence length and modality, but a systematic study of how the relative contributions of the sparse and low-rank branches evolve with model scale, data scale, and context length would clarify when each branch dominates, and would inform the design of branch-specific schedules during pretraining. In particular, the dichotomy we observe between peaked (vision) and diffuse (long text) regimes suggests that the appropriate gate and λ schedules may also depend on depth and head index. 
+
+Fused causal GPU kernels. A natural systems-level ex-tension is a fused GPU kernel that combines, in one launch, the recursive sortLSH grouping of Algorithm 5, block-wise exact attention within sorted blocks, the chunked cumulative bucket aggregation of Algorithm 3, and the denominator-aware fusion of Equation (5). Implementations along the lines of FlashAttention show that such fusions are feasi-ble and can recover most of the theoretical advantage in practice. A particularly promising aspect of ELSAA in this respect is that the sparse and low-rank branches are inde-pendent given Q, K, V , so they admit parallel scheduling on independent CUDA streams or within a single persistent kernel that shares the Q, K, V loads from high-bandwidth memory. 
+
+Pretraining of decoder language models. Having vali-dated the causal variant on long-context classification and on retrieval-style NIAH tasks at lengths up to 64K, the next milestone is autoregressive language-model pretraining with causal ELSAA. The empirical literature on long-context in-ference (Zhang et al., 2023; Xiao et al., 2024; Tang et al., 2024) consistently documents heavy-tailed attention access patterns dominated by attention sinks, recent context, and a small number of task-relevant pivots, which is precisely the structure that the sparse branch is designed to capture. The denominator-aware multiplier msparse additionally provides a principled account of the mass discarded by KV-cache eviction methods, which currently address this scale prob-lem with heuristics. 
+
+Joint compression in parameter and attention space. 
+
+ELSAA is orthogonal to weight-space compression meth-ods such as LoRA (Hu et al., 2022), LoSparse (Li et al., 2023), and SLTrain (Han et al., 2024a). Approximating the input-dependent attention operator and the learned projec-tion matrices simultaneously is a natural composition: the former targets the sequence-length bottleneck, while the latter targets the parameter-count bottleneck. We see this composition as a promising route to long-context efficient pretraining of large language models. 
+
+Theoretical analysis of branch fusion. The rank analysis of Section 4 establishes an expressivity guarantee for the hybrid sparse–low-rank operator but does not directly ana-lyze the bias and variance of ELSAA’s normalized branch outputs under the denominator-aware fusion rule. A comple-mentary output-level bias–variance analysis, in the spirit of Scatterbrain’s entrywise analysis but at the level of normal-ized attention outputs, would clarify when the denominator-aware multiplier provably reduces the mean-squared error of the fused estimator, and when learnable λ is preferable to a fixed schedule. 
+
+# 9. Conclusion 
+
+We introduced ELSAA, a sparse–low-rank approximation of attention combining an exact sortLSH sparse branch with a low-rank RACE branch, fused via a denominator-aware multiplier msparse that corrects the scale mismatch between separately-normalized branches. Our rank analysis shows the sparse component contributes rank through its support graph’s matching structure while the low-rank component fills the remaining deficiency. Empirically, ELSAA domi-nates efficient-attention baselines on long-context structured vision, remains competitive on diffuse long-text tasks, and succeeds where exact attention fails entirely (Text Retrieval @ 64K). On NIAH, ELSAA achieves perfect retrieval up to 16K and remains strong at 32K–64K where exact atten-tion runs out of memory and RACE degrades sharply. We further extended both branches to the causal setting and vali-dated causal ELSAA on autoregressive ArXiv classification up to 64K tokens and on Tiny ImageNet, matching or ex-ceeding causal exact attention and causal RACE throughout. The method is linear in sequence length, adds negligible parameters, and degrades gracefully at short lengths, offer-ing a principled path toward long-context attention that is tractable where exact attention is not. 
+
+# 10. Acknowledgments 
+
+This work was supported by the National Research Founda-tion of Korea (NRF) grants funded by the Korea government (MSIT) (Nos. RS-2024-00340966 and RS-2024-00408003), and by the Institute for Information & Communications Technology Promotion (IITP) grant funded by the Korea government (MSIT) (No. RS-2024-00444862). 
+
+# 11. Impact statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 9ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+# References 
+
+Beltagy, I., Peters, M. E., and Cohan, A. Long-former: The long-document transformer. arXiv preprint arXiv:2004.05150 , 2020. Bossard, L., Guillaumin, M., and Van Gool, L. Food-101 – mining discriminative components with random forests. In European Conference on Computer Vision (ECCV) , pp. 446–461, 2014. Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan, J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., et al. Language models are few-shot learners. In Advances in Neural Information Processing Systems ,2020. Cand `es, E. J., Li, X., Ma, Y., and Wright, J. Robust principal component analysis? Journal of the ACM , 58(3):1–37, 2011. Chandrasekaran, V., Sanghavi, S., Parrilo, P. A., and Willsky, A. S. Rank-sparsity incoherence for matrix decomposi-tion. SIAM Journal on Optimization , 21(2):572–596, 2011. Chen, B., Dao, T., Winsor, E., Song, Z., Rudra, A., and R ´e, C. Scatterbrain: Unifying sparse and low-rank atten-tion approximation. In Advances in Neural Information Processing Systems , 2021. Child, R., Gray, S., Radford, A., and Sutskever, I. Gen-erating long sequences with sparse transformers. arXiv preprint arXiv:1904.10509 , 2019. Choromanski, K., Likhosherstov, V., Dohan, D., Song, X., Gane, A., Sarlos, T., Hawkins, P., Davis, J., Mohiuddin, A., Kaiser, L., et al. Rethinking attention with performers. In International Conference on Learning Representations ,2021. Dao, T. Flashattention-2: Faster attention with bet-ter parallelism and work partitioning. arXiv preprint arXiv:2307.08691 , 2023. Dao, T., Fu, D. Y., Ermon, S., Rudra, A., and R ´e, C. Flashat-tention: Fast and memory-efficient exact attention with IO-awareness. In Advances in Neural Information Pro-cessing Systems , 2022. Daras, G., Kitaev, N., Odena, A., and Dimakis, A. G. SMYRF: Efficient attention using asymmetric clustering. 
+
+arXiv preprint arXiv:2010.05315 , 2020. Dettmers, T., Pagnoni, A., Holtzman, A., and Zettlemoyer, L. QLoRA: Efficient finetuning of quantized LLMs. In Ad-vances in Neural Information Processing Systems , 2023. Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. BERT: Pre-training of deep bidirectional transformers for lan-guage understanding. In Proceedings of NAACL-HLT ,2019. Ding, N., Lv, X., Wang, Q., Chen, Y., Zhou, B., Liu, Z., and Sun, M. Sparse low-rank adaptation of pre-trained language models, 2023. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., et al. An image is worth 16x16 words: Transformers for image recognition at scale. In 
+
+International Conference on Learning Representations ,2021. Han, A., Li, J., Huang, W., Hong, M., Takeda, A., Jawan-puria, P., and Mishra, B. SLTrain: A sparse plus low-rank approach for parameter and memory efficient pretraining. In Advances in Neural Information Processing Systems ,2024a. Han, I. et al. Hyperattention: Long-context attention in near-linear time. arXiv preprint arXiv:2401.XXXX , 2024b. Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., and Chen, W. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations , 2022. Jiang, H., Li, Y., Zhang, C., Wu, Q., Luo, X., Ahn, S., Han, Z., Abdi, A. H., Li, D., Lin, C.-Y., Yang, Y., and Qiu, L. MInference 1.0: Accelerating pre-filling for long-context LLMs via dynamic sparse attention. In Advances in Neural Information Processing Systems , 2024. Joshi, S., Chowdhury, A., Kanakamedala, A., Singh, E., Tu, E., and Shrivastava, A. RACE attention: A strictly linear-time attention layer for training on outrageously large contexts. In International Conference on Learning Representations , 2026. URL https://openreview. net/forum?id=RR8Lh8RHgA .Katharopoulos, A., Vyas, A., Pappas, N., and Fleuret, F. Transformers are RNNs: Fast autoregressive transformers with linear attention. In International Conference on Machine Learning , 2020. Kitaev, N., Kaiser, L., and Levskaya, A. Reformer: The efficient transformer. In International Conference on Learning Representations , 2020. Li, Y., Yu, Y., Zhang, Q., Liang, C., He, P., Chen, W., and Zhao, T. LoSparse: Structured compression of large lan-guage models based on low-rank and sparse approxima-tion. In Proceedings of the 40th International Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pp. 20336–20350. PMLR, 2023. 10 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Lialin, V., Muckatira, S., Shivagunde, N., and Rumshisky, A. ReLoRA: High-rank training through low-rank updates. In International Conference on Learning Representations ,2024. Liu, S.-Y., Wang, C.-Y., Yin, H., Molchanov, P., Wang, Y.-C. F., Cheng, K.-T., and Chen, M.-H. DoRA: Weight-decomposed low-rank adaptation. In Proceedings of the 41st International Conference on Machine Learning ,2024. Maas, A. L., Daly, R. E., Pham, P. T., Huang, D., Ng, A. Y., and Potts, C. Learning word vectors for sentiment anal-ysis. Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics , pp. 142–150, 2011. Mozaffari, M., Yazdanbakhsh, A., Zhang, Z., and Mehri Dehnavi, M. SLoPe: Double-pruned sparse plus lazy low-rank adapter pretraining of LLMs, 2024. Nilsback, M.-E. and Zisserman, A. Automated flower clas-sification over a large number of classes. Proceedings of the Indian Conference on Computer Vision, Graphics and Image Processing , 2008. Parkhi, O. M., Vedaldi, A., Zisserman, A., and Jawahar, C. V. Cats and dogs. In IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 3498–3505, 2012. Peng, H., Pappas, N., Yogatama, D., Schwartz, R., Smith, N. A., and Kong, L. Random feature attention. In Inter-national Conference on Learning Representations , 2021. Roy, A., Saffar, M., Vaswani, A., and Grangier, D. Efficient content-based sparse attention with routing transform-ers. Transactions of the Association for Computational Linguistics , 9:53–68, 2021. Tang, J., Zhao, Y., Zhu, K., Xiao, G., Kasikci, B., and Han, S. QUEST: Query-aware sparsity for efficient long-context LLM inference. In Proceedings of the 41st In-ternational Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , pp. 47901–47911. PMLR, 2024. Tay, Y., Dehghani, M., Abnar, S., Shen, Y., Bahri, D., Pham, P., Rao, J., Yang, L., Ruder, S., and Metzler, D. Long range arena: A benchmark for efficient transformers. 
+
+arXiv preprint arXiv:2011.04006 , 2020. Tay, Y., Dehghani, M., Bahri, D., and Metzler, D. Efficient transformers: A survey. ACM Computing Surveys , 55(6): 1–28, 2022. Touvron, H., Lavril, T., Izacard, G., Martinet, X., Lachaux, M.-A., Lacroix, T., Rozi `ere, B., Goyal, N., Hambro, E., Azhar, F., et al. Llama: Open and efficient foundation lan-guage models. arXiv preprint arXiv:2302.13971 , 2023. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., and Polosukhin, I. Atten-tion is all you need. In Advances in Neural Information Processing Systems , 2017. Wang, S., Li, B. Z., Khabsa, M., Fang, H., and Ma, H. Linformer: Self-attention with linear complexity. arXiv preprint arXiv:2006.04768 , 2020. Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M. Ef-ficient streaming language models with attention sinks, 2024. Xiao, H., Rasul, K., and Vollgraf, R. Fashion-mnist: A novel image dataset for benchmarking machine learning algorithms. arXiv preprint arXiv:1708.07747 , 2017. Xiong, Y., Zeng, Z., Chakraborty, R., Tan, M., Fung, G., Li, Y., and Singh, V. Nystr ¨omformer: A nystr ¨om-based algorithm for approximating self-attention. In AAAI Con-ference on Artificial Intelligence , 2021. Zaheer, M., Guruganesh, G., Dubey, K. A., Ainslie, J., Al-berti, C., Ontanon, S., Pham, P., Ravula, A., Wang, Q., Yang, L., et al. Big bird: Transformers for longer se-quences. In Advances in Neural Information Processing Systems , 2020. Zandieh, A., Han, I., Daliri, M., and Karbasi, A. KDE-former: Accelerating transformers via kernel density esti-mation. In Proceedings of the 40th International Confer-ence on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pp. 40605–40623. PMLR, 2023. Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R ´e, C., Barrett, C., Wang, Z., and Chen, B. H 2O: Heavy-hitter oracle for efficient genera-tive inference of large language models. In Advances in Neural Information Processing Systems , 2023. Zhao, J., Zhang, Z., Chen, B., Wang, Z., Anandkumar, A., and Tian, Y. GaLore: Memory-efficient LLM training by gradient low-rank projection. In International Conference on Machine Learning , 2024. 11 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Algorithm 2 RACE Low-Rank Attention Branch 
+
+1: Input: Q, K, V ∈ RN ×dh , number of hash tables Ls, number of hyperplanes γ, temperature β > 0, numerical floor ε > 0
+
+2: Output: low-rank output Olr ∈ RN ×dh , denominator proxy dlr ∈ RN
+
+3: Set R ← 2γ and V ← {± 1}γ
+
+4: for ℓ = 1 , . . . , L s do 
+
+5: Draw W (ℓ) ∈ Rγ×dh with i.i.d. Gaussian rows 6: Build Φ(ℓ) 
+
+> Q
+
+, Φ(ℓ) 
+
+> K
+
+∈ RN ×R with rows 
+
+[ϕ(ℓ)(x)] r = exp {β tanh( W (ℓ)x)⊤vr }
+
+PRr′=1 exp {β tanh( W (ℓ)x)⊤vr′ } , x ∈ { Qi, K j }.
+
+7: Compute bucket mass and value summaries 
+
+A(ℓ) ← (Φ (ℓ) 
+
+> K
+
+)⊤1N ∈ RR, B(ℓ) ← (Φ (ℓ) 
+
+> K
+
+)⊤V ∈ RR×dh .
+
+8: end for 
+
+9: Compute table-averaged numerator and denominator 
+
+Num ← 1
+
+Ls
+
+> Ls
+
+X
+
+> ℓ=1
+
+Φ(ℓ) 
+
+> Q
+
+B(ℓ), Den ← 1
+
+Ls
+
+> Ls
+
+X
+
+> ℓ=1
+
+Φ(ℓ) 
+
+> Q
+
+A(ℓ).
+
+10: Return Olr ← diag(Den + ε)−1Num , dlr ← Den .
+
+Algorithm 3 Causal RACE Low-Rank Attention Branch 
+
+1: Input: Q, K, V ∈ RN ×dh , Ls, γ, β > 0, chunk size C, ε > 0
+
+2: Output: causal low-rank output Olr ∈ RN ×dh , denominator proxy dlr ∈ RN
+
+3: Build soft hash features Φ(ℓ) 
+
+> Q
+
+, Φ(ℓ) 
+
+> K
+
+∈ RN ×R for ℓ = 1 , . . . , L s as in Algorithm 2 steps 3–7. 4: Pad sequence axis to N ′ = ⌈N/C ⌉ · C; reshape into nc = N ′/C chunks of size C. Denote chunk-n slices Φ(ℓ)
+
+> Q,n
+
+, Φ(ℓ) 
+
+> K,n
+
+∈ RC×R
+
+and Vn ∈ RC×dh .5: for each table ℓ and chunk n do 
+
+6: A(ℓ) 
+
+> n
+
+← (Φ (ℓ)
+
+> K,n
+
+)⊤1C ∈ RR, B(ℓ) 
+
+> n
+
+← (Φ (ℓ)
+
+> K,n
+
+)⊤Vn ∈ RR×dh .7: end for 
+
+8: Compute strict prefix states via cumulative sum and one-chunk right shift: sA (ℓ) 
+
+> n
+
+← P 
+
+> m<n
+
+A(ℓ) 
+
+> m
+
+, sB (ℓ) 
+
+> n
+
+← P 
+
+> m<n
+
+B(ℓ) 
+
+> m
+
+.9: Inter-chunk (queries read from all prior chunks): 
+
+inum n ← 1
+
+> Ls
+
+P 
+
+> ℓ
+
+Φ(ℓ)
+
+> Q,n
+
+sB (ℓ) 
+
+> n
+
+, iden n ← 1
+
+> Ls
+
+P 
+
+> ℓ
+
+Φ(ℓ)
+
+> Q,n
+
+sA (ℓ) 
+
+> n
+
+.
+
+10: Intra-chunk (causally-masked soft attention within chunk): 
+
+Mn ← 1
+
+> Ls
+
+P 
+
+> ℓ
+
+Φ(ℓ)
+
+> Q,n
+
+(Φ (ℓ)
+
+> K,n
+
+)⊤ ⊙ tril( 1C×C ),
+
+anum n ← MnVn, aden n ← Mn1C .11: Combine: dlr ,n ← iden n + aden n, Olr ,n ← diag( dlr ,n + ε)−1(inum n + anum n).12: Concatenate chunks, remove padding, and return Olr , d lr .
+
+# A. Branch Algorithms for ELSAA 
+
+This appendix gives full pseudocode for all five branch-level procedures used by ELSAA: the non-causal RACE low-rank branch, its causal extension, the non-causal sortLSH sparse branch, its causal recursive extension, and the complete causal ELSAA fusion procedure. 
+
+# B. Proofs and Additional Rank Corollaries 
+
+We prove the rank statements from Section 4. The proof has four ingredients. First, we relate the angular collision probabilities qij to simpler lower and upper bounds. Second, a generic rank-r matrix can increase the rank of a fixed matrix by r, unless full rank is already reached. Third, the generic rank of a sparse matrix equals the maximum matching size of its 12 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Algorithm 4 sortLSH Sparse Exact Attention Branch 
+
+1: Input: Q, K, V ∈ RN ×dh , LSH map H(·), block size b, ε > 0
+
+2: Output: sparse output Osparse ∈ RN ×dh , denominator dsparse ∈ RN
+
+3: Hash: hQi ← H (Qi), hKj ← H (Kj ).4: Sort: let PQ, P K ∈ Sym( N ) sort hQ, h K in non-decreasing order; form Qs, K s, V s accordingly. 5: Partition sorted sequence into consecutive blocks {Bt} of size b.6: for each block Bt do 
+
+7: Zt ← Qs[Bt]Ks[Bt]⊤/√dh, At ← exp( Zt), ds[Bt] ← At1.8: Os[Bt] ← diag( ds[Bt] + ε)−1AtVs[Bt].9: end for 
+
+10: Undo query permutation: Osparse [PQ(t)] ← Os[t], dsparse [PQ(t)] ← ds[t].11: Return Osparse , d sparse .
+
+Algorithm 5 Causal sortLSH Sparse Exact Attention Branch 
+
+1: Input: Q, K, V ∈ RN ×dh , LSH map H(·), block size b, base length N0, ε > 0
+
+2: Output: causal sparse output Osparse ∈ RN ×dh , log dsparse ∈ RN
+
+3: Return C AUSAL SPARSE (Q, K, V ).4: procedure CAUSAL SPARSE (Q, K, V ):5: if n ≤ N0 then return exact causal attention (O, log d).6: If n odd, pad by one zero token ( n ← n + 1 ); remove on return. 7: m ← n/ 2; split into past (Qp, K p, V p) ← [ · ]1: m and future (Qf , K f , V f ) ← [ · ]m+1: n.8: (Otop , log dtop ) ← CAUSAL SPARSE (Qp, K p, V p) {past–past causal }
+
+9: (Odiag , log ddiag ) ← CAUSAL SPARSE (Qf , K f , V f ) {future–future causal }
+
+10: (Ooff , log doff ) ← SORT LSH (Qf , K p, V p; b) {future–past, non-causal }
+
+11: (Obot , log dbot ) ← MERGE LSE (Odiag , log ddiag , O off , log doff )
+
+12: Return concat( Otop , O bot ), concat(log dtop , log dbot ).13: procedure SORT LSH (Q, K, V ; b): apply Algorithm 4 and return (O, log dsparse ).14: procedure MERGE LSE (O1, log d1, O 2, log d2):15: μ ← max(log d1, log d2); wk ← exp(log dk − μ); s ← w1 + w2.16: Return O ← (w1O1 + w2O2)/(s + ε), log d ← μ + log( s + ε).
+
+Algorithm 6 Causal ELSAA: Efficient Low-Rank and Sparse Approximation of Attention 
+
+1: Input: hidden states X ∈ RN ×d, shared projections WQ, W K , W V , W O , RACE parameters Ls, γ, β, C , sortLSH parameters b, N 0,gate network Gθ , coefficient λi > 0, ε > 0
+
+2: Output: causal hybrid attention output O ∈ RN ×d
+
+3: Q ← XW Q, K ← XW K , V ← XW V .4: (Olr , d lr ) ← CAUSAL RACE (Q, K, V ; Ls, γ, β, C, ε ) {Algorithm 3 }
+
+5: (Osparse , log dsparse ) ← CAUSAL SPARSE (Q, K, V ; b, N 0, ε ) {Algorithm 5 }
+
+6: Compute msparse ,i via numerically stable log-sum-exp: 
+
+log Di ← logsumexp  log dsparse ,i , log λi + log dlr ,i , log ε,msparse ,i ← exp(log dsparse ,i − log Di), i = 1 , . . . , N. 
+
+7: (gsparse , g lr ) ← σ(Gθ (X)) ∈ (0 , 1) N ×2.8: Ohead ← gsparse ⊙ msparse ⊙ Osparse + glr ⊙ Olr .9: Return O ← Ohead WO .
+
+support graph. Fourth, Hall’s theorem and concentration inequalities control the probability that the sparse collision graph has matching deficiency larger than r.
+
+B.1. Generic low-rank completion Lemma B.1 (Generic rank-r completion) . Let S ∈ Rn×n be fixed with 
+
+rank( S) = k. 
+
+13 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Let B ∈ Rn×r and A ∈ Rr×n be drawn from an absolutely continuous distribution. Then 
+
+rank( S + BA ) = min {n, k + r} almost surely . (7) 
+
+In particular, if k ≥ n − r, then 
+
+rank( S + BA ) = n almost surely . (8) 
+
+Proof. Let 
+
+m := min {n, k + r}.
+
+Since rank( S) = k, there exist invertible matrices P, Q ∈ Rn×n such that 
+
+P SQ =
+
+Ik 00 0
+
+
+
+. (9) Rank is invariant under multiplication by invertible matrices, hence 
+
+rank( S + BA ) = rank( P SQ + P BAQ ). (10) Define eB := P B, eA := AQ. 
+
+Because P and Q are invertible and A, B are drawn from absolutely continuous distributions, eA, eB are also absolutely continuous. We show that some m × m minor of 
+
+P SQ + eB eA
+
+is not the zero polynomial in the entries of eA, eB. Let 
+
+t := m − k. 
+
+Then 0 ≤ t ≤ r. Choose a deterministic value of eB, eA as follows: 
+
+eB{k+1 ,...,k +t},{1,...,t } = It, eA{1,...,t },{k+1 ,...,k +t} = It,
+
+and set all other entries of eB, eA equal to zero. Then eB eA places an identity block on coordinates k + 1 , . . . , k + t. Therefore 
+
+P SQ + eB eA
+
+contains an m × m identity block, and hence has rank at least m.Thus, at least one m × m determinant polynomial is not identically zero. Since the zero set of a nonzero polynomial has Lebesgue measure zero, the same minor is nonzero almost surely for absolutely continuous eA, eB. Hence 
+
+rank( S + BA ) ≥ m almost surely . (11) On the other hand, by subadditivity of rank, 
+
+rank( S + BA ) ≤ rank( S) + rank( BA ) ≤ k + r. (12) Also rank( S + BA ) ≤ n. Therefore 
+
+rank( S + BA ) ≤ min {n, k + r} = m. (13) Combining Equations (11) and (13) gives 
+
+rank( S + BA ) = m = min {n, k + r}
+
+almost surely. 14 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+B.2. Structural rank and maximum matchings Definition B.2 (Structural rank) . For a support pattern Ω ⊆ [n] × [n], define the bipartite graph 
+
+GΩ = ([ n]row , [n]col , Ω) .
+
+The structural rank of Ω is the largest rank achievable by any matrix whose nonzero entries are restricted to the support Ω.
+
+Lemma B.3 (Structural rank equals maximum matching) . Let XΩ ∈ Rn×n be a sparse matrix supported on Ω. Assume that its nonzero entries are algebraically generic. Then 
+
+rank( XΩ) = ν(Ω) almost surely . (14) 
+
+Proof. Let 
+
+m := ν(Ω) .
+
+Since the graph GΩ has a matching of size m, there exist row and column sets I, J ⊆ [n], with |I| = |J| = m, such that the subgraph induced by I, J contains a perfect matching. Consider the determinant of the submatrix XΩ,I,J . Expanding this determinant as a polynomial in the nonzero variables 
+
+{xij : ( i, j ) ∈ Ω},
+
+the perfect matching contributes a monomial of the form 
+
+Y
+
+> (i,j )∈M
+
+xij . (15) Different perfect matchings correspond to different monomials. Therefore this determinant polynomial is not identically zero. Since the entries are algebraically generic, the determinant is nonzero almost surely. Hence 
+
+rank( XΩ) ≥ m. (16) Conversely, suppose that rank( XΩ) ≥ m + 1 . Then there exists an (m + 1) × (m + 1) minor that is not identically zero as a polynomial in the nonzero entries. In the determinant expansion of this minor, at least one permutation monomial must be present. Such a monomial corresponds to a matching of size m + 1 in GΩ, contradicting the maximality of ν(Ω) = m.Therefore 
+
+rank( XΩ) ≤ m. (17) Combining Equations (16) and (17) gives 
+
+rank( XΩ) = ν(Ω) 
+
+almost surely. 
+
+B.3. Hall deficiency and weighted Hall failure Definition B.4 (Neighborhood of a row set) . For a set I ⊆ [n] of row vertices, define its neighborhood in the support graph 
+
+GΩ by 
+
+NΩ(I) := {j ∈ [n] : ∃i ∈ I such that (i, j ) ∈ Ω}. (18) 
+
+Lemma B.5 (Deficiency form of Hall’s theorem) . For the bipartite graph GΩ,
+
+n − ν(Ω) = max  
+
+> I⊆[n]
+
+(|I| − | NΩ(I)|) . (19) 
+
+Consequently, 
+
+ν(Ω) < n − r
+
+if and only if there exists I ⊆ [n] such that 
+
+|NΩ(I)| ≤ | I| − r − 1. (20) 15 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Proof. This is the standard deficiency form of Hall’s theorem. A matching of size at least n − r exists if and only if every row set I ⊆ [n] has deficiency at most r, namely 
+
+|I| − | NΩ(I)| ≤ r. 
+
+Equivalently, 
+
+|NΩ(I)| ≥ | I| − r for all I ⊆ [n].
+
+Thus, the condition fails if and only if there exists I ⊆ [n] such that 
+
+|NΩ(I)| ≤ | I| − r − 1.
+
+Lemma B.6 (Weighted Hall failure bound) . Assume that the edge indicators Ωij are independent Bernoulli random variables with probabilities qij . Let R := r + 1 . For I, U ⊆ [n], define 
+
+Λ( I, U ) := X
+
+> i∈I, j ∈U
+
+qij .
+
+Then 
+
+P[ν(Ω) < n − r] ≤ X     
+
+> I,U ⊆[n]
+> |I|≥ R, |U|≥ R, |I|+|U|≥ n+R
+
+exp( −Λ( I, U )) . (21) 
+
+Proof. By Theorem B.5, the event ν(Ω) < n − r occurs if and only if there exists I ⊆ [n] such that 
+
+|NΩ(I)| ≤ | I| − r − 1.
+
+Let J := NΩ(I) and U := Jc. Then no edges exist from I to U . Moreover, 
+
+|U | = n − | J| ≥ n − | I| + r + 1 .
+
+Equivalently, 
+
+|I| + |U | ≥ n + r + 1 = n + R. 
+
+Also, such a violation can occur only when |I| ≥ R, and the previous display implies |U | ≥ R. Thus, Hall failure implies the existence of sets I, U ⊆ [n] satisfying 
+
+|I| ≥ R, |U | ≥ R, |I| + |U | ≥ n + R, 
+
+with no edges in the rectangle I × U .For fixed I, U , the probability that there are no edges in I × U is 
+
+Y
+
+> i∈I, j ∈U
+
+(1 − qij ) ≤ exp 
+
+− X
+
+> i∈I, j ∈U
+
+qij 
+
+ = exp( −Λ( I, U )) .
+
+Taking a union bound over all admissible I, U gives the result. 
+
+B.4. Proof of the deterministic rank proposition 
+
+Proof of Theorem 4.5. By Theorem B.3, the sparse matrix SΩ satisfies 
+
+rank( SΩ) = ν(Ω) 
+
+almost surely under the generic-values assumption. Applying Theorem B.1 with S = SΩ, we get 
+
+rank( SΩ + BA ) = min {n, rank( SΩ) + r}
+
+= min {n, ν (Ω) + r} (22) almost surely. In particular, if 
+
+ν(Ω) ≥ n − r, 
+
+then 
+
+rank( SΩ + BA ) = n
+
+almost surely. 16 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+B.5. Proof of the main full-rank theorem 
+
+Proof of Theorem 4.6. Condition on Q, K . Then the angular collision probabilities qij are fixed numbers in [0 , 1] . By Theorem B.6, 
+
+P[ν(Ω) < n − r | Q, K ] ≤ ∆r (Q, K ).
+
+Therefore, with probability at least 1 − ∆r (Q, K ), we have 
+
+ν(Ω) ≥ n − r. 
+
+On this event, Theorem 4.5 implies 
+
+rank( SΩ + BA ) = n
+
+almost surely over the generic low-rank factors A, B . Hence 
+
+P[rank( SΩ + BA ) = n | Q, K ] ≥ 1 − ∆r (Q, K ).
+
+# C. Interpretable High-Probability Corollaries 
+
+The main theorem gives the full-rank probability through the quantity ∆r (Q, K ). In this section, we give several sufficient conditions under which ∆r (Q, K ) ≤ n−c, so that 
+
+P[rank( SΩ + BA ) = n | Q, K ] ≥ 1 − n−c.
+
+These corollaries are not meant to exhaust all possible conditions. Rather, they show different ways to interpret the rank guarantee: through uniform cut-density, through a conservative worst-case angular lower bound, and through an idealized isotropic mean model. 
+
+C.1. A combinatorial rectangle bound Lemma C.1 (A binomial rectangle bound) . Let R ∈ [n]. Suppose a, h ∈ { R, . . . , n } satisfy 
+
+a + h ≥ n + R. 
+
+Then 
+
+log 
+
+na
+
+
+
++ log 
+
+nh
+
+
+
+≤ 8 ah n log en R . (23) 
+
+Proof. We use the standard bound 
+
+nt
+
+
+
+=
+
+ nn − t
+
+
+
+≤
+
+ en 
+
+min {t, n − t}
+
+min {t,n −t}
+
+,
+
+with the convention that the corresponding term is zero when min {t, n − t} = 0 .First suppose a ≤ n/ 2. Since a + h ≥ n + R, we have 
+
+n − h ≤ a − R ≤ a. 
+
+Therefore, 
+
+log 
+
+na
+
+
+
++ log 
+
+nh
+
+
+
+= log 
+
+na
+
+
+
++ log 
+
+ nn − h
+
+
+
+≤ a log en a + ( n − h) log en n − h
+
+≤ 2a log en a
+
+≤ 2a log en R . (24) 17 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Also h ≥ n/ 2, so ah/n ≥ a/ 2. Hence 
+
+log 
+
+na
+
+
+
++ log 
+
+nh
+
+
+
+≤ 4 ah n log en R .
+
+The case h ≤ n/ 2 is symmetric. It remains to consider the case a > n/ 2 and h > n/ 2. Then 
+
+na
+
+ nh
+
+
+
+≤ 22n,
+
+so 
+
+log 
+
+na
+
+
+
++ log 
+
+nh
+
+
+
+≤ 2n log 2 .
+
+Since a > n/ 2 and h > n/ 2, we have ah/n > n/ 4. Also log( en/R ) ≥ 1. Therefore 
+
+8 ah n log en R ≥ 2n ≥ 2n log 2 .
+
+Combining the cases proves the claim. 
+
+C.2. Deficiency-aware collision density Corollary C.2 (Deficiency-aware collision density) . Fix c > 0, and suppose 0 ≤ r < n . Let 
+
+R := r + 1 ,
+
+and define 
+
+pr,c := 1
+
+n
+
+
+
+8 log en R + (c + 2) log nR
+
+
+
+. (25) 
+
+Suppose that for every pair of sets I, U ⊆ [n] satisfying 
+
+|I| ≥ R, |U | ≥ R, |I| + |U | ≥ n + R, 
+
+we have the cut-density lower bound 
+
+Λ( I, U ) = X
+
+> i∈I, j ∈U
+
+qij ≥ pr,c |I|| U |. (26) 
+
+Then, under the assumptions of Theorem 4.6, 
+
+P[rank( SΩ + BA ) = n | Q, K ] ≥ 1 − n−c. (27) 
+
+Proof. Let 
+
+R := r + 1 .
+
+Recall from Theorem 4.6 that the failure probability is bounded by 
+
+∆r (Q, K ) = X     
+
+> I,U ⊆[n]
+> |I|≥ R, |U|≥ R, |I|+|U|≥ n+R
+
+exp( −Λ( I, U )) .
+
+For fixed cardinalities 
+
+a := |I|, h := |U |,
+
+the cut-density assumption gives 
+
+Λ( I, U ) ≥ pr,c ah. 
+
+18 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Therefore, 
+
+∆r (Q, K ) ≤ X
+
+> a,h ∈{ R,...,n }
+> a+h≥n+R
+
+na
+
+ nh
+
+
+
+exp( −pr,c ah ). (28) By the definition of pr,c ,
+
+pr,c ah = ah n
+
+
+
+8 log en R + (c + 2) log nR
+
+
+
+.
+
+Using Theorem C.1, 
+
+log 
+
+na
+
+
+
++ log 
+
+nh
+
+
+
+≤ 8 ah n log en R .
+
+Hence, for each admissible cardinality pair (a, h ),
+
+na
+
+ nh
+
+
+
+exp( −pr,c ah ) ≤ exp 
+
+
+
+− ah nR (c + 2) log n
+
+
+
+. (29) Since a, h ≥ R and a + h ≥ n + R, the product ah is minimized at (a, h ) = ( R, n ) or (n, R ). Thus 
+
+ah ≥ nR. 
+
+Therefore each admissible cardinality pair contributes at most 
+
+n−(c+2) .
+
+There are at most n2 admissible pairs (a, h ). Consequently, 
+
+∆r (Q, K ) ≤ n2 · n−(c+2) = n−c.
+
+Applying Theorem 4.6 completes the proof. The threshold pr,c is deficiency-aware. When r = 0 , the sparse graph itself must contain a perfect matching, and the sufficient sparse density has the familiar O(log n/n ) scaling. When r > 0, the sparse graph is allowed to have matching deficiency up to r, and the rank-r low-rank branch fills the missing directions. 
+
+C.3. Conservative worst-case angular condition Corollary C.3 (Conservative worst-case angular condition) . Fix c > 0, suppose 0 ≤ r < n , and let pr,c be defined as in Equation (25) . Let 
+
+ρmin := min  
+
+> i,j
+
+ρij .
+
+If 
+
+1 − exp( −Lsργ
+
+> min
+
+) ≥ pr,c , (30) 
+
+then, under the assumptions of Theorem 4.6, 
+
+P[rank( SΩ + BA ) = n | Q, K ] ≥ 1 − n−c. (31) 
+
+Equivalently, when pr,c < 1 and ρmin > 0, it is sufficient that 
+
+Ls ≥ − log(1 − pr,c )
+
+ργ
+
+> min
+
+. (32) 
+
+Proof. For every pair (i, j ),
+
+qij ≥ 1 − exp( −Lsργij ).
+
+By definition of ρmin ,
+
+ρij ≥ ρmin for all i, j. 
+
+19 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Therefore, 
+
+qij ≥ 1 − exp( −Lsργ
+
+> min
+
+).
+
+If 
+
+1 − exp( −Lsργ
+
+> min
+
+) ≥ pr,c ,
+
+then qij ≥ pr,c for all i, j . Hence, for every admissible rectangle I × U ,
+
+Λ( I, U ) = X
+
+> i∈I, j ∈U
+
+qij ≥ pr,c |I|| U |.
+
+Thus the cut-density condition in Theorem C.2 holds, and the desired high-probability full-rank conclusion follows. Finally, when pr,c < 1 and ρmin > 0, the inequality 
+
+1 − exp( −Lsργ
+
+> min
+
+) ≥ pr,c 
+
+is equivalent to 
+
+exp( −Lsργ
+
+> min
+
+) ≤ 1 − pr,c ,
+
+which holds whenever 
+
+Ls ≥ − log(1 − pr,c )
+
+ργ
+
+> min
+
+.
+
+Remark C.4 (Worst-case angular conditions are pessimistic) . Theorem C.3 uses the minimum angular similarity over all 
+
+n2 query-key pairs and is therefore conservative. In practice, full rank does not require every pair to have large collision probability; it only requires that no Hall-relevant rectangle has too little total collision mass. Thus, some individual pairs may have very small collision probability, as long as no large query set is separated from too many key vertices. 
+
+C.4. Isotropic mean Hoeffding certificate Corollary C.5 (Isotropic mean Hoeffding certificate) . Fix c > 0, δ ∈ (0 , 1) , and suppose 0 ≤ r < n . Let 
+
+R := r + 1 .
+
+For a, h ∈ { R, . . . , n } satisfying a + h ≥ n + R, define 
+
+τa,h,c := log  na
+
+ + log  nh
+
+ + ( c + 2) log nah , (33) 
+
+and 
+
+βa,h,δ := 
+
+s
+
+log  na
+
+ + log  nh
+
+ + log( n2/δ )2ah . (34) 
+
+Let 
+
+Θr,c,δ := max 
+
+> a,h ∈{ R,...,n }
+> a+h≥n+R
+
+(τa,h,c + βa,h,δ ) . (35) 
+
+Assume an idealized isotropic collision-probability model in which the entries qij ∈ [0 , 1] are independent random variables with common mean μq . Moreover, assume that the isotropic angular estimate is a conservative lower approximation to this mean: 
+
+μq ≥ ¯qiso − εiso , ¯qiso := 1 −  1 − 2−γ Ls
+
+, (36) 
+
+where εiso ≥ 0 measures the approximation slack. In the sparse-collision regime Ls2−γ ≪ 1,
+
+¯qiso = Ls2−γ + O L2s 2−2γ  .
+
+If 
+
+¯qiso − εiso ≥ Θr,c,δ , (37) 20 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+then, with probability at least 1 − δ over the draw of the probability matrix (qij ), all Hall-relevant rectangles satisfy 
+
+1
+
+|I|| U |
+
+X
+
+> i∈I, j ∈U
+
+qij ≥ τ|I|,|U |,c . (38) 
+
+Consequently, under Theorems 4.3 and 4.4, with probability at least 1 − δ over the draw of (qij ),
+
+P[rank( SΩ + BA ) = n | (qij )i,j ] ≥ 1 − n−c. (39) 
+
+Equivalently, over the joint randomness of the collision probabilities, the sparse support, and the low-rank factors, 
+
+P[rank( SΩ + BA ) = n] ≥ 1 − δ − n−c. (40) 
+
+Proof. Fix admissible cardinalities a, h ∈ { R, . . . , n } satisfying 
+
+a + h ≥ n + R. 
+
+For fixed sets I, U ⊆ [n] with |I| = a and |U | = h, define 
+
+q(I, U ) := 1
+
+ah 
+
+X
+
+> i∈I, j ∈U
+
+qij .
+
+Under the idealized isotropic collision-probability model, the entries qij ∈ [0 , 1] are independent with common mean μq .Hence Hoeffding’s inequality gives 
+
+P [q(I, U ) < μ q − βa,h,δ ] ≤ exp( −2ahβ 2 
+
+> a,h,δ
+
+).
+
+By the definition of βa,h,δ ,
+
+exp( −2ahβ 2 
+
+> a,h,δ
+
+) = exp 
+
+
+
+− log 
+
+na
+
+
+
+− log 
+
+nh
+
+
+
+− log( n2/δ )
+
+
+
+.
+
+Taking a union bound over all  na
+
+  nh
+
+ pairs of sets with these cardinalities, the probability that any such rectangle violates the bound is at most δn2 .
+
+Taking another union bound over at most n2 admissible cardinality pairs (a, h ), we obtain that, with probability at least 
+
+1 − δ, every Hall-relevant rectangle satisfies 
+
+q(I, U ) ≥ μq − β|I|,|U |,δ .
+
+By assumption, 
+
+μq ≥ ¯qiso − εiso ≥ Θr,c,δ .
+
+Since 
+
+Θr,c,δ = max 
+
+> a,h ∈{ R,...,n }
+> a+h≥n+R
+
+(τa,h,c + βa,h,δ ) ,
+
+it follows that every Hall-relevant rectangle satisfies 
+
+q(I, U ) ≥ τ|I|,|U |,c .
+
+Equivalently, 
+
+Λ( I, U ) = X
+
+> i∈I, j ∈U
+
+qij ≥ | I|| U |τ|I|,|U |,c .
+
+By the definition of τa,h,c ,
+
+Λ( I, U ) ≥ log 
+
+ n
+
+|I|
+
+
+
++ log 
+
+ n
+
+|U |
+
+
+
++ ( c + 2) log n. 
+
+21 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Therefore, 
+
+∆r = X     
+
+> I,U ⊆[n]
+> |I|≥ R, |U|≥ R, |I|+|U|≥ n+R
+
+exp( −Λ( I, U )) 
+
+≤ X
+
+> a,h ∈{ R,...,n }
+> a+h≥n+R
+
+na
+
+ nh
+
+
+
+exp 
+
+
+
+− log 
+
+na
+
+
+
+− log 
+
+nh
+
+
+
+− (c + 2) log n
+
+
+
+≤ n2 · n−(c+2) = n−c. (41) Applying Theorem 4.6 conditionally on the realized probability matrix (qij ) gives 
+
+P[rank( SΩ + BA ) = n | (qij )i,j ] ≥ 1 − n−c
+
+with probability at least 1 − δ over the draw of (qij ).Finally, by the union bound over the two sources of failure, namely failure of the probability matrix to satisfy the rectangle-average condition and failure of the sampled sparse graph to have matching size at least n − r, the joint success probability is at least 
+
+1 − δ − n−c.
+
+The role of δ in Theorem C.5 is to control the probability that the random collision-probability matrix itself has a low-density Hall-relevant cut. The term n−c controls the subsequent failure probability of the sampled sparse graph, conditioned on that probability matrix. In the common sparse-collision regime, the practical design rule suggested by Equation (37) is 
+
+Ls2−γ ≳ Θr,c,δ .
+
+Thus, increasing Ls increases sparse coverage, while increasing γ makes collisions more selective. 
+
+C.5. Interpretation and technical remarks 
+
+Remark C.6 (Interpretation) . The rank guarantee is an expressivity statement. It shows that the hybrid sparse + low-rank construction avoids the rank collapse of purely low-rank attention. The sparse collision graph contributes rank through its maximum matching, while the low-rank branch supplies r additional dense directions. Thus, sparse matching size + low-rank dimension ≥ n
+
+is sufficient for the hybrid attention matrix to be full rank. 
+
+Remark C.7 (Scope of the probabilistic assumptions) . The corollaries above should be read as interpretable regimes in which the error term in Theorem 4.6 becomes small. Some of these regimes make simplifying assumptions, such as independent edge sampling or an idealized isotropic model for the collision probabilities. These assumptions are not intended to fully model every practical hashing implementation. Rather, they expose the mechanism behind the algorithm: if angular sparse sampling produces enough coverage across Hall-relevant cuts, then the sparse component has matching deficiency at most r,and the rank-r low-rank component fills the remaining directions. 
+
+Remark C.8 (Independence) . Theorem 4.6 is stated under an independent angular edge model. Practical LSH collisions may be dependent because the same hash functions are reused across multiple query-key pairs. The deterministic implication in Theorem 4.5, however, does not require independence. It applies to any realized support Ω satisfying ν(Ω) ≥ n − r.Independence is used only to control the probability that this matching condition fails. 
+
+Remark C.9 (Deterministic version) . The deterministic implication 
+
+ν(Ω) ≥ n − r =⇒ rank( SΩ + BA ) = n
+
+holds under the generic sparse-values and generic low-rank assumptions, and does not require independence of the sparse support. Independence is used only to upper bound the probability that ν(Ω) < n − r.22 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers    
+
+> Table 6. Main dataset-level hyperparameters. Here Ndenotes the input sequence length after tokenization or patchification.
+
+Dataset / Task N Layers Heads d MLP dim Batch Grad. accum. LR WD Epochs 
+
+IMDB 512 1 2 128 512 32 1 1 × 10 −5 5 × 10 −5 150 Fashion-MNIST 784 2 4 384 1536 32 1–2 6 × 10 −4 0.1 150 Oxford-IIIT Pet 16,384 2 4 384 1536 32 1–2 6 × 10 −4 0.1 150 Flowers-102 16,384 2 4 384 1536 32 1–2 6 × 10 −4 0.1 150 Food-101 16,384 8 8 512 2048 8 4 3 × 10 −4 0.001 100 ArXiv classification 32,000 4 4 256 1024 8 16 3 × 10 −4 0.01 33 Text Retrieval 64,000 4 4 256 1024 4 16 3 × 10 −4 0.01 50 
+
+Remark C.10 (When exact sparse values are not generic) . If the sparse exact values SΩ = Ω ⊙ M ⋆ are deterministic and not assumed to be generic, one can use the deterministic condition 
+
+rank( SΩ) ≥ n − r. 
+
+Then Theorem B.1 alone implies 
+
+rank( SΩ + BA ) = n
+
+almost surely over the low-rank factors A, B . The matching condition ν(Ω) ≥ n − r is a support-level sufficient condition for this rank condition under generic sparse values. 
+
+Remark C.11 (Independent safety sparsifier) . If one wants a literal independent-edge guarantee while preserving a practical LSH collision rule, one may augment the LSH support by an independent safety sparsifier: 
+
+Ω = Ω LSH ∪ Ωsafe , Ωsafe ,ij ∼ Bernoulli( pr,c ) .
+
+By Theorem C.2, the safety support alone is sufficient to guarantee 
+
+rank( SΩ + BA ) = n
+
+with probability at least 1 − n−c, under the generic sparse-values and generic low-rank assumptions. Its expected number of additional edges is 
+
+n2pr,c = n
+
+
+
+8 log en r + 1 + (c + 2) log nr + 1 
+
+
+
+.
+
+# D. Experiment Hyperparameters 
+
+We evaluate all attention variants using encoder-style, non-causal Transformer architectures. Unless otherwise stated, we train with cross-entropy loss and the AdamW optimizer. We use dropout 0.1, set qkv bias=False , and fix the random seed to 42. For the hybrid methods, the gate is a two-layer MLP with SiLU activation and two independent sigmoid outputs, one for the sparse branch and one for the RACE branch. We do not normalize the gates. For the image experiments, Fashion-MNIST uses 28 × 28 grayscale images with patch size 1, giving N = 784 . Oxford-IIIT Pet and Flowers-102 use 512 × 512 RGB images with patch size 4, giving 128 × 128 = 16 ,384 image tokens. For Food-101, we use the long-image setting with 512 × 512 inputs, patch size 4, and N = 16 ,384 . The vision models use a learnable class token and learnable positional embeddings. For ArXiv classification, we tokenize documents using a basic English tokenizer, keep documents with at least 1,000 raw tokens, and perform class-balanced streaming packing. Documents from the same class are concatenated until the target sequence length is reached. For the reported ArXiv classification setting, we use N = 32 ,000 , a vocabulary limit of 50,000, and packed train/test examples produced from the class-balanced long-document subset. For Text Retrieval, we construct binary retrieval-pair examples from the packed ArXiv documents. Each input is formatted as 
+
+[CLS] doc a [SEP] doc b,
+
+with label 1 if the two documents come from the same ArXiv class and label 0 otherwise. We use 4,000 training pairs and 1,000 test pairs at N = 64 ,000 .23 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+Table 7. Attention-specific hyperparameters. 
+
+Component Text settings Vision settings 
+
+RACE hash bits γ 4 for ArXiv/Retrieval, 3 for IMDB 2RACE tables Ls 4 for ArXiv/Retrieval, 2 for IMDB 5RACE ensembles M 1 for ArXiv/Retrieval, 2 for IMDB 1Sort LSH bits 5 4–5 Sort LSH block size s 256 for ArXiv/Retrieval, 32 for IMDB 32 Sort LSH min length 4096 for ArXiv/Retrieval, 256 for IMDB 256 Neighbor blocks 0 0Gate hidden dim 64 128 Gate normalization False False 
+
+ϵ for denominator correction 10 −6 10 −6
+
+For ELSAA, the sparse branch is Sort LSH and the low-rank branch is RACE. The output is computed as 
+
+O = gsparse msparse Osparse + grace Orace ,
+
+where gsparse and grace are token-wise sigmoid gates. In the denominator-aware version, we use 
+
+msparse = dsparse 
+
+dsparse + λd race + ϵ .
+
+For the scalar-λ version, λ is parameterized as 
+
+λ = exp( ℓλ),
+
+initialized with λ = 1 .0, and learned during training. For the input-dependent version, we use 
+
+λi = c + σ(w⊤qi + b),
+
+where c is initialized to 0.3, is learnable, and is constrained to be nonnegative. The bias is initialized so that the initial average target is approximately 0.8. We detach qi from the lambda path, use λmin = 10 −6, and initialize w with standard deviation 10 −3.For IMDB, we build a long-review subset at N = 512 . Reviews with length between N and 2N are kept directly, longer reviews are split into overlapping windows with stride N/ 2, and shorter reviews from the same class are concatenated until they reach the target length. During training, we apply light EDA augmentation using random deletion with probability 0.05 or random token swaps. For the vision datasets, we use standard data augmentation. Fashion-MNIST uses random horizontal flipping and random cropping with padding 4 during training. Oxford-IIIT Pet, Flowers-102, and Food-101 use random resized cropping and horizontal flipping for training, and resize followed by center crop for validation. RGB image datasets are normalized with ImageNet mean and standard deviation. 
+
+# E. Numerical Complexity Example 
+
+Attention interaction count. We give a concrete example to illustrate the scale of the savings from the sparse–low-rank construction. For 
+
+N = 32 ,000 , s = 256 , Ls = 4 , γ = 4 ,
+
+full attention computes 
+
+N 2 = 1 .024 × 10 9
+
+query–key interactions per head. The sparse sortLSH branch computes 
+
+N s = 32 ,000 · 256 = 8 .192 × 10 6
+
+selected interactions, which is 0.8% of full attention. The RACE branch uses 
+
+N L s2γ = 32 ,000 · 4 · 16 = 2 .048 × 10 6
+
+24 ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers 
+
+bucket interactions, which is 0.2% of full attention. Therefore, ELSAA uses 
+
+N (s + Ls2γ ) = 32 ,000(256 + 64) = 1 .024 × 10 7
+
+interactions, which is 1.0% of full attention. This corresponds to roughly a 99 .0% reduction in attention interactions compared with exact dense attention. 
+
+Hashing and sorting overhead. The hashing overhead is linear or near-linear in sequence length. The sortLSH branch requires angular hash projections and sorting, approximately 
+
+O(N d γ sort ) + O(N log N ),
+
+where γsort denotes the number of hash bits used by the sparse selector. The RACE branch requires soft-hash projections and bucket-feature construction, approximately 
+
+O(N d L sγ) + O(N L sγ2γ ).
+
+In our experiments, s, Ls, γ, and γsort are fixed hyperparameters. Therefore, these terms scale linearly or near-linearly in N ,whereas dense attention scales quadratically. For sufficiently long sequences, the hashing and sorting overhead is dominated by the saved N 2 query–key computation. 
+
+Parameter overhead. The additional learnable parameters introduced by ELSAA are small compared with the base Transformer layer. The standard attention projections 
+
+WQ, W K , W V , W O ∈ Rd×d
+
+already contribute O(d2) parameters. In contrast, the scalar-λ version of ELSAA adds only O(1) parameters, a query-dependent λ version adds O(d) parameters, and the gate MLP adds O(dg ) parameters for gate hidden width g ≪ d. Thus, the parameter overhead is negligible relative to the base attention projections, while the main savings come from reducing the input-dependent attention computation. 25
