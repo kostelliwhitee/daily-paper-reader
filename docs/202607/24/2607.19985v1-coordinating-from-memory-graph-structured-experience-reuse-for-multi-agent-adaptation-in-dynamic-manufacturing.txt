@@ -1,0 +1,522 @@
+Title: Coordinating from Memory: Graph-Structured Experience Reuse for Multi-Agent Adaptation in Dynamic Manufacturing
+
+URL Source: https://arxiv.org/pdf/2607.19985v1
+
+Published Time: Thu, 23 Jul 2026 00:43:12 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Coordinating from Memory: Graph-Structured Experience Reuse for Multi-Agent Adaptation in Dynamic Manufacturing 
+
+Chengxiao Dai 1, Zhanhui Lin 1, Zhaokun Yan 3, Youyang Ni 4, Chenjun Lei 5, Luyan Zhang 2,∗
+
+Abstract — Dynamic manufacturing environments require multi-agent systems to coordinate effectively under frequent operational disturbances such as machine failures, urgent job arrivals, and processing time variations. Existing multi-agent reinforcement learning approaches treat each distur-bance episode independently, discarding valuable coordination experience that could accelerate future adaptation. In this paper, we propose a Graph-Structured Experiential Memory (GSEM) framework for multi-agent coordination in dynamic manufacturing. The framework encodes historical coordination episodes as heterogeneous relational graphs that capture task dependencies, machine states, and inter-agent collaboration patterns. When a new disturbance occurs, a graph neural network-based retrieval mechanism identifies structurally simi-lar past episodes, enabling experience-guided policy adaptation rather than learning from scratch. Experiments on dynamic flexible job-shop scheduling benchmarks with three disturbance types show that GSEM reduces makespan by 4.1%– 10 .0%and adaptation time by 33 %– 38 % compared to the strongest memory-augmented baseline, with the advantage increasing under higher disturbance frequency. Ablation studies and cross-disturbance transfer experiments further validate the necessity of graph-structured encoding and similarity-based re-trieval, and demonstrate the cross-disturbance generalizability of learned coordination patterns. 
+
+I. INTRODUCTION Modern manufacturing systems in the Industry 4.0 era are characterized by high product variety, short production cycles, and frequent uncertainty, making shop-floor schedul-ing much more challenging than in traditional static settings [1]. In practice, production plans are often disrupted by machine breakdowns, urgent job arrivals, material short-ages, and processing-time fluctuations, which may propagate across machines, jobs, and production stages [2]. Dynamic scheduling should therefore be viewed not simply as repeated local rescheduling, but as an online coordination problem in which distributed decision makers detect disturbances and adjust actions to maintain production performance [2], [3]. Multi-agent systems provide a natural foundation for dis-tributed manufacturing control by decomposing decision-making across machines or production units while preserv-ing system-level coordination objectives [3]. Based on this 
+
+> ∗Corresponding author (
+
+zhang.luya@northeastern.edu ). 
+
+> 1School of Computer Science, University of Sydney, Sydney, Australia.
+> 2Khoury College of Computer Sciences, Northeastern University, Boston, USA.
+> 3School of Computation, Information and Technology, Technical Univer-sity of Munich, Munich, Germany.
+> 4School of Life and Environmental Sciences, University of Sydney, Sydney, Australia.
+> 5College of Business and Economics, Australian National University, Canberra, Australia.
+
+paradigm, reinforcement learning (RL) and multi-agent rein-forcement learning (MARL) have shown strong potential for dynamic scheduling, especially in flexible job-shop environ-ments [4], [5]. Recent studies have reported promising results using cooperative MARL methods in dynamic manufacturing scenarios [6]–[8]. However, most existing approaches still treat disturbance episodes as largely independent. When a new disruption occurs, agents usually rely on the current policy or replayed transitions, which mainly improve training efficiency rather than support structured adaptation during execution [9], [10]. As a result, current MARL methods often show slow adaptation, weak reuse of coordination experience, and limited generalization across heterogeneous disturbances [4], [6]. This limitation is important because disturbances in man-ufacturing are rarely isolated. A local machine failure may trigger downstream waiting, queue imbalance, and coordina-tion conflicts among multiple agents [2]. Effective adaptation depends on whether the system can recall and reuse coordi-nation patterns from similar past situations, much as human operators handle disruptions by recalling similar incidents [11]. A key challenge is representation: manufacturing coor-dination is inherently relational, involving precedence con-straints, resource competition, and inter-agent dependencies that are difficult to preserve using flat state-action vectors [9], [10]. Graph neural networks (GNNs) can model such relational structures effectively [12]–[16], but have mainly been used for current-state encoding rather than experience storage. This paper proposes a Graph-Structured Experien-tial Memory (GSEM) framework that stores coordination episodes as heterogeneous relational graphs and retrieves structurally similar past experiences for rapid adaptation. The key insight is that what needs to be reused is not a raw past state, but a reusable recovery motif : the coordinated rerouting pattern after a breakdown, the queue rebalancing after an urgent job arrival, or the conflict resolution under processing time variation. These motifs are inherently relational, and flat episodic memory cannot preserve them. The main contributions of this paper are:  
+
+> •
+
+We propose graph-structured coordination memory for disturbance adaptation in multi-agent manufacturing, where past recovery episodes are stored as hetero-geneous relational graphs that preserve the structural dependencies essential for experience reuse.  
+
+> •
+
+We design a structure-aware memory retrieval mecha-nism that identifies relevant past episodes through GNN-based graph similarity with quality-recency weighting, arXiv:2607.19985v1 [cs.AI] 22 Jul 2026 rather than flat nearest-neighbor matching.  
+
+> •
+
+We integrate retrieved experience into multi-agent co-ordination through gated attention fusion and memory-conditioned communication, enabling agents to collec-tively exploit past recovery motifs for faster adaptation. II. RELATED WORK 
+
+A. Multi-Agent Coordination in Manufacturing 
+
+Multi-agent systems have been widely used in manufactur-ing scheduling and control because of their modularity, scal-ability, and fault tolerance [3]. Early studies mainly relied on rule-based coordination or contract-net-style negotiation, in which agents allocated tasks through predefined interaction protocols [17]. Although effective in stable environments, these approaches are less adaptable to disruptions such as machine failures, urgent job arrivals, and other dynamic events. With the development of learning-based scheduling, RL has been increasingly applied to manufacturing decision-making. Single-agent RL methods typically formulate scheduling as a Markov decision process and learn a cen-tralized dispatching policy for the shop floor [5]. However, they often face scalability challenges as the numbers of jobs, machines, and decisions increase. MARL distributes decision-making across multiple machines or production units [4]. Representative approaches include independent learning [18], value decomposition methods such as QMIX [7], and cooperative policy optimization methods such as Multi-Agent Proximal Policy Optimization (MAPPO) [8]. Recent studies have also shown the potential of adaptive multi-agent scheduling in dynamic manufacturing environ-ments [6]. Most MARL-based scheduling methods focus on reacting to the current state rather than reusing coordination expe-rience across disturbances. When disruptions occur, agents usually rely on learned policies or replay mechanisms, which may limit adaptation and generalization. 
+
+B. Memory-Augmented Learning 
+
+Memory augmentation has been widely studied to improve the adaptability of neural decision systems. Early architec-tures such as Neural Turing Machines and Differentiable Neural Computers introduced differentiable read-write mech-anisms that allow models to store and retrieve information beyond fixed network parameters [19], [20]. In reinforcement learning, experience replay and prioritized replay are stan-dard techniques for improving sample efficiency by reusing past transitions during training [9], [10]. More recently, episodic memory mechanisms have been proposed to support faster adaptation by storing and re-trieving past episodes rather than isolated transitions [21], [22]. These methods typically retrieve historical experiences through nearest-neighbor matching in an embedding space, allowing agents to recall useful behaviors in similar situa-tions. However, these methods store experience as fixed-dimensional vectors or flat transition sequences, which can-not preserve the relational dependencies among jobs, opera-tions, machines, and agents that are intrinsic to manufactur-ing coordination. 
+
+C. Graph Neural Networks in Manufacturing 
+
+Graph neural networks have emerged as an effec-tive tool for modeling relational structures in manufactur-ing and scheduling problems. Job-shop and flexible job-shop scheduling naturally involve precedence constraints, machine-operation compatibility, and resource conflicts, making graph-based representations suitable for learning scheduling policies [12]. Several studies have used GNNs to encode scheduling states and learn dispatching deci-sions, showing strong performance and generalization across problem instances [13], [14]. Heterogeneous graph neural networks further improve representational expressiveness by distinguishing different node and edge types, such as jobs, machines, operations, and resource relations [15]. In multi-agent settings, graph-based learning has also been used to model communication and coordination structures among agents [16]. By propagating information along rela-tional edges, GNNs allow agents to reason about neighboring states and interactions more effectively than flat feature encodings. Although graph-based methods capture relational structure effectively, they are mainly used to encode the current system state for reactive decision-making; their use as memory units for storing and retrieving historical coordination episodes has received much less attention. III. PROPOSED METHOD The goal of GSEM is not only to improve current-state encoding, but to store and retrieve reusable coordination structures from past disturbance recovery episodes. We con-sider a Dynamic Flexible Job-Shop Scheduling Problem (DFJSP) with n jobs J and m machines M, where each job consists of ordered operations with machine-dependent processing times. Dynamic disturbances, including machine breakdowns, urgent job arrivals, and processing time varia-tions, occur stochastically during execution. We model this as a Decentralized Partially Observable Markov Decision Process (Dec-POMDP) with N scheduling agents, each managing a disjoint subset of machines. The goal is to find a joint policy π∗ that minimizes the expected makespan Cmax 
+
+under disturbances. At each step t, each agent receives a shared reward composed of a progress term and a completion penalty: 
+
+rt = −α · ∆Cmax (t) − β · X
+
+> j∈J
+
+max(0 , C j − dj ) (1) where ∆Cmax (t) is the incremental makespan change, Cj is the completion time of job j, dj is its due date, and α, β are weighting coefficients. Dyna mic  Manufacturing 
+
+Eenvironment 
+
+Manufacturing 
+
+State Graph 
+
+Graph -Structured 
+
+Experiential Memory 
+
+Experience -Guided 
+
+Multi -Agent Coordination 
+
+Adapted Multi -Agent 
+
+Decisions 
+
+Phase I: Base MARL Pre -Training Phase II: Memory Population Phase III: Memory -Augmented Fi ne -Tuning         
+
+> Job1 Job2 Job3
+> Queue 1Queue 2Queue 3
+> Machine 1Machine 2Machine 3
+> Agent 1Agent 2Agent 3
+> Urgent
+> Job
+> Machine
+> Breakdown
+
+𝑂 11  𝑂 12  𝑂 21 
+
+𝑀 1 𝑀 2 𝑀 3
+
+𝐴 1 𝐴 2 𝐴 3   
+
+> Operation Machine Agent
+> Precedence Assignment
+> Management Conflict
+
+Memory Write 
+
+Memory Retrieval 
+
+Adaptive Decay 
+
+> Quality
+> Filtering
+> Episode
+> Selection
+> Top -k
+> Retrieval
+> Relevance
+> Update
+> Pre -disturbance
+> State
+> Post -disturbance
+> State
+> Graph
+> Episode
+> Current Graph
+> State (Query)
+> Aging / Pruning
+
+Retrieved Experiences 
+
+Attention -Based 
+
+Experience Fusion 
+
+Gating 
+
+Mechanism   
+
+> Agent 1Agent 2Agent 3
+> Coordinated Multi -Agent
+> Policies
+
+Machine 
+
+Assignment 
+
+Task Rerouting 
+
+Load Rebalancing 
+
+Recovery 
+
+Scheduling             
+
+> 𝒎 𝒕
+> (𝒊 ):memory -conditioned msg
+> attention aggregation
+> 𝑬 𝒍 =(𝑮 𝒍
+> 𝒑𝒓𝒆 ,𝑮 𝒍
+> 𝒑 𝒐𝒔𝒕 ,𝑨 𝒍 ,𝑹 𝒍
+> 𝒄𝒖𝒎 ,𝝁 𝒍 )
+
+High -quality episodes 
+
+written back to 
+
+memory Processing 
+
+> Time Variation
+
+Fig. 1. Overall framework of the proposed GSEM system. 
+
+A. Manufacturing State Graph 
+
+We represent the manufacturing state at each decision point as a heterogeneous graph Gt = ( Vt, Et) with three node types (operation, machine, and agent) and four edge types: 
+
+precedence (operation sequencing within jobs), assignment 
+
+(operation-to-compatible-machine links weighted by pro-cessing time), management (machine-to-agent ownership), and conflict (operations competing for the same machine). A Relational Graph Convolutional Network (R-GCN) en-coder produces node embeddings through L message-passing layers, and a type-aware readout generates a graph-level embedding by mean-pooling each node type separately and concatenating: 
+
+zG = ¯hop ¯hmc ¯hag  , ¯hτ = 1
+
+|V τ |
+
+X
+
+> v∈V τ
+
+h(L) 
+
+> v
+
+(2) This preserves the distinct semantics of different node types that would be lost in naive global pooling. 
+
+B. Graph-Structured Experiential Memory 
+
+The memory pool P stores bounded past coordination episodes. Each entry is a tuple 
+
+El = (Gpre  
+
+> l
+
+, Gpost  
+
+> l
+
+, Al, R cum  
+
+> l
+
+, μl) containing the state graphs before and after a disturbance, the joint action sequence during recovery, the cumulative reward, and metadata (disturbance type, severity, timestamp). 
+
+Memory Write. Episodes are filtered by two criteria before storage. First, episode boundaries are identified by detecting disturbance onset (a |∆Cmax | spike beyond 2σ
+
+of recent history) and recovery completion (per-step reward returning within 1σ of its pre-disturbance moving average). Second, only episodes whose cumulative reward satisfies 
+
+Rcum  
+
+> l
+
+≥ ¯R −κ·σR are retained, where ¯R and σR are running statistics and κ controls selectivity. 
+
+Memory Retrieval. When a disturbance occurs, the cur-rent state graph Gt is encoded and compared against stored entries using cosine similarity with a quality-recency weight: sim (Gt, E l) = z⊤Gt zGpre 
+
+> l
+
+∥zGt ∥ · ∥ zGpre  
+
+> l
+
+∥ · ˜Rl · e−η(t−τl) (3) where ˜Rl = ( Rcum  
+
+> l
+
+−Rmin )/(Rmax −Rmin ) ∈ [0 , 1] is a min-max-normalized quality score (needed because cumulative rewards are non-positive under Eq. (1)), and Rmin , R max are running statistics over P. Top-K episodes are then selected via maximal marginal relevance (MMR) to balance relevance and diversity. 
+
+Adaptive Decay. Each entry maintains a relevance score 
+
+ρl updated as: 
+
+ρl ← ρl · exp  −ηd(t − tlast  
+
+> l
+
+) + ⊮[El ∈ S t] · ∆ρ (4) where St is the top-K retrieved set at step t: retrieved entries receive a bonus ∆ρ and unused entries decay over time. When |P| exceeds capacity, the lowest-ρ entry is evicted. 
+
+C. Experience-Guided Coordination 
+
+Retrieved episodes are integrated into each agent’s policy through attention-based fusion and gating. For each retrieved episode El, the system exploits all stored components: the pre-disturbance graph Gpre  
+
+> l
+
+provides situational context, the post-recovery graph Gpost  
+
+> l
+
+encodes the target coordination state, and the action sequence Al supplies the recovery strat-egy. These are fused into a unified episode representation: 
+
+el = We
+
+h
+
+zGpre  
+
+> l
+
+∥zGpost 
+
+> l
+
+∥fa(Al)
+
+i
+
++ be (5) where fa(·) is a temporal mean-pooling over the action sequence embeddings. 
+
+Attention Fusion. Each agent i’s R-GCN embedding h(L)
+
+> vi
+
+serves as query, while the episode representations {el}Kl=1 serve as keys and values via cross-attention with learned projection matrices WQ, WK , WV ∈ Rd×d:
+
+α(i) 
+
+> l
+
+= softmax (WQh(L) 
+
+> vi
+
+)⊤(WK el)
+
+√d
+
+!
+
+,
+
+c(i) 
+
+> t
+
+=
+
+> K
+
+X
+
+> l=1
+
+α(i) 
+
+> l
+
+WV el
+
+(6) 
+
+Gating Mechanism. A learned gate g(i) 
+
+> t
+
+adaptively bal-ances between current state and retrieved experience: 
+
+g(i) 
+
+> t
+
+= σ
+
+
+
+Wg [h(L) 
+
+> vi
+
+∥c(i) 
+
+> t
+
+] + bg
+
+
+
+(7) 
+
+˜h(i) 
+
+> t
+
+= g(i) 
+
+> t
+
+⊙ c(i) 
+
+> t
+
++ (1 − g(i) 
+
+> t
+
+) ⊙ h(L) 
+
+> vi
+
+(8) The gate tends toward experience reliance immediately after a disturbance and shifts toward the current policy as the agent adapts. 
+
+Memory-Conditioned Communication. To enable col-lective experience-driven coordination, each agent i broad-casts a memory-conditioned message m(i) 
+
+> t
+
+= Wm ˜h(i) 
+
+> t
+
+and aggregates incoming messages via attention over its neighbor set N (i), defined as agents whose machines share at least one operation with those of i via assignment or conflict edges in Gt:
+
+βij = softmax (˜h(i) 
+
+> t
+
+)⊤m(j)
+
+> t
+
+√d
+
+!
+
+¯m(i) 
+
+> t
+
+= X 
+
+> j∈N (i)
+
+βij m(j)
+
+> t
+
+(9) The final policy πi(a(i) 
+
+> t
+
+|· ) takes the concatenation [˜h(i) 
+
+> t
+
+∥ ¯m(i) 
+
+> t
+
+]
+
+as input. 
+
+D. Training Procedure 
+
+Training proceeds in three phases: (I) base policy pre-training with MAPPO [8] without memory; (II) memory population by rolling out the Phase I policy, with ¯R, σ R in the quality filter initialized from the Phase I reward distribution; (III) end-to-end fine-tuning with memory retrieval active and ¯R, σ R continuously updated. In Phase III, the R-GCN encoder is additionally trained with a contrastive loss that pulls graphs of the same disturbance type together, where 
+
+G+ is sampled within ±5 recovery steps of Gt and {G l}Bl=1 
+
+are negatives from the current mini-batch: 
+
+Lcont = − log exp( sim (zGt , zG+ )/τ )
+
+PBl=1 exp( sim (zGt , zGl )/τ ) (10) During online adaptation, the agent detects disturbances, retrieves top-K episodes via Eqs. (3)–(4), applies experience fusion via Eqs. (5)–(9), and writes high-quality recovery episodes back to P. Parameters are updated with LMAPPO +
+
+c2Lcont .IV. EXPERIMENTS 
+
+A. Experimental Setup 
+
+We primarily evaluate GSEM on DFJSP instances with 10 
+
+jobs, 10 machines, and 5 scheduling agents, a scale consistent with widely used DFJSP benchmarks in the literature [12]– [14]. Each job consists of 3 to 6 operations, each compat-ible with 2 to 4 machines, with processing times sampled from U(1 , 20) . Three types of dynamic disturbances are injected during execution: machine breakdowns with failure rate λ=0 .03 per step and downtime drawn from U(5 , 20) ,urgent job arrivals at rate 0.05 per step, and processing time variations with perturbation factor δ ∼ U (0 .8, 1.2) . Three disturbance frequency levels are tested: Low, Medium, and High, with 2–3, 5–7, and 10 + events per episode. Adapt. 
+
+counts steps from disturbance onset until per-step reward recovers to within 1σ of its pre-disturbance moving average. We compare against shortest processing time (SPT) and earliest due date (EDD) dispatching rules, a genetic algo-rithm (GA) with reactive rescheduling, centralized proximal policy optimization (PPO), and MARL methods including QMIX [7], MAPPO [8], and MAPPO+ER with flat experi-ence replay. We further include two adapted baselines: GNN-Dispatch, a GNN-based reactive scheduler adapted from [13] without memory, and MAPPO+Epi, which augments MAPPO with flat episodic memory following [22]. The R-GCN encoder has L=3 layers with 128 -dimensional hidden features, and the policy network is a 2-layer multi-layer perceptron (MLP) with 256 units. We train with Adam at learning rate 3×10 −4, discount factor γ=0 .99 , and PPO clip-ping ϵ=0 .2 for 20 K Phase I and 30 K Phase II+III episodes. The memory pool capacity is |P| max =500 with retrieval size 
+
+K=5 . All results are averaged over 20 independent seeds on a server with dual AMD EPYC 9654 CPUs, 2 TB of DDR5 RAM, and 4× NVIDIA RTX 5090 GPUs. The contrastive loss weight is set to c2=0 .1, the decay rate to ηd=0 .01 ,and the quality threshold parameter to κ=1 .0. The reward coefficients are α=1 .0 and β=0 .5.
+
+B. Main Results 
+
+Table I summarizes the results across all scenarios. Two baseline comparisons are particularly informative. First, GNN-Dispatch achieves performance comparable to MAPPO despite using a graph neural network encoder, confirming that GNN-based encoding of the current state alone does not improve adaptation to dynamic disturbances. Second, MAPPO+Epi benefits from episodic retrieval and outper-forms MAPPO+ER, yet its reliance on flat state vectors limits its ability to preserve the relational recovery structures within coordination episodes. GSEM closes this gap by storing recovery motifs as graphs, consistently achieving the best performance with makespan reductions of 4.1%– 6.4%and adaptation speed improvements of 33 %– 38 % relative to MAPPO+Epi across all single-disturbance scenarios. The advantage of GSEM becomes more pronounced un-der mixed disturbances (Fig. 2). As disturbance frequency increases from Low to High, the makespan improvement TABLE I PERFORMANCE COMPARISON ON DFJSP ( 10 × 10 , 5 AGENTS ). M AKESPAN (Cmax ), A DAPTATION SPEED (A DAPT ., STEPS ), AND MACHINE 
+
+UTILIZATION (U ). Method 
+
+Single Disturbance (Medium Freq.) Mixed Disturbances (All Three Types) 
+
+Breakdown Urgent Job Time Variation Low Freq. Medium Freq. High Freq. 
+
+Cmax Adapt. Cmax Adapt. Cmax Adapt. Cmax U (%) Cmax U (%) Cmax U (%) SPT 312 ±19 – 298 ±14 – 267 ±13 – 285 ±15 68.2 334 ±19 61.5 398 ±27 53.8 EDD 325 ±20 – 285 ±15 – 274 ±12 – 291 ±15 66.8 341 ±23 59.7 405 ±29 52.1 GA 268 ±13 42 ±9 255 ±13 38 ±6 241 ±11 35 ±7 248 ±12 74.1 289 ±16 67.3 352 ±23 58.6 PPO 259 ±15 35 ±8 248 ±12 32 ±9 234 ±10 28 ±6 241 ±14 75.3 281 ±16 68.9 345 ±23 59.2 QMIX 251 ±15 31 ±6 242 ±10 29 ±7 229 ±10 25 ±5 235 ±10 76.8 274 ±15 70.2 336 ±21 60.8 MAPPO 243 ±12 28 ±7 235 ±11 26 ±5 223 ±9 22 ±5 228 ±11 78.4 265 ±12 72.1 324 ±19 62.5 MAPPO+ER 238 ±10 25 ±5 231 ±10 24 ±4 220 ±7 20 ±4 224 ±10 79.1 259 ±13 73.5 316 ±18 63.7 GNN-Disp. [13] 245 ±12 27 ±7 237 ±10 25 ±6 221 ±8 21 ±5 230 ±11 77.8 267 ±14 71.5 327 ±18 61.9 MAPPO+Epi [22] 233 ±11 22 ±4 227 ±9 21 ±4 217 ±8 18 ±4 220 ±9 80.3 253 ±10 74.8 309 ±17 65.1 
+
+GSEM (Ours) 218 ±9 14 ±4 214 ±8 13 ±3 208 ±7 12 ±3 209 ±10 83.6 237 ±9 78.4 278 ±15 71.2 Low Medium High 
+
+> Disturbance Frequency
+> 200
+> 250
+> 300
+> 350
+> 400
+> Makespan ( Cmax )
+> 5.0%
+> 6.3%
+> 10.0%
+> SPT
+> GA
+> MAPPO
+> MAPPO+ER
+> MAPPO+Epi
+> GSEM
+
+Fig. 2. Makespan under increasing disturbance frequency (mixed distur-bances). 
+
+over MAPPO+Epi grows from 5.0% to 10 .0%. Under high-frequency conditions, new disturbances arrive before previ-ous ones are fully resolved, creating cascading disruptions. GSEM mitigates this by retrieving relevant recovery patterns from its memory pool. 
+
+C. Training Convergence 
+
+Fig. 3 presents the learning curves under mixed distur-bances at medium frequency. In Phase I, all three meth-ods exhibit similar convergence. Once Phase II+III begins, MAPPO and MAPPO+ER plateau, while GSEM continues to improve as the memory pool accumulates high-quality coordination episodes. This confirms that reusing past re-covery structures provides a complementary learning signal that reactive policy optimization alone cannot capture. 
+
+D. Ablation Study 
+
+Table II reports ablation results under mixed disturbances at medium frequency. The results directly validate the ne-cessity of graph-structured recovery experience reuse. First, replacing graph memory with flat vectors (w/o Graph) 0 10 20 30 40 50  
+
+> Training Episodes ( ×10 3)
+> 240
+> 260
+> 280
+> 300
+> 320
+> 340
+> 360
+> 380
+> 400
+> Makespan ( Cmax )
+> Phase I Phase II+III
+> SPT (no learning)
+> MAPPO
+> MAPPO+ER
+> GSEM (Ours)
+> Memory benefit
+
+Fig. 3. Training curves under mixed disturbances (medium frequency). 
+
+increases makespan by 6.3%, confirming that the benefit comes from preserving relational recovery structure, not from memory augmentation alone. Second, replacing similarity-based retrieval with random retrieval (Random Retrieval) causes the largest degradation ( 8.0%), demonstrating that the system genuinely reuses past recovery motifs rather than ben-efiting from generic experience augmentation, as irrelevant experiences actively mislead agents. The gating mechanism and memory-conditioned communication contribute 4.2%and 5.1% improvements, respectively, by preventing negative transfer and enabling system-level experience sharing. 
+
+E. Computational Overhead 
+
+Compared to MAPPO, GSEM increases per-step inference time by approximately 18 % ( 3.4 ms to 4.0 ms per agent) and total training time by 31 % ( 14 .2 h vs. 10 .8 h for 50 Kepisodes). The memory pool with |P| max =500 requires approximately 120 MB of GPU memory. These overheads are modest and practical for manufacturing control where decision intervals are on the order of seconds. To verify scalability, we tested on a 15 ×15 instance with 8 agents: GSEM achieves 365 ±14 vs. 394 ±16 for MAPPO+Epi ( 7.4%TABLE II ABLATION STUDY (10 ×10, M IXED , M ED . F REQ .). T : MEAN TARDINESS .Variant Cmax Adapt. U (%) T
+
+GSEM (Full) 237 ±9 14 ±3 78.4 42 ±8
+
+w/o Graph (flat vector) 252 ±10 20 ±5 74.1 56 ±13 Random Retrieval 256 ±14 22 ±6 73.2 61 ±11 w/o Decay (FIFO evict) 244 ±11 17 ±3 76.5 49 ±10 w/o Gate (concat) 247 ±9 18 ±5 75.8 51 ±11 w/o Communication 249 ±12 19 ±4 75.2 53 ±9w/o Contrastive 242 ±9 16 ±4 77.0 47 ±10 TABLE III CROSS -D ISTURBANCE TRANSFER (M AKESPAN , 10 ×10, M ED . F REQ .) Memory Source Test Disturbance Avg. Breakdown Urgent Time Var. No memory (MAPPO) 243 ±12 235 ±11 223 ±9 233.7 Breakdown 218 ±9 228 ±10 216 ±7 220.7 Urgent Job 232 ±11 214 ±8 215 ±7 220.3 Time Variation 235 ±10 230 ±9 208 ±7 224.3 Mixed (all types) 216 ±10 212 ±8 206 ±7 211.3 
+
+improvement), confirming the advantage is maintained at larger scale. 
+
+F. Cross-Disturbance Transferability 
+
+Table III reports transfer results where the memory pool is populated from a single disturbance type and evaluated on different types without retraining. Even under mismatched source-target conditions, GSEM consistently outperforms memoryless MAPPO, indicating that graph-structured memory captures transferable recovery patterns that generalize across disturbance types. The mixed-source memory achieves the lowest average makespan ( 211 .3
+
+vs. 233 .7 for MAPPO), confirming that diverse disturbance exposure yields a more versatile memory pool. V. CONCLUSION This paper presented GSEM, a graph-structured expe-riential memory framework for multi-agent coordination in dynamic manufacturing. By storing past coordination episodes as heterogeneous relational graphs and retrieving structurally similar experiences, GSEM enables experience-guided recovery rather than learning from scratch. Experiments on DFJSP benchmarks demonstrated makespan reductions of 4.1%– 10 .0% and adaptation time improvements of 33 %– 38 % over the strongest baselines, with the advantage being most pronounced under high-frequency mixed disturbances. Ablation studies confirmed that graph-structured encoding and similarity-based retrieval are the two most critical components. Cross-disturbance transfer experiments further showed that the learned recovery patterns generalize across disturbance types. Future directions include scaling to larger instances, integrating human operator feedback, and extending the framework to other dynamic combinatorial optimization domains. ACKNOWLEDGMENT This work was supported by Chuchiang Data Co., Ltd., Shanghai, China. The authors gratefully acknowledge the computational resources provided by Chuchiang Data. REFERENCES [1] J. C. Serrano-Ruiz, J. Mula, and R. Poler, “Smart manufacturing scheduling: A literature review,” J. Manuf. Syst. , vol. 61, pp. 265– 287, 2021. [2] D. Ouelhadj and S. Petrovic, “A survey of dynamic scheduling in manufacturing systems,” J. Scheduling , vol. 12, no. 4, pp. 417–431, 2009. [3] P. Leit˜ ao, “Agent-based distributed manufacturing control: A state-of-the-art survey,” Eng. Appl. Artif. Intell. , vol. 22, no. 7, pp. 979–991, 2009. [4] T. Zhou, D. Tang, H. Zhu, and Z. Zhang, “Multi-agent reinforcement learning for online scheduling in smart factories,” Robot. Comput.-Integr. Manuf. , vol. 72, p. 102202, 2021. [5] C. Zhang, M. Juraschek, and C. Herrmann, “Deep reinforcement learning-based dynamic scheduling for resilient and sustainable manu-facturing: A systematic review,” J. Manuf. Syst. , vol. 77, pp. 962–989, 2024. [6] Y. Gui, Z. Zhang, D. Tang, H. Zhu, and Y. Zhang, “Collaborative dynamic scheduling in a self-organizing manufacturing system us-ing multi-agent reinforcement learning,” Adv. Eng. Inform. , vol. 62, p. 102646, 2024. [7] T. Rashid, M. Samvelyan, C. S. de Witt, G. Farquhar, J. Foerster, and S. Whiteson, “Monotonic value function factorisation for deep multi-agent reinforcement learning,” J. Mach. Learn. Res. , vol. 21, no. 178, pp. 1–51, 2020. [8] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of PPO in cooperative multi-agent games,” in Proc. NeurIPS , 2022. [9] L.-J. Lin, “Self-improving reactive agents based on reinforcement learning, planning and teaching,” Mach. Learn. , vol. 8, no. 3, pp. 293– 321, 1992. [10] T. Schaul, J. Quan, I. Antonoglou, and D. Silver, “Prioritized experi-ence replay,” in Proc. ICLR , 2016. [11] I. Nonaka and H. Takeuchi, The Knowledge-Creating Company . Ox-ford University Press, 1995. [12] C. Zhang, W. Song, Z. Cao, J. Zhang, P. S. Tan, and C. Xu, “Learning to dispatch for job shop scheduling via deep reinforcement learning,” in Proc. NeurIPS , 2020, pp. 1621–1632. [13] W. Song, X. Chen, Q. Li, and Z. Cao, “Flexible job-shop scheduling via graph neural network and deep reinforcement learning,” IEEE Trans. Ind. Inform. , vol. 19, no. 2, pp. 1600–1610, 2023. [14] J. Park, J. Chun, S. H. Kim, Y. Kim, and J. Park, “Learning to schedule job-shop problems: Representation and policy learning using graph neural network and reinforcement learning,” Int. J. Prod. Res. , vol. 59, no. 11, pp. 3360–3377, 2021. [15] L. Wan, L. Fu, C. Li, and K. Li, “Flexible job shop scheduling via deep reinforcement learning with meta-path-based heterogeneous graph neural network,” Knowl.-Based Syst. , vol. 296, p. 111940, 2024. [16] J. Jiang, C. Dun, T. Huang, and Z. Lu, “Graph convolutional rein-forcement learning,” in Proc. ICLR , 2020. [17] R. G. Smith, “The contract net protocol: High-level communication and control in a distributed problem solver,” IEEE Trans. Comput. ,vol. C-29, no. 12, pp. 1104–1113, 1980. [18] M. Tan, “Multi-agent reinforcement learning: Independent vs. coopera-tive agents,” in Proc. 10th Int. Conf. Mach. Learn. , 1993, pp. 330–337. [19] A. Graves, G. Wayne, and I. Danihelka, “Neural Turing machines,” 
+
+arXiv preprint arXiv:1410.5401 , 2014. [20] A. Graves, G. Wayne, M. Reynolds, T. Harley, I. Danihelka, A. Grabska-Barwi´ nska, S. G. Colmenarejo, E. Grefenstette, T. Ra-malho, J. Agapiou, et al., “Hybrid computing using a neural network with dynamic external memory,” Nature , vol. 538, no. 7626, pp. 471– 476, 2016. [21] C. Blundell, B. Uria, A. Pritzel, Y. Li, A. Ruderman, J. Z. Leibo, J. Rae, D. Wierstra, and D. Hassabis, “Model-free episodic control,” 
+
+arXiv preprint arXiv:1606.04460 , 2016. [22] A. Pritzel, B. Uria, S. Srinivasan, A. Puigdom` enech, O. Vinyals, D. Hassabis, D. Wierstra, and C. Blundell, “Neural episodic control,” in Proc. ICML , 2017, pp. 2827–2836.

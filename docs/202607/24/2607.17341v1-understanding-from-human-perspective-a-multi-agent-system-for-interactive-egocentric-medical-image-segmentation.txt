@@ -1,0 +1,611 @@
+Title: Understanding From Human Perspective: A Multi-agent System for Interactive Egocentric Medical Image Segmentation
+
+URL Source: https://arxiv.org/pdf/2607.17341v1
+
+Published Time: Tue, 21 Jul 2026 01:14:13 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+IEEE TRANSACTIONS AND JOURNALS TEMPLATE 1
+
+# Understanding From Human Perspective: A Multi-agent System for Interactive Egocentric Medical Image Segmentation 
+
+Rongjun Ge, Dongyang Wang, Heng Zhu, Zhirui Li, Yang Chen, and Yuting He 
+
+Abstract — Interactive egocentric medical image seg-mentation (IEMIS) plays an important role in smart-glasses-assisted medical image review, segmenting the medical targets a clinician refers to from their egocentric view. Once it succeeds, the object-level visual evidence it provides strengthens the review and underpins fine-grained analysis and clinical decision-making. However, the instruction and the video both come from the user’s egocentric perspec-tive, which poses two challenges. (1) Semantic ambigu-ity leaves the model unable to confirm the user-intended target. (2) Visual variability makes the segmentation jump from frame to frame. In this paper, we propose EgoMed-Agent, a multi-agent system that understands the target from the human perspective through two workflows. (1) The Target Confirmation Workflow grounds the instruction against candidate targets with a reliability score, confirm-ing the target when the grounding is reliable and asking the user to clarify when it is not, thereby confirming the segmentation target. (2) The Localization-Guided Propaga-tion Workflow couples mask propagation with per-frame target localization, using the localized target to correct the propagated mask whenever the two diverge, so the seg-mentation stays on the target across the egocentric video. Extensive experiments show that EgoMed-Agent reaches 71.34% average Dice, far above the best text-prompted baseline (11.70%). Our code is available at our project page. 
+
+Index Terms — Interactive egocentric medical image seg-mentation, multi-agent system, medical smart glasses, ego-centric vision. 
+
+I. I NTRODUCTION 
+
+# INTERACTIVE egocentric medical image segmentation (IEMIS) plays an important role in medical smart glasses copilots [1], [2]. Medical image review is a continuous reason-ing process in which doctors identify lesions, inspect anatom-ical structures, and integrate visual evidence into diagnostic 
+
+This work was supported by the National Natural Science Foundation of China under Grant T2225025. Rongjun Ge and Heng Zhu are with the School of Instrument Science and Engineering, Southeast University, Nanjing 210096, China (e-mail: rongjun ge@seu.edu.cn; zhumoran519@gmail.com). Dongyang Wang and Yang Chen are with the School of Computer Science and Engineering, Southeast University, Nanjing 210096, China (e-mail: 220255090@seu.edu.cn; chenyang.list@seu.edu.cn). Zhirui Li is with the Sichuan University-Pittsburgh Institute, Sichuan University, Chengdu 610065, China (e-mail: lizhirui@stu.scu.edu.cn). Yuting He is with the Department of Biomedical Engineering, Case Western Reserve University, Cleveland, OH 44106 USA (e-mail: yut-ing.he4@case.edu). (Corresponding authors: Yang Chen and Yuting He.) Human Perspective  Human reviewing with 
+
+> interactive help
+> Copilot -assisted
+> clinical decision
+
+(a) Medical image review with confusion and experience -dependent decision. 
+
+(b)  Copilot -assisted medical image review with interactive help and reliable decision.    
+
+> Human Perspective Human reviewing
+> with confusion
+> Experience -dependent
+> clinical decision
+> Where is the lesion?
+> These characteristics
+> indicate? Reasoning…
+
+Fig. 1. (a) Medical image review leaves the doctor without support, so the clinical decision is experience-dependent. (b) Smart-glasses-assisted medical image review gives the doctor support, so the clinical decision is reliable. 
+
+decisions [3]. During this process, the reviewer faces confusion over where a lesion lies and what its characteristics indicate, relying on their own expertise [4], so clinical decisions become experience-dependent and vulnerable when critical findings are overlooked [5] (Fig. 1(a)). Medical smart glasses copilots have achieved preliminary success in clinical settings [1], [2]. By perceiving the review context from the doctor’s egocentric perspective, these copilots enable an interactive paradigm in which the doctor issues instructions during image review while the copilot answers queries and provides suggestions for clinical decision-making (Fig. 1(b)). In this paradigm, IEMIS provides the perceptual basis: it segments instruction-relevant medical objects from egocentric video streams (Fig. 2). Once IEMIS succeeds, the copilot grounds its answers on concrete object-level visual evidence, such as lesions and anatomical structures, providing the perceptual foundation for fine-grained analysis and evidence-based clinical decision support. However, both the instruction and the video in IEMIS come from the user’s egocentric perspective, which poses two chal-lenges (Fig. 2). (1) Semantic ambiguity in interactions. User instructions exhibit semantic ambiguity [6]–[8]. For example, the instruction “Segment the kidney.” does not specify whether the left or right kidney is intended, leaving both as plausible candidate targets. Such ambiguity leaves the model unable to determine the user-intended target from the instruction alone. (2) Visual variability from egocentric perspectives. Egocentric video streams contain substantial visual variability caused by arXiv:2607.17341v1 [cs.CV] 19 Jul 2026 2 IEEE TRANSACTIONS AND JOURNALS TEMPLATE Doctor      
+
+> Smart glasses
+> Medical smart
+> glasses copilot
+> Results
+> Human perspective
+> (1) Semantic ambiguity
+> Left or right?
+> (2) Visual variability
+> “Segment the kidney.”
+> Fig. 2. IEMIS is formulated as an interactive loop among the doctor, smart glasses, and the medical smart glasses copilot. In each interac-tion cycle, the doctor issues an instruction, the smart glasses capture the egocentric video stream and forward it to the copilot, and the copilot returns the corresponding segmentation results (top). This egocentric interaction poses two challenges (bottom). (1) Semantic ambiguity. The instruction “segment the kidney” matches both the left and right kidney, leaving the model unable to determine the user-intended target. (2) Vi-sual variability. Head motion, viewpoint changes, and lighting variations make the target’s position, scale, and shape vary across frames, so its segmentation jumps from frame to frame.
+
+head motion, viewpoint changes, and lighting variations [9]– [11]. These variations cause the target to appear with changing position, scale, and shape across consecutive frames, so its segmentation jumps from frame to frame [12]. Multi-agent systems (MAS) tackle complex tasks by decom-posing them into coordinated subtasks assigned to agents with complementary capabilities [13]–[15]. Decomposing IEMIS along these two challenges lowers the interaction complex-ity of confirming and segmenting the user-intended target, which makes MAS a suitable paradigm for IEMIS. (1) For semantic ambiguity, MAS decomposes target confirmation into candidate perception and reliability-based grounding. Different agents identify possible medical targets and determine the user-intended one from the instruction, confirming what to segment before segmentation begins. (2) For visual variability, MAS decomposes the video segmentation into temporal propa-gation and target-aware localization. Different agents maintain the user-intended target across frames and localize it in each frame, keeping the segmentation on the user-intended target across the egocentric video. In this paper, we propose the Interactive Ego centric Med ical Image Segmentation Agent (EgoMed-Agent), the first multi-agent system for IEMIS. EgoMed-Agent decomposes IEMIS into two workflows implemented by three specialized agents, a Detection Agent, a Confirmation Agent, and a Propagation Agent. (1) The Target Confirmation Workflow confirms the segmentation target, asking the user to clarify only when the instruction does not reliably identify the target. The Confir-mation Agent grounds the instruction against the candidate targets from the Detection Agent and scores the reliability of this grounding. A reliable grounding directly fixes the user-intended target, while an unreliable one triggers a clarification that completes the user’s intent. Through this reliability-based grounding and clarification, the workflow determines the user-intended target, so the subsequent segmentation acts on an explicit target. (2) The Localization-Guided Propagation Workflow couples mask propagation with per-frame target localization, using the localized target to correct the propa-gated mask whenever the two diverge. The Propagation Agent segments the user-intended target from its localized position and propagates the mask for temporal continuity, while the Detection Agent re-localizes the target in each frame. The system evaluates the consistency between the propagated result and this localization and re-initializes propagation from the detected position whenever they diverge, so the segmentation stays on the target across the egocentric video. Specifically, our contributions are summarized as follows:  
+
+> •
+
+We propose IEMIS, which segments instruction-relevant medical objects from the human perspective to strengthen smart-glasses-assisted medical image review, which in turn underpins precise localization of structures, fine-grained analysis, and clinical decision support.  
+
+> •
+
+We propose EgoMed-Agent, the first multi-agent system for IEMIS, which decomposes the task into the Target Confirmation and Localization-Guided Propagation work-flows, so the system confirms the user-intended target before segmentation and keeps the segmentation on that target across the egocentric video.  
+
+> •
+
+We propose the Target Confirmation Workflow, in which the Detection Agent perceives candidate targets and the Confirmation Agent grounds the instruction against them with a reliability score, requesting clarification from the user only when the grounding is unreliable, thereby determining the user-intended target before segmentation.  
+
+> •
+
+We propose the Localization-Guided Propagation Work-flow, in which the Detection and Propagation Agents couple mask propagation with per-frame target localiza-tion. The localized target corrects the propagated mask whenever the two diverge, keeping the segmentation on the user-intended target across the egocentric video.  
+
+> •
+
+Extensive experiments show that EgoMed-Agent reaches 
+
+71 .34% average Dice and significantly outperforms the strongest text-prompted baseline ( 11 .70% , p < 0.001 
+
+on every target), with strong potential for smart-glasses-assisted medical image review. Overall, our EgoMed-Agent has three key advantages: a) Reliable target understanding: By confirming the user-intended target from the human perspective before segmen-tation, EgoMed-Agent grounds the segmentation on the target the clinician refers to, bringing reliable instruction-guided segmentation on egocentric medical scenes. b) Stable cross-frame segmentation: By coupling mask propagation with per-frame target localization, EgoMed-Agent corrects propagation drift under head motion and viewpoint change, keeping the segmentation on the user-intended target across the egocen-tric video. c) Training-free generality: As a general multi-agent paradigm that assembles off-the-shelf detection, ground-AUTHOR et al. : TITLE 3
+
+ing, and propagation models without task-specific training, EgoMed-Agent applies across diverse medical modalities and real-world capture scenes. 
+
+II. R ELATED WORK  
+
+> 1) Egocentric Vision:
+
+Egocentric vision studies visual un-derstanding from the user’s egocentric perspective, providing a natural perception paradigm for wearable devices and human-centered assistance [9]. Large-scale egocentric benchmarks, such as EPIC-KITCHENS [16] and Ego4D [17], have further advanced egocentric video understanding. Multimodal large language models are also evaluated on egocentric video under-standing, including fine-grained temporal reasoning and scene-text question answering [18], [19]. More recent works segment objects from egocentric video through language, via egocentric referring video object segmentation [20] and text-supervised egocentric semantic segmentation [21]. In the medical domain, egocentric vision has been used to interpret clinical scenes from egocentric videos, including surgical workflows, medi-cal actions, and instrument usage [22]–[24]. However, these studies either interpret the surrounding clinical environment or segment general daily objects by mapping language di-rectly to masks. In contrast, IEMIS focuses on segmenting user-intended medical targets from egocentric video streams captured during interaction with medical images. This involves identifying the user-intended target from user instructions and keeping the segmentation aligned with that target across frames, which existing formulations do not support.  
+
+> 2) Copilots:
+
+AI copilots are interactive assistant systems that perceive user context, respond to instructions, and provide task-oriented support [25]. Smart glasses extend copilots to wearable and hands-free scenarios, enabling them to operate from the user’s egocentric perspective [26]. In the medical domain, smart-glasses copilots have been explored for work-flow assistance, such as remote consultation, surgical training, and clinical documentation [1], [2], [27], [28], and generative copilots support clinicians in medical image interpretation and question answering [29]. However, IEMIS centers on object-level visual grounding, where the copilot localizes and segments the medical target specified by the user from the egocentric video streams. Such object-level perception remains underexplored in current medical copilot systems.     
+
+> 3) Interactive Medical Image Segmentation:
+
+Interactive medical image segmentation allows users to delineate medical objects through prompts such as points, boxes, scribbles, and texts [30]–[32]. Among these prompts, text offers an intuitive interaction modality in egocentric settings, allow-ing users to specify target medical objects naturally through language. Text-prompted segmentation therefore provides a relevant formulation for hands-free medical image segmen-tation. These methods formulate the task as segmenting the object described by a given textual prompt [33]–[36], making the target depend on the prompt description. More recent efforts adapt promptable segmentation foundation models to medical images, producing segmentation from visual or tex-tual prompts [37]–[39]. However, real interactions involve incomplete instructions that omit discriminative target details, leading to semantic ambiguity. This motivates confirming the target before performing segmentation in EgoMed-Agent.  
+
+> 4) Multi-agent Systems:
+
+Multi-agent systems (MAS) coor-dinate specialized agents to tackle tasks beyond the reach of a single model, and have been applied across general and med-ical domains [13]–[15]. In particular, existing medical MAS have been developed for clinical diagnosis simulation, radi-ology report generation and evaluation, and tool-augmented clinical reasoning [40]–[44]. Unlike these, IEMIS targets a different MAS setting, where agents interactively determine the user-intended visual target from instructions and keep the segmentation aligned with that target across the egocentric video. This couples instruction-guided target confirmation with object-level visual perception and video segmentation. 
+
+III. M ETHODOLOGY 
+
+Our EgoMed-Agent (Fig. 3) decomposes IEMIS into two workflows implemented by three specialized agents. It identi-fies the user-intended target from instructions through Target Confirmation (Detection and Confirmation Agents, Sec. III-B), and keeps the segmentation on that target across the egocentric video through Localization-Guided Propagation (Detection and Propagation Agents, Sec. III-C). Together, the two workflows produce reliable instruction-guided medical segmentation from the human perspective. 
+
+A. Formulation of Problem and Overall Framework  
+
+> 1) The Formulation of IEMIS:
+
+IEMIS is formulated as an interactive loop among the doctor, smart glasses, and copilot. The doctor issues instructions at different time points, and each instruction defines an interaction cycle. In the k-th interaction cycle, the doctor issues an instruction Ik, the smart glasses capture the corresponding egocentric video stream Vk 
+
+> 1: tk
+
+=
+
+{vk 
+
+> 1
+
+, v k 
+
+> 2
+
+, . . . , v ktk }, and the copilot predicts the mask sequence 
+
+Mk 
+
+> 1: tk
+
+= {mk 
+
+> 1
+
+, m k 
+
+> 2
+
+, . . . , m ktk }:
+
+Mk 
+
+> 1: tk
+
+= F(Vk 
+
+> 1: tk
+
+, I k), (1) where mki denotes the mask of the user-intended medical object in frame vki , and F denotes the IEMIS model. The index k distinguishes different interaction cycles within a continuous egocentric video stream. For simplicity, we omit the superscript k in the following sections and denote one interaction cycle as (I, V1: t, M1: t). 
+
+> 2) The Framework of EgoMed-Agent:
+
+EgoMed-Agent de-composes IEMIS into two workflows supported by three specialized agents, a Detection Agent Adet , a Confirmation Agent Acon , and a Propagation Agent Apro .In the Target Confirmation Workflow, the Detection Agent 
+
+Adet and the Confirmation Agent Acon collaborate to determine the user-intended target θ from the initial frame v1 and instruc-tion I. This workflow confirms what should be segmented. In the Localization-Guided Propagation Workflow, the Detection Agent Adet and the Propagation Agent Apro collaborate to generate the mask sequence M1: t for the user-intended target 
+
+θ across the egocentric video V1: t. This workflow keeps the 4 IEEE TRANSACTIONS AND JOURNALS TEMPLATE Target            
+
+> “Right kidney”
+> Initial frame Detection Agent Potential targets
+> Confirmation
+> Agent
+> Detection toolbox
+> “Segment
+> kidney.”
+> Ambiguous
+> instruction
+> Detection Agent
+> Target
+> Egocentric video stream
+> Target Locations
+> Segmentation Masks
+> Initialization
+> Propagation Agent
+> Consistency Evaluation
+> Re -initialization Propagation
+> Target Confirmation Workflow to Confirm the Target Localization -Guided Propagation Workflow to Keep the Segmentation on the Target
+> Abdominal
+> CT Detector
+> Fig. 3. EgoMed-Agent decomposes IEMIS into two cooperating agent workflows. The Target Confirmation Workflow, run by the Detection and Confirmation Agents, confirms the user-intended target, while the Localization-Guided Propagation Workflow, run by the Detection and Propagation Agents, keeps the segmentation on that target across the egocentric video through Consistency Evaluation.
+
+segmentation on the user-intended target throughout the video stream. The overall process is formulated as: 
+
+θ = W1(v1, I ; Adet , A con ), M1: t = W2(V1: t, θ ; Adet , A pro ),
+
+(2) where W1 and W2 denote the Target Confirmation and Localization-Guided Propagation workflows, each carried out by the agents listed after the semicolon. 
+
+B. Target Confirmation Workflow to Confirm the Target 
+
+Target Confirmation determines the user-intended segmen-tation target θ before segmentation. It is implemented by the Detection Agent Adet and the Confirmation Agent Acon .The Detection Agent extracts candidate medical targets from the initial frame, and the Confirmation Agent grounds the user instruction to these candidates. Through modality-specific candidate extraction and reliability-based grounding with clar-ification, this workflow confirms the user-intended target, so the subsequent segmentation acts on an explicit target. 
+
+1) Detection Agent: The Detection Agent extracts potential medical targets from the initial frame. To support different medical image types, it is equipped with a toolbox T contain-ing a set of specialized detectors. Given the initial frame v1, the Detection Agent first predicts the imaging type c, selects the corresponding detector d from the toolbox, and then applies the selected detector to obtain the candidate target set O:
+
+c = Cmod (v1), d = T (c), O = d(v1), (3) where Cmod denotes the type classifier, d denotes the detector selected from T , and O = {o(1) , o (2) , . . . , o (N )} denotes the set of candidate targets. Each candidate o(i) contains an object category and a bounding box. This toolbox design allows the Detection Agent to extract candidate targets across different medical imaging contexts. 
+
+2) Confirmation Agent: The Confirmation Agent determines the user-intended target according to the user instruction and the candidate targets extracted by the Detection Agent. Given the instruction I and the candidate set O, the Confirmation Agent grounds the instruction to the candidates and outputs a target result θ∗ together with a reliability score s:
+
+θ∗, s = Acon (I, O ), (4) where θ∗ denotes the target result obtained from the current grounding process, and s measures the reliability of this grounding result. Given a grounding reliability threshold τ1, if s ≥ τ1, the grounding result is considered reliable, and θ∗ is directly confirmed as the user-intended target θ for subsequent segmen-tation. If s < τ 1, the grounding result is considered unreliable, indicating that the current instruction and candidates do not reliably determine the user-intended target. In this case, the Confirmation Agent proactively requests clarification from the user and updates the grounding result according to the user’s clarification response r:
+
+θr = Acon (I, O, r ), (5) where θr denotes the clarified target result. The final user-intended target θ is defined as: 
+
+θ =
+
+(
+
+θ∗, if s ≥ τ1,θr , if s < τ 1. (6) Through this reliability-based grounding and clarification mechanism, EgoMed-Agent confirms the user-intended target before segmentation, enabling subsequent segmentation to be conditioned on explicit user intent. 
+
+3) Properties of Target Confirmation: The Target Confir-mation workflow provides two properties for IEMIS: (1) 
+
+Modality-specific Candidate Perception. By selecting spe-cialized detectors according to the medical image type, this workflow extracts candidate targets that are specific to the cur-rent imaging context, providing reliable visual candidates for instruction grounding. (2) Clarification-based Target Con-firmation. By evaluating grounding reliability, this workflow identifies unreliable grounding results and triggers clarification in such cases, enabling the user-intended target to be confirmed before segmentation. AUTHOR et al. : TITLE 5
+
+C. Localization-Guided Propagation Workflow to Keep the Segmentation on the Target 
+
+Localization-Guided Propagation generates segmentation masks for the target across the egocentric video V1: t through the collaboration of the Detection Agent Adet and the Propa-gation Agent Apro . The Detection Agent provides target-aware localization results in video frames, while the Propagation Agent segments the target according to the localized position and propagates its mask over time. By combining target localization with temporal propagation, this workflow keeps the segmentation on the target across the egocentric video.  
+
+> 1) Propagation Agent:
+
+The Propagation Agent maintains the segmentation mask of the user-intended target θ across the egocentric video. Specifically, after target confirmation, the Detection Agent localizes θ in the initial frame v1 using the specialized detector selected in the Target Confirmation Workflow and provides the corresponding bounding box bloc  
+
+> 1
+
+.This bounding box is used to initialize the Propagation Agent. Starting from this initialization, the Propagation Agent gen-erates the initial mask and propagates it through subsequent frames to produce a temporally continuous mask sequence: 
+
+M1: t = Apro (V1: t, b loc  
+
+> 1
+
+). (7) Through this localized initialization and temporal propagation, the Propagation Agent produces a temporally continuous mask sequence for the user-intended target.  
+
+> 2) Consistency Evaluation:
+
+Consistency Evaluation keeps the propagated masks on the user-intended target across the egocentric video by correcting propagation drift with target-aware localization. For each frame vi, the Detection Agent uses the specialized detector selected in the Target Confir-mation Workflow to localize the user-intended target with a bounding box bloc  
+
+> i
+
+. Meanwhile, the propagated mask produced by the Propagation Agent is converted into a propagated bounding box bpro  
+
+> i
+
+for Consistency Evaluation. The consistency between the localized target and the propagated result is measured by their IoU, IoU i = |bloc  
+
+> i
+
+∩ bpro  
+
+> i
+
+|/|bloc  
+
+> i
+
+∪ bpro  
+
+> i
+
+|.Given a consistency threshold τ2, when IoU i ≥ τ2, the propagated result is considered consistent with the localized target, and the Propagation Agent continues propagation. When IoU i < τ 2, the propagated result is considered unre-liable. In this case, the system re-initializes the Propagation Agent using the localized bounding box bloc  
+
+> i
+
+determined by the Detection Agent, bringing the propagation process back to the target. Through this mechanism, EgoMed-Agent preserves temporal continuity when the propagated result is reliable and uses target-aware localization to re-initialize propagation when inconsistency occurs. This keeps the segmentation on the user-intended target across the egocentric video.     
+
+> 3) Properties of Localization-Guided Propagation:
+
+The Localization-Guided Propagation workflow provides two prop-erties for IEMIS: (1) General Propagation Capability. The Propagation Agent propagates masks in a target-agnostic man-ner after initialization. Therefore, once the Detection Agent provides the initial target location, the propagation mechanism applies to different medical targets. (2) Target-Aware Re-localization. By evaluating the consistency between the prop-agated result and the Detection Agent localization, the system Imaging modality     
+
+> Capture scene
+> CT MRI Ultrasound
+> X-ray Endoscopy
+> 523 videos
+> 173,657
+> frames
+> Fig. 4. Our dataset covers five imaging modalities and five capture scenes, recorded as egocentric video of on-screen medical images. The two pies give the number of videos per modality and per capture scene, and the panels on the right show one egocentric example per modality.
+
+determines whether propagation remains aligned with the user-intended target. When inconsistency occurs, the target-aware localization result is used to re-initialize propagation, correcting propagation drift to keep the segmentation on the user-intended target across the egocentric video. 
+
+IV. E XPERIMENTS 
+
+A. Experimental Settings  
+
+> 1) Dataset:
+
+We construct an egocentric medical image segmentation dataset for IEMIS, containing 523 videos and 173,657 frames that span 5 imaging modalities, 12 medical targets, and 5 real-world capture scenes, as shown in Fig. 4. The videos are collected from five public medical image sources, spanning CT (AMOS [45]), MRI (ACDC [46]), ultrasound (CAMUS [47]), X-ray (MCC [48]), and endoscopy (PMC [49]). To build the egocentric reviewing scenario, we display these medical images in a DICOM viewer (RadiAnt) on a screen and record the reviewing process from the ego-centric perspective with smart glasses (Xiaomi AI Glasses and Rokid Glasses), keeping the screen within view. The recordings span five everyday environments (workstation, liv-ing room, cafe, bedroom, and classroom) and cover both static viewing and head motion (left-right or forward-backward), reflecting diverse real-world reviewing conditions. For each video, we annotate the segmentation mask of every medical target and design multiple sequential instructions. The dataset is publicly available at HuggingFace.  
+
+> 2) Implementation Details:
+
+We instantiate the image-type classifier in the Detection Agent using YOLO26-classify to identify the medical image type. We instantiate the five detec-tion tools in the Detection Agent toolbox using YOLO26-det, corresponding to CT, MRI, ultrasound, X-ray, and endoscopy images. The image-type classifier and all modality-specific detectors are trained on our data using an NVIDIA RTX A6000 GPU. The dataset is split into training, validation, and test sets with a ratio of 5:2:3. On the test set, the image-type classifier reaches 100% routing accuracy ( 159 /159 cases), so each frame is dispatched to the correct modality-specific de-tector. The Confirmation Agent is instantiated with DeepSeek-V4-Flash with prompts to output the reliability score and user-intended target. The grounding reliability threshold in Target Confirmation is set to τ1 = 0 .8. We instantiate the Propagation Agent using SAM2 with its original weights to perform mask 6 IEEE TRANSACTIONS AND JOURNALS TEMPLATE 
+
+TABLE I QUANTITATIVE COMPARISON OF SEGMENTATION PERFORMANCE , REPORTED AS TARGET -WISE DICE (%, MEAN ± STD OVER CASES ). F OR EACH TARGET , THE BEST INSTRUCTION -GUIDED RESULT IS IN BOLD AND THE SECOND BEST IS UNDERLINED . NN U-N ET (GRAY ) IS A FULLY SUPERVISED UPPER -BOUND REFERENCE , NOT A COMPETITOR , AND “-” MARKS A METHOD THAT PRODUCED NO VALID MASK FOR THAT TARGET . T HE AVERAGE ROW REPORTS THE MEAN ± STD ACROSS THE TWELVE TARGETS , AND THE LAST COLUMN GIVES THE p-VALUE OF A PAIRED t-TEST BETWEEN 
+
+EGO MED -A GENT AND THE STRONGEST BASELINE MED SAM3 ON PER -CASE DICE .                                                                                                                                                                                                                                                                                                                
+
+> Targets nnU-Net Grounded SAM2 LangSAM LISA MedSAM3 SAM3 EgoMed-Agent p-value
+> AMOS liver 82 .82 ±13 .919 .80 ±11 .217 .89 ±11 .911 .52 ±9.715 .15 ±21 .70.03 ±0.271 .69 ±15 .63.3×10 −19
+> AMOS left kidney 86 .01 ±4.84.24 ±2.04.14 ±2.12.41 ±1.68.57 ±15 .70.87 ±3.276 .23 ±11 .42.2×10 −29
+> AMOS right kidney 80 .49 ±18 .03.80 ±2.23.26 ±2.64.06 ±1.712 .04 ±20 .9–59 .68 ±24 .21.7×10 −16
+> AMOS spleen 82 .63 ±14 .91.34 ±2.25.05 ±4.04.53 ±2.713 .08 ±21 .50.43 ±1.669 .00 ±20 .61.9×10 −17
+> AMOS stomach 60 .91 ±26 .34.50 ±4.85.09 ±5.13.48 ±3.04.89 ±9.5–49 .88 ±26 .41.3×10 −13
+> ACDC RV cavity 74 .48 ±13 .80.65 ±0.50.63 ±0.30.11 ±0.23.70 ±10 .7–57 .87 ±19 .41.1×10 −10
+> ACDC LV cavity 84 .98 ±9.51.02 ±1.00.77 ±0.41.01 ±0.616 .31 ±19 .7–77 .82 ±11 .91.0×10 −11
+> ACDC myocardium 76 .21 ±4.60.72 ±0.33.69 ±0.91.63 ±0.725 .07 ±16 .20.66 ±3.051 .95 ±19 .11.7×10 −6
+> CAMUS Left Atrium 91 .54 ±4.55.53 ±5.01.23 ±1.34.37 ±1.616 .61 ±4.5–81 .43 ±5.18.1×10 −26
+> MCC left lung 96 .01 ±0.916 .25 ±10 .816 .47 ±10 .414 .31 ±3.73.00 ±4.0–92 .13 ±2.07.5×10 −43
+> MCC right lung 95 .63 ±1.09.23 ±7.74.22 ±1.516 .31 ±4.14.46 ±8.5–90 .32 ±2.81.8×10 −32
+> PMC polyp 68 .55 ±29 .011 .49 ±16 .56.83 ±12 .210 .25 ±8.517 .53 ±21 .5–78 .02 ±17 .82.5×10 −8
+> Average 81 .69 ±10 .56.55 ±6.45.77 ±5.76.17 ±5.511 .70 ±6.90.17 ±0.371 .34 ±14 .01.8×10 −158
+
+segmentation and propagation. Based on the hyperparameter experiments in Sec. IV-B.4, we set the consistency threshold in Consistency Evaluation to τ2 = 0 .6.
+
+3) Comparison Methods: As shown in Table I, we compare EgoMed-Agent with five text-prompted segmentation base-lines, including Grounded SAM2 [50]–[54], LangSAM [55], LISA [36], MedSAM3 [35], and SAM3 [56]. These methods take the interaction instruction and the egocentric video as input and output the mask sequence of the instructed target. We also report nnU-Net [57] as a supervised upper-bound reference. Unlike instruction-guided methods, nnU-Net per-forms predefined semantic segmentation with fixed target cate-gories and is trained using the mask annotations in the training split. Therefore, nnU-Net is not used as a direct comparison method, but as a reference showing the performance achiev-able under fully supervised category-specific segmentation. 
+
+4) Evaluation Metrics: We evaluate segmentation perfor-mance using the Dice Similarity Coefficient (DSC) [58] and report target-wise DSC to compare performance across different medical targets. For target confirmation, we report two interaction metrics, Grounding State Accuracy (GSA) and Target Confirmation Accuracy (TCA), on an evaluation set {(Ii, O i, θ gt  
+
+> i
+
+)}Mi=1 of M instructions. Here, Ii is a user instruction, Oi the candidate set extracted by the Detection Agent, and θgt  
+
+> i
+
+the ground-truth user-intended target. GSA evaluates whether the Confirmation Agent correctly deter-mines the grounding state of an instruction, i.e., whether the instruction is directly groundable or calls for clarification. With the grounding reliability threshold τ1, the predicted grounding state is ˆyi = 1[ si ≥ τ1 ] and the ground-truth grounding state is yi = 1[ Ii is unambiguous ], where 1[·] is the indicator function and si is the reliability score in (4). GSA is the agreement between them: 
+
+GSA = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+1[ ˆ yi = yi ] . (8) TCA evaluates whether the final user-intended target θi in (6) matches the user-intended target θgt  
+
+> i
+
+. For directly grounded instructions ( si ≥ τ1), θi = θ∗ 
+
+> i
+
+. For ambiguous instructions (si < τ 1), θi = θri is the target confirmed after the clarification response r. TCA is defined as: 
+
+TCA = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+1 θi = θgt 
+
+> i
+
+ , (9) where θi = θgt  
+
+> i
+
+holds when the confirmed candidate is the same target instance, in both category and location, as the intended one. The per-type TCA in Table IV restricts this average to the corresponding instruction subset. 
+
+B. Results and Analysis 
+
+1) Quantitative Evaluation: Table I presents the quantitative comparison, from which we draw two observations. 
+
+a) EgoMed-Agent provides the most reliable instruction-guided segmentation. It attains the highest Dice on all twelve targets among instruction-guided methods, with an average of 
+
+71 .34% , and approaches the fully supervised nnU-Net upper bound ( 81 .69% ) without training the segmentation model on mask annotations. This advantage comes from confirming the user-intended target before segmentation, so the mask is conditioned on an explicit target. 
+
+b) Directly grounding free-form instructions to masks is unreliable in IEMIS. The text-prompted baselines remain below 12% average Dice, and SAM3 fails to produce valid masks on most targets ( 0.17% average), indicating that open-vocabulary text grounding does not transfer to anatomical targets under egocentric visual conditions. Lacking an explicit confirmation step, these methods ground the instruction to screen or background regions, missing the intended object. 
+
+2) Qualitative Analysis: Fig. 5 shows qualitative segmen-tation results on representative targets from different imag-ing scenarios. Text-prompted segmentation methods ground the instruction unreliably in egocentric medical scenes. They produce over-expanded masks that cover a large part of the displayed medical image or the computer screen region, not the user-intended target. This is visible in targets such as the liver, kidneys, lung, and polyp, where the predicted masks from text-prompted baselines include non-target regions. In addition, for fine-grained anatomical structures such as kidneys and cardiac AUTHOR et al. : TITLE 7Instruction  Input  GT  Grounded-SAM2  LangSAM  LISA  MedSAM3  SAM3 Ours 
+
+> "Segment the right
+> kidney"
+> "Segment the liver"
+> "Segment the left
+> kidney"
+> "Segment the left
+> atrium"
+> "Segment the left
+> lung"
+> "Segment the polyp"
+
+Fig. 5. On representative targets from different imaging scenarios, EgoMed-Agent produces masks concentrated on the user-intended target and close to the ground truth, while the text-prompted baselines produce over-expanded masks or segment irrelevant screen and background regions. 
+
+regions, these methods struggle to distinguish the target from nearby structures or visually similar regions. In contrast, EgoMed-Agent produces masks that are more concentrated on the target regions and better aligned with the ground truth across different anatomical structures and lesions. This is because EgoMed-Agent first confirms the user-intended target through Target Confirmation and then performs Localization-Guided Propagation for the user-intended target, so it does not map the text instruction directly to a pixel-level mask. By separating target confirmation from mask generation, EgoMed-Agent reduces the risk of segmenting screen regions, background areas, or unintended neighboring structures, leading to more accurate segmentation results in egocentric medical scenes. 
+
+3) Ablation of Components: To isolate the roles of temporal propagation and localization guidance, we compare two re-duced variants of EgoMed-Agent in Table II. Init-Only Prop. 
+
+keeps only the Propagation Agent: it initializes from the first detector box and then propagates, which preserves temporal continuity but accumulates drift once the mask deviates from the user-intended target, so its average Dice drops to 50 .46% .
+
+Frame-wise Det. keeps only per-frame detection: it segments each frame independently, which avoids long-term drift but loses temporal continuity and remains sensitive to detection quality, reaching 59 .27% . EgoMed-Agent couples the two, propagating for continuity while using detector-based local-ization to re-initialize when inconsistency occurs, and reaches 
+
+71 .34% . This shows that temporal propagation and localization guidance are complementary. 
+
+4) Ablation of Hyperparameters: We further analyze the effect of the consistency threshold τ2 in Localization-Guided 
+
+TABLE II PER -TARGET DICE (%) OF EGO MED -A GENT AGAINST ITS REDUCED VARIANTS INIT -O NLY PROP . ( PROPAGATION ONLY ) AND FRAME -WISE 
+
+DET . ( PER -FRAME DETECTION ONLY ), WHERE COUPLING PROPAGATION WITH DETECTOR -BASED LOCALIZATION GIVES THE BEST DICE ON EVERY TARGET .                                                                                                                        
+
+> Targets Init-Only Prop. Frame-wise Det. EgoMed-Agent
+> AMOS liver 39 .86 ±32 .658 .83 ±15 .471 .69 ±15 .6
+> AMOS left kidney 63 .00 ±28 .062 .95 ±15 .676 .23 ±11 .4
+> AMOS right kidney 52 .33 ±29 .643 .07 ±23 .559 .68 ±24 .2
+> AMOS spleen 40 .98 ±30 .154 .05 ±19 .669 .00 ±20 .6
+> AMOS stomach 29 .35 ±26 .639 .46 ±22 .749 .88 ±26 .4
+> ACDC RV cavity 52 .13 ±21 .837 .39 ±21 .657 .87 ±19 .4
+> ACDC LV cavity 68 .47 ±13 .166 .11 ±14 .177 .82 ±11 .9
+> ACDC myocardium 30 .50 ±20 .533 .22 ±17 .751 .95 ±19 .1
+> CAMUS Left Atrium 30 .92 ±31 .774 .27 ±11 .681 .43 ±5.1
+> MCC left lung 80 .72 ±27 .388 .96 ±3.292 .13 ±2.0
+> MCC right lung 83 .86 ±18 .885 .49 ±6.490 .32 ±2.8
+> PMC polyp 33 .43 ±35 .567 .45 ±23 .878 .02 ±17 .8
+> Average 50 .46 ±19 .659 .27 ±18 .571 .34 ±14 .0
+
+Propagation. This threshold controls when localization-based re-initialization is triggered. When τ2 = 0 , the system does not perform consistency-based re-initialization and mainly relies on continuous propagation by the Propagation Agent. As τ2
+
+increases, the system becomes more sensitive to the inconsis-tency between the propagated result and the localization result, and therefore triggers re-initialization on more frames. As shown in Fig. 6, a positive consistency threshold im-proves the average Dice score over τ2 = 0 , indicating that our consistency evaluation mechanism is important for accurate segmentation across the egocentric video. Specifically, τ2 = 0 ,
+
+τ2 = 0 .3, τ2 = 0 .6, and τ2 = 0 .9 achieve average DSC scores of 56 .18% , 69 .61% , 71 .34% , and 70 .17% across all twelve targets, respectively. Among them, τ2 = 0 .6 achieves 8 IEEE TRANSACTIONS AND JOURNALS TEMPLATE 55                       
+
+> 60
+> 65
+> 70
+> 75
+> 80
+> DSC (%)
+> 62.88
+> 71.31 71.69
+> 69.48
+> AMOS Liver
+> 65
+> 70
+> 75
+> 80
+> 85
+> DSC (%)
+> 71.86
+> 75.51 76.23 75.79
+> AMOS Left-Kidney
+> 50
+> 55
+> 60
+> 65
+> 70
+> DSC (%)
+> 60.36 61.28
+> 59.68
+> 57.72
+> AMOS Right-Kidney
+> 45
+> 55
+> 65
+> 75
+> DSC (%)
+> 52.90
+> 67.70 69.00 67.38
+> AMOS Spleen
+> 30
+> 35
+> 40
+> 45
+> 50
+> 55
+> DSC (%)
+> 35.38
+> 48.50 49.88
+> 44.99
+> AMOS Stomach
+> 45
+> 50
+> 55
+> 60
+> 65
+> DSC (%)
+> 55.72
+> 57.97 57.87
+> 54.53
+> ACDC RV Cavity
+> 60
+> 65
+> 70
+> 75
+> 80
+> 85
+> DSC (%)
+> 69.50
+> 75.48
+> 77.82 76.91
+> ACDC LV Cavity
+> 30
+> 40
+> 50
+> 60
+> DSC (%)
+> 36.84
+> 43.79
+> 51.95
+> 56.96
+> ACDC Myocardium
+> 25
+> 35
+> 45
+> 55
+> 65
+> 75
+> 85
+> DSC (%)
+> 30.76
+> 77.14
+> 81.43 78.01
+> CAMUS LA
+> 75
+> 80
+> 85
+> 90
+> 95
+> 100
+> DSC (%)
+> 80.72
+> 90.01
+> 92.13 91.63
+> MCC Left-Lung
+> 75
+> 80
+> 85
+> 90
+> 95
+> 100
+> DSC (%)
+> 83.86
+> 89.87 90.32 90.04
+> MCC Right-Lung
+> 25
+> 35
+> 45
+> 55
+> 65
+> 75
+> 85
+> DSC (%)
+> 33.43
+> 76.72 78.02 78.55
+> PMC Polyp
+> 2= 0 2= 0.3 2= 0.6 2= 0.9
+
+Fig. 6. A positive consistency threshold τ2 improves segmentation over τ2 = 0 , and τ2 = 0 .6 gives the best average Dice. Each subplot reports the Dice score under different τ2 settings for one medical target. 
+
+the highest average DSC. When the threshold further increases to τ2 = 0 .9, the performance does not continue to improve, suggesting that overly frequent re-initialization does not nec-essarily further benefit segmentation. Thus, we adopt τ2 = 0 .6
+
+as the consistency threshold in all of our main experiments. 
+
+5) Effectiveness of Consistency Evaluation: Fig. 7 illustrates the role of Consistency Evaluation during temporal propa-gation. From t = 0 to t = 2, both Init-Only Prop. and EgoMed-Agent follow the user-intended target. At t = 3 , Init-Only Prop. starts to drift toward a nearby non-target region. Relying only on continuous propagation, it carries this error forward to subsequent frames. In contrast, EgoMed-Agent detects the inconsistency between the propagated mask and the target-aware localization, and re-initializes propagation from the localized target position, correcting the drift and keeping the propagated mask aligned with the user-intended target. This correction is exercised throughout propagation: across the test set ( 533 video–target instances), EgoMed-Agent triggers on average 27 .5 re-initializations per target, 79 .0% 
+
+of the targets trigger at least one, and the mean detection– propagation IoU is 0.787 . Together, these results show that drift is a recurring failure mode in egocentric medical video, and that Consistency Evaluation prevents error accumulation and improves segmentation accuracy. 
+
+6) Inference Efficiency: Table III reports the parameters and per-frame latency of EgoMed-Agent on a single NVIDIA RTX A6000. The full system has 113 .0M parameters and runs at 10 .7 FPS ( 48 .2 ms detection and 45 .2 ms propagation per frame), using 3.7 GB of GPU memory. The Confirmation Agent (DeepSeek-V4-Flash) is queried once per instruction, not per frame, and is therefore excluded from the per-frame latency. EgoMed-Agent therefore runs in near-real-time on a single GPU, supporting interactive copilot assistance. 
+
+7) Target Confirmation Analysis: We validate the Confirma-tion Agent on a 200-sample evaluation set balanced across four instruction types (unique semantic, unique spatial, am-biguous semantic, and ambiguous spatial), 50 samples each. Semantic instructions refer to the target by organ category 
+
+TABLE III INFERENCE EFFICIENCY OF EGO MED -A GENT ON A SINGLE NVIDIA RTX A6000, WITH PER -FRAME LATENCY MEASURED ON A 200 -FRAME EGOCENTRIC VIDEO .
+
+Component Params (M) Latency (ms/frame) Detection Agent (YOLO26) 21.8 48.2 Propagation Agent (SAM2.1 b+) 80.9 45.2 Image-type classifier (YOLO26-cls) 10.4 once/video 
+
+Total 113.0 93.4 (10.7 FPS) 
+
+(e.g., “segment the liver”), while spatial instructions refer to it by an organ-relative relation. A relation that singles out one candidate is unique (e.g., “the organ immediately to the left of the liver”), whereas one satisfied by multiple candidates is ambiguous (e.g., “the organ on the left of the liver” when several organs lie to its left) and calls for clarification. As reported in Table IV, with DeepSeek-V4-Flash the Confirmation Agent attains 100% GSA and 100% TCA, judging whether an instruction is directly groundable and, when ambiguous, determining the user-intended target through clarification. On the same set, a lighter LLM (DeepSeek-Chat) reaches only 80% GSA and 70 .5% TCA, with errors concentrated on organ-relative spatial instructions ( 44% and 
+
+38% TCA on unique and ambiguous spatial). This indicates that spatial grounding is the main source of error and benefits from a stronger reasoner. Overall, these results show that Target Confirmation evaluates grounding reliability and either confirms the target or requests clarification, so the subsequent segmentation is conditioned on an explicit target. 
+
+V. D ISCUSSION AND CONCLUSION 
+
+This paper studied IEMIS, the problem of segmenting a user-intended target from the egocentric video of medical smart glasses. We proposed EgoMed-Agent, a multi-agent system in which a Detection Agent, a Confirmation Agent, and a Propagation Agent cooperate with the user to confirm the user-intended target and keep the segmentation locked onto it as the egocentric view changes. On our IEMIS benchmark, AUTHOR et al. : TITLE 9t=0  t=1  t=2  t=3  t=4  t=5  t=6  t=7  t=8  t=9  t=10 
+
+> GT Init -Only Prop. EgoMed -Agent
+> (Ours)
+> continuous drift
+> recovered
+> drift
+> drift
+
+Fig. 7. Consistency Evaluation keeps EgoMed-Agent on the user-intended target where naive propagation drifts off it. The green contour denotes the ground-truth target and the red region denotes the predicted mask. From t = 0 to t = 2 , both Init-Only Prop. and EgoMed-Agent follow the user-intended target. At t = 3 , Init-Only Prop. drifts toward a nearby non-target region and keeps propagating this erroneous mask, leaving its prediction off the target (the “drift” arrow). EgoMed-Agent detects the inconsistency and re-initializes from the localized target, so its prediction returns to the target (the “recovered” arrow). TABLE IV PER -TYPE TARGET CONFIRMATION ACCURACY (TCA, %) OF THE 
+
+EGO MED -A GENT CONFIRMATION AGENT ON THE 200-SAMPLE SET UNDER TWO LLM BACKENDS , WHERE EACH INSTRUCTION TYPE CONTAINS 50 SAMPLES . O VER ALL SAMPLES , GSA / TCA REACH 
+
+80 / 70.5 WITH DS-C HAT AND 100 / 100 WITH DS-V4F LASH ,
+
+> SHOWING THAT THE STRONGER BACKEND REMOVES THE SPATIAL
+
+-GROUNDING ERRORS OF THE LIGHTER ONE .
+
+Instruction Type Num. DS-Chat DS-V4Flash Unique semantic 50 100 100 Unique spatial 50 44 100 Ambiguous semantic 50 100 100 Ambiguous spatial 50 38 100 
+
+EgoMed-Agent reached 71 .34% average Dice and significantly outperformed the strongest text-prompted baseline. By un-derstanding the target from the human perspective, EgoMed-Agent offers a general paradigm for reliable instruction-guided medical perception on smart-glasses copilots. Two aspects remain open and define our future work. First, EgoMed-Agent relies on its detection toolbox for candidate targets and localization, which bounds the covered modalities, anatomical structures, and lesion types. This is alleviated by extending the toolbox with additional specialized detectors and open-vocabulary detection [51], which we will pursue to broaden coverage. Second, our dataset is built from screen-displayed public medical images captured by smart glasses. Although this reflects a practical smart-glasses-assisted sce-nario, it does not yet cover all real clinical deployment conditions, and collecting egocentric data directly from clinical imaging workstations is a further direction of our future work. 
+
+REFERENCES 
+
+[1] L. Malungana and B. Chimbo, “The use of smart glasses in the healthcare metaverse: A systematic review,” Suid-Afrikaanse Tydskrif vir Natuurwetenskap en Tegnologie , vol. 44, no. 1, pp. 8–16, 2025. [2] Z. Zhang, N. A. Ramiya Ramesh Babu, K. Adelgais, and M. Ozkaynak, “Designing and implementing smart glass technology for emergency medical services: a sociotechnical perspective,” JAMIA open , vol. 5, no. 4, p. ooac113, 2022. [3] S. Waite, J. Scott, B. Gale, T. Fuchs, S. Kolla, and D. Reede, “Interpre-tive error in radiology,” American Journal of Roentgenology , vol. 208, no. 4, pp. 739–749, 2017. [4] J.-P. J. Yu, A. P. Kansagra, and J. Mongan, “The radiologist’s workflow environment: evaluation of disruptors and potential implications,” Jour-nal of the American College of Radiology , vol. 11, no. 6, pp. 589–593, 2014. [5] T. Drew, M. L.-H. V˜ o, and J. M. Wolfe, “The invisible gorilla strikes again: sustained inattentional blindness in expert observers,” Psycholog-ical Science , vol. 24, no. 9, pp. 1848–1853, 2013. [6] H. Su, M. Xie, N. Cao, Y. Ding, B. Shao, X. Long, F. Gu, and C. Chen, “Ova-fields: Weakly supervised open-vocabulary affordance fields for robot operational part detection,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , 2025, pp. 6385–6395. [7] T. Zhang, P. Qin, Y. Deng, C. Huang, W. Lei, J. Liu, D. Jin, H. Liang, and T.-S. Chua, “Clamber: A benchmark of identifying and clarifying ambiguous information needs in large language models,” in Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2024, pp. 10 746–10 766. [8] J. Ding, H. Tang, and G. Li, “Open-vocabulary 3d instruction ambiguity detection,” arXiv preprint arXiv:2601.05991 , 2026. [9] X. Li, H. Qiu, L. Wang, H. Zhang, C. Qi, L. Han, H. Xiong, and H. Li, “Challenges and trends in egocentric vision: A survey,” Machine Intelligence Research , vol. 23, no. 1, pp. 1–33, 2026. [10] Y. Poleg, C. Arora, and S. Peleg, “Temporal segmentation of egocentric videos,” in Proceedings of the IEEE conference on computer vision and pattern recognition , 2014, pp. 2537–2544. [11] C. Millerdurai, H. Akada, J. Wang, D. Luvizon, C. Theobalt, and V. Golyanik, “Eventego3d: 3d human motion capture from egocentric event streams,” in Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , 2024, pp. 1186–1195. [12] X. Wang, M. Yang, S. Tosun, K. Nakamura, S. Li, and X. Li, “Caldiff: calibrating uncertainty and accessing reliability of diffusion models for trustworthy lesion segmentation,” IEEE journal of biomedical and health informatics , 2025. [13] A. Li, Y. Xie, S. Li, F. Tsung, B. Ding, and Y. Li, “Agent-oriented planning in multi-agent systems,” arXiv preprint arXiv:2410.02189 ,2024. [14] W. Zhang, C. Cui, Y. Zhao, R. Hu, Y. Liu, Y. Zhou, and B. An, “Agentorchestra: A hierarchical multi-agent framework for general-purpose task solving,” arXiv e-prints , pp. arXiv–2506, 2025. [15] Y. Hu, M. Trager, Y. Zhang, Y. Zhang, S. Yang, W. Xia, and S. Soatto, “Evolutionary generation of multi-agent systems,” arXiv preprint arXiv:2602.06511 , 2026. [16] D. Damen, H. Doughty, G. M. Farinella, S. Fidler, A. Furnari, E. Kaza-kos, D. Moltisanti, J. Munro, T. Perrett, W. Price et al. , “Scaling egocentric vision: The epic-kitchens dataset,” in Proceedings of the European conference on computer vision (ECCV) , 2018, pp. 720–736. [17] K. Grauman, A. Westbury, E. Byrne, Z. Chavis, A. Furnari, R. Girdhar, J. Hamburger, H. Jiang, M. Liu, X. Liu et al. , “Ego4d: Around the world in 3,000 hours of egocentric video,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2022, 10 IEEE TRANSACTIONS AND JOURNALS TEMPLATE 
+
+pp. 18 995–19 012. [18] C. Plizzari, A. Tonioni, Y. Xian, A. Kulshrestha, and F. Tombari, “Omnia de egotempo: Benchmarking temporal understanding of multi-modal llms in egocentric videos,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 24 129–24 138. [19] S. Zhou, J. Xiao, Q. Li, Y. Li, X. Yang, D. Guo, M. Wang, T.-S. Chua, and A. Yao, “Egotextvqa: Towards egocentric scene-text aware video question answering,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 3363–3373. [20] H. Liu, Z. Song, H. Wu, T. Pu, K. Wang, and L. Lin, “Robust egocentric referring video object segmentation via dual-modal causal intervention,” in Advances in Neural Information Processing Systems , 2025. [21] Z. Shi, H. Qiu, L. Wang, F. Meng, Q. Wu, and H. Li, “Cognition transferring and decoupling for text-supervised egocentric semantic segmentation,” arXiv preprint arXiv:2410.01341 , 2024. [22] R. Fujii, M. Hatano, H. Saito, and H. Kajita, “Egosurgery-phase: A dataset of surgical phase recognition from egocentric open surgery videos,” in International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 2024, pp. 187–196. [23] Y. Zhuo, E. Zhang, X. Yu, A. Pachpande, W. Fang, X. Chen, A. W. Kirkpatrick, K. Couperus, C. Colombo, O. Tran et al. , “An egocentric life-saving interventional procedure dataset of actions, medical ques-tions, maneuvers and tools,” Scientific Data , 2025. [24] N. Darjana, R. Fujii, H. Saito, and H. Kajita, “Egosurgery-hts: A dataset for egocentric hand–tool segmentation in open surgery videos,” 
+
+Healthcare Technology Letters , vol. 12, no. 1, p. e70049, 2025. [25] C. Plizzari, G. Goletto, A. Furnari, S. Bansal, F. Ragusa, G. M. Farinella, D. Damen, and T. Tommasi, “An outlook into the future of egocentric vision: C. plizzari et al.” International Journal of Computer Vision , vol. 132, no. 11, pp. 4880–4936, 2024. [26] S. Yang, Y. Huang, W. Cai, S. Sun, F. Fang, Y. He, Y. Xie, J. Deng, H. Zhang, J. Song, and Z. Zhang, “Egocentric co-pilot: Web-native smart-glasses agents for assistive egocentric ai,” arXiv preprint arXiv:2603.01104 , 2026. [27] S. Gollapalli, V. Sharma, A. Al Ghazwi, and L. Heskin, “Smart glasses in surgery: the theatre and beyond,” Surgical Innovation , vol. 31, no. 5, pp. 502–508, 2024. [28] S. Mitrasinovic, E. Camacho, N. Trivedi, J. Logan, C. Campbell, R. Zilinyi, B. Lieber, E. Bruce, B. Taylor, D. Martineau et al. , “Clinical and surgical applications of smart glasses,” Technology and health care ,vol. 23, no. 4, pp. 381–401, 2015. [29] M. Y. Lu, B. Chen, D. F. Williamson, R. J. Chen, M. Zhao, A. K. Chow, K. Ikemura, A. Kim, D. Pouli, A. Patel et al. , “A multimodal generative ai copilot for human pathology,” Nature , vol. 634, no. 8033, pp. 466–473, 2024. [30] Y. Xu, R. Quan, W. Xu, Y. Huang, X. Chen, and F. Liu, “Advances in medical image segmentation: A comprehensive review of traditional, deep learning and hybrid approaches,” Bioengineering , vol. 11, no. 10, p. 1034, 2024. [31] J. Ma, Y. He, F. Li, L. Han, C. You, and B. Wang, “Segment anything in medical images,” Nature communications , vol. 15, no. 1, p. 654, 2024. [32] G. Wang, M. A. Zuluaga, W. Li, R. Pratt, P. A. Patel, M. Aertsen, T. Doel, A. L. David, J. Deprest, S. Ourselin et al. , “Deepigeos: a deep interactive geodesic framework for medical image segmentation,” IEEE transactions on pattern analysis and machine intelligence , vol. 41, no. 7, pp. 1559–1572, 2018. [33] L. Heinemann, A. Jaus, Z. Marinov, M. Kim, M. F. Spadea, J. Kleesiek, and R. Stiefelhagen, “Limis: Towards language-based interactive medi-cal image segmentation,” in 2025 IEEE 22nd International Symposium on Biomedical Imaging (ISBI) . IEEE, 2025, pp. 1–5. [34] R. Yuan, L. Zhou, J. Xu, Q. Li, M. Chen, Y. Zhang, R. Feng, T. Zhang, and S. Gao, “Tgsam-2: Text-guided medical image segmentation using segment anything model 2,” in International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 2025, pp. 565–574. [35] A. Liu, R. Xue, X. R. Cao, Y. Shen, Y. Lu, X. Li, Q. Chen, and J. Chen, “Medsam3: Delving into segment anything with medical concepts,” 
+
+arXiv preprint arXiv:2511.19046 , 2025. [36] X. Lai, Z. Tian, Y. Chen, Y. Li, Y. Yuan, S. Liu, and J. Jia, “Lisa: Reasoning segmentation via large language model,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2024, pp. 9579–9589. [37] H. Li, H. Liu, D. Hu, J. Wang, and I. Oguz, “Prism: A promptable and robust interactive segmentation model with visual prompts,” in 
+
+International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 2024, pp. 389–399. [38] Y. Xie, T. Zhou, Y. Zhou, and G. Chen, “Simtxtseg: Weakly-supervised medical image segmentation with simple text cues,” in International Conference on Medical Image Computing and Computer-Assisted Inter-vention . Springer, 2024, pp. 634–644. [39] C. Shen, W. Li, Y. Zhang, Y. Wang, and X. Wang, “Temporally-extended prompts optimization for sam in interactive medical image segmenta-tion,” in 2023 IEEE International Conference on Bioinformatics and Biomedicine (BIBM) . IEEE, 2023, pp. 3550–3557. [40] S. Schmidgall, R. Ziaei, C. Harris, E. Reis, J. Jopling, and M. Moor, “Agentclinic: a multimodal agent benchmark to evaluate ai in simulated clinical environments,” arXiv preprint arXiv:2405.07960 , 2024. [41] M. Almansoori, K. Kumar, and H. Cholakkal, “Medagentsim: Self-evolving multi-agent simulations for realistic clinical interactions,” in 
+
+International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 2025, pp. 362–372. [42] A. T. Elboardy, G. Khoriba, and E. A. Rashed, “Medical ai consensus: A multi-agent framework for radiology report generation and evaluation,” 
+
+arXiv preprint arXiv:2509.17353 , 2025. [43] Z. Yi, T. Xiao, and M. V. Albert, “A multimodal multi-agent framework for radiology report generation,” arXiv preprint arXiv:2505.09787 , 2025. [44] Y. Liao, S. Jiang, Y. Wang, and Y. Wang, “Reflectool: Towards reflection-aware tool-augmented clinical agents,” in Proceedings of the 63rd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2025, pp. 13 507–13 531. [45] Y. Ji, H. Bai, C. Ge, J. Yang, Y. Zhu, R. Zhang, Z. Li, L. Zhanng, W. Ma, X. Wan et al. , “Amos: A large-scale abdominal multi-organ benchmark for versatile medical image segmentation,” Advances in neural information processing systems , vol. 35, pp. 36 722–36 732, 2022. [46] O. Bernard, A. Lalande, C. Zotti, F. Cervenansky, X. Yang, P.-A. Heng, I. Cetin, K. Lekadir, O. Camara, M. A. G. Ballester et al. ,“Deep learning techniques for automatic mri cardiac multi-structures segmentation and diagnosis: is the problem solved?” IEEE transactions on medical imaging , vol. 37, no. 11, pp. 2514–2525, 2018. [47] S. Leclerc, E. Smistad, J. Pedrosa, A. Østvik, F. Cervenansky, F. Es-pinosa, T. Espeland, E. A. R. Berg, P.-M. Jodoin, T. Grenier et al. ,“Deep learning for segmentation using an open large-scale dataset in 2d echocardiography,” IEEE transactions on medical imaging , vol. 38, no. 9, pp. 2198–2210, 2019. [48] S. Jaeger, S. Candemir, S. Antani, Y.-X. J. W´ ang, P.-X. Lu, and G. Thoma, “Two public chest x-ray datasets for computer-aided screen-ing of pulmonary diseases,” Quantitative imaging in medicine and surgery , vol. 4, no. 6, p. 475, 2014. [49] S. Ali, D. Jha, N. Ghatwary, S. Realdon, R. Cannizzaro, O. E. Salem, D. Lamarque, C. Daul, M. A. Riegler, K. V. Anonsen et al. , “A multi-centre polyp detection and segmentation dataset for generalisability assessment,” Scientific Data , vol. 10, no. 1, p. 75, 2023. [50] N. Ravi, V. Gabeur, Y.-T. Hu, R. Hu, C. Ryali, T. Ma, H. Khedr, R. R¨ adle, C. Rolland, L. Gustafson, E. Mintun, J. Pan, K. V. Alwala, N. Carion, C.-Y. Wu, R. Girshick, P. Doll´ ar, and C. Feichtenhofer, “Sam 2: Segment anything in images and videos,” 2024. [Online]. Available: https://arxiv.org/abs/2408.00714 [51] S. Liu, Z. Zeng, T. Ren, F. Li, H. Zhang, J. Yang, C. Li, J. Yang, H. Su, J. Zhu et al. , “Grounding dino: Marrying dino with grounded pre-training for open-set object detection,” arXiv preprint arXiv:2303.05499 ,2023. [52] T. Ren, Q. Jiang, S. Liu, Z. Zeng, W. Liu, H. Gao, H. Huang, Z. Ma, X. Jiang, Y. Chen, Y. Xiong, H. Zhang, F. Li, P. Tang, K. Yu, and L. Zhang, “Grounding dino 1.5: Advance the ”edge” of open-set object detection,” 2024. [53] T. Ren, S. Liu, A. Zeng, J. Lin, K. Li, H. Cao, J. Chen, X. Huang, Y. Chen, F. Yan, Z. Zeng, H. Zhang, F. Li, J. Yang, H. Li, Q. Jiang, and L. Zhang, “Grounded sam: Assembling open-world models for diverse visual tasks,” 2024. [54] A. Kirillov, E. Mintun, N. Ravi, H. Mao, C. Rolland, L. Gustafson, T. Xiao, S. Whitehead, A. C. Berg, W.-Y. Lo, P. Doll´ ar, and R. Girshick, “Segment anything,” arXiv:2304.02643 , 2023. [55] L. Medeiros and contributors, “Language segment-anything,” https:// github.com/luca-medeiros/lang-segment-anything, 2023, gitHub repos-itory. [56] N. Carion, L. Gustafson, Y.-T. Hu, S. Debnath, R. Hu, D. Suris, C. Ryali, K. V. Alwala, H. Khedr, A. Huang et al. , “Sam 3: Segment anything with concepts,” arXiv preprint arXiv:2511.16719 , 2025. [57] F. Isensee, P. F. Jaeger, S. A. Kohl, J. Petersen, and K. H. Maier-Hein, “nnu-net: a self-configuring method for deep learning-based biomedical image segmentation,” Nature methods , vol. 18, no. 2, pp. 203–211, 2021. [58] L. R. Dice, “Measures of the amount of ecologic association between species,” Ecology , vol. 26, no. 3, pp. 297–302, 1945.

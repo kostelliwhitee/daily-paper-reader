@@ -6,30 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 20:09:05 UTC
+- 最新运行日期：2026-07-24
+- 运行时间：2026-07-24 21:34:05 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：3
-- 速读区：0
+- 本次总论文数：5
+- 精读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读两篇论文，聚焦高效Transformer注意力机制与端到端V2X多智能体驾驶。最值得关注的是ELSAA提出的低秩稀疏注意力近似方法（9.0分），以及Defer to Plan的自适应多智体融合方案（8.0分）。建议读者优先阅读ELSAA的注意力加速思路，并关注V2X驾驶中规划与融合的协同设计。
-- 详情：[/202607/23/README](/202607/23/README)
+今日关注视频生成与多智能体两大方向，精读《SANA-Video 2.0》以混合线性注意力实现高效视频生成（8.0分），速读《Coordinating from Memory》探索图结构经验复用助力动态制造（7.0分）。  
+最值得看的是视频生成中的注意力残差机制和多智能体系统中的记忆协调方法。  
+建议普通读者优先精读SANA-Video 2.0论文，再速读制造领域的经验复用文章，以理解当前高效生成与智能协作的前沿思路。
+- 详情：[/202607/24/README](/202607/24/README)
 
 ### 精读区论文标签
-1. [ELSAA: Efficient Low-Rank and Sparse Attention Approximation for Training Transformers](/202607/23/2607.20214v1-elsaa-efficient-low-rank-and-sparse-attention-approximation-for-training-transformers)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：高效低秩稀疏注意力近似
-2. [Defer to Plan: Adaptive Multi-Agent Fusion for End-to-End V2X Driving](/202607/23/2607.19774v1-defer-to-plan-adaptive-multi-agent-fusion-for-end-to-end-v2x-driving)  
+1. [SANA-Video 2.0: Hybrid Linear Attention with Attention Residuals for Efficient Video Generation](/202607/24/2607.21553v1-sana-video-20-hybrid-linear-attention-with-attention-residuals-for-efficient-video-generation)  
    标签：评分：8.0/10、query:ma-la
-   evidence：端到端V2X驾驶利用注意力进行多智能体融合
-3. [Dreamer-CPC: Message Learning with World Models for Decentralized Multi-agent Reinforcement Learning](/202607/23/2607.19809v1-dreamer-cpc-message-learning-with-world-models-for-decentralized-multi-agent-reinforcement-learning)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：去中心化多智能体强化学习，智能体间通信，世界模型
+   evidence：混合线性注意力机制用于高效视频生成
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Coordinating from Memory: Graph-Structured Experience Reuse for Multi-Agent Adaptation in Dynamic Manufacturing](/202607/24/2607.19985v1-coordinating-from-memory-graph-structured-experience-reuse-for-multi-agent-adaptation-in-dynamic-manufacturing)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：使用图结构记忆的多智能体协调
+2. [Understanding From Human Perspective: A Multi-agent System for Interactive Egocentric Medical Image Segmentation](/202607/24/2607.17341v1-understanding-from-human-perspective-a-multi-agent-system-for-interactive-egocentric-medical-image-segmentation)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体交互系统
+3. [CHMAS: A Coupled Hierarchical Framework for Multi-Agent Reinforcement Learning](/202607/24/2607.19555v1-chmas-a-coupled-hierarchical-framework-for-multi-agent-reinforcement-learning)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体层次化分解与协调
+4. [GRADRAG: Cross-Component Prompt Adaptation for Coordinated Multi-Agent RAG](/202607/24/2607.21324v1-gradrag-cross-component-prompt-adaptation-for-coordinated-multi-agent-rag)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：提出跨组件提示适应的协调多智能体RAG框架
 
 
 <div class="dpr-home-promo-card">
