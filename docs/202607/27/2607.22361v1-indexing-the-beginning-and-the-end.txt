@@ -1,0 +1,458 @@
+Title: Indexing: the Beginning and the End
+
+URL Source: https://arxiv.org/pdf/2607.22361v1
+
+Published Time: Mon, 27 Jul 2026 00:50:56 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Indexing: the Beginning and the End 
+
+# Alexander Kozachinskiy CENIA 
+
+# alexander.kozachinskyi@cenia.cl 
+
+# Vicente Opazo CENIA 
+
+# vicente.opazo@cenia.cl 
+
+# Felipe Urrutia Pontifical Catholic University of Chile 
+
+# felipe.urrutia@uc.cl 
+
+# July 27, 2026 
+
+Abstract 
+
+We study information bottlenecks in modern deep-learning architectures – RNNs, softmax transform-ers, linear-attention transformers and state-space models – through the lens of the indexing primitive . In this primitive, the input consists of n bits and one integer i from 1 to n called the index, and the output equals the value of the i-th bit. We introduce causal complexity for masked architectures. We show that architectures with low causal complexity cannot solve the indexing primitive in any constant number of layers when the index appears at the end of the input. In particular, this limitation applies to low-parameter RNNs, SSMs and masked linear-attention transformers. In contrast, small softmax transformers can solve it in one layer, while non-masked linear-attention transformers can solve it in 2, which separates them from their masked counterparts. In turn, when the index appears at the beginning, we show that small RNNs are capable of solving this task in 1 layer, while all the other architectures require 2. All our impossibility results are unconditional and apply even to models that employ infinite-precision real arithmetic. Moreover, experiments for up to n = 64 qualitatively align with our theory: configura-tions with low-parameter theoretical solutions learn the indexing task easily, while configurations that do not admit such theoretical solutions struggle to learn as the sequence length grows. 
+
+# 1 Introduction 
+
+Part of the research on the expressivity of transformers (Strobl et al., 2024) has been revolving around their ability to compute certain fundamental primitives . These primitives are supposed to be a mathematical abstraction of some challenges that arise in processing information by transformers. The most well-studied primitive is the function composition .It has been linked to the transformers’ ability to infer implicit facts through compositional generaliza-tion (Peng et al., 2024; Guan et al., 2024). For instance, the training data may contain the birth year of a singer A and the Nobel Prize winners for each year, but not explicitly answer the question “who won the Nobel Prize in Physics in the year A was born?” Answering it requires composing a function mapping people to birth years with one mapping years to Nobel Prize winners. Mathematically, this inference is abstracted as the following task: given two functions f, g : [ n] → [n] as lists of values, and an index i ∈ [n], compute g(f (i)), where [ n] = {1, . . . , n }. Peng et al. (2024) introduced this task and used communication complexity to show that 1-layer transformers with no(1) parameters and 
+
+no(1) bits of precision cannot solve it. They further showed that such transformers require Ω( k) chain-of-thought iterations for k-fold composition, 
+
+i 7 → fk ◦ fk−1 ◦ . . . ◦ f1(i).
+
+1arXiv:2607.22361v1 [cs.LG] 24 Jul 2026 Afterwards, Kozachinskiy et al. (2025) removed the bounded-precision assumption, proving the same impos-sibility for infinite-precision 1-layer transformers with no(1) parameters. They have also introduced the binary relation composition primitive and have conjectured that it cannot be done by O(1)-layer small transformers. At the same time, Barcelo et al. (2025) showed that k-fold composition requires exactly k chain-of-thought steps for 1-layer transformers of any size, although only under unique hard attention. In their breakthrough work, Chen et al. (2025) were able to extend this analysis to multi-layer trans-formers. They have shown that no(1) -parameter no(1) -precision transformers with masking require k layers to solve a variation of the k-fold function composition task, but full-attention transformers can solve it in 
+
+O(log k) layers. Their technique is based on “autoregressive” communication complexity and thus requires assumptions about bits of precision. It is open to obtain lower bounds on multi-layer infinite-precision transformers, even with masking. Another primitive that arose from mechanistic interpretability is the induction heads task. Given a sequence of symbols, the goal is to predict what will go after the last symbol. One simple strategy is – take the closest previous appearance of the last symbol in the sequence and look what goes after it. It was observed empirically that this mechanism is widely used by transformer language models (Elhage et al., 2021; Olsson et al., 2022). In turn, Sanford et al. (2024) have shown that small 1-layer transformers cannot do this primitive while small 2-layer can (their notion of “small” includes the assumptions about the number of bits of precision). Recently, Strobl et al. (2025) have turned their attention to an even more basic primitive of function evaluation – given a function f : {1, 2, . . . , n } → { 1, 2, . . . , n } and an input i, output f (i). They have found out that even this simple task might be hard for small 1-layer transformers under some assumptions about input representation. Their result applies even to infinite-precision transformers. As we see, there is a rich literature on the analysis of these primitives for transformers. However, more modern architectures, aimed to circumvent the computational bottlenecks of transformers – like Mamba (Gu and Dao, 2023) or linear-attention transformers (Katharopoulos et al., 2020) – still wait their turn. In this paper, we address this gap by studying a version of function evaluation primitive called indexing – which is essentially the function evaluation for functions that take just two values, 0 and 1. Our analysis includes stan-dard transformers, linear-attention transformers, state-space models (SSMs), and “pre-transformer” RNNs. Albeit very simple, the indexing primitive surprisingly reveals a rich interplay between these architectures, and provides insights on how they process information in a form of rigorous mathematical results. Moreover, it allows us to obtain the first multi-layer infinite-precision lower bounds – although not for transformers, but for a class of architectures with low causal complexity – including SSMs, RNNs, and masked linear-attention transformers. We now describe our results in more detail. 
+
+Our results In the indexing task, we are given n bits σ1, . . . , σ n ∈ { 0, 1} and a number i ∈ { 1, 2, . . . , n }
+
+called the index. The goal is to output σi. Observe that it can be seen as a function evaluation task for a function of the form σ : {1, 2, . . . , n } → { 0, 1}.We consider two versions of this task. In the left-hand indexing, the token with i is the first one while the answer has to be computed in the special end-token. In the right-hand indexing, the token with i is the last one, and the answer has to be computed in it. In both versions, there is also a token for each of the bits 
+
+σ1, . . . , σ n.Our contribution is summarized as follows. 
+
+• For causal architectures, or architectures with masking – those where the output in k-th position does not depend on input in the positions after k – we introduce the notion of causal complexity of a layer. Intuitively, it measures the minimal dimension to which the first k − 1 inputs to a layer can be compressed so that then the k-th output can be “easily” computed from this compressed representation and the k-th input. We show that no O(1) layers with no(1) causal complexity can solve the right-hand indexing task. We then observe that “small” ( no(1) -parameter) masked linear-attention, Mamba and RNN layers all have 
+
+no(1) causal complexity, deriving the corresponding limitations for these architectures. Once again, 2our lower bound technique applies even in the infinite-precision regime. Thus, we conclude that no 
+
+O(1) small layers of these architectures, even if they use infinite-precision computations, can solve the right-hand indexing task. 
+
+• In contrast, as it essentially was observed in previous works (Strobl et al., 2025) standard 1-layer transformers can solve the right-hand indexing task with O(1) parameters. This is explained by their high causal complexity compared to other architectures. We also show that 2-layer non-masked linear-attention transformers with O(1) parameters can solve the right-hand indexing task as well. This separates them from their masked version which cannot solve the task in any constant number of 
+
+no(1) -parameter layers. 
+
+• Finally, we observe that in the left-hand indexing task, RNNs prevail over all other architectures. While RNNs can solve it in 1 layer with O(1) parameters, neither standard attention, nor linear-attention, nor Mamba can solve it in 1 layer with no(1) parameters (but all of them can solve it in 2 layers with 
+
+O(1) parameters, with or without masking). Our results exploit information bottlenecks in the aforementioned architectures. In the right-hand in-dexing task, the bits are processed before the index. Thus, at the moment when index is considered, the information we receive from the previous positions must essentially allow us to recover the whole n-bit string. But such memory capacity turns out to be bounded by the causal complexity, which is low for every masked architecture in question except transformers. In turn, in the left-hand indexing task, the indexed i is processed first, and intuitively it should be then carried over the input until we reach the i-th position. Then the bit at this position should be remembered and carried over to the end. RNNs are perfectly suitable for this task, while, for instance, SSMs, which are sometimes viewed as parallelizable alternatives to RNNs because of their linear update rule, struggle on this task – precisely, as we will show, because of that linearity. The following table summarizes our results, indicating for each architecture the minimal number of “small” layers needed to solve the left-hand and the right-hand indexing tasks. Architecture LHI RHI Full softmax 2 1Causal softmax 2 1Full linear-attention 2 2Causal linear-attention 2 ω(1) SSM 2 ω(1) RNN 1 ω(1) Table 1: Minimum number of no(1) -parameter layers required for the left-hand indexing (LHI) and the right-hand indexing (RHI). Recall that the ω(1) notation means “is not bounded by a constant”. All our impossibility results hold even for models that use infinite-precision computations with real numbers. We achieve this via adapting the VC dimension technique of Kozachinskiy et al. (2025) beyond the transformers context. Finally, we experimentally test whether existence or absence of a low-parameter theoretical solution correlates with the ability to learn the indexing task in practice. First, we find that already at length n = 64 the configurations on the lower-bound side consistently fail under our fixed training protocol. Across all seeds, causal linear-attention transformers, RNNs and Mamba (all with up to 4 layers) consistently fail to learn the right-hand indexing, as well as 1-layer transformers (softmax and linear) and 1-layer Mamba – the left-hand indexing. As for the “existence results” (upper bounds), the situation seems to depend on the positional encoding. We found that polynomial positional encoding leads to the strongest agreement with our theory: among the 160 non-redundant constructive runs represented in our summary, only two failed to learn the task perfectly. 31.1 Further related work 
+
+Study of the expressive power of transformers is not limited to the study of the above primitives. For instance, part of the research was dedicated to showing that these machines, equipped with the mechanism of autoregressively generating tokens, are capable of simulating any computation (P´ erez et al., 2021; Merrill and Sabharwal, 2024; Jiang et al., 2025). A significant part of the literature is devoted to obtaining limitations for computing formal languages, using methods from computational complexity and logic (Hahn, 2020; Chiang et al., 2023; Yang et al., 2024; S¨ alzer et al., 2025). As for RNNs, long before the deep learning era it was observed that they are capable of simulating finite automata (Minsky, 1967). Moreover, when one allows arbitrary rational weights and an unbounded number of intermediate steps after processing the input, they are capable of simulating Turing machines (Siegelmann and Sontag, 1994). Very recently, Merrill et al. (2026) gave an example of a task, doable by a hybrid architecture (RNNs + transformers) but not by RNNs or transformers separately, under standard complexity assumptions. In turn, SSMs have been investigated from the viewpoint of their ability to overcome limitations of transformers in recurrent computations (Merrill et al., 2024) – as a more scalable alternative to RNNs in this matter. It was observed that this hugely depends on design choices. For instance, Mamba is not capable of performing summation over the group Z2 (Sarrof et al., 2024), while more general diagonalizable SSMs, under finite-precision assumption, are capable of performing summation over a finite group if and only if this group is solvable (Shakerinava et al., 2026). 
+
+# 2 Preliminaries 
+
+# 2.1 VC dimension and arithmetic complexity 
+
+Definition 1. Let f : Rn → Rm. Its arithmetic complexity, denoted by AC (f ), is the minimal t ∈ N such that f can be computed by some algorithm in no more than t of the following operations: 
+
+• the exponential function α 7 → eα on real numbers; 
+
+• the arithmetic operations +, −, ×, / on real numbers; 
+
+• jumps conditioned on >, = comparisons of real numbers; 
+
+• output a constant or a previously computed value. (If no such t exists, we set AC (f ) = + ∞.) 
+
+By a concept class we mean a function C : Rn × Rp → { 0, 1}. The first n coordinates form an input , and the last p coordinates form parameters .
+
+Definition 2. Let C : Rn × Rp → { 0, 1} be a concept class. Its VC dimension, denoted by V Cdim (C), is the maximal natural number d such that for some x1, . . . , x d ∈ Rn, the following holds. For every d-bit string 
+
+α = α1 . . . α d ∈ { 0, 1}d there exists y ∈ Rp such that: 
+
+C(x1, y ) = α1, . . . , C (xd, y ) = αd.
+
+Theorem 3 ((Anthony and Bartlett, 2009) Theorem 8.14) . Let C be a concept class with p parameters. Then 
+
+V Cdim (C) = O(AC (C)2 · p2).
+
+42.2 Layers and tasks 
+
+We work with a notion of a layer . In general, a layer with input length n and input-output dimension d (in short, an ( n, d )-layer) is any function f : ( Rd)n → (Rd)n.By tasks we formally mean functions T : Σ 1 × . . . × Σn → Γ, where Σ 1, . . . , Σn, Γ are finite sets. Here n
+
+is the input length of a task. We imagine that the input to a task is given in a sequence of n tokens : the first token contains an element σ1 ∈ Σ1, the second token contains an element σ2 ∈ Σ2, and so on. The goal is to compute T (σ1 . . . σ n). We now formalize what it means that L layers f1, . . . , f L solve a task T .
+
+Definition 4. Let T : Σ 1 × . . . × Σn → Γ be a task, and f1, . . . , f L be (n, d )-layers. We say that f1, . . . , f L solve T if there exists a function 
+
+p : Σ 1 × { 1} ∪ . . . ∪ Σn × { n} → Rd,
+
+(usually referred to as input-position embedding), and a matrix A ∈ RΓ×d (usually referred to as output-distribution matrix) such that for any σ1 . . . σ n ∈ Σ1 × . . . × Σn, the following holds. Calculate 
+
+x1 = p(σ1, 1) , . . . , x n = p(σn, n ),
+
+(y1, . . . , y n) = fL ◦ . . . ◦ f1(( x1, . . . , x n)) ,α = Ay n ∈ RΓ.
+
+Then, denoting γ = T (σ1 . . . σ n), we have αγ > α γ′ for all γ′ ∈ Γ \ { γ}.
+
+Indexing task. The indexing task is the following task: given n bits σ1, . . . , σ n ∈ { 0, 1} and a number 
+
+i ∈ { 1, 2, . . . , n }, the goal is to output σi. We consider two variations – the right-hand indexing task where the input is given via n + 1 tokens; the last one (where the output should be computed) has i. The left-hand indexing task assumes n + 2 tokens, first goes the token with i, then tokens with σ1, . . . , σ n, and then a special end token. 
+
+# 2.3 Attention, RNNs, SSMs 
+
+We define several types of layers from relevant architectures of interest. For each of them, we define the notion of size , referring to the number of learnable parameters in their MLPs (that, unless stated otherwise, are assumed to use the ReLU activation). We also take into account arithmetic complexity of some non-polynomial components of the architectures. The size always includes a term d – the dimension of the layer – and thus upper bounds the dimension. 
+
+Definition 5. A causal softmax transformer (n, d )-layer is given by 3 matrices K, Q, V ∈ Rd×d and an MLP N : Rd → Rd.On input (x1, . . . , x n) ∈ (Rd)n, the following computations are performed to produce the output sequence 
+
+(y1, . . . , y n) ∈ (Rd)n. First, 
+
+vℓ = V x ℓ, qℓ = Qx ℓ, kℓ = Kx ℓ
+
+for ℓ = 1 , . . . , n . Then 
+
+ak =
+
+> k
+
+P
+
+> ℓ=1
+
+vℓ exp {kTℓ qk}
+
+> k
+
+P
+
+> ℓ=1
+
+exp {kTℓ qk}
+
+, k = 1 , . . . , n, (1) 
+
+and then 
+
+yk = N (xk + ak), k = 1 , . . . , n 
+
+In a full softmax transformer layer, the upper limits in the sums in (1) are changed from k to n.The size of the layer is 3d2 plus the number of learnable parameters of N .
+
+5Definition 6. A causal linear-attention (n, d )-layer is given by 3 matrices K, Q, V ∈ Rd×d, a kernel function ϕ : Rd → (0 , +∞)d and an MLP N : Rd → Rd.On input (x1, . . . , x n) ∈ (Rd)n, the following computations are performed to produce the output sequence 
+
+(y1, . . . , y n) ∈ (Rd)n. First, 
+
+vℓ = V x ℓ, qℓ = Qx ℓ, kℓ = Kx ℓ
+
+for ℓ = 1 , . . . , n . Then 
+
+ak =
+
+> k
+
+P
+
+> ℓ=1
+
+vℓ · ϕ(kℓ)T ϕ(qk)
+
+> k
+
+P
+
+> ℓ=1
+
+ϕ(kℓ)T ϕ(qk)
+
+, k = 1 , . . . , n, (2) 
+
+yk = N (xk + ak), k = 1 , . . . , n. (3) 
+
+In a full linear-attention layer, the upper limit in the sums in (2) are changed from k to n.The size of the layer is 3d2 plus the number of learnable parameters of N , plus the arithmetic complexity of the kernel function ϕ.
+
+For instance, in (Katharopoulos et al., 2020) the following kernel function is used: 
+
+ϕ : ( x1, . . . , x d) 7 → (elu (x1) + 1 , . . . , elu (xd) + 1) ,
+
+where 
+
+elu (x) = 
+
+(
+
+x x > 0
+
+α(ex − 1) x ≤ 0for some positive constant α. This example has O(d) arithmetic complexity. Another common choice is to use ReLU instead of elu, where the arithmetic complexity is still O(d). 
+
+Remark 7. For a one-layer softmax or linear-attention transformer, full and causal attention induce the same computation at the final readout token. Indeed, the answer is computed from the last token which sees all tokens in both models, and does not yet use the attention computations in these tokens. 
+
+Definition 8. An SSM layer of dimension d is given by three maps A : Rd → Rd×d, B : Rd → Rd, ϕ : R2d →
+
+Rd and vector h0 ∈ Rd. On input (x1, . . . , x n) ∈ (Rd)n the output sequence of vectors (y1, . . . , y n) ∈ (Rd)n
+
+is computed as follows: for k = 1 , . . . , n , compute 
+
+hk = A(xk)hk−1 + B(xk), (4) 
+
+yk = ϕ(xk, h k). (5) 
+
+The size of the layer is d2 + 2 d plus the arithmetic complexities of A, B, ϕ .
+
+For instance, in Mamba (Gu and Dao, 2023), A(xt) is a constant d × d matrix, and B(xt) is defined as a multiplication of the vector xt by another constant d × d matrix. Thus, these maps have O(d2) arithmetic complexity. In turn, ϕ in Mamba can be seen as an MLP with the SiLU/Swish activation (Ramachandran et al., 2018), which can be expressed using exponentials and standard arithmetic operations. Thus, such ϕ
+
+also has poly (d) arithmetic complexity. Additionally, Mamba has an optional normalization layer for ϕ using LayerNorm of Ba et al. (2016). Unfortunately, such a layer cannot be easily handled in our theoretical setting due to its use of the square root function which is not an operation permitted in Definition 1. Thus, with layernorm, we no longer have good upper bounds on the VC dimension guaranteed by Theorem 3 that we require for our proofs. One can incorporate this type of layers with the use of bounds on the VC dimension for Pfaffian activation functions due to Karpinski and Macintyre (1997). However, the way these results are formulated requires a significant additional technical work in order to apply to our setting which we omit in the current version for simplicity. 6Definition 9. An RNN layer of dimension d is given by two MLPs N1, N2 : R2d → Rd. On input (x1, . . . , x n) ∈
+
+(Rd)n, the output sequence of vectors (y1, . . . , y n) ∈ (Rd)n is computed as follows: set h0 = 0 ∈ Rd and for 
+
+k = 1 , . . . , n , compute 
+
+hk = N1(xk, h k−1), (6) 
+
+yk = N2(xk, h k). (7) 
+
+The size of the layer is d plus the number of learnable parameters of N1, N2.
+
+# 3 Right-hand Indexing and Causal Architectures 
+
+Definition 10. An (n, d )-layer f is causal if the i-th output of the layer is the function of the first i input vectors, for every i = 1 , . . . , n .
+
+Definition 11. Let f be an (n, d )-causal layer. Its causal complexity is the minimal natural number s ≥ d
+
+such that for some p, t ∈ N with p + t ≤ s, the following holds. For any k = 2 , . . . , n , there exist a “fingerprint” function 
+
+ϕk : ( Rd)k−1 → Rp
+
+such that the k-th output vector, yk, on input (x1, . . . , x n) ∈ (Rd)n, is the function of the fingerprint fk =
+
+ϕk(x1, . . . , x k−1) and of xk, and, moreover, this function (fk, x k) 7 → yk has arithmetic complexity at most t.
+
+Theorem 12. a) No O(1) causal layers of causal complexity no(1) can solve the right-hand indexing task. b) Two full linear-attention layers of O(1) -size can solve the right-hand indexing task; c) One softmax transformer layer of O(1) -size can solve the right-hand indexing task. Proof. a) Assume for contradiction that there exist L = O(1) causal layers f1, . . . , f L of causal complexity 
+
+no(1) that solve the right-hand indexing task (σ1, . . . , σ n, i ) 7 → σi.
+
+We employ the definition of the causal complexity with respect to the ( n + 1)-st token, one with the index i. First, this input token is transformed via some input embedding into a vector xn+1 (i) ∈ Rd.Next, the input binary word σ = σ1 . . . σ n ∈ { 0, 1}n is first transformed into a sequence ( x1, . . . , x n)of input vectors in the first n tokens. Then ( x1, . . . , x n), by definition of causal complexity, can be transformed in L fingerprints of dimension p = no(1) :
+
+σ 7 → fn+1 (σ) ∈ RO(p)
+
+such that the outputs of all L layers in the last position, including the last output yLn+1 , can be computed from fn+1 (σ) and xn+1 (i) in arithmetic complexity no(1) . Then from yLn+1 one can compute the answer σi to the indexing task through multiplying yLn+1 by a 2 × d matrix, and computing the maximal coordinate of the resulting vector. The last part requires O(d) = no(1) arithmetic complexity (recall that causal complexity upper bounds d). One can perform these computations for arbitrary real vectors fn+1 ∈ RO(p) and xn+1 ∈ Rd, not just from those that come as inputs to the indexing problem. That is, when we omit inputs in 
+
+fn+1 (σ), x n+1 (i), we no longer consider these vectors as functions of σ and i but allow them to take arbitrary values. This gives a concept class C(xn+1 , f n+1 ), which, on the one hand, has arithmetic complexity, and thus VC dimension by Theorem 3, at most no(1) , but on the other hand, has VC dimension at least n since for inputs xn+1 (1) , . . . , x n+1 (n) we have: 
+
+C(xn+1 (i), f n+1 (σ)) = σi, i = 1 , . . . , n, 
+
+for every σ ∈ { 0, 1}n.7b) Using a positional encoding that assigns 0 to every position except the last one, to which it assigns a sufficiently large value, we can make the last token receive attention weight 100 n2, while all other tokens receive weight 1. Since there is no masking, every token can then recover the index i from the last token up to a small additive error, say 0 .01. Next, we can devise an output MLP of the first layer that produces 0 at positions k̸ = i, while at position i it outputs a large marker together with the local bit σi. Indeed, one can do it by computing the absolute value |k − i′| – if it is less than 0 .01, then k = i,and if it is greater than 0 .99, then k̸ = i. Thus, the first-layer output at position i contains a large marker together with σi, while all other positions output 0. Repeating the same attention mechanism in the second layer gives this value to every token, including the last one. c) Imagine that the positional encoding of the k-th position contains 
+
+cos k
+
+sin k
+
+
+
+while the index i is embedded as 
+
+cos i
+
+sin i
+
+
+
+. Then we can make sure that the attention from the index position to the k-th position is of the form  cos k
+
+sin k
+
+
+
+,
+
+cos i
+
+sin i
+
+ 
+
+and thus is strictly maximized at k = i. Through multiplying these products by a sufficiently large constant, the softmax function will get us, up to a small error, the content of the i-th position that allows us to restore the i-th bit. We now observe that item a) of Theorem 12 applies to RNNs, SSMs and causal linear-attention layers with reasonable assumptions on their size. 
+
+Proposition 13. no(1) -size SSM, RNN, and causal linear-attention layers have causal complexity no(1) .Proof. Let ( x1, . . . , x n) ∈ (Rd)n be an input. For SSMs and RNNs, the fingerprint of x1, . . . , x k−1 would be the vector hk−1 from (4) and (6), respectively. Given this vector and xk, one computes yk according to formulas (4–5) and (6–7). This can be performed in arithmetic complexity no(1) . Here one uses the fact that the dimension, the number of learnable parameters of the MLPs in the equations, and the arithmetic complexity of A, B, ϕ in case of SSMs, are bounded by no(1) due to the corresponding bound on the size of a layer. For causal linear-attention layer, the fingerprint of x1, . . . , x k−1 consists of one d × d matrix, and one 
+
+d-dimensional row, computed by: k−1X
+
+> ℓ=1
+
+vℓϕ(kℓ)T ,
+
+> k−1
+
+X
+
+> ℓ=1
+
+ϕ(kℓ)T .
+
+The output yk is then computed via formulas in (2–3). Complementing the computation, given two sums above, requires now just dO(1) = no(1) arithmetic operations that come from matrix products, and also computation of ϕ whose arithmetic complexity is bounded by no(1) due to the bound on the size of the layer. 
+
+# 4 Left-hand Indexing: RNNs prevail 
+
+Theorem 14. a) One O(1) -size RNN layer can solve the left-hand indexing task. b) No 1-layer no(1) -size SSM, linear-attention or softmax transformer can solve the left-hand indexing task. c) Each of the following – 2 O(1) -size SSM layers, 2 O(1) -size linear-attention layers, 2 O(1) -size soft-max transformer layers – can solve the left-hand indexing task. This holds regardless of whether the transformer layers are full or causal. 
+
+8Proof. a) The RNN stores i and one answer coordinate. At bit position k, the update MLP computes a binary marker for i = k and writes σk to the answer coordinate only at that position. Since exactly one position is selected, the final state contains σi.b) We start with the lower bound for transformers (the same proof works both for linear-attention and softmax). Let the input to the indexing task be i, (σ1, . . . , σ n). There are n + 2 tokens, the first token with i, next n tokens with input bits, and the last end-token. Note that for both models, the computation of the attention in the last token (see (1) and (2)) can be decomposed into two parts, one determined by i and the other by the string σ = σ1 . . . σ n, more precisely: 
+
+an+2 = α(i) + β(σ)
+
+γ(i) + ρ(σ) , (8) where α(i), β (σ) ∈ Rd, γ(i), ρ (σ) ∈ (0 , +∞). Consider a concept class C that treats coordinates of (α(i), γ (i)) as d + 1 input coordinates and ( β(σ), ρ (σ)) as d + 1 parameters, computes an+2 as in (8), and then performs the rest of the computations in the last token, getting the output of the indexing task. More specifically, it sums up an+2 with the vector xn+2 – embedding of the last token, applies the output MLP N to the sum, multiplies the resulting vector by the output-distribution matrix A,and computes which output class has the largest score. On the one hand, if the size of the layer is no(1) ,then d = no(1) , the number of learnable parameters in N is no(1) , and hence the number of parameters and arithmetic complexity of C is no(1) , together with its VC dimension by Theorem 3. On the other hand, if for contradiction such a layer solves the indexing task, then 
+
+C (α(i), γ (i)) , (β(σ), ρ (σ))  = σi,
+
+meaning that the VC dimension of C is at least n as, choosing distinct σ ∈ { 0, 1}n, we can realize any Boolean function on n inputs: (α(1) , γ (1)) , . . . , (α(n), γ (n)) .
+
+The structure of the argument against no(1) -size SSM layer, computing the left-hand indexing, is similar. Assuming for contradiction that such a layer exists, we construct a concept class C(α, β ) with 
+
+no(1) number of parameters and no(1) arithmetic complexity, satisfying: 
+
+C(α(i), β (σ)) = σi
+
+for some functions α(i), β (σ), obtaining a contradiction since its VC dimension has to be at least n.More specifically, we let α(i) = h1 be the state after processing the first token (one with the index) in (4–5). The further evolution of the state h1 happens through a composition of n + 1 affine functions 
+
+Rd → Rd, determined by σ1, . . . , σ n. This whole composition can be given by a d × d matrix A(σ) and a d-vector b(σ). Overall, we get the following formula for the state after processing the whole input 
+
+hn+2 = A(σ)α(i) + b(σ).
+
+Coordinates of β(σ) = ( A(σ), b (σ)) will be viewed as parameters, and there are d2 + d = no(1) of them. Computing hn+2 takes poly (d) = no(1) standard arithmetic operations. The output of the SSM layer is then computed by applying the output MLP ϕ to hn+2 and the embedding of the last token xn+2 ,multiplying by the output-distribution matrix, and taking the highest-scoring output class. Again, this all takes arithmetic complexity no(1) if the size of the layer is no(1) . Finally, we have C(α(i), β (σ)) = σi
+
+since the layer is supposed to solve the indexing task. c) Transformers – both linear-attention and softmax, causal and full – essentially can mimic the solution from item b) of Theorem 12. By putting a lot of weight to the first position in the positional encoding, all subsequent tokens can obtain the value of the index i (up to a small additive error, say, 0 .01). Since the index is in the beginning, the masking does not prevent us from doing it. Then again, the output 9MLP of the first layer can use this to output a large number at the i-th position, and 0 at all other positions. Finally, the second layer can now focus its attention on the i-th position, retrieving the value of the i-th bit. Since the output is computed at the last token, masking would not be a problem. A 2-layer SSM is capable of imitating this solution as well. Note that due to its linear update rule, it can in particular simply sum up the input vectors. By putting the index i to a designated coordinate for the first token, and 0 for other tokens, and summing up values in this coordinate, we get i to every position after the first layer. Then the output MLP can transform it into the value of the i-th bit at the i-th position and 0 at the rest of the positions. Summing up these MLP outputs at the second layer gives us the i-th bit. 
+
+# 5 Experiments 
+
+The preceding sections establish asymptotic separations for indexing. We now test whether the same picture appears in finite models trained from scratch. We call configurations supported by our positive constructions 
+
+constructive (✓), and configurations on the asymptotically hard side of our results stress tests (✗). Stress-test configurations may still succeed at small finite lengths, but their performance is expected to deteriorate as n
+
+grows. These experiments do not replace the lower bounds: training failure is not evidence of impossibility. The appendix provides full hyperparameters, ablations, parameter counts, runtimes, and length-shifted evaluations. The code for our experiments can be found at 
+
+https://github.com/visho33/IndexRetrieval .
+
+# 5.1 Experimental Setup 
+
+We train models on binary indexing for n ∈ { 8, 16 , 32 , 64 }, using five random seeds per configuration and online-generated examples. We use the query-token readout for RHI and the end-token readout for LHI. We compare full and causal variants of softmax and linear attention, together with GRUs and Mamba2. All models have width 16. Attention models use two heads and feedforward width 64, and linear attention uses the ELU+1 feature map. By Remark 7, equivalent one-layer full/causal pairs are reported once. Further implementation details are provided in the supplement. Following an ablation over learned, sinusoidal, rotary, polynomial, and no positional encoding, we use polynomial positional encodings throughout the main sweep. Bit tokens encode their type and value, whereas query tokens additionally contain the features (( i − 1) /n ) and (( i − 1) /n )2.Models are trained with AdamW, learning rate 10 −3, batch size 256, and at most 500 epochs, using 50,000 newly generated examples per epoch. A run is considered successful if its maximum held-out accuracy during training reaches 1 .0. 
+
+# 5.2 Results 
+
+Table 2 reports the number of successful seeds for each of the 23 distinct configurations. Constructive configurations succeed in 158 /160 runs overall: all 40 /40 runs succeed for n ≤ 32, and 38 /40 succeed at 
+
+n = 64. The only failures are one seed of two-layer full softmax attention and one seed of two-layer Mamba, both on LHI. Stress-test configurations display the opposite trend. Their success count decreases from 70 /75 at n = 8, to 51 /75 at n = 16, 13 /75 at n = 32, and 0 /75 at n = 64. Thus, the empirical separation between the two theory-guided groups becomes increasingly sharp as the sequence length grows. For right-hand indexing, all stress-test families succeed at n = 8, while additional depth allows some causal linear-attention and Mamba models to remain successful at n = 32. Nevertheless, every causal linear-attention, GRU, and Mamba configuration fails the criterion at n = 64, for all tested depths. One-layer full and causal linear attention also transition from 5 /5 successes at n ≤ 16 to 0 /5 at n ≥ 32. 10 Task Model family L Thm. Bit string length n
+
+8 16 32 64 RHI Softmax 1 ✓
+
+RHI Linear 1 ✗
+
+RHI Full linear 2 ✓
+
+RHI Causal linear 2 ✗
+
+RHI Causal linear 3 ✗
+
+RHI Causal linear 4 ✗
+
+RHI GRU 1 ✗
+
+RHI GRU 2 ✗
+
+RHI GRU 3 ✗
+
+RHI GRU 4 ✗
+
+RHI Mamba 1 ✗
+
+RHI Mamba 2 ✗
+
+RHI Mamba 3 ✗
+
+RHI Mamba 4 ✗
+
+LHI GRU 1 ✓
+
+LHI Mamba 1 ✗
+
+LHI Mamba 2 ✓
+
+LHI Softmax 1 ✗
+
+LHI Full softmax 2 ✓
+
+LHI Causal softmax 2 ✓
+
+LHI Linear 1 ✗
+
+LHI Full linear 2 ✓
+
+LHI Causal linear 2 ✓
+
+Total successful runs ✓ 40 40 40 38 
+
+✗ 70 51 13 0Table 2: Successful seeds out of five by task, model, depth L, and bit-string length n. For L = 1, Softmax and Linear merge the equivalent full and causal variants. ✓ and ✗ denote constructive and stress-test configurations. The final rows aggregate 40 constructive and 75 stress-test runs per length. For left-hand indexing, the breakdown occurs earlier. One-layer softmax attention fails at every tested length, whereas one-layer linear attention and Mamba succeed at n = 8 but fail for every seed once n ≥ 16. In contrast, the constructive one-layer GRU and two-layer models succeed almost uniformly. Overall, the experiments qualitatively align with the theoretical separations while exhibiting substantial finite-size effects. Success at small n does not contradict an asymptotic lower bound, and failure under our fixed optimization protocol is not evidence of impossibility. Several unsuccessful runs at n = 64 also remain above chance, as detailed in the supplementary material. 
+
+# 6 Conclusion 
+
+We used indexing to isolate how token order and information bottlenecks affect sequence models. Causal complexity yields precision-independent lower bounds for constant-depth RNNs, SSMs, and causal linear-attention transformers on right-hand indexing, whereas left-hand indexing gives a one-layer advantage to RNNs. Our experiments are consistent with these theoretical separations and show that their signatures are already visible at moderate input lengths. They also reveal substantial finite-size effects: success at small n
+
+does not contradict an asymptotic lower bound, and training failure is not evidence of impossibility. More broadly, our results show that even a minimal retrieval primitive can expose fundamental differences in how 11 sequence architectures route and preserve information. Extending causal complexity to richer primitives and more general architectural components is a direction for future work. 
+
+# References 
+
+Anthony, M. and Bartlett, P. L. (2009). Neural network learning: Theoretical foundations . cambridge university press. Ba, J. L., Kiros, J. R., and Hinton, G. E. (2016). Layer normalization. arXiv preprint arXiv:1607.06450 .Barcelo, P., Kozachinskiy, A., and Steifer, T. (2025). Ehrenfeucht-haussler rank and chain of thought. In 
+
+Forty-second International Conference on Machine Learning .Chen, L., Peng, B., and Wu, H. (2025). Theoretical limitations of multi-layer transformer. In 2025 IEEE 66th Annual Symposium on Foundations of Computer Science (FOCS) , pages 2631–2653. IEEE. Chiang, D., Cholak, P., and Pillay, A. (2023). Tighter bounds on the expressivity of transformer encoders. In International Conference on Machine Learning , pages 5544–5562. PMLR. Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph, N., Mann, B., Askell, A., Bai, Y., Chen, A., Conerly, T., et al. (2021). A mathematical framework for transformer circuits. Transformer Circuits Thread , 1(1):12. Gu, A. and Dao, T. (2023). Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 .Guan, X., Liu, Y., Lin, H., Lu, Y., He, B., Han, X., and Sun, L. (2024). Mitigating large language model hallucinations via autonomous knowledge graph-based retrofitting. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, pages 18126–18134. Hahn, M. (2020). Theoretical limitations of self-attention in neural sequence models. Transactions of the Association for Computational Linguistics , 8:156–171. Jiang, H., Hahn, M., Zetzsche, G., and Lin, A. W. (2025). Softmax transformers are turing-complete. arXiv preprint arXiv:2511.20038 .Karpinski, M. and Macintyre, A. (1997). Polynomial bounds for vc dimension of sigmoidal and general pfaffian neural networks. Journal of Computer and System Sciences , 54(1):169–176. Katharopoulos, A., Vyas, A., Pappas, N., and Fleuret, F. (2020). Transformers are rnns: Fast autoregressive transformers with linear attention. In International conference on machine learning , pages 5156–5165. PMLR. Kozachinskiy, A., Urrutia, F., Orellana, H., Steifer, T., Pizarro, G., Fuentes, M., Meza Va´ asquez, F., Buc Calderon, C., and Rojas, C. (2025). Strassen attention, split vc dimension and compositionality in transformers. Advances in Neural Information Processing Systems , 38:9665–9696. Merrill, W., Li, Y., Romero, T., Svete, A., Costello, C., Dasigi, P., Groeneveld, D., Heineman, D., Kuehl, B., Lambert, N., et al. (2026). Olmo hybrid: From theory to practice and back. arXiv preprint arXiv:2604.03444 .Merrill, W., Petty, J., and Sabharwal, A. (2024). The illusion of state in state-space models. arXiv preprint arXiv:2404.08819 .Merrill, W. and Sabharwal, A. (2024). The expressive power of transformers with chain of thought. In 
+
+International Conference on Learning Representations , volume 2024, pages 7690–7706. 12 Minsky, M. (1967). Computation: Finite and Infinite Machines . Prentice-Hall. Olsson, C., Elhage, N., Nanda, N., Joseph, N., DasSarma, N., Henighan, T., Mann, B., Askell, A., Bai, Y., Chen, A., et al. (2022). In-context learning and induction heads. arXiv preprint arXiv:2209.11895 .Peng, B., Narayanan, S., and Papadimitriou, C. (2024). On limitations of the transformer architecture. In 
+
+First conference on language modeling .P´ erez, J., Barcel´ o, P., and Marinkovic, J. (2021). Attention is turing-complete. Journal of Machine Learning Research , 22(75):1–35. Ramachandran, P., Zoph, B., and Le, Q. V. (2018). Searching for activation functions. In International Conference on Learning Representations .S¨ alzer, M., K¨ ocher, C., Kozachinskiy, A., Zetzsche, G., and Lin, A. W. (2025). The counting power of transformers. arXiv preprint arXiv:2505.11199 .Sanford, C., Hsu, D., and Telgarsky, M. (2024). One-layer transformers fail to solve the induction heads task. arXiv preprint arXiv:2408.14332 .Sarrof, Y., Veitsman, Y., and Hahn, M. (2024). The expressive capacity of state space models: A formal language perspective. Advances in Neural Information Processing Systems , 37:41202–41241. Shakerinava, M., Khavari, B., Ravanbakhsh, S., and Chandar, S. (2026). The expressive limits of diagonal ssms for state-tracking. arXiv preprint arXiv:2603.01959 .Siegelmann, H. T. and Sontag, E. D. (1994). Analog computation via neural networks. Theoretical Computer Science , 131(2):331–360. Strobl, L., Angluin, D., and Frank, R. (2025). Concise one-layer transformers can do function evaluation (sometimes). arXiv preprint arXiv:2503.22076 .Strobl, L., Merrill, W., Weiss, G., Chiang, D., and Angluin, D. (2024). What formal languages can trans-formers express? a survey. Transactions of the Association for Computational Linguistics , 12:543–561. Yang, A., Chiang, D., and Angluin, D. (2024). Masked hard-attention transformers recognize exactly the star-free languages. Advances in Neural Information Processing Systems , 37:10202–10235. 
+
+# A Further Experimental Details 
+
+This supplement provides the experimental details omitted from the main paper: the full training and evaluation protocol, the positional-encoding ablation used to choose the final setup, complete held-out results for each model family, parameter counts, runtimes, and out-of-distribution evaluations. The main paper reports 23 distinct configuration classes. For one-layer attention models, the full and causal variants are theoretically equivalent at the final readout token, so they are merged there. In this supplement, we sometimes report them separately because both variants were trained independently. When-ever this affects a total, we state whether we are counting merged configuration classes or individual trained variants. All experiments use the binary indexing task defined in the main paper. Each run is evaluated once per epoch on a fixed held-out set of 2,000 examples. Training examples are generated online, with 50,000 examples per epoch. Training stops when the held-out binary cross-entropy reaches at most 10 −6 or after 500 epochs. A run is considered successful if its maximum held-out accuracy during training reaches 1 .0. Since indexing has a deterministic correct answer, requiring perfect held-out accuracy gives a simple and strict empirical criterion. However, success on this finite held-out set does not prove that the trained model solves every possible input. 13 A.1 Protocol Details 
+
+Table 3 lists the final training and evaluation settings used in the main sweep. The positional-encoding alternatives considered during development are described separately in the next section. For each example, the index i is sampled uniformly from {1, . . . , n }, and the input bits are sampled independently and uniformly from {0, 1}. The target is σi. Training examples are generated online, while the held-out set is generated once and kept fixed throughout each run. For a run with seed s, we initialize Python, NumPy, PyTorch, and the CUDA random-number generators with s. The held-out set uses seed 
+
+s + 10 ,000, while the length-shifted sets at n/ 2 and 2 n use seeds s + 20 ,000 and s + 30 ,000, respectively. Softmax attention is implemented using Hugging Face BERT blocks (except rotary, which uses Ro-Former). We explicitly set the model width, number of layers, number of attention heads, feed-forward width, causal or full attention mask, and zero dropout. Other internal choices follow the defaults of the installed Transformers version. GRUs use PyTorch’s nn.GRU with input and hidden size 16, one direction, and zero dropout. Biases and the initial hidden state follow the PyTorch defaults. Mamba2 uses state dimension 16, head dimension 8, expansion factor 1, and convolution width 3. Caching, fused normalization, and fused cross-entropy paths are disabled. Other unspecified Mamba2 op-tions follow the defaults of the installed flash-linear-attention version. We refer to this model family as Mamba in the result tables. Linear attention is implemented locally using pre-normalized blocks, bias-free query, key, value, and output projections, the ELU( x) + 1 feature map, denominator epsilon 10 −6, and zero dropout. Full linear attention uses global key–value sums, whereas causal linear attention uses prefix sums. Other unspecified options follow the PyTorch defaults. 14 Setting Value Task sizes n ∈ { 8, 16 , 32 , 64 }
+
+Seeds {0, 1, 2, 3, 4}
+
+Training examples 50000 per epoch, drawn on demand Held-out examples 2000 fixed samples Evaluation frequency Once per epoch OOD test sizes n/ 2 and 2 n
+
+Success criterion Maximum held-out accuracy 1 .0Readout convention RHI: query token, LHI: end token Input query features (i − 1) /n and (( i − 1) /n )2
+
+Architectures Full and causal softmax attention Full and causal linear attention GRU Mamba2 Model width 16 Attention heads 2Feed-forward width 64 Linear-attention feature map ELU( x) + 1 Dropout 0Positional encoding Polynomial Loss Binary cross-entropy with logits Optimizer AdamW Learning rate 10 −3
+
+AdamW ϵ 10 −8
+
+AdamW betas PyTorch default (0 .9, 0.999) Weight decay 0Batch size 256 Gradient clipping Global norm 5 Early stopping Held-out binary cross-entropy loss ≤ 10 −6
+
+Scheduler ReduceLROnPlateau Scheduler metric Training binary cross-entropy Scheduler factor 0.5 Scheduler patience 30 epochs Min. learning rate 10 −5
+
+Mixed precision No Prediction rule sigmoid(logit) ≥ 0.5Max. epochs 500 Table 3: Final training and evaluation settings used in the main sweep. Experiments were run on a Slurm-managed x86 64 Linux server with kernel 6.8.0-124-generic , two AMD EPYC 9654 96-core processors, 1.5 TiB of system memory, and NVIDIA H100 GPUs with 80 GB of HBM3 memory, using driver 610.43.02. The sweep launcher requested one GPU per run. The software envi-ronment used Python 3.12.3, PyTorch 2.12.1 with CUDA 13.0, Transformers 5.12.1, flash-linear-attention 
+
+0.5.1, Triton 3.7.1, and NumPy 2.5.0. 15 A.2 Positional-Encoding Ablation 
+
+Before running the main sweep, we compared learned, sinusoidal, rotary, polynomial, and no positional encoding. This ablation uses d = 16, two attention heads, n ∈ { 32 , 64 }, seeds {0, 1, 2}, and the same training protocol as the main sweep. The ablation covers nine architecture–depth configurations (rotary is evaluated only for the four softmax-attention configurations): 1. RHI full and causal softmax attention with one layer 2. RHI full linear attention with two layers 3. LHI full and causal softmax and linear attention with two layers 4. a one-layer LHI GRU 5. two-layer LHI Mamba2 For polynomial positional encoding, each token position t ∈ { 0, . . . , L − 1} is represented by ( p, p 2), where 
+
+p = t/ (L − 1) and L is the training sequence length. This two-dimensional representation is projected to the model dimension using a learned bias-free linear layer. The main paper reports only the conclusion of this ablation. Table 4 presents the results by sequence length. Polynomial encoding is the only option that reaches perfect held-out accuracy in every run at n = 32 and in all but one run at n = 64. Based on these results, we use polynomial positional encoding throughout the main sweep. Encoding n Runs Successes Mean max. accuracy None 32 27 12 0.7628 None 64 27 12 0.7578 Learned 32 27 17 0.9751 Learned 64 27 8 0.8708 Sinusoidal 32 27 23 0.9969 Sinusoidal 64 27 18 0.9432 Rotary 32 12 12 1.0000 Rotary 64 12 6 0.9497 Polynomial 32 27 27 1.0000 Polynomial 64 27 26 0.9849 Table 4: Positional-encoding ablation. Rotary is included only for softmax attention. The only polynomial run that does not reach perfect held-out accuracy is L64 softmaxL2d16h2 poly s0 ,with maximum held-out accuracy 0 .5910 after 500 epochs. All other polynomial runs in this ablation reach held-out accuracy 1 .0. 16 A.3 Complete Main-Sweep Accuracy 
+
+Table 5 complements the success counts reported in the main paper by showing the maximum held-out accuracy reached during training. Each entry reports the mean ± standard deviation across five seeds. This makes it possible to distinguish configurations that came close to the perfect-accuracy criterion of 1 .0 from those that remained substantially below perfect accuracy. As in the previous sections, one-layer full and causal attention models are listed separately because both variants were trained independently. Where Model family Depth Theory n = 8 n = 16 n = 32 n = 64 RHI Full softmax 1 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 RHI Causal softmax 1 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 RHI Full linear 1 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.78 ± 0.01 0.64 ± 0.01 RHI Full linear 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 RHI Causal linear 1 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.78 ± 0.01 0.65 ± 0.01 RHI Causal linear 2 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.99 ± 0.02 0.77 ± 0.01 RHI Causal linear 3 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.99 ± 0.01 0.82 ± 0.02 RHI Causal linear 4 Stress test 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 0.85 ± 0.04 RHI GRU 1 Stress test 1.00 ± 0.00 0.95 ± 0.02 0.77 ± 0.02 0.66 ± 0.01 RHI GRU 2 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.86 ± 0.01 0.69 ± 0.01 RHI GRU 3 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.86 ± 0.02 0.72 ± 0.01 RHI GRU 4 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.94 ± 0.02 0.74 ± 0.01 RHI Mamba 1 Stress test 1.00 ± 0.00 0.99 ± 0.01 0.77 ± 0.07 0.66 ± 0.02 RHI Mamba 2 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.91 ± 0.04 0.69 ± 0.04 RHI Mamba 3 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.97 ± 0.03 0.79 ± 0.02 RHI Mamba 4 Stress test 1.00 ± 0.00 1.00 ± 0.00 0.99 ± 0.02 0.80 ± 0.04 LHI GRU 1 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 LHI Mamba 1 Stress test 1.00 ± 0.00 0.82 ± 0.06 0.65 ± 0.04 0.59 ± 0.01 LHI Mamba 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 0.91 ± 0.20 LHI Full softmax 1 Stress test 0.76 ± 0.15 0.64 ± 0.06 0.58 ± 0.01 0.56 ± 0.02 LHI Full softmax 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 0.92 ± 0.18 LHI Causal softmax 1 Stress test 0.76 ± 0.15 0.64 ± 0.06 0.58 ± 0.01 0.56 ± 0.02 LHI Causal softmax 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 LHI Full linear 1 Stress test 1.00 ± 0.00 0.78 ± 0.15 0.64 ± 0.06 0.58 ± 0.02 LHI Full linear 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 LHI Causal linear 1 Stress test 1.00 ± 0.00 0.77 ± 0.14 0.64 ± 0.06 0.58 ± 0.02 LHI Causal linear 2 Constructive 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 1.00 ± 0.00 Table 5: Mean and standard deviation, across five seeds, of the maximum held-out accuracy reached during training for each architecture–depth configuration. Constructive and Stress test denote the theory-guided groups defined in the main paper. 17 A.4 Runtime and Model Scale at n = 64 
+
+Table 6 reports parameter counts, training length, and wall-clock runtime for the constructive families at 
+
+n = 64. Successes are reported across five seeds. The number of parameters is fixed for each configuration, while the number of epochs and runtime measurements are reported as medians across the five runs. Training time is measured for the final training epoch, and evaluation time corresponds to one pass over the fixed held-out set of 2,000 examples using the same batch size as training. These measurements document the computational scale of the experiments under the hardware and software setup described above. Where Model L Succ. Params Med. epochs Train s/epoch Eval s/pass RHI Full softmax 1 5/5 3473 185 2.21 0.065 RHI Causal softmax 1 5/5 3473 185 2.24 0.065 RHI Full linear 2 5/5 6577 73 2.55 0.068 LHI GRU 1 5/5 1777 325 2.04 0.062 LHI Mamba 2 4/5 3261 113 9.01 0.184 LHI Full softmax 2 4/5 6753 261 2.57 0.069 LHI Causal softmax 2 5/5 6753 112 2.45 0.069 LHI Full linear 2 5/5 6577 50 3.24 0.085 LHI Causal linear 2 5/5 6577 33 2.60 0.069 Table 6: Parameter counts, training length, and runtime at n = 64 for the constructive families. Epoch and runtime columns report medians across five seeds. 18 A.5 Length-Shifted Evaluation 
+
+This section reports length-shifted evaluations for the constructive families. For each run, the model is evaluated on inputs with n/ 2 and 2 n bits using the same parameters, tokenization, and readout convention, without retraining. These evaluations do not affect whether a run is counted as successful in-distribution. At the task level, a shorter instance can always be embedded into a longer one by appending additional bits that are never queried. Thus, there is no fundamental obstacle to using the same indexing rule across different lengths. However, our models are trained at a single length, and the polynomial positional encoding uses the training sequence length as its reference scale. The learned solution may therefore rely on the positions seen during training rather than implement a length-independent indexing rule. Strong length generalization was therefore not expected, but we included this evaluation as a simple probe of whether it emerged nevertheless. As in the complete main-sweep table, one-layer full and causal attention variants are counted separately here because they were trained independently. This gives 45 possible constructive-family runs at each training length. The tables report the length-shifted accuracy from the final training epoch and include only runs whose maximum in-distribution held-out accuracy reached 1 .0. Table 7 aggregates these results by training length, while Table 8 reports them separately for each model family at n = 64. Transfer across lengths is weak overall. Accuracy at n/ 2 is above chance for models trained at the smallest length but approaches 0 .5 as the training length increases. Accuracy at 2 n remains near chance throughout. At training length n = 64, both length-shifted evaluations are close to chance for every listed family. Train n ID succ. Acc. at n/ 2 Acc. at 2 n
+
+8 45 0.629 ± 0.091 0.535 ± 0.026 16 45 0.554 ± 0.042 0.520 ± 0.018 32 45 0.527 ± 0.023 0.510 ± 0.011 64 43 0.514 ± 0.014 0.500 ± 0.007 Table 7: Length-shifted accuracy for the constructive families, aggregated by training length. Results are reported as mean ± standard deviation across runs that succeeded in-distribution. Where Model L ID succ. Acc. at n/ 2 Acc. at 2 n
+
+RHI Full softmax 1 5/5 0.525 ± 0.008 0.501 ± 0.007 RHI Causal softmax 1 5/5 0.525 ± 0.008 0.501 ± 0.007 RHI Full linear 2 5/5 0.502 ± 0.005 0.500 ± 0.008 LHI GRU 1 5/5 0.510 ± 0.011 0.497 ± 0.006 LHI Mamba 2 4/5 0.513 ± 0.024 0.499 ± 0.010 LHI Full softmax 2 4/5 0.523 ± 0.005 0.504 ± 0.003 LHI Causal softmax 2 5/5 0.517 ± 0.010 0.497 ± 0.007 LHI Full linear 2 5/5 0.497 ± 0.012 0.503 ± 0.011 LHI Causal linear 2 5/5 0.513 ± 0.007 0.499 ± 0.009 Table 8: Length-shifted accuracy for the constructive families trained at n = 64. Results are reported as mean ± standard deviation across runs that succeeded in-distribution. 19

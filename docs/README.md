@@ -6,35 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-26
-- 运行时间：2026-07-26 19:58:29 UTC
+- 最新运行日期：2026-07-27
+- 运行时间：2026-07-27 21:18:26 UTC
 - 运行状态：成功
 - 本次总论文数：5
-- 精读区：1
-- 速读区：4
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今天精读了高分报告《Solar Open 2》，并速览了AI Agent通信与多智能体强化学习等4篇论文。最值得一看的是Solar Open 2的技术细节，以及AI原生6G中智能体通信的挑战与机遇。建议优先精读Solar Open 2报告，再速读AI Agent通信论文补充前沿视角。
-- 详情：[/202607/26/README](/202607/26/README)
+今日精读2篇高价值论文，涉及索引本质与方差缩减Q学习，速读3篇涵盖信念协调、稀疏注意力和双臂操作。最值得看的是《Indexing: the Beginning and the End》（9.0）和《Variance-Reduced Q-Learning》（8.0），前者探讨索引理论的根本问题，后者提出静态与时变网络下的高效强化学习算法。建议优先精读索引论文以深化基础理解，再结合方差削减方法提升对分布式强化学习的认识。
+- 详情：[/202607/27/README](/202607/27/README)
 
 ### 精读区论文标签
-1. [Solar Open 2 Technical Report](/202607/26/2607.20062v1-solar-open-2-technical-report)  
+1. [Indexing: the Beginning and the End](/202607/27/2607.22361v1-indexing-the-beginning-and-the-end)  
    标签：评分：9.0/10、query:ma-la
-   evidence：使用线性注意力层的混合注意力栈用于长周期智能体任务
+   evidence：线性注意力Transformer的理论分析
+2. [Variance-Reduced Q-Learning over Static and Time-Varying Networks](/202607/27/2607.21876v1-variance-reduced-q-learning-over-static-and-time-varying-networks)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：网络上的去中心化多智能体Q学习与线性加速
 
 ### 速读区论文标签
-1. [AI Agent Communications in AI-Native 6G Network: Status, Challenges and Opportunities](/202607/26/2607.18138v1-ai-agent-communications-in-ai-native-6g-network-status-challenges-and-opportunities)  
+1. [Explainable Belief Harmonization under Dynamic Epistemic Partitions](/202607/27/2607.21210v1-explainable-belief-harmonization-under-dynamic-epistemic-partitions)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体系统通信，AI智能体通信协议与网络基础设施
-2. [Decentralized Multi-agent Reinforcement Learning for Resilient Critical Infrastructures](/202607/26/2607.18359v1-decentralized-multi-agent-reinforcement-learning-for-resilient-critical-infrastructures)  
+   evidence：动态划分下的多智能体信念协调
+2. [Parameter-free Adaptive Sparse Attention via Compression-Based Content Selection](/202607/27/2607.21752v1-parameter-free-adaptive-sparse-attention-via-compression-based-content-selection)  
    标签：评分：7.0/10、query:ma-la
-   evidence：面向弹性基础设施的分散式多智能体强化学习
-3. [Reinforcement Learning: From Algorithms To Foundation Models](/202607/26/2607.17560v1-reinforcement-learning-from-algorithms-to-foundation-models)  
+   evidence：通过压缩实现自适应稀疏注意力，可扩展的注意力机制
+3. [One Hand Watches The Other: Dynamic Multi-Agent Cooperation for Sample-Efficient Bimanual Manipulation in Dynamic Environments](/202607/27/2607.22119v1-one-hand-watches-the-other-dynamic-multi-agent-cooperation-for-sample-efficient-bimanual-manipulation-in-dynamic-environments)  
    标签：评分：6.0/10、query:ma-la
-   evidence：游戏中的多智能体强化学习与基础模型
-4. [ChannelGuard: Safe Models Do Not Compose into Safe Multi-Agent Systems](/202607/26/2607.19430v1-channelguard-safe-models-do-not-compose-into-safe-multi-agent-systems)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体LLM应用安全，智能体间未监控的通信通道
+   evidence：双臂操作的动态多智能体合作
 
 
 <div class="dpr-home-promo-card">

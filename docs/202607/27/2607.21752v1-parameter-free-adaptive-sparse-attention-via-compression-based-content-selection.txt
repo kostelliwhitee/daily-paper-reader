@@ -1,0 +1,712 @@
+Title: Parameter-free Adaptive Sparse Attention via Compression-Based Content Selection
+
+URL Source: https://arxiv.org/pdf/2607.21752v1
+
+Published Time: Mon, 27 Jul 2026 00:07:36 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Parameter-free Adaptive Sparse Attention via Compression-Based Content Selection 
+
+Debarshi Kundu 
+
+The Pennsylvania State University 
+
+dqk5620@psu.edu 
+
+Swaroop Ghosh 
+
+The Pennsylvania State University 
+
+szg212@psu.edu 
+
+Vasant Honavar 
+
+The Pennsylvania State University 
+
+vuh14@psu.edu 
+
+## Abstract 
+
+Data-adaptive sparse attention masks substantially outperform fixed patterns (e.g., BigBird and Longformer) and can even exceed dense attention on long sequences. Existing adaptive approaches—including SBM-Transformer, Dynamic Mask Atten-tion, and NSA—typically require additional learnable parameters, custom gradient estimators, or specialized CUDA kernels. We show that classical data compression provides an effective masking signal with 
+
+no additional parameters . By computing per-block gzip compression ratios, we identify non-redundant content blocks and route long-range attention selectively through them. Intuitively, blocks that gzip cannot compress contain information not predictable from local repetition, making them natural long-range attention targets. Because the compression profile is input-dependent, the resulting sparse mask adapts dynamically to content without learned parameters, auxiliary losses, or custom kernels. On PG-19 byte-level language modeling at 92M parameters with 8K context, our method achieves 1.71 bits-per-byte (BPB), outperforming dense attention (2.89), BigBird (2.34), Longformer (3.21), and a reimplemented SBM-Transformer (3.38)—the only learned-mask baseline—by up to 1.67 BPB while adding no parameters. The advantage grows with sequence length, with the gap over BigBird widening from 0.05 BPB at 4K context to 0.63 BPB at 8K, while convergence is 3.3 × faster. 
+
+## 1 Introduction 
+
+Self-attention is the computational bottleneck of Transformers on long sequences. Because attention scales quadratically with sequence length N , processing 8K–64K token contexts requires either substantial hardware or sparse attention mechanisms that restrict which positions each token can attend to. The central challenge is therefore which positions should be connected —a question that has driven increasingly sophisticated sparse attention methods. 
+
+Fixed patterns: simple but blind. Early sparse attention methods used predetermined connectivity patterns. Longformer Beltagy et al. [2020] employs a sliding window with fixed global tokens, while BigBird Zaheer et al. [2020] augments this with random long-range edges. These approaches are efficient and simple, but their connectivity is independent of the input : the same mask is used whether the sequence is a legal contract or a children’s story. At shorter contexts (1K–4K tokens), this is often sufficient because the fixed pattern covers enough useful connections by chance. At longer 
+
+> Preprint. arXiv:2607.21752v1 [cs.LG] 23 Jul 2026
+
+contexts, however, the combinatorial space of useful connections grows quadratically, and fixed patterns increasingly fail. 
+
+Learned masks: effective but complex. Recent work addresses this limitation by learning masks from the input. Routing Transformer Roy et al. [2021] clusters queries using online k-means and restricts attention within clusters. SBM-Transformer Cho et al. [2022] models attention as a stochastic block model with learnable memberships and Bernoulli mask sampling via straight-through estimation. NSA Yuan et al. [2025] uses learned gating networks to select compressed token blocks, while Dynamic Mask Attention trains per-head mask predictors using specialized CUDA kernels. These methods consistently outperform fixed patterns, but they introduce additional parameters, training complexity, custom estimators, or specialized kernels. 
+
+Our insight: compression already provides the signal. We observe that the question “which positions contain information worth attending to?” closely mirrors the objective solved by data compression. If gzip compresses a text block to 90% of its original size, the block contains content not predictable from local repetition and is therefore a natural long-range attention target. Conversely, blocks compressed to 30% are largely repetitive. Compression ratio thus provides a direct signal for identifying non-redundant content likely to benefit from long-range attention. We therefore propose compression-guided sparse attention : divide the input into fixed-size blocks, compute per-block gzip compression ratios, and route long-range attention only through high-ratio (“literal”) blocks. The method adds zero learnable parameters, requires no gradient estimators or custom kernels, and runs in O(N ) time using standard-library compression. Because gzip ratios depend on input content, the resulting sparse mask adapts naturally to each sequence. 
+
+Contributions. We make four contributions. (i) We introduce compression-guided sparse atten-tion , the first method to use classical data compression for adaptive attention-mask construction, requiring zero additional parameters and no custom kernels. (ii) Through controlled ablations, we provide a clean component decomposition : gzip-derived literal-to-literal connections account for 
+
+−0.43 BPB (68% of the improvement over BigBird), the local window for −0.12 BPB (19%), and removing fixed global tokens for −0.08 BPB (13%). (iii) We show that learned mask construction degrades at 8K context where zero-parameter compression succeeds (SBM-Transformer 3.38 BPB vs. ours 1.71), suggesting that external compression signals can be more robust than gradient-based mask optimization at scale. (iv) We demonstrate that the advantage grows with sequence length : the gap over BigBird widens from 0.05 BPB at 4K context to 0.63 BPB at 8K, while BigBird’s delayed breakthrough shifts later as context increases (step ∼4K at 4K, ∼7K at 8K). 
+
+## 2 Related Work 
+
+Fixed-pattern sparse attention. Sparse Transformer Child et al. [2019] introduced strided and local attention patterns, showing that sparse attention can match dense autoregressive modeling performance. Longformer Beltagy et al. [2020] uses a sliding window with fixed global tokens, while BigBird Zaheer et al. [2020] adds random long-range edges and proves the resulting pattern is a universal approximator of sequence functions. These methods are efficient ( O(N )) and parameter-free, but their masks are input-independent : the same connectivity pattern is used regardless of content. Our experiments show that this limitation becomes increasingly costly as context length grows, with BigBird’s convergence delayed at larger sequence lengths (Table 3). 
+
+Learned adaptive sparse attention. To overcome the rigidity of fixed patterns, several methods learn masks from the input. Routing Transformer Roy et al. [2021] clusters queries and keys using online k-means and restricts attention within clusters. SBM-Transformer Cho et al. [2022] models connectivity as a stochastic block model with learnable cluster embeddings and Bernoulli mask sampling via straight-through estimation Bengio et al. [2013]. NSA Yuan et al. [2025] uses learned gating networks with hardware-aligned CUDA kernels to select compressed token blocks, while Dynamic Mask Attention trains per-head mask predictors with fused FlashAttention kernels. SparseK Attention Lou et al. [2024] employs a differentiable top-k operator to select keys per query. These approaches consistently outperform fixed patterns, but require additional parameters and training complexity. In contrast, our method uses an external compression signal to construct adaptive masks with zero additional parameters and no gradient flow through mask generation. 2Compression in ML and long-context evaluation. Our work also connects to broader efforts using classical compression as a structural signal in machine learning Jiang et al. [2023], Hurwitz et al. [2024] and to methodology for evaluating long-context utilization Fang et al. [2025], Tay et al. [2021], Rae et al. [2020]. We defer extended discussion to Appendix H and adopt bits-per-byte (BPB) on PG-19 as our primary metric, supplemented by context-scaling analysis (Table 5). 
+
+## 3 Method 
+
+We construct sparse attention masks from classical data compression, requiring zero learnable parameters. The method has three components—block-level compression analysis (§3.1), mask construction (§3.2), and integration with multi-head attention (§3.3)—followed by a complexity analysis (§3.4). Figure 1 illustrates the pipeline. B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 B15                                 
+
+> Literal (gzip ratio > mean) Redundant (gzip ratio mean)
+> (a) Input sequence 128-byte blocks gzip classifies each block
+> 012345678910 11 12 13 14 15
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Ratio
+> (b) Per-block gzip compression ratio
+> Mean threshold = 0.749
+> (c) Resulting attention masks
+> 04812 15
+> Key block
+> 0
+> 4
+> 8
+> 12
+> 15
+> Query block
+> BigBird
+> (fixed random + globals)
+> [70 edges]
+> 04812 15
+> Key block
+> 0
+> 4
+> 8
+> 12
+> 15
+> SBM-Transformer
+> (learned near-uniform)
+> [uniform density]
+> 04812 15
+> Key block
+> 0
+> 4
+> 8
+> 12
+> 15
+> Gzip-Guided (ours)
+> (literal-to-literal + local)
+> [56 edges]
+
+Figure 1: Method overview. (a) A sequence is divided into 128-byte blocks. Gzip identifies literal blocks (high compression ratio, content not predictable from within-block repetition) and redundant blocks (low ratio, repetitive or formulaic content). (b) Per-block compression ratios; blocks above the mean threshold are literal. (c) Resulting attention masks compared to BigBird (fixed random + globals) and SBM-Transformer (learned, near-uniform). Our mask connects literal blocks to each other, producing content-adaptive sparse connectivity. 
+
+3.1 Block-Level Compression Analysis 
+
+Given an input sequence of N bytes, we partition it into B = N/b blocks of b bytes each ( b = 128 
+
+throughout). For each block i, we compute its compression ratio :
+
+ri = |gzip (xib :( i+1) b)|
+
+b (1) 3where |gzip (·)| denotes the compressed size in bytes using gzip at compression level 1. The ratio 
+
+ri ∈ (0 , 1] measures the information density of block i: high ri indicates content gzip cannot compress—novel, non-redundant information—while low ri indicates predictable or repetitive patterns. Any general-purpose lossless compressor would suffice; we use gzip Ziv and Lempel [1977] for its O(N ) runtime and standard-library availability. We classify each block as literal (informationally dense) or redundant using a parameter-free mean threshold: 
+
+ℓi =
+
+1 if ri > r 
+
+0 otherwise , r = 1
+
+B
+
+> B
+
+X
+
+> j=1
+
+rj (2) The mean threshold adapts naturally to each sequence and, unlike a median, allows the literal fraction itself to vary with content. When the ratio distribution is skewed toward low values (e.g., repetitive prose), only a few blocks exceed the mean and the mask is sparse. For denser technical content, the mask becomes correspondingly denser. Empirically, the literal fraction varies from roughly 36% to 67% across PG-19 sequences (Appendix G), yielding a 3.5 × range in long-range edge count without any sparsity hyperparameter. 
+
+3.2 Mask Construction 
+
+We construct a block-level attention mask M ∈ { 0, 1}B×B with three components: 
+
+Literal-to-literal connections. All pairs of literal blocks are connected for long-range attention: 
+
+Mlit  
+
+> ij
+
+= 1 iff ℓi = ℓj = 1 and |i − j| > w , where w is the local window size. Literal blocks thus form an attention backbone among positions carrying non-redundant content. 
+
+Local sliding window. Adjacent blocks are always connected: Mlocal  
+
+> ij
+
+= 1 iff |i − j| ≤ w. We use 
+
+w = 1 , providing 256 bytes of guaranteed local context for redundant blocks predictable from nearby context. 
+
+No global tokens. Unlike BigBird Zaheer et al. [2020] and Longformer Beltagy et al. [2020], we use no fixed-position global tokens. Experiments consistently show that global tokens degrade performance (Section 4.3), likely because they bias attention toward positions selected by index rather than content. The final block-level mask is 
+
+M = Mlit ∪ Mlocal ∪ I (3) where I is the identity (self-attention). The block-level mask is expanded to token resolution by repeating each entry across the corresponding b × b token block, then intersected with a causal mask to enforce autoregressive ordering. Because compression profiles vary across inputs, M naturally adapts per sequence—more complex inputs receive denser long-range connectivity. 
+
+3.3 Integration with Multi-Head Attention 
+
+We divide attention heads into three groups: 50% local heads (use only Mlocal ∪ I), 25% long-range 
+
+heads (use only Mlit ∪ I), and 25% hybrid heads (use the full mask). All heads share the same mask across layers, computed once per sequence and expanded to token resolution with a single vectorized tensor operation. 
+
+3.4 Complexity and Comparison to Learned Masks Computational cost. Mask construction requires one gzip call per block: O(B) = O(N/b )
+
+operations, each compressing b = 128 bytes. On modern hardware this takes < 1ms for N = 8192 ,negligible compared to attention itself. The resulting attention complexity depends on the number of literal blocks L: each literal block attends to O(L) others, yielding O(L2 + N w ) total attention operations, which is O(N ) when L = O(√N ).
+
+Block-to-token expansion. The block mask M ∈ { 0, 1}B×B is expanded to token resolution by indexing entry (i, j ) from M[⌊i/b ⌋, ⌊j/b ⌋], implemented as a single expand +reshape operation in PyTorch with no Python loops. 4Comparison to learned alternatives. A detailed comparison with adaptive sparse attention methods (parameter counts, differentiability, kernel requirements, mask cost) is given in Table 15 of Appendix I. The key distinction is that our mask is derived from an external information-theoretic signal rather than learned parameters. This eliminates the need for gradient flow through mask construction— no straight-through estimators, Gumbel-softmax relaxations, or custom backward passes. The compression ratio provides a noise-free structural signal that scales to arbitrary sequence lengths without additional training or architectural modifications. 
+
+## 4 Experiments and Results 
+
+We organize the empirical study around five questions, each tested with a controlled experiment. All experiments use the common setup in Section 4.1; experiment-specific changes are noted below. 
+
+4.1 Common Experimental Setup Model. Byte-level autoregressive Transformer (ByteLM, 92M params): 768 hidden dim, 12 layers, 12 heads, 3072 FFN width, vocabulary 256, tied input/output embeddings, gradient checkpointing, and bfloat16 mixed precision. Dataset. PG-19 Rae et al. [2020] (28,602 Project Gutenberg books), en-coded as raw UTF-8 bytes and chunked to 8192 bytes ( ≈1500 words). A fixed random ordering (seed 42) ensures that all methods within an experiment see identical data. Training. AdamW Loshchilov and Hutter [2019] with learning rate 3 × 10 −4, weight decay 0.1, β = (0 .9, 0.95) , 2000-step linear warmup followed by cosine decay, 20K total steps, and effective batch size 16–20 across 4–5 H100 GPUs. All models use initialization seed 42. Evaluation. Bits-per-byte (BPB = cross-entropy / ln 2 )on the PG-19 validation split, computed over 30 chunks at the training sequence length. Mask construction. Each sequence is divided into 128-byte blocks; we compute ri = |gzip (bi)|/128 ,mark blocks above the per-sequence mean as “literal” (informationally dense), and connect all literal-to-literal pairs for long-range attention, plus a ±1-block local window. No fixed-position global tokens are used. 
+
+4.2 Experiment 1: How does compression-guided attention compare to existing methods? 
+
+We compare seven attention methods using the same 92M-parameter model, PG-19 data, sequence length 8192, and 20K training steps. Methods differ only in mask construction: • Dense: Full O(N 2) attention. • Local Only: ±1-block sliding window (256 bytes); no globals or long-range edges. • Longformer Beltagy et al. [2020]: ±4-block window + global tokens every 8 blocks. • BigBird Zaheer et al. [2020]: Local + global tokens + 6 fixed random long-range edges per block. • SBM-Transformer Cho et al. [2022]: Learned stochastic block model with per-head clusters, Bernoulli sampling, and STE; +247K parameters. Reimplemented from official code. 1
+
+• Literal Pure (ours): Gzip-identified literal blocks all-pairs only; no local or globals. • Gzip-Guided (ours): Literal-to-literal connections + local sliding window; no globals. All methods share initialization, data order, optimizer, schedule, and evaluation. For Literal Pure and Gzip-Guided, a fresh mask is constructed per sequence from its compression profile; fixed-mask methods reuse the same mask throughout training. Table 1 shows a clear stratification by mask type. Compression-guided methods achieve 1.71–1.83 BPB, substantially outperforming fixed-pattern and learned-mask baselines. Gzip-Guided achieves the best BPB (1.71) with zero extra parameters, improving over Dense (2.89), BigBird (2.34), and Local Only (2.26) by 1.18, 0.63, and 0.55 BPB, respectively. SBM-Transformer, the only baseline that learns the mask (+247K parameters and STE), performs worst at 3.38 BPB. Even Literal Pure , which uses only gzip-derived literal-to-literal connections, reaches 1.83 BPB and outperforms every baseline. Thus, compression-identified blocks form a strong long-range attention 
+
+> 1https://github.com/sc782/SBM-Transformer
+
+5Table 1: Main results. PG-19 language modeling at 92M parameters, SEQ_LEN=8192, 20K steps. All methods share architecture, initialization, data ordering, and hyperparameters. Lower BPB is better. 
+
+Method Extra Params BPB 
+
+Longformer 0 3.21 SBM-Transformer 247K 3.38 Dense Attention 0 2.89 Local Only 0 2.26 BigBird 0 2.34 Literal Pure (ours) 0 1.83 
+
+Gzip-Guided (ours) 0 1.71 
+
+backbone even without local windows or globals. A second pattern is that fixed-position global tokens hurt: Local Only (2.26, no globals) outperforms BigBird (2.34, with globals) despite BigBird’s additional random edges, suggesting that attention budget spent on content-agnostic positions is wasted. A bar-chart visualization appears in Figure 5 (Appendix M). 
+
+Convergence dynamics. Compression-guided and fixed-mask methods exhibit qualitatively dif-ferent learning curves (Figure 2). All methods learn similarly for the first ∼1000 steps, after which compression-guided methods accelerate sharply. Fixed-pattern methods plateau for thousands of steps before delayed breakthroughs: BigBird at ∼7K, Local at ∼8K, and Dense at ∼14K; SBM-Transformer never breaks through. Gzip-Guided reaches 2.5 BPB in ∼4.2K steps, whereas BigBird requires ∼14K steps (3.3 × speedup), and Dense, Longformer, and SBM do not reach this target within 20K steps. Per-target step counts are in Appendix J. 0K 2K 5K 7K 10K 12K 15K 17K 20K 
+
+Training Steps 
+
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> Validation BPB  BigBird
+> breakthrough
+> Dense
+> breakthrough
+
+Training Dynamics: 92M params, PG-19, SEQ_LEN=8192 
+
+> Longformer
+> SBM-Transformer
+> Dense
+> Local Only
+> BigBird
+> Literal Pure (ours)
+> Gzip-Guided (ours)
+
+Figure 2: Convergence Dynamics. Validation BPB during training. Compression-guided methods (solid, bottom) diverge from fixed-mask methods at step ∼1500 and descend continuously. BigBird and Local exhibit delayed breakthroughs at steps 7K and 8K respectively. SBM-Transformer drifts slowly downward without breakthrough despite 247K learned mask parameters. 64.3 Experiment 2: Component ablation 
+
+Our method differs from BigBird by (i) removing fixed global tokens, (ii) replacing fixed random edges with gzip-derived literal-to-literal edges, and (iii) adding a local sliding window. We isolate these effects with controlled variants using the same 92M-parameter model, initialization, data ordering, and schedule. Table 2: Component ablation. Each row modifies one component relative to the previous. All results use 92M params, PG-19, SEQ_LEN=8192, and 20K steps. 
+
+Configuration Globals Local Long-range BPB ∆ (% Contr.) 
+
+BigBird (reference) ✓ ✓ Fixed random 2.34 —
+
+− globals (= Local Only) ✗ ✓ None 2.26 −0.08 (13%) 
+
++ gzip literal (= Literal Pure) ✗ ✗ Gzip-adaptive 1.83 −0.43 (68%) 
+
++ local window (= Gzip-Guided) ✗ ✓ Gzip-adaptive 1.71 −0.12 (19%)    
+
+> Cumulative improvement from BigBird to Gzip-Guided: −0.63 BPB. ∆values are relative to the previous row.
+
+The ablation reveals a clear hierarchy. Removing global tokens helps (−0.08 BPB, 13%): Local Only outperforms BigBird, indicating that fixed-position globals bias attention toward index-selected rather than content-selected positions. Gzip-derived literal connections dominate (−0.43 BPB, 68%): adding literal-to-literal edges drops BPB from 2.26 to 1.83, showing that compression-derived edges form an effective long-range routing backbone. The local window adds complementary benefit (−0.12 BPB, 19%): adding a ±1-block window to Literal Pure yields the full Gzip-Guided model at 1.71 BPB. 
+
+Long-range connections alone are nearly sufficient. Literal Pure, with only gzip-derived long-range edges and no local window, already achieves 1.83 BPB, outperforming BigBird by 0.51 BPB and Local Only by 0.43 BPB. Thus, the compression-identified graph is not merely a supplement to local attention but a viable backbone aligned with the input’s information-theoretic structure. 
+
+4.4 Experiment 3: How does the advantage scale with sequence length? 
+
+We train BigBird and Gzip-Guided at 4096 and 8192 bytes using the same 92M-parameter architecture and 20K steps. At 4096 the sequence has 32 blocks; at 8192 it has 64 blocks, increasing the block-pair search space from 32 2 = 1024 to 64 2 = 4096 .Table 3: Sequence length scaling. Gzip-Guided outperforms BigBird at both sequence lengths. The gap widens from 0.05 BPB at 4K to 0.63 BPB at 8K as the attention search space quadruples. 
+
+SEQ_LEN Blocks BigBird Gzip-Guided Gap Speedup 
+
+4096 32 1.64 1.59 0.05 1.8 ×
+
+8192 64 2.34 1.71 0.63 3.3 ×
+
+At 4K, the gap is only 0.05 BPB: fixed random masks work adequately when the search space is small. At 8K, the gap widens to 0.63 BPB as the quadrupled search space makes random patterns less likely to cover useful long-range connections. BigBird’s breakthrough is delayed from ∼4K to 
+
+∼7K steps and converges to a worse final BPB. This trend matches a simple counting argument: as sequences grow, useful long-range dependencies become a smaller fraction of all O(N 2) possible pairs, so random edges become poorer approximations of useful routes. Compression targets non-redundant positions directly and therefore scales more gracefully. Learning curves appear in Figure 7 (Appendix M). 
+
+4.5 Experiment 4: Can learned masks compete with compression? 
+
+SBM-Transformer Cho et al. [2022] is the most directly comparable learned adaptive mask method. We reimplement it from the official code, 2 adapting it to autoregressive byte-level modeling while 
+
+> 2https://github.com/sc782/SBM-Transformer/tree/main/code
+
+7preserving key details: kaiming_normal_ cluster initialization, shared two-layer ReLU MLP node projections, flattened softmax over k2 block entries, the custom STE ( SampleGraphSparseGraph )using hardtanh (A·g) in the backward pass, and the mask pipeline (softmax → binary mask multiply 
+
+→ L1 renormalization). We use 8 clusters per head and add a causal mask. The reimplementation adds 247K parameters (0.27% of the base model). Table 4: Zero-parameter vs. learned masks. SBM-Transformer adds 247K parameters for adaptive mask generation. Our method uses gzip—no parameters, no STE, and no custom kernels. 
+
+Method Extra Params Needs STE Custom CUDA BPB 
+
+SBM-Transformer 247K Yes No 3.38 Gzip-Guided 0 No No 1.71 
+
+∆ (learned − compression) +1.67 SBM-Transformer achieves 3.38 BPB, worse than dense attention (2.89) and all sparse baselines. 
+
+Analysis: why does SBM fail at 8K? A likely failure mode is high-variance stochastic optimization. Bernoulli sampling over N 2 = 67 M potential edges at N = 8192 requires the STE to propagate useful signal through a binary stochastic mask that changes each forward pass; at 8K, the signal-to-noise ratio appears insufficient for cluster embeddings to learn useful structure. Its trajectory (Table 11) shows slow monotonic descent without the breakthrough seen when effective patterns emerge. This contrasts with the original SBM-Transformer results on Long Range Arena Tay et al. [2021], where sequences are 1K–4K tokens. At those lengths, the search space ( N 2 ≤ 16 M) is more manageable for STE. Our results suggest that learned masks face a scaling challenge precisely where compression provides a noise-free, parameter-free structural signal. 
+
+4.6 Experiment 5: How do the methods utilize context? 
+
+To test whether BPB gains reflect better long-range context use rather than only better local rep-resentations, we evaluate trained models at multiple context budgets. For budget C, we keep the full 8192-byte input but zero out attention-mask columns corresponding to blocks before position 
+
+(N −C). Each method uses its own mask type to avoid mask-switching artifacts. We measure BPB on the last 512 bytes, which have exactly C bytes of preceding context. This is clean for within-method comparisons; cross-method deltas should be interpreted cautiously because each model is optimized for its own mask. We exclude SBM-Transformer because its stochastic Bernoulli mask is sensitive to train/eval-mode details, and report only its training-time validation BPB in Table 1. Table 5: Context utilization. BPB on the last 512 bytes as available context varies. Each method uses its own mask with early blocks progressively blocked. ∆ = improvement from 512 to 8192 bytes. 
+
+Context LF BB Local Gzip 
+
+512 4.02 2.48 2.27 1.89 1024 3.86 2.30 2.17 1.78 2048 3.83 2.28 2.15 1.75 4096 3.67 2.27 2.14 1.71 8192 3.25 2.26 2.14 1.68 
+
+∆ 0.77 0.22 0.13 0.21 
+
+Gzip-Guided achieves the lowest absolute BPB at every context length. With only 512 bytes of context, it reaches 1.89 BPB—better than BigBird with full 8192-byte context (2.26). This indicates that compression-derived masks improve representation quality across context scales, not only at long contexts. Within-method trends show that Gzip-Guided extracts comparable long-context gains to BigBird (0.21 vs. 0.22 BPB from 512 to 8192) while operating from a much lower starting point, indicating more effective routing throughout the context range. 85 Summary and Discussion 
+
+Summary. We introduced compression-guided sparse attention, which constructs per-sequence attention masks from gzip compression ratios with zero additional parameters: blocks gzip cannot compress carry non-redundant information and become long-range attention targets; blocks gzip can compress are handled by a short local window. On PG-19 at 92M parameters and 8K context, our method achieves 1.71 BPB, outperforming dense attention (2.89), BigBird (2.34), Local Only (2.26), and a reimplemented SBM-Transformer (3.38). Compression-derived literal-to-literal connections alone (no local window, no globals) already reach 1.83 BPB, and the gap over fixed-pattern methods widens with sequence length (0.05 at 4K to 0.63 at 8K). More broadly, the result suggests classical compression algorithms still have much to offer modern deep learning: when a problem can be cast in terms of identifying redundant content, decades of engineering on practical compressors provides parameter-free, deployment-ready answers. Promising directions include integration with block-sparse kernels for wall-clock speedups, scaling to billion-parameter models with subword tokenization, and exploring stronger compressors (brotli, zstd, neural compressors) that may yield sharper signals. 
+
+Limitations. We briefly note the principal limitations that qualify our findings; each is discussed in full in Appendix L. Our experiments use a single 92M-parameter model trained for 20K steps on a single dataset (PG-19), with byte-level rather than subword tokenization, and the only compressor we evaluate is gzip at level 1. Our implementation materializes the full N × N attention matrix and applies the sparse mask via element-wise multiplication, providing no wall-clock speedup over dense attention—the sparsity is logical rather than computational. Our SBM-Transformer baseline is a reimplementation rather than the original authors’ code on their original benchmark, so its poor performance in our setting may reflect domain mismatch with the encoder-based 1K–4K classification regime for which it was designed. Finally, we report only PG-19 BPB; downstream task transfer remains untested. 
+
+Discussion. The experimental results presented above raise the question as to why compression length is associated with attention. The empirical pattern—gzip-guided attention reaching 1.71 BPB vs. 2.34 for BigBird and 2.89 for dense—admits a simple intuition. Self-attention solves a routing problem at every layer: given a query, which keys carry information that reduces its predictive uncertainty? For natural language, the keys that matter are those carrying novel content, not those echoing predictable patterns already inferable from nearby context. Gzip’s compression ratio is a cheap proxy for this distinction: blocks that compress well contain repetitive or formulaic material, while blocks that do not compress contain content with low internal redundancy. By connecting the latter to each other, we construct an attention graph that preferentially links positions carrying non-redundant content, while letting the local window handle predictable material. This intuition is supported by Literal Pure’s strong performance (1.83 BPB with only literal-to-literal connections, no local window): the compression-identified blocks form a sufficient backbone for effective language modeling, suggesting alignment between gzip’s notion of non-redundancy and the model’s need for long-range dependencies. Appendix K extends this discussion to (i) why an external compression signal outperforms a learned one in our setting, (ii) implications for sequence-length scaling, and (iii) the choice of compressor. 
+
+## References 
+
+Iz Beltagy, Matthew E. Peters, and Arman Cohan. Longformer: The long-document transformer. 
+
+arXiv preprint arXiv:2004.05150 , 2020. URL https://arxiv.org/abs/2004.05150 .Yoshua Bengio, Nicholas Léonard, and Aaron Courville. Estimating or propagating gradients through stochastic neurons for conditional computation. arXiv preprint arXiv:1308.3432 , 2013. URL 
+
+https://arxiv.org/abs/1308.3432 .Rewon Child, Scott Gray, Alec Radford, and Ilya Sutskever. Generating long sequences with sparse transformers. arXiv preprint arXiv:1904.10509 , 2019. URL https://arxiv.org/abs/1904. 10509 .Sungjun Cho, Seonwoo Min, Jinwoo Kim, Moontae Lee, Honglak Lee, and Seunghoon Hong. Transformers meet stochastic block models: Attention with data-adaptive spar-9sity and cost. In Advances in Neural Information Processing Systems (NeurIPS) , vol-ume 35, 2022. URL https://proceedings.neurips.cc/paper_files/paper/2022/ hash/9c93b3cd3bc60c0fe7b0c2d74a2da966-Abstract-Conference.html .Lizhe Fang, Yifei Wang, Zhaoyang Liu, Chenheng Zhang, Stefanie Jegelka, Jinyang Gao, Bolin Ding, and Yisen Wang. What is wrong with perplexity for long-context language model-ing? In International Conference on Learning Representations (ICLR) , 2025. URL https: //openreview.net/forum?id=fL4qWkSmtM .John Hurwitz, Charles Nicholas, and Edward Raff. Neural normalized compression distance and the disconnect between compression and classification. In Machine Learning and Compression Workshop, NeurIPS 2024 , 2024. URL https://arxiv.org/abs/2410.15280 .Zhiying Jiang, Matthew Y. R. Yang, Mikhail Tsirlin, Raphael Tang, Yiqin Dai, and Jimmy Lin. “low-resource” text classification: A parameter-free classification method with compressors. In 
+
+Findings of the Association for Computational Linguistics: ACL 2023 , pages 6810–6828, Toronto, Canada, 2023. Association for Computational Linguistics. URL https://aclanthology.org/ 2023.findings-acl.426/ .Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International Confer-ence on Learning Representations (ICLR) , 2019. URL https://openreview.net/forum?id= Bkg6RiCqY7 .Chao Lou, Zixia Jia, Zilong Zheng, and Kewei Tu. Sparser is faster and less is more: Efficient sparse attention for long-range transformers. arXiv preprint arXiv:2406.16747 , 2024. URL 
+
+https://arxiv.org/abs/2406.16747 .Jack W. Rae, Anna Potapenko, Siddhant M. Jayakumar, Chloe Hillier, and Timothy P. Lillicrap. Com-pressive transformers for long-range sequence modelling. In International Conference on Learning Representations (ICLR) , 2020. URL https://openreview.net/forum?id=SylKikSYDH .Aurko Roy, Mohammad Saffar, Ashish Vaswani, and David Grangier. Efficient content-based sparse attention with routing transformers. Transactions of the Association for Computational Linguistics ,9:53–68, 2021. doi: 10.1162/tacl_a_00353. URL https://aclanthology.org/2021.tacl-1. 4/ .Yi Tay, Mostafa Dehghani, Samira Abnar, Yikang Shen, Dara Bahri, Philip Pham, Jinfeng Rao, Liu Yang, Sebastian Ruder, and Donald Metzler. Long range arena: A benchmark for efficient transformers. In International Conference on Learning Representations (ICLR) , 2021. URL 
+
+https://openreview.net/forum?id=qVyeW-grC2k .Jingyang Yuan, Huazuo Gao, Damai Dai, Junyu Luo, Liang Zhao, Zhengyan Zhang, Zhenda Xie, Yuxing Wei, Lean Wang, Zhiping Xiao, Yuqing Wang, Chong Ruan, Ming Zhang, Wen-feng Liang, and Wangding Zeng. Native sparse attention: Hardware-aligned and natively trainable sparse attention. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 23078–23097, Vienna, Austria, 2025. Association for Computational Linguistics. doi: 10.18653/v1/2025.acl-long.1126. URL 
+
+https://aclanthology.org/2025.acl-long.1126/ . Best Paper Award. Manzil Zaheer, Guru Guruganesh, Kumar Avinava Dubey, Joshua Ainslie, Chris Alberti, Santiago Ontañón, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang, and Amr Ahmed. Big bird: Transformers for longer sequences. In Advances in Neural Information Processing Systems (NeurIPS) , volume 33, 2020. URL https://proceedings.neurips.cc/paper/2020/hash/ c8512d142a2d849725f31a9a7a361ab9-Abstract.html .Jacob Ziv and Abraham Lempel. A universal algorithm for sequential data compression. IEEE Transactions on Information Theory , 23(3):337–343, May 1977. doi: 10.1109/TIT.1977.1055714. 10 Table 6: ByteLM architecture (medium configuration). 
+
+Hyperparameter Value 
+
+Vocabulary size 256 (byte-level) Model dimension ( d) 768 Attention heads ( H) 12 Head dimension ( dk) 64 Layers ( L) 12 FFN dimension 3072 Activation GELU Dropout 0.1 Positional encoding Learned (max 16384) Embedding tying Input = Output Total parameters 91,544,064 
+
+## A Hyperparameters and Compute 
+
+A.1 Model Architecture 
+
+Table 6 details the model configuration used in all experiments unless otherwise noted. At SEQ_LEN=4096, the positional embedding table is smaller, yielding 88,398,336 parameters. The SBM-Transformer adds 173,568 parameters (0.19% overhead): 6,144 per layer for cluster embeddings ( H × K × dk = 12 × 8 × 64 ) and 8,320 per layer for the shared projection MLP (2 × (d2 
+
+> k
+
++ dk) = 2 × 4160 ). 
+
+A.2 Training Configuration 
+
+Table 7: Training hyperparameters. 
+
+Hyperparameter Value 
+
+Optimizer AdamW Learning rate 3 × 10 −4
+
+Weight decay 0.1 
+
+β1, β 2 0.9, 0.95 
+
+ϵ 10 −8
+
+LR schedule Linear warmup + cosine decay Warmup steps 2000 Training steps 20,000 Batch size per GPU 1Gradient accumulation 4GPUs 4–5 × NVIDIA H100 SXM Effective batch size 16–20 sequences Precision bfloat16 mixed precision Gradient checkpointing Enabled (disabled for SBM) Random seed 42 (model init + data order) 
+
+A.3 Mask Construction Parameters A.4 Compute Budget 
+
+All experiments were run on RunPod cloud instances with NVIDIA H100 SXM (80GB) GPUs. Training used PyTorch 2.x with DistributedDataParallel across GPUs within each node. A shared network volume stored data and checkpoints, enabling parallel execution of different methods on separate pods. 11 Table 8: Sparse attention mask hyperparameters. 
+
+Parameter Value 
+
+Block size ( b) 128 bytes Local window ( w) ±1 block (256 bytes) Gzip compression level 1 (fastest) Literality threshold Mean compression ratio per sequence Global tokens None (removed in all our variants) BigBird random edges ( K) 6 per block Longformer window ±4 blocks Longformer global stride Every 8th block SBM clusters ( k) 8 per head SBM edge exploration ( δ) 0.01 Head allocation: local 50% of heads (6/12) Head allocation: long-range 25% of heads (3/12) Head allocation: hybrid 25% of heads (3/12) Table 9: Approximate compute costs per experiment. 
+
+Experiment Configuration GPU-hours Hardware 
+
+Main (8K, 20K steps) 7 methods, each on 4 GPUs 7 × 5 = 35 4×H100 Scaling (4K, 20K) 2 methods, sequential 5 4×H100 Evaluation suite 7 models × 3 evals 11 1×H100 
+
+Total ∼51 
+
+## B Mask Construction Pseudocode 
+
+Algorithm 1 presents the complete mask construction procedure. Total cost is dominated by B gzip calls on b-byte blocks ( <1ms for N = 8192 , b = 128 ). 
+
+Head-specific mask distribution. The block mask M is split across attention heads: • Local heads (heads 0–5): Mlocal ∪ I only. • Long-range heads (heads 6–8): Mlit ∪ I only. • Hybrid heads (heads 9–11): full M.This allocation is identical across all 12 layers and fixed throughout training. 
+
+Block-to-token expansion. Implemented as a single vectorized operation in PyTorch: 
+
+token_mask = block_mask.unsqueeze(-1).unsqueeze(-1) .expand(B, B, b, b).reshape(N, N) 
+
+No Python loops. Cost is negligible relative to attention. 
+
+## C SBM-Transformer Reimplementation Details 
+
+We reimplemented SBM-Transformer following the official code at 
+
+github.com/sc782/SBM-Transformer . This section documents the key implementation decisions. 
+
+C.1 Components Preserved from Official Code 
+
+1. Cluster embeddings: Per-head parameters C ∈ RH×K×dk initialized with 
+
+kaiming_normal_ (matching the official code). 12 Algorithm 1 Compression-Guided Sparse Attention Mask 
+
+Require: Sequence x ∈ { 0, . . . , 255 }N , block size b, window w
+
+Ensure: Token-level mask M′ ∈ { 0, 1}N ×N , where B = N/b 
+
+// Step 1: Per-block compression ratios [O(B) gzip calls]  
+
+> 1:
+
+for i = 0 to B − 1 do  
+
+> 2:
+
+ri ← | gzip (x[ib : ( i+1) b]) | / b  
+
+> 3:
+
+end for 
+
+// Step 2: Classify blocks [parameter-free]  
+
+> 4:
+
+τ ← mean (r0, . . . , r B−1) 
+
+> 5:
+
+for i = 0 to B − 1 do  
+
+> 6:
+
+ℓi ← 1[ri > τ ] 
+
+> 7:
+
+end for 
+
+// Step 3: Build block-level mask [3 components]  
+
+> 8:
+
+M ← IB ▷ diagonal (self-attn)  
+
+> 9:
+
+for i, j ∈ { 0, . . . , B −1}2 do  
+
+> 10:
+
+if |i−j| ≤ w then Mij ← 1 ▷ local  
+
+> 11:
+
+end if  
+
+> 12:
+
+if ℓi=1 and ℓj =1 and |i−j|>w then  
+
+> 13:
+
+Mij ← 1 ▷ literal  
+
+> 14:
+
+end if  
+
+> 15:
+
+end for 
+
+// Step 4: Expand to tokens + causal masking [vectorized]  
+
+> 16:
+
+M′ ← expand (M, b ) ▷ B ×B → N ×N 
+
+> 17:
+
+M′ ← M′ AND NOT triu (1, 1) ▷ enforce causality 2. Node projection: A shared (not per-head) nn.Sequential(Linear( dk,dk), ReLU, Linear( dk,dk)) applied to both queries and keys. 3. Block matrix: ˆS = softmax (CC ⊤) with softmax over the flattened K2 entries (matching the official .reshape(num_head, num_clusters**2) ). 4. Memberships: ˆQ = σ(MLP (Q) · C⊤), ˆK = σ(MLP (K) · C⊤).5. Edge probabilities: A = ˆQˆS ˆK⊤.6. Custom STE (SampleGraphSparseGraph ): Forward: G = Bernoulli (clamp (A +0.01 , 0, 1)) . Backward: ∇A = hardtanh (G ⊙ ∇ out ).7. Mask application: attn = L1-normalize (softmax (QK ⊤/√dk) ⊙ G) (matching official 
+
+F.normalize(...*graph, p=1, dim=-1) ). 
+
+C.2 Adaptations for Our Setting 
+
+1. Causal mask: Added standard upper-triangular masking to attention logits before softmax for autoregressive training. 2. Clusters: K = 8 (the argparse default in the official run_tasks.py ). 3. Gradient checkpointing: Disabled for SBM. The official code sets 
+
+attention_grad_checkpointing: False for SBM, and we found empirically that Bernoulli resampling during checkpoint recomputation produces inconsistent gradients. 4. NaN handling: Added nan_to_num after L1 normalization. At 8K context, the intersection of Bernoulli sampling and causal masking occasionally produces all-zero rows. 13 Table 10: SBM-Transformer additional parameters per layer. 
+
+Component Params Formula 
+
+Cluster embeddings 6,144 H × K × dk = 12 × 8 × 64 
+
+MLP weight 1 4,096 dk × dk
+
+MLP bias 1 64 dk
+
+MLP weight 2 4,096 dk × dk
+
+MLP bias 2 64 dk
+
+Per layer 14,464 12 layers 173,568 (0.19% of base model) 
+
+C.3 Parameter Count 
+
+## D Full Training Trajectories 
+
+Table 11 provides the complete validation BPB at every evaluation checkpoint for all seven methods. Table 11: Validation BPB at each evaluation checkpoint (92M params, PG-19, SEQ_LEN=8192, 20K steps). BB = BigBird, LF = Longformer, Lit-P = Literal Pure.                                                                                                                                                    
+
+> Step Dense BB LF SBM Local Lit-P Gzip
+> 1K 3.74 3.70 3.70 3.71 3.71 3.68 3.66 2K 3.71 3.70 3.69 3.70 3.72 3.33 3.38 3K 3.67 3.66 3.66 3.66 3.65 2.83 2.90 4K 3.65 3.64 3.64 3.67 3.62 2.50 2.55 5K 3.63 3.62 3.63 3.65 3.61 2.33 2.34 6K 3.63 3.60 3.62 3.63 3.60 2.21 2.19 7K 3.61 3.48 3.60 3.62 3.55 2.15 2.09 8K 3.63 3.12 3.60 3.62 3.32 2.09 2.00 9K 3.60 2.92 3.60 3.62 2.99 2.04 1.94 10K 3.59 2.80 3.58 3.59 2.81 2.00 1.88 11K 3.56 2.70 3.58 3.58 2.67 1.97 1.85 12K 3.51 2.61 3.55 3.56 2.55 1.93 1.81 13K 3.45 2.54 3.52 3.54 2.46 1.91 1.79 14K 3.25 2.49 3.49 3.52 2.39 1.88 1.76 15K 3.11 2.43 3.43 3.47 2.34 1.86 1.74 16K 3.00 2.39 3.32 3.43 2.30 1.85 1.73 17K 2.94 2.37 3.26 3.40 2.28 1.84 1.72 18K 2.90 2.35 3.22 3.39 2.26 1.83 1.71 19K 2.89 2.35 3.21 3.38 2.26 1.83 1.71 20K 2.89 2.34 3.21 3.38 2.26 1.83 1.71
+
+Three training regimes are visible: • Steps 0–1K: All methods learn identically (basic byte statistics). • Steps 1K–7K: Compression-guided methods accelerate sharply; fixed-mask methods plateau. At step 5K, Gzip-Guided is at 2.34 BPB while BigBird remains at 3.62. • Steps 7K–20K: Fixed-pattern methods undergo delayed breakthroughs (BigBird ∼7K, Local ∼8K, Dense ∼14K). The gap narrows but remains substantial (0.63 BPB for BigBird, 1.18 for Dense). SBM-Transformer drifts downward without breakthrough. 
+
+## E Sequence Length Scaling: Detailed Results 
+
+E.1 SEQ_LEN=4096 
+
+At 4K, BigBird’s breakthrough occurs at step ∼4K (vs. ∼7K at 8K) and the final gap is only 0.05 BPB (vs. 0.63 at 8K). The smaller attention search space ( 32 2 = 1024 vs. 64 2 = 4096 block pairs) allows fixed patterns to discover useful routes more quickly. 14 Table 12: Training trajectories at SEQ_LEN=4096 (92M params, 20K steps). 
+
+Step BigBird Gzip-Guided 
+
+1K 3.64 3.58 2K 3.61 2.91 3K 3.59 2.37 4K 3.45 2.12 5K 2.85 1.98 6K 2.46 1.88 7K 2.22 1.82 8K 2.07 1.78 9K 1.96 1.75 10K 1.86 1.72 15K 1.68 1.62 20K 1.64 1.59 4K 8K 
+
+Sequence Length  
+
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> BPB (lower is better)
+> 1.64 1.59
+> 2.34
+> 1.71
+> = 0.05
+> = 0.63
+
+Gap Widens 13× as Sequence Length Doubles 
+
+> BigBird
+> Gzip-Guided
+
+Figure 3: Left: BPB comparison at 4K and 8K context. Right: the gap between BigBird and Gzip-Guided at each sequence length. 
+
+## F Context Scaling: Complete Results 
+
+Table 13 extends Table 5 with the Dense model and additional context lengths. Table 13: Complete context scaling results. BPB on last 512 bytes with varying context budget. Each method uses its own mask type.                                    
+
+> Ctx Dense LF BB Local Gzip
+> 256 4.14 4.00 3.63 3.27 5.23 512 4.53 4.02 2.48 2.27 1.89 1024 4.41 3.86 2.30 2.17 1.78 2048 4.25 3.83 2.28 2.15 1.75 4096 4.02 3.67 2.27 2.14 1.71 8192 2.96 3.25 2.26 2.14 1.68
+
+Dense model artifact. The Dense model shows non-monotonic behavior: BPB increases from 256 to 512 bytes (4.14 →4.53). This occurs because the Dense model was trained without any block-level 15 masking; introducing column-blocking at evaluation disrupts its learned attention patterns. Dense context-scaling numbers should be interpreted with caution for cross-method comparison. The main table value (2.89 BPB) is computed without any blocking and remains valid. 
+
+Short-context degradation in Gzip-Guided. Gzip-Guided performs poorly at 256 bytes (5.23 BPB) because almost no sparse connections exist in such a small window (only 2 blocks). Performance recovers sharply at 512 bytes (4 blocks), where the local window and initial literal connections become available. This confirms that the model’s representations are structurally dependent on its sparse attention pathways. 
+
+## G Edge Count Distribution 
+
+The Gzip-Guided method produces a varying number of long-range edges per sequence, reflecting content diversity in PG-19. Table 14: Edge count statistics for Gzip-Guided at SEQ_LEN=8192 (computed over 1000 training sequences). 
+
+Statistic Value 
+
+Minimum edges 256 Maximum edges 904 Mean 593 Median 621 Std. dev. 135 Range ratio 3.5 ×
+
+For comparison, BigBird always produces exactly 309 edges per sequence (fixed by construction), regardless of input content. The adaptive density reflects content structure: repetitive passages (fairy tales with repeated phrases, formulaic letter openings) produce fewer literal blocks (gzip compresses such content well) and thus fewer edges. Dense novel content (technical descriptions, dialogue with unique vocabulary) produces more literal blocks and denser connectivity. This automatic compute allocation—more attention budget for less-redundant inputs—is a practical consequence of the compression-based approach. 300 400 500 600 700 800 900 
+
+> Long-Range Edges per Sequence
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> Count
+> 3.5× range (min=256, max=904)
+
+Adaptive Edge Density: Gzip-Guided (3.5× range) 
+
+Figure 4: Distribution of long-range attention edges per sequence in the Gzip-Guided method (1000 training sequences from PG-19). The 3.5 × range (256–904) reflects automatic density adaptation to content redundancy. 16 H Extended Related Work 
+
+This appendix expands the abbreviated “Compression in ML and long-context evaluation” paragraph in Section 2 into the two full threads it draws on. 
+
+Compression in machine learning. Compression has long been studied as a proxy for structure and predictability in data. Jiang et al. Jiang et al. [2023] demonstrated that gzip-based Normalized Compression Distance (NCD) enables competitive text classification without any learned parameters, sparking significant interest in compression-based ML. Follow-up work Hurwitz et al. [2024] showed that the relationship between compression rate and classification accuracy is more nuanced than initially understood. Compression has also been used for anomaly detection, clustering, and similarity measurement across domains. Our work extends this line of research in a new direction: rather than using compression for classification (comparing documents), we use it for attention routing 
+
+(identifying which parts of a single document carry non-redundant content). To our knowledge, this is the first use of classical compression for attention mask construction. 
+
+Long-context evaluation. Evaluating long-context utilization is challenging. LongPPL Fang et al. [2025] proposes selective perplexity metrics that measure per-token benefit from distant context. The Long Range Arena Tay et al. [2021] provides classification benchmarks at 1K–4K tokens, though recent work questions whether its tasks truly require long-range reasoning. RULER and HELMET evaluate retrieval and reasoning in instruction-tuned models. For base language models without instruction tuning, loss-based evaluation remains the most reliable metric. We adopt bits-per-byte (BPB) on PG-19 Rae et al. [2020] as our primary metric and supplement it with context-scaling analysis that measures how BPB improves as available context grows (Table 5). 
+
+## I Detailed Comparison to Learned Mask Methods 
+
+Table 15: Comparison of adaptive mask construction methods. Our approach is the only one requiring zero additional parameters, no custom gradient estimators, and no specialized kernels. 
+
+Method Extra Params Differentiable? Custom Kernel? Mask Cost 
+
+BigBird 0 N/A (fixed) No O(N )
+
+Routing Trans. O(dK ) K-means No O(N K )
+
+SBM-Trans. O(HKd ) STE No O(N 2K)
+
+NSA O(d) Gating Yes O(N )
+
+DMA O(d2) End-to-end Yes O(N d )
+
+Ours 0 N/A (external) No O(N )       
+
+> d= model dim, H= heads, K= clusters, N= seq length.
+
+Among the listed methods, our approach is the only one combining zero extra parameters, no need for a gradient estimator through the mask construction step, and no custom CUDA kernel. Rout-ing Transformer and SBM-Transformer add cluster-based parameters with associated optimization challenges; NSA and DMA require specialized kernels for efficient training. 
+
+## J Convergence Speed Summary 
+
+Table 16 summarizes the training steps each method requires to reach successive BPB thresholds, derived from the trajectories in Table 11. 
+
+## K Extended Discussion 
+
+This appendix continues the discussion begun in Section 5 with three further threads. 
+
+Why an external compression signal works. A natural question is why an externally-derived signal (gzip, no learned parameters) outperforms a learned signal (SBM-Transformer, 247K parameters) in our setting. Three factors stand out. First, gzip’s signal is noise-free : every mask construction 17 Table 16: Convergence speed. Training steps to reach BPB targets. “—” = not reached within 20K steps. Speedup is relative to BigBird at the 2.5 BPB target. 
+
+Method 3.0 BPB 2.5 BPB 2.0 BPB Speedup 
+
+Longformer — — — —SBM-Transformer — — — —Dense ∼16K — — —BigBird ∼9K ∼14K — 1.0 ×
+
+Literal Pure ∼3.5K ∼5.0K ∼9.5K 2.8 ×
+
+Gzip-Guided ∼2.8K ∼4.2K ∼8.4K 3.3 ×
+
+call returns a deterministic, reproducible outcome. Learned masks, in contrast, must navigate high-variance gradient estimates through Bernoulli sampling over N 2 potential edges. Second, gzip’s signal is available prior to training : the structure of the input is captured before any model weights are computed, providing stable supervision throughout training. Learned mask parameters change as the model evolves, creating a non-stationary mask distribution. Third, gzip is robust by construction :it has been engineered over decades to identify within-document redundancy across diverse text, and natural-language text plays to its strengths. 
+
+Implications for scaling. Our sequence-length scaling results (Table 3) show the gap between fixed and compression-guided masks widening from 0.05 BPB at 4K to 0.63 BPB at 8K, with convergence speedup increasing from 1.8 × to 3.3 ×. BigBird’s delayed breakthrough shifts later as context grows: step ∼4K at 4K, ∼7K at 8K. The combinatorial explanation is straightforward: the number of possible attention patterns over B blocks grows as 2B2
+
+, so fixed random patterns become increasingly poor approximations of the useful routing as B grows. Compression-guided selection sidesteps the issue by deterministically targeting non-redundant positions. The failure of SBM-Transformer at 8K further supports this: learned mask methods face their own scaling challenges (noisy gradients through Bernoulli sampling over N 2 edges), while compression-based construction scales trivially—gzip’s O(N ) cost is independent of the attention dimension and produces identical-quality signals at any sequence length. 
+
+Beyond gzip. Our use of gzip is deliberately conservative: gzip is universally available, fast, and well-understood. The same approach applies to any general-purpose compressor: brotli, zstd, and LZ4 each offer different trade-offs between compression strength and speed, and stronger compressors may provide a sharper redundant/non-redundant signal. Exploring whether stronger compression yields better attention masks—and at what computational cost—is a natural direction for future work. 
+
+## L Detailed Limitations 
+
+This appendix elaborates on the limitations summarized in Section 5. 
+
+Scale. All experiments use a 92M-parameter model trained for 20K steps on a single dataset (PG-19). While this is sufficient for controlled comparison of attention mechanisms, it remains an open question whether the advantages of compression-guided masks persist at billion-parameter scale, longer training budgets, and diverse data mixtures. The information-theoretic argument is scale-invariant in principle, but practical advantages may diminish or strengthen at scale—this requires empirical validation. 
+
+Byte-level modeling. Our model operates on raw bytes (vocabulary size 256) rather than subword tokens (vocabulary size 32K–128K). Byte-level models face a harder sequence-length problem—8192 bytes corresponds to only ≈1500 words—but also have different attention dynamics than BPE-based models. The compression ratios that guide our masks are computed on raw bytes; adapting the method to subword-tokenized inputs would require computing compression ratios at the token level, which is straightforward but untested. 18 Gzip is not the strongest available compressor. Gzip at compression level 1 is fast but loose; stronger compressors (brotli, zstd at high levels, neural compressors) would identify within-block redundancy more accurately and may improve mask quality. Conversely, our results show that even gzip at compression level 1 already produces highly effective masks, suggesting a degree of robustness to compressor choice. Systematic comparison across compressors is left to future work. 
+
+No true sparse computation. Our implementation materializes the full N × N attention matrix and applies the sparse mask via element-wise multiplication. This provides no wall-clock speedup over dense attention—the sparsity is “logical” rather than computational. Achieving actual speedups requires integration with block-sparse CUDA kernels (e.g., FlashAttention with block-sparse masks) or custom sparse attention implementations, which we leave to future work. 
+
+SBM-Transformer comparison. Our SBM-Transformer baseline is a reimplementation, not the original authors’ code running on their original benchmark. While we followed the official code faithfully (Section 4.5), the SBM-Transformer was designed for encoder-based classification on 1K– 4K sequences (Long Range Arena), not autoregressive language modeling at 8K. Its poor performance in our setting may reflect a domain mismatch rather than a fundamental limitation of learned masks. We encourage the community to evaluate learned mask methods at longer contexts to determine whether our finding generalizes. 
+
+Single dataset, no downstream evaluation. We evaluate only on PG-19 BPB. Production language models are judged on downstream tasks (question answering, summarization, retrieval), and it is possible that the representations learned through compression-guided sparse attention, while achieving lower BPB, do not transfer equally well to all downstream applications. 
+
+## M Supplementary Figures 
+
+This appendix collects visualizations referenced from the main text. Each figure is a graphical complement to a table or paragraph already presented above; the underlying numbers are unchanged. 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 
+
+> BPB (lower is better)
+> Gzip-Guided (ours)
+> Literal Pure (ours)
+> Local Only
+> BigBird
+> Dense
+> Longformer
+> SBM-Transformer
+> 1.71
+> 1.83
+> 2.26
+> 2.34
+> 2.89
+> 3.21
+> 3.84
+> Compression-
+> guided
+> Fixed-pattern
+> / learned
+
+Final BPB at 20K Steps (92M params, PG-19) 
+
+Figure 5: Visualization of Table 1 (main results). Final BPB for all seven methods. Compression-guided methods (bottom two) achieve 1.71–1.83 BPB, dramatically outperforming fixed-pattern methods. SBM-Transformer, the only method with learned mask parameters (+247K), performs worst. 19 BigBird 
+
+> (baseline)
+> globals
+> (= Local)
+> + gzip literal
+> conns
+> + local
+> window
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> BPB
+> 2.34
+> 2.26
+> -0.08 (13%)
+> 1.83
+> -0.43 (68%)
+> 1.71
+> -0.12 (19%)
+
+Component Contribution (92M, 8K, 20K steps) Figure 6: Visualization of Table 2 (component ablation). Waterfall chart of component contribu-tions. Gzip-derived literal connections account for 68% of the total improvement over BigBird, the local window contributes 19%, and removing fixed global tokens contributes 13%. 5K 10K 15K 20K 
+
+Steps 
+
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> Validation BPB
+> = 0.05
+
+SEQ_LEN = 4096    
+
+> BigBird
+> Gzip-Guided
+> 5K 10K 15K 20K
+
+Steps 
+
+> = 0.63
+
+SEQ_LEN = 8192 
+
+> BigBird
+> Gzip-Guided
+
+Gap Widens 13× from 4K to 8K Context 
+
+Figure 7: Visualization of Section 4.4 (sequence length scaling). Learning curves at 4K (left) and 8K (right) context. At 4K, BigBird’s delayed breakthrough occurs at step ∼4K and converges within 0.05 BPB of Gzip-Guided. At 8K, the breakthrough is delayed to step ∼7K with a final gap of 0.63 BPB. 20
