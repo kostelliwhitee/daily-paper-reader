@@ -1,0 +1,801 @@
+Title: What Softmax Throws Away: Mass-Aware Attention for Evidence Accumulation
+
+URL Source: https://arxiv.org/pdf/2607.22781v1
+
+Published Time: Tue, 28 Jul 2026 00:08:28 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# What Softmax Throws Away: Mass-Aware Attention for Evidence Accumulation 
+
+Minwoo Yu and Young-guk Ha 
+
+Abstract —High task performance alone does not establish whether a model retains the structural information it uses for prediction in its internal representation. Temporal graph models, in particular, can achieve high future-link AUC while basic graph statistics remain inconsistently recoverable from the same representation. We identify one structural source of this gap in the weighted averaging performed by standard attention. When an evidence pattern is repeated, the numerator and denominator of standard attention grow at the same rate; consequently, inputs with different amounts of accumulated evidence can produce the same aggregate. We address this limitation with Mass-Aware Attention (MAA) , which generalizes standard L1 normalization to an Lp family of operators. By making the numerator and denominator scale at different rates under repetition, MAA retains the effective number of contributing inputs in the magnitude of the representation. It requires no additional supervision, parameters, hidden dimensions, or explicit count features, and recovers standard attention as the special case p = 1 .Across four CTDG models and three datasets, MAA improves future-link AUC in 11 of 12 model–dataset cells. Linear recovery from the same hidden representation increases by 4.49% on average, while preferential-attachment recovery improves in all 12 cells and remains significant after family-wise correction. We confirm this effect in CTDG and observe consistent cross-domain evidence in four additional settings: candidate-mark counts in MTPP, pair recurrence in TKG, retained-passage conditions in RAG, and local event counts in STPP. Information accessibility and task utility remain distinct: NLL improves in MTPP and ranking is largely preserved in TKG, whereas the additional information in RAG does not improve the diagnostic head, and a downstream LayerNorm can erase the signal in STPP. These results establish MAA as a general normalization principle for improving the informativeness of predictor-facing representations by controlling the repetition invariance hard-coded into standard attention. 
+
+Index Terms —Mass-Aware Attention, attention normalization, representation auditing, temporal graph learning, evidence accumulation. 
+
+✦
+
+1 INTRODUCTION 
+
+High benchmark performance shows how accurately a model distinguishes future links, but it does not reveal how much pre-query graph structure—such as pair frequency or degree accumulation—remains in the predictor-facing representa-tion. This distinction is especially important for temporal graphs, where repeated interactions, node activity, recency, and periodicity can all support future-link prediction. Yet simple heuristics can achieve strong benchmark performance because of easy negative sampling and recurring edges [1], [2], and model predictions do not consistently reflect several graph characteristics [3]. A model that learns a temporal graph effectively should therefore make prediction-relevant graph statistics accessible in the representation supplied to its predictor. In this work, statistic recovery is not a substitute for task performance; it is a representation audit of this condition. We study a small but pervasive blind spot shared by attention models across domains. Standard softmax attention returns a weighted average of its input values. When the same evidence pattern is repeated, its numerator and L1
+
+denominator can grow together, leaving the aggregate un-changed. The operator preserves which evidence is relatively important while weakening how broadly that evidence has accumulated. This effect can appear as low graph-statistic recovery in CTDG, weak accessibility of cumulative 
+
+• M. Yu and Y.-G. Ha are with the Smart Computing Laboratory, Department of Computer Science & Engineering, Konkuk University, Seoul 05029, Republic of Korea. E-mail: {snowypainter, ygha }@konkuk.ac.kr. 
+
+• Y.-G. Ha is the corresponding author. 
+
+candidate-mark occurrences in MTPP, query-specific pair recurrence in TKG, evidence completeness across passages in RAG, and event counts around a candidate location in STPP. We introduce Mass-Aware Attention (MAA) to address this blind spot. The only modification is to generalize the 
+
+L1 norm in the attention denominator to an Lp norm. Standard attention becomes the point p = 1 ; for p > 1,the numerator and denominator scale at different rates under repetition. MAA thereby preserves the weighted direction while retaining an input-dependent scale derived from the effective support of the attention distribution. It uses no explicit count, auxiliary target, additional parameter, or hidden coordinate. Instead, it exposes the exact repetition invariance hard-coded by standard attention as a continuous control axis. Our evaluation follows a hierarchy of evidence. The primary question is whether target information becomes more recoverable from the same predictor-facing hidden representation Z. We then measure whether this change preserves or improves the original task. Finally, a 2 × 2
+
+representation audit, an explicit-cardinality control, output normalization, and power sensitivity distinguish MAA from coordinate exposure and uniform changes in representation norm. Figure 1 summarizes the central CTDG results, and Table 1 shows how the common question is instantiated in each domain. Our contributions are as follows.  
+
+> •
+
+We reinterpret the repetition invariance of standard attention as the p = 1 special case of an Lp normal-arXiv:2607.22781v1 [cs.LG] 24 Jul 2026 20.000      
+
+> 0.002
+> 0.004
+> 0.006
+> 0.008
+> Δ AUC
+> mean = +0.00350
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> Preferential attachment
+> ΔR2 (linear)
+> mean = +0.09108
+> CRAFT TGAT DyGFormer GraphMixer
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> ΔR2shared  (linear)
+> mean = +0.01799
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> Δ context margin
+> mean = +0.03150
+> Fig. 1. Main CTDG results. Linear recovery and context sensitivity increase on average. Confirmatory evidence is strongest for preferential-attachment recovery, which improves in 12/12 cells, and future-link AUC, which improves in 11/12 cells. Effect sizes vary across probes and statistics. TABLE 1 Evidence-accumulation problem and evaluation target in each domain. Every recovery result is measured from an equal-dimensional predictor-facing representation Zwithout auxiliary coordinates.
+
+Domain Input distinction Information recovered from Z Task-utility metric CTDG Differences in repeated interactions and temporal neighborhoods Pair frequency, recency, persistence, periodicity, granularity, density, ho-mophily, and preferential attachment Future-link ROC–AUC and context sensitivity MTPP Accumulation of preceding events sup-porting a candidate mark Global and recent occurrence counts of the candidate mark Point-process/mark NLL, mark accu-racy, and time error TKG Repeated historical facts connecting the current head and candidate tail Pair recurrence, relation diversity, and two-hop path count Filtered MRR, Hits@10, and hard-negative AUC RAG Complete supporting passages versus inputs missing part of the evidence Retained-passage condition with literal-duplicate cues removed Diagnostic AUC for complete versus partial evidence STPP Preceding events accumulated around a candidate location Local event counts at multiple radii NELBO and spatial/temporal log-likelihood 
+
+ization family and introduce MAA, a parameter-free mechanism for controlling it.  
+
+> •
+
+We jointly evaluate recovery from the same rep-resentation, behavioral sensitivity, and task perfor-mance across four CTDG architectures, three datasets, and three seeds. Preferential-attachment recovery improves in all 12 model–dataset cells, and AUC improves in 11.  
+
+> •
+
+We extend the evaluation to MTPP, TKG, RAG, and STPP, showing that one normalization principle improves access to distinct forms of accumulated evidence.  
+
+> •
+
+We characterize the operational boundary of MAAthrough information that becomes accessible but remains unused in RAG and information that a downstream normalization removes in STPP. 
+
+2 RELATED WORK 
+
+This section reviews temporal representation auditing and at-tention normalization, and distinguishes MAAfrom explicit cardinality injection. Standard scaled dot-product attention forms a weighted average of values using normalized coefficients [4]. We study the repetition invariance imposed by the denominator of this basic operator. 
+
+2.1 Temporal Graph Learning and Representation Au-diting 
+
+TGAT constructs inductive node representations using time encoding and temporal attention [5]. GraphMixer combines link and node encoders with an MLP mixer [6], while DyGFormer encodes interaction sequences as patches [7]. CRAFT achieves strong future-link performance using node identities and target-aware cross-attention [8]. MAAdoes not replace these backbones; it modifies only the normalization at the attention boundary that forms the predictor-facing representation. In dynamic link prediction, recurring edges and memo-rization can dominate under particular evaluation protocols [1]. Hayes et al. show through interventions that model predictions reflect temporal graph characteristics unevenly [3]. Their analysis is behavioral, whereas ours examines frozen internal representations. We measure the recoverabil-ity of query-level graph statistics and test an operator that improves their accessibility without statistic supervision. 
+
+2.2 Representation Probing 
+
+Linear probes are a standard tool for measuring whether a target is accessible through a simple readout from a frozen representation [9], [10], [11]. Because a probe may itself learn the target or exploit surface correlations, its capacity and held-out protocol must be interpreted separately [12]. We report 3
+
+Ridge and ExtraTrees probes on chronological held-out splits, never propagate probe gradients into the original model, and evaluate recovery together with behavioral sensitivity and task performance. This design separates information that is readable from information that the predictor actually uses. 
+
+2.3 Cardinality Preservation and Probability Normaliza-tion 
+
+Cardinality-Preserved Attention (CPA) identifies the inability of graph attention to distinguish multisets with different mul-tiplicities and augments the aggregate with an unweighted sum or explicit neighborhood cardinality [13]. Its motivation is closely related, but its information source and operator differ from ours. CPA injects the observed token count or an unweighted aggregate through a separate branch. MAAinstead derives its scale from the effective support and concentration of the attention distribution already computed by the model. It can therefore assign different scales to inputs with identical cardinality but different attention distributions, while p continuously controls the strength of the invariance. Normalized Attention Without Probability Cage replaces softmax with normalization based on the mean and variance of logits and learnable gain and bias, motivated by the probability-simplex and convex-hull constraints [14]. Affine-Scaled Attention learns an input-dependent affine transfor-mation after softmax [15]. In contrast, MAApreserves the standard weighted direction and learns no additional gate: its scale is deterministically computed from the normalized attention α. The distinctive contribution of MAAis thus to expose the L1 repetition invariance hard-coded into standard attention as an explicit control axis in an Lp family. 
+
+2.4 Evidence Accumulation Across Domains 
+
+In temporal point processes, event history determines mark-specific conditional intensities and the distribution of the next event, which recurrent and attention-based models represent in different ways [16], [17], [18], [19]. In temporal knowledge graph forecasting, recurrent facts and relational paths support candidate-entity ranking [20], [21], [22]. Multi-hop QA requires integrating supporting facts distributed across passages [23], [24], while spatio-temporal point pro-cesses condition spatial intensity on local event density and revisit patterns [25], [26]. Although these tasks and data structures differ, they share an attention boundary that conveys accumulated evidence to a predictor through a weighted average. We therefore use domain-specific targets that directly represent accumulation rather than imposing one statistic across domains. Layer normalization standardizes hidden-state scale [27], and its placement before or after attention changes optimiza-tion and information flow in Transformers [28]. Our STPP analysis identifies a concrete boundary at which this general architectural choice determines whether the input-dependent amplitude introduced by MAAreaches the predictor-facing representation. 
+
+3 MASS -A WARE ATTENTION 
+
+This section formalizes the repetition invariance of standard weighted averaging and presents the Lp normalization that relaxes it continuously. 
+
+3.1 Repetition Invariance of Standard Attention 
+
+Let the inputs participating in the aggregation for one query be X = {(mi, v i)}ni=1 , where vi is a value and mi = exp( ai −
+
+max j aj ) is a numerically stabilized positive attention weight. Under this notation, standard softmax aggregation is defined by 
+
+A1(X) = 
+
+P 
+
+> i
+
+mivi
+
+∥m∥1
+
+. (1) Equation (1) divides the weighted sum of values by the total L1 mass, forcing the coefficients to sum exactly to one. To examine how this operator treats multiplicity, let 
+
+X(r) contain r copies of the same weighted-value motif. Replication multiplies both the numerator and denominator by r, yielding 
+
+A1(X(r)) = A1(X). (2) Equation (2) is a mathematical thought experiment rather than a training procedure that duplicates real observations. It demonstrates that standard weighted averaging preserves the relative evidence pattern but may map different numbers of repetitions of that pattern to the same aggregate. Figure 2 visualizes this invariance and the change in-troduced by MAA. Standard attention collapses replicated inputs to the same aggregate, whereas MAApreserves the weighted direction while retaining an amplitude difference induced by repetition. 
+
+3.2 The Lp Normalization Family 
+
+MAAextends the exact L1 normalization hard-coded into standard attention to a continuous family of operators. It replaces only the denominator in (1) with an Lp norm: 
+
+Ap(X) = 
+
+P 
+
+> i
+
+mivi
+
+∥m∥p
+
+, p ≥ 1. (3) Standard attention is the special case p = 1. The ef-fect of MAAbecomes clearer using normalized attention 
+
+α = m/ ∥m∥1. Rearranging (3) gives 
+
+Ap(X) = 1
+
+∥α∥p
+
+| {z } 
+
+> gp(α)
+
+A1(X). (4) Equation (4) shows that MAApreserves the standard weighted direction A1(X) and retains only an input-dependent scale gp(α). This scale is computed from the normalized attention distribution itself rather than from an injected token count. For p > 1, it satisfies 
+
+1 ≤ gp(α) ≤ n1−1/p . (5) The scale approaches one when attention concentrates on a few inputs and grows as attention spreads over more inputs. In terms of R ´enyi entropy Hp(α), it can equivalently be written as gp(α) = exp((1 − 1/p )Hp(α)) . Thus, gp(α) is a monotonic transformation of the attention-weighted effective support. This generalization separates the growth rates of the numerator and denominator under repetition. For X(r), the numerator grows by r, while the Lp denominator grows by 
+
+r1/p . The resulting response is 
+
+Ap(X(r)) = r1−1/p Ap(X). (6) 4Attended evidence                
+
+> One weighted-value motif, replicated
+> X
+> X(3)
+> X(3) = replicate( X, 3)
+> Standard attention ·p= 1
+> Exact unit-sum invariance
+> A1(X) =
+> ∑
+> i
+> mivi
+> ‖m‖1
+> A1(X(3) ) = A1(X)same aggregate
+> collision
+> Mass-Aware Attention ·p> 1
+> Coefficient mass becomes input-dependent
+> Ap(X) =
+> ∑
+> i
+> mivi
+> ‖m‖p
+> =gp(α)A1(X)
+> Ap(X(3) ) = 3 1 − 1/ pAp(X)Ap(X)Ap(X(3) )
+> same direction ·different amplitude
+
+Fig. 2. Intuition behind Mass-Aware Attention. Standard attention can map repetitions of the same weighted-value pattern to an identical aggregate. MAAmakes the numerator and denominator grow at different rates under repetition, preserving the weighted direction while retaining an effective-input-dependent amplitude. 
+
+Algorithm 1 MAAat One Attention Boundary 
+
+Require: logits a, values V , valid mask M , power p ≥ 1
+
+1: s ← max i:Mi=1 ai
+
+2: mi ← Mi exp( ai − s)
+
+3: dp ← (P 
+
+> i
+
+mpi )1/p 
+
+4: βi ← mi/ max( dp, ϵ )
+
+5: return P 
+
+> i
+
+βiVi
+
+At p = 1 , the two rates cancel exactly and recover (2). For 
+
+p > 1, the effective size of the replicated input remains as a controlled amplitude. Importantly, this is not the arbitrary absolute mass of unnormalized scores. MAAconveys a re-producible scale derived from the concentration and effective support of normalized attention. 
+
+3.3 Implementation 
+
+MAAchanges only the computation of the normalization denominator in an existing attention pipeline. Algorithm 1 summarizes the operation for one query and one attention head. The operation is applied independently to each query and head, with masked tokens excluded from the norm. Logits, value projections, residual connections, and decoders remain unchanged, so neither parameter count nor hidden dimensionality increases. Time and space complexity remain of the same order as standard attention. This minimal change enables the same principle to be applied across domains, although a strong scale-removing normalization after (4) can erase the signal. 
+
+4 EVALUATION PRINCIPLES AND PROTOCOL 
+
+The evaluation consistently separates information accessi-bility in the same representation, original-task utility, and power selection. 
+
+4.1 Representation Recovery 
+
+After training, we freeze the hidden representation Z sup-plied to the predictor. Probes are trained on a chronological held-out split; neither recovery targets nor probe gradients participate in training the original model. For CTDG, we use both linear Ridge and ExtraTrees. The linear probe measures linear accessibility from the same Z, whereas ExtraTrees measures nonlinear accessibility. Unless otherwise stated, the primary cross-domain recovery measure uses a linear probe. Continuous targets are evaluated with held-out R2
+
+and binary conditions with AUC. 
+
+Shared recovery directly compares the equal-dimensional hidden representations ZB and ZMAA of the baseline and MAA. Beyond-posthoc recovery supplies both probes with the same type of auxiliary coordinate c computed during attention and measures the remaining difference. The former tests whether the final representation itself changes; the latter tests whether the learned representation changes beyond simply exposing an already computed coordinate. Context margin is the difference in prediction between the original query context and a condition with a substituted source context. A larger margin indicates greater sensitivity of model output to contextual differences. 
+
+4.2 Separating Power Selection from Evaluation 
+
+Because p defines the operator family, we select it through a constrained model-selection problem aligned with the purpose of MAA. The primary objective is information accessibility in the predictor-facing representation, while preservation of original-task utility is a feasibility constraint. The two outcomes are therefore not combined post hoc with equal status. We use a pre-specified lexicographic order: the selection split first identifies powers that preserve baseline task utility, and the pre-specified recovery endpoint selects a power within this feasible set. We then freeze p and evaluate final task performance and recovery once on held-out conditions that did not participate in selection. For CTDG, we instantiate this rule through leave-one-model-out selection. Cells from three models select p, and the excluded model provides evaluation; all four folds select p =1.1. Consequently, none of the 12 reported CTDG cells uses a power selected from results of its own model. RAG applies the same task-preserving recovery rule on an independent validation split and reports results on a separate test split. MTPP fixes p = 1 .3 in an earlier pilot and evaluates it on new likelihood and time endpoints. TKG separates an ICEWS14 5
+
+Algorithm 2 Validation-Based Power Selection for MAA 
+
+Require: candidate grid P, selection split, fixed audit target, task tolerance ϵU 
+
+> 1:
+
+Evaluate Usel (p) and Rsel (p) for every p ∈ P  
+
+> 2:
+
+F ← { p : Usel (p) ≥ Usel (1) − ϵU } 
+
+> 3:
+
+if F = ∅ then  
+
+> 4:
+
+return p⋆ = 1  
+
+> 5:
+
+end if  
+
+> 6:
+
+p⋆ ← arg max p∈F Rsel (p) 
+
+> 7:
+
+Break recovery ties toward the smaller p 
+
+> 8:
+
+return frozen p⋆; evaluate the held-out test once pilot from ICEWS18 validation, fixing p = 1 .2 and p = 1 .02 ,respectively, before test evaluation. STPP evaluates p = 1 .05 
+
+in a matched pre-norm architecture after diagnosing the post-norm boundary. Reusable decision rule.: Algorithm 2 operationalizes the procedure for a new model or domain. The audit target, candidate grid, and task-utility tolerance are fixed before opening the test set. We use a small grid dense near the standard operator, P = {1, 1.02 , 1.05 , 1.1, 1.2, 1.3}.Let Usel (p) denote the original-task metric oriented so that larger is better, and let Rsel (p) denote recovery from the same predictor-facing Z. In CTDG, a candidate is feasible only when its mean selection-fold AUC is at least that of standard attention ( p = 1 ). In RAG, feasibility analogously requires validation diagnostic AUC at least as high as the 
+
+p = 1 baseline. Both studies therefore use ϵU = 0 and select the power with the highest pre-specified recovery endpoint among feasible candidates. Future applications may instead pre-specify a domain-accepted practical-equivalence margin. This lexicographic rule gives the two design goals explicit priority: the task constraint protects predictive utility, and the recovery objective selects the more informative representa-tion within that constraint. Candidate comparison, feasibility filtering, and tie breaking are completed entirely on the selection split, making held-out recovery and task utility outcomes of evaluation rather than inputs to selection. This tunability is a design advantage of MAA. Standard attention fixes exact L1 normalization, and hence p = 1 ,for every input and task. MAA exposes this implicit design decision as an explicit hyperparameter, allowing practitioners to calibrate the strength of repetition invariance through standard validation without observing test outcomes. Be-cause input length, attention concentration, and downstream normalization alter the distribution of gp(α) induced by the same p, an explicit and reproducible selection rule is more appropriate than a universal constant. When no meaningful audit target is available, p = 1 .1, the common CTDG value, can serve as a default, subject to the same validation check on task utility. 
+
+4.3 Statistical Inference 
+
+Seeds within the same model–dataset pair are repeated measurements of one condition, not independent research settings. Confirmatory CTDG inference therefore first av-erages the three seed-level effects within each of the 12 model–dataset cells. We apply two-sided Wilcoxon signed-rank tests and jointly adjust the six aggregate endpoints with Holm correction. We additionally report 95% intervals from 20,000 crossed hierarchical bootstrap iterations that resample models and datasets independently and then resample seeds within each selected cell. The 36 seed-level results serve as a sensitivity analysis of direction and variability. The cross-domain extension is exploratory, and all paired Wilcoxon tests are therefore two-sided. In small samples, conclusions jointly consider effect size, the number of im-proving repetitions, and original-task performance rather than relying on significance alone. 
+
+5 CORE VALIDATION ON CTDG 
+
+CTDG serves as the core validation domain because prior work has already identified a concrete gap between bench-mark performance and the graph mechanisms captured by temporal models. Dynamic link-prediction results can depend strongly on negative sampling and recurring edges [1], and recent evidence shows that model predictions do not consistently reflect several temporal graph characteristics [3]. We extend this behavioral question to recovery from predictor-facing representations and conduct our broadest comparison and confirmatory inference in CTDG, using four models and three datasets. 
+
+5.1 Setup and Representation Gap               
+
+> TABLE 2 Experimental setup for the core CTDG study.
+> Component Setting Models CRAFT, TGAT, DyGFormer, GraphMixer Datasets LastFM, MOOC, Wikipedia Repetitions Seeds 7, 17, and 29; 36 paired runs Training data Most recent 32,768 events in chronological order; 70/30 split Objective Original future-link BPR loss Method Baseline p= 1 ; fixed-power MAA p= 1 .1
+> Probes Chronological held-out Ridge and ExtraTrees Task metric ROC–AUC over positives and sampled nega-tives Inference unit 12 model–dataset cells after within-cell seed averaging
+
+We evaluate CRAFT, TGAT, DyGFormer, and GraphMixer on LastFM, MOOC, and Wikipedia. These temporal inter-action benchmarks were released with JODIE [29]. Every model uses the same recent-event budget and its original future-link objective. The eight recovery targets are pair fre-quency, recency, persistence, periodicity, granularity, density, homophily, and preferential attachment (PA). PA audits the count-structured information left by repeated edge formation at the node level because it reflects accumulated endpoint degrees [30]. Pair frequency directly counts repetitions at the pair level, whereas PA measures degree accumulation at the node level. Baseline recovery varies substantially across models and statistics. CRAFT is relatively strong on PA and pair fre-quency, while TGAT recovers density and granularity more accurately. This analysis motivates the central observation that high AUC does not determine the graph-statistic content of a predictor-facing representation. 6
+
+5.2 2 × 2 Representation Audit Probe input: hidden Z only Control: hidden Z + normalizer values c  
+
+> Standard softmax
+> p= 1
+
+0.400  
+
+> held-out linear R2
+
+0.443    
+
+> held-out linear R2
+> Fixed power
+> p= 1.1
+
+0.418  
+
+> held-out linear R2
+
+0.453    
+
+> held-out linear R2
+> +0.018
+> gain inside hidden Z
+> +0.010
+> gain after equal exposure
+> cis provided only to the control probe; it is never appended to the model representation.
+> Cells show descriptive means; inferential tests use the 12 model–dataset effects.
+
+Fig. 3. 2 × 2 audit separating changes in the hidden representation Z
+
+learned by MAAfrom gains obtained by exposing a normalization-derived coordinate to the probe. The shared comparison directly contrasts ZB
+
+and ZMAA , while the post-hoc comparison supplies the same type of coordinate c to both sides. 
+
+The four conditions in Fig. 3 are the baseline represen-tation ZB , its post-hoc augmentation (ZB , c B ), the equal-dimensional MAArepresentation ZMAA , and (ZMAA , c MAA ).The primary comparison is ZMAA versus ZB , which rules out gains caused by providing a new feature to the probe. The beyond-posthoc comparison tests whether a difference remains after exposing an equivalent coordinate on both sides. 
+
+5.3 Aggregate Results 
+
+TABLE 3 Aggregate CTDG results. Wilcoxon tests use 12 paired effects obtained by first averaging three seeds within each model–dataset cell. Holm correction is applied jointly to the six aggregate endpoints. 
+
+Measure Baseline MAA Mean change Improved cells p Holm p
+
+AUC 0.85985 0.86336 +0.00350 (+0.41%) 11/12 0.000977 0.005859 
+
+Shared ExtraTrees R2 0.52526 0.52628 +0.00102 (+0.19%) 4/12 0.518555 0.518555 Beyond ExtraTrees R2 0.55928 0.55761 -0.00168 (-0.30%) 5/12 0.233398 0.466797 Shared linear R2 0.40020 0.41818 +0.01799 (+4.49%) 9/12 0.034180 0.136719 Beyond linear R2 0.44278 0.45298 +0.01020 (+2.30%) 9/12 0.052246 0.156738 Context margin 0.54111 0.57261 +0.03150 (+5.82%) 9/12 0.026855 0.134277 
+
+Table 3 shows that AUC rises by 0.41% on average and improves in 11 of 12 cells. The 12-cell Wilcoxon test, Holm correction, and crossed-bootstrap interval agree on the direction. Shared linear recovery increases by 4.49% and context margin by 5.82%. Both effects are positive in 9/12 cells, although uncertainty remains after aggregate family-wise correction. Mean ExtraTrees recovery is nearly unchanged. The clearest representational effect of MAAis therefore improved linear accessibility from the same Z,rather than a universal increase in nonlinear recoverability. 
+
+TABLE 4 Key statistic-wise changes in CTDG. Holm correction over the eight statistics is performed separately for each probe. 
+
+Probe Statistic ∆R2 Cell Holm p
+
+Linear PA +0.09108 12/12 0.003906 
+
+Linear Pair frequency +0.01392 8/12 0.187988 Linear Density +0.03754 9/12 0.462891 ExtraTrees Density -0.02170 2/12 0.039062 
+
+Statistic-level analysis sharpens this result. Linear PA recovery increases by 0.09108 on average, improves in all 12 cells, and survives Holm correction across the eight statistics (Table 4). Pair frequency has a positive mean effect but remains uncertain after correction, whereas ExtraTrees density decreases significantly. Figure 4 shows both statistic-level uncertainty and model heterogeneity. The most stable gains occur along linear directions tied directly to repetition and degree accumulation, while some nonlinear structure is redistributed. −0.05 0.00 0.05 0.10 0.15                           
+
+> Change in held-out R2
+> Pair frequency
+> Preferential attachment
+> Density
+> Recency
+> Persistence
+> Periodicity
+> Temporal granularity
+> Homophily
+> *
+> *
+> Linear ExtraTrees
+> CRAFT
+> TGAT
+> DyGFormer
+> GraphMixer
+> +0.01 +0.02 +0.02 +0.01
+> +0.14 +0.09 +0.07 +0.07
+> +0.06 +0.05 +0.06 -0.01
+> +0.08 -0.02 -0.01 -0.01
+> +0.00 -0.00 -0.00 -0.01
+> +0.01 +0.01 +0.00 +0.00
+> +0.04 -0.06 +0.04 -0.07
+> +0.00 +0.00 +0.00 +0.00
+> −0.10
+> −0.05
+> 0.00
+> 0.05
+> 0.10
+> Linear Δ R2
+
+Fig. 4. Statistic-wise changes in recovery and their boundary. Linear recovery improves most strongly and consistently for preferential attach-ment, with pair frequency changing in the same direction. The decrease in ExtraTrees density shows that accessibility varies across probes and statistics. 
+
+5.4 Behavioral Sensitivity 
+
+Context margin measures the score difference between the observed source temporal neighborhood and a substituted neighborhood. Its average increase of 5.82% shows that the additional probe-accessible information coincides with greater sensitivity of predictive behavior to contextual differences. Because the margin alone does not establish directionally correct causal use, we interpret it together with original-task AUC and statistic interventions. 
+
+6 CROSS -D OMAIN GENERALIZATION 
+
+We extend the CTDG question to four additional domains. For each domain, we first define a count- or support-based statistic that MAAis expected to retain, and then separately measure its recovery from the same Z, the model’s behavioral response to evidence manipulation, and utility on the original task. Figure 5 and Table 5 place the results from all domains in a common framework. 
+
+TABLE 5 Key cross-domain results. Recovery is the primary endpoint, and task metrics jointly report predictive utility. 
+
+Domain Representation improve-ment Task utility CTDG Linear R2 +4.49% ; PA 
+
+12/12 
+
+Link AUC +0.41% 
+
+MTPP Mark-count R2 +25.05% Point-process NLL 2.59% lower 
+
+TKG Pair recurrence +9.09% Hits@10 +1.07% 
+
+RAG Retained-passage AUC 
+
++35.03% 
+
+Diagnostic AUC -0.73% (n.s.) STPP Local-count R2 +9.46% Matched NELBO 4.46% better 70.400 0.425 
+
+Recovery R2
+
++4.49%   
+
+> 0.400 →0.418
+> Graph statistics
+
+CTDG 
+
+0.100 0.125 
+
+Recovery R2
+
++25.05%   
+
+> 0.108 →0.135
+> Mark occurrence
+
+MTPP 
+
+0.18 0.20 
+
+Recovery R2
+
++9.09%   
+
+> 0.176 →0.192
+> Pair recurrence
+
+TKG 
+
+0.6 0.8 
+
+Recovery AUC 
+
++35.03%   
+
+> 0.585 →0.790
+> Retained passages
+
+RAG 
+
+0.32 0.34 0.36 
+
+Recovery R2
+
++9.46%   
+
+> 0.324 →0.355
+> Local events
+
+STPP    
+
+> ●Standard attention ●MAA
+
+Fig. 5. Changes in predictor-facing representation recovery across domains. Each value is an equally weighted average over the model–dataset conditions evaluated in that domain. Targets and metrics follow the predictive structure of each domain; the common question is whether evidence-accumulation information becomes more accessible from the same Z, without auxiliary coordinates. 
+
+6.1 MTPP: Accumulated Occurrences of a Candidate Mark 
+
+AttNHP and THP encode event sequences with self-attention to predict the mark and time of the next event [18], [19]. The candidate mark of the next event is conditionally related to the occurrence pattern of the same mark in preceding events. We use candidate-mark counts over the full past and the most recent 32 and 8 events as recovery targets. These quantities directly summarize inputs to the mark-specific conditional intensity. MAAimproves full-history count R2 in all six aggregated model–dataset–seed conditions, yielding a mean improvement of 25.05%. Concurrently, next-mark NLL decreases by 1.29% and point-process NLL by 2.59%. For AttNHP, next-time MAE and RMSE also decrease by 2.14% and 3.96%, respectively. The joint improvement in information accessibility and likelihood indicates that the information attenuated by standard weighted averaging has predictive value for this task. 
+
+6.2 TKG: Query-Specific Pair Recurrence 
+
+xERTE expands a query-relevant temporal subgraph through attention to rank future entities [21]; this architecture differs from RE-NET, which uses a recurrent event encoder [20]. For a TKG query (head, relation, ?, time ), the number of previous connections between the same head and candidate tail provides more query-specific evidence than global tail popularity. On ICEWS14 and ICEWS18, we recover pair recurrence, the number of relation types observed for the same pair, and the number of historical two-hop paths. The stand-alone diagnostic AUC of pair recurrence exceeds that of global tail count on both datasets, establishing its relevance to the ranking problem. 
+
+TABLE 6 Representative MTPP and TKG results. A downward arrow marks a lower-is-better metric.                                              
+
+> Domain Setting Endpoint p= 1 MAA Relative change Improved runs MTPP All 6 settings Candidate-mark count R20.10792 0.13495 +25.05% 6/6
+> Point-process NLL ↓2.96749 2.89063 -2.59% 5/6 Next-mark NLL ↓1.92280 1.89791 -1.29% 6/6
+> TKG ICEWS14 Pair-recurrence R20.22149 0.24773 +11.85% 3/3
+> Hits@10 0.68300 0.69617 +1.93% 3/3
+> ICEWS18 Pair-recurrence R20.13071 0.13650 +4.43% 3/3
+> MRR 0.22807 0.22760 -0.20% 1/3
+
+As shown in Table 6, pair-recurrence recovery increases by 11.85% on ICEWS14 and by 4.43% in the deterministic ICEWS18 rerun, with the same direction in all three seeds for both datasets. Hits@10 improves by 1.93% on ICEWS14. On ICEWS18, MRR decreases by 0.20% and Hits@10 by 0.43%, preserving nearly equivalent ranking performance. These results show that MAAcan retain query-specific recurrence more clearly while leaving the ranking function largely intact, even when every task metric does not improve simultaneously. 
+
+6.3 RAG: Separating Accessibility from Utilization 
+
+In multi-hop question answering tasks such as HotpotQA, success requires combining facts distributed across distinct supporting passages rather than merely repeating one pas-sage [23]. FiD encodes retrieved passages independently and combines them through decoder attention [24]. We therefore define a retained-passage condition that distinguishes com-plete evidence from inputs missing part of the supporting passages. Our primary analysis masks duplicate-token and duplicate-passage indicators to prevent literal duplication from becoming a count shortcut. Recovery AUC measures how well this binary condition can be separated from the same Z, whereas task AUC measures whether the original diagnostic head assigns higher scores to complete evidence. 
+
+TABLE 7 Boundary results for RAG and STPP. Arrows denote changes from baseline to MAA. 
+
+Domain Endpoint Baseline → MAA Change RAG Retained-passage re-covery AUC 
+
+0.585 → 0.790 +35.03% 
+
+Diagnostic task AUC 
+
+0.614 → 0.609 -0.73% STPP Predictor-facing count R2
+
+0.324 → 0.355 +9.46% 
+
+Encoder count R2 0.452 → 0.493 +9.18% 
+
+NELBO ↓ −1.675 → − 1.750 4.46% better 
+
+MAAraises duplicate-masked retained-passage recovery AUC from 0.58482 to 0.78967 (35.03%, 5/5). Diagnostic task 8
+
+AUC decreases by 0.73%, with a two-sided p = 1 .0. As Fig. 6 illustrates, the presence of complete supporting evidence becomes substantially clearer in the representation, while the current task head does not automatically exploit that direction. This separation delineates the role of MAA— retaining information—from the role of the decoder and objective—using that information through an appropriate decision rule. 0 10 20 30 40      
+
+> Relative change (%)
+> CTDG
+> MTPP
+> TKG
+> RAG
+> STPP
+> +4.49%
+> +25.05%
+> +9.09%
+> +35.03%
+> +9.46%¹
+> Representation recovery
+> −4 −2 0246
+> Relative change (%)
+> AUC +0.41%
+> NLL 2.59% better
+> Hits@10 +1.07%
+> Diagnostic AUC
+> −0.73% (n.s.)
+> NELBO 4.46% better¹
+> Task utility
+> ¹ STPP compares MAA with standard attention in the same pre-norm architecture.
+
+Fig. 6. Relationship between representation accessibility and task utility. Recovery and representative task metrics improve together in CTDG and MTPP. In TKG, ICEWS14 Hits@10 improves while ICEWS18 ranking remains nearly unchanged. In RAG, the retained-passage condition becomes more recoverable without a corresponding improvement in the diagnostic head’s AUC. 
+
+6.4 STPP: The Boundary Imposed by Downstream Nor-malization 
+
+DeepSTPP constructs a nonparametric spatiotemporal inten-sity through a latent process [26], whereas Neural STPP con-ditions on preceding events through an attentive continuous-time flow [25]. For DeepSTPP, we use the numbers of preceding events within radii 0.25, 0.5, and 1.0 of a candidate location as local-count targets. In the original architecture, recovery improves at the final attention output, but the effect disappears immediately after LayerNorm and becomes negative at the predictor-facing Z. This trace shows that MAAcreates the signal at the attention boundary and that a subsequent amplitude-removing operation interrupts its propagation. In a matched pre-norm architecture that places Lay-erNorm before attention [28], predictor-facing recovery increases by 9.46% and NELBO improves by 4.46%. Its absolute NELBO, however, remains below that of the original DeepSTPP architecture. Figure 7 summarizes this boundary. MAAretains the effective-support scale at the attention boundary; propagation to the final representation depends on whether subsequent architectural operations preserve that scale. 
+
+7 MECHANISM ANALYSIS AND ALTERNATIVE EX-
+
+PLANATIONS 
+
+This section tests whether the observed improvements are attributable to a training schedule, uniform norm expansion, or explicit cardinality injection. 
+
+7.1 Power or Schedule? 
+
+TABLE 8 Fixed-power sensitivity. Values are averaged over four representative conditions and characterize the effect of mildly relaxing exact repetition invariance at p = 1 .                                           
+
+> pAUC ∆AUC Shared linear R2∆R2Context margin ∆margin 1.00 0.84559 –0.38277 –0.48446 –1.02 0.84809 +0.30% 0.40403 +5.56% 0.51870 +7.07% 1.05 0.84891 +0.39% 0.40626 +6.14% 0.52151 +7.65% 1.10 0.84935 +0.45% 0.40891 +6.83% 0.52465 +8.29% 1.20 0.84992 +0.51% 0.41288 +7.87% 0.53985 +11.43% 2.00 0.84553 -0.01% 0.40940 +6.96% 0.60774 +25.45%
+
+Our initial hypothesis assigned importance to a schedule that began with a large p and strengthened invariance later in training. The differences among fixed p = 1 .1, forward 2 →
+
+1.1, and reverse 1.1 → 2 are small. By contrast, the range 1.02– 1.2, which mildly departs from p = 1 , consistently improves AUC, shared linear recovery, and context margin in Table 8. Figure 8 shows both the mean changes and variation across conditions. At p = 2 , context margin increases substantially while the AUC gain disappears. The principal effect therefore arises from mildly relaxing exact L1 repetition invariance rather than from the order of training. 
+
+7.2 Uniform Scaling or an Input-Dependent Effect? 
+
+Equation (4) shows that MAAmultiplies the standard weighted direction by an input-dependent amplitude. To test the alternative explanation that a larger representation norm merely facilitates optimization, we use a matched control that L2-normalizes the aggregation output. Removing the norm attenuates but does not eliminate the gains in AUC, shared linear recovery, and beyond-posthoc recovery. Figure 9 indicates that amplitude is a principal transmission path and that training also induces some directional change in the representation. The relevant mechanism is therefore the input-varying gp(α) and its associated optimization trajectory, rather than a uniform scale factor. 
+
+7.3 Comparison with Explicit Cardinality 
+
+TABLE 9 Matched comparison of MAA with CPA, an explicit cardinality control. Each cell reports a change from baseline; for CPA, the better result between its additive and scaled variants is shown for each endpoint.                                                       
+
+> Representative setting Endpoint Best CPA ∆MAA ∆MAA–CPA CRAFT–LastFM AUC -0.00258 +0.00293 +0.00550
+> Shared linear R2-0.00684 +0.01527 +0.02211
+> TGAT–MOOC AUC -0.01582 +0.00159 +0.01741
+> Shared linear R2+0.12934 +0.03166 -0.09768 AttNHP–StackOverflow NLL reduction -0.02067 +0.04456 +0.06523
+> Count R2-0.02380 +0.00213 +0.02594
+> THP–StackOverflow NLL reduction +0.24629 +0.18438 -0.06190 Count R2+0.08140 +0.08650 +0.00511 xERTE–ICEWS14 MRR -0.00216 -0.00341 -0.00125 Pair-recurrence R2-0.06946 +0.00128 +0.07074
+> xERTE–ICEWS18 MRR -0.01280 -0.00047 +0.01233
+> Pair-recurrence R2-0.07276 +0.00579 +0.07855
+
+CPA directly injects the number or unweighted sum of inputs and can substantially improve recovery or task performance in particular conditions, as observed for TGAT– MOOC recovery and THP NLL. The same intervention, however, strongly perturbs performance or recovery for 9RAG: recovery ↑, task preserved 
+
+MAA representation 
+
+> retained-passage recovery AUC
+> +35.03%
+
+Task head 
+
+> diagnostic task AUC
+> −0.73% (n.s.)
+> available to
+
+Task-aware power selection retains the information gain 
+
+without a significant change in diagnostic utility. 
+
+STPP: LayerNorm can erase the signal 
+
+Attention 
+
+output 
+
++0.03165 
+
+After 
+
+LayerNorm 
+
+-0.00349 
+
+Encoder 
+
+output 
+
+-0.00211 
+
+Predictor 
+
+Z
+
+-0.01467 
+
+LayerNorm removes 
+
+the amplitude difference 
+
+Move LayerNorm before attention 
+
+> local-count recovery +9.46%
+> NELBO 4.46% better
+> Improvement is relative to the matched pre-norm baseline;
+> the original DeepSTPP still has better absolute NELBO.
+
+Fig. 7. Cross-domain boundaries. In RAG, increased information accessibility is separated from task utilization. In STPP, post-attention LayerNorm removes the scale created at the attention output; moving LayerNorm before attention in a matched architecture improves both predictor-facing recovery and NELBO. 1 1.02 1.05 1.1 1.2 2
+
+Fixed power p
+
+−0.02 
+
+−0.01 
+
+0.00 
+
+0.01 
+
+0.02 
+
+> Δ AUC
+
+1 1.02 1.05 1.1 1.2 2
+
+Fixed power p
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+> ΔR2shared  (linear)
+
+1 1.02 1.05 1.1 1.2 2
+
+Fixed power p
+
+0.0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+> Δ context margin
+
+Fig. 8. Fixed-power sensitivity. Mild normalization relaxation improves recovery and context margin while maintaining or improving AUC. Larger p
+
+further increases sensitivity but can weaken the balance with task utility. Ap(X) = gp(α) A1(X)
+
+gp(α) = 1/‖ α‖p  
+
+> sample-wise L2normalization
+
+Ap(X)‖Ap(X)‖ 2
+
+= A1(X)‖A1(X)‖ 2       
+
+> concentration-dependent scale gp(α) is removed
+> 40 60 80 100 120 140 160
+
+Effect retained after output L2 normalization (%)     
+
+> AUC
+> Linear recovery
+> Context sensitivity
+> +0.00377 → +0.00206 (-45%)
+> +0.02614 → +0.01737 (-34%)
+> +0.04018 → +0.05505 (+37%)
+> Amplitude available Amplitude removed
+
+Fig. 9. Mechanism validation. Removing the L2 norm of the MAAoutput attenuates, but does not eliminate, the effect. Input-dependent amplitude is a principal signal path, accompanied by a smaller change in the learned hidden direction. 
+
+CRAFT, AttNHP, and xERTE. MAAinstead reflects the effective support of the learned attention distribution without a separate count, producing a more stable representation– task trade-off. In Table 9, MAAoutperforms the best CPA variant in recovery for five of six representative cases and in task utility for four of six. This comparison empirically distinguishes the retention of attention-weighted support from the direct reinjection of counts. 10 
+
+7.4 What Is Learned, and Where Is It Useful? 
+
+The information made more accessible by MAAhas domain-specific names but a common structure: the extent of evi-dence accumulated across multiple inputs. In CTDG, PA and pair frequency describe pair- and node-level accumulation induced by repeated edge formation. Candidate-mark count in MTPP is a direct input to the intensity of the next event, and pair recurrence in TKG provides query-specific support for a candidate tail. The retained-passage condition in RAG indicates whether all distinct evidence required for an answer is present, while local count in STPP represents conditional event density around a candidate location. This information supports three uses. First, when the original task head exploits it, the improvement appears in metrics such as AUC, NLL, and ranking quality. Second, linear accessibility from the same Z enables model auditing, transfer heads, calibration, and downstream decisions even when the original head does not immediately convert it into task performance. Third, tracing where accessibility disappears reveals architectural information bottlenecks. RAG most clearly separates accessibility from direct uti-lization, while STPP exposes the downstream normalization boundary. 
+
+7.5 Limitations 
+
+MAAis a general principle for improving representation informativeness rather than a universal task-performance optimizer. Information reaches the predictor-facing Z when the path following attention preserves amplitude, and the task head converts it into utility when its objective is aligned with that information. Recovery targets likewise follow the semantically meaningful evidence unit of each domain. Because the cross-domain samples are smaller than the CTDG study, we interpret them through effect sizes, replication counts, and task performance together. Broader validation across architectures and large-scale real-world tasks remains valuable. Although power selection is separated from evaluation, the validation protocols are not identical across domains; a transferable selection rule based on the distribution of gp(α) is a promising direction. 
+
+8 CONCLUSION 
+
+Standard attention is a weighted average and can therefore map repetitions of the same evidence pattern to an identical aggregate. We introduced Mass-Aware Attention, which turns this implicit L1 repetition invariance into an explicit control axis within an Lp family. The method changes a single denominator and adds no supervision, count feature, or parameter. In CTDG, MAAincreases the linear accessibility of graph statistics from the same hidden representation, improving preferential-attachment recovery in all 12 model–dataset cells. Future-link AUC also increases in 11 of 12 cells. Candidate-mark counts and pair recurrence become more recoverable in MTPP and TKG, while RAG and STPP reveal how information retention interacts with task heads and downstream normalization. Together, these results connect representation gaps ob-served under different names to a shared blind spot of weighted averaging and show that a minimal normalization principle can make accumulated evidence more accessible. MAAadvances attention design beyond judging learning solely through predictive performance by making the ev-idence transmitted to the final representation an explicit design consideration. 
+
+DECLARATION OF COMPETING INTEREST 
+
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper. 
+
+ACKNOWLEDGEMENTS 
+
+The authors have no acknowledgements to declare. 
+
+FUNDING 
+
+This research received no specific grant from any funding agency in the public, commercial, or not-for-profit sectors. 
+
+DATA AVAILABILITY 
+
+All datasets used in this study are publicly available. The exact data sources are listed in Table 10.                           
+
+> TABLE 10 Public dataset sources used in this study.
+> Domain Dataset Source CTDG Wikipedia https://snap.stanford.edu/jodie/wikipedia.csv CTDG MOOC https://snap.stanford.edu/jodie/mooc.csv CTDG LastFM https://snap.stanford.edu/jodie/lastfm.csv MTPP StackOverflow HuggingFace: https://huggingface.co/datasets/ easytpp/stackoverflow MTPP Retweets HuggingFace: https://huggingface.co/datasets/ easytpp/retweet STPP Earthquake GitHub: https://github.com/ss15859/ EarthquakeNPP STPP Gowalla https://snap.stanford.edu/data/loc-gowalla totalCheckins.txt.gz TKG ICEWS14 GitHub RE-Net data: https://github.com/INK-USC/ RE-Net TKG ICEWS18 GitHub RE-Net data: https://github.com/INK-USC/ RE-Net RAG HotpotQA HuggingFace: https://huggingface.co/datasets/ hotpotqa/hotpot qa
+
+CODE AVAILABILITY 
+
+The implementation, experiment configurations, aggregation scripts, and plotting scripts used in this study are available at https://github.com/SnowyPainter/maa-public. 
+
+REFERENCES       
+
+> [1] F. Poursafaei, S. Huang, K. Pelrine, and R. Rabbany, “Towards better evaluation for dynamic link prediction,” in Advances in Neural Information Processing Systems , vol. 35, 2022, datasets and Benchmarks Track. [2] F. Cornell, O. Smirnov, G. Z. Gandler, and L. Cao, “On the power of heuristics in temporal graphs,” in Proceedings on “I Can’t Believe It’s Not Better: Challenges in Applied Deep Learning” at ICLR 2025 Workshops , ser. Proceedings of Machine Learning Research, vol. 296. PMLR, 2025, pp. 37–46. [3] A. J. Hayes, T. Schumacher, and M. Strohmaier, “What do temporal graph learning models learn?” arXiv preprint arXiv:2510.09416 , 2025. 11
+
+[4] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances in Neural Information Processing Systems , vol. 30, 2017. [5] D. Xu, C. Ruan, E. Korpeoglu, S. Kumar, and K. Achan, “Inductive representation learning on temporal graphs,” in International Conference on Learning Representations , 2020. [6] W. Cong, S. Zhang, J. Kang, B. Yuan, H. Wu, X. Zhou, H. Tong, and M. Mahdavi, “Do we really need complicated model architectures for temporal networks?” in International Conference on Learning Representations , 2023. [7] L. Yu, L. Sun, B. Du, and W. Lv, “Towards better dynamic graph learning: New architecture and unified library,” in Advances in Neural Information Processing Systems , vol. 36, 2023. [8] L. Yi, R. Lei, F. Mo, Y. Zheng, Z. Wei, and Y. Ye, “Future link prediction without memory or aggregation,” in Advances in Neural Information Processing Systems , vol. 38, 2025. [9] G. Alain and Y. Bengio, “Understanding intermediate layers using linear classifier probes,” 2017. [Online]. Available: https://openreview.net/forum?id=ryF7rTqgl [10] A. Conneau, G. Kruszewski, G. Lample, L. Barrault, and M. Baroni, “What you can cram into a single $&!#* vector: Probing sentence embeddings for linguistic properties,” in Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics , 2018, pp. 2126–2136. [11] J. Hewitt and P. Liang, “Designing and interpreting probes with control tasks,” in Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing , 2019, pp. 2733–2743. [12] J. Kunz and M. Kuhlmann, “Classifier probes may just learn from linear context features,” in Proceedings of the 28th International Conference on Computational Linguistics , 2020, pp. 5136–5146. [13] S. Zhang and L. Xie, “Improving attention mechanism in graph neural networks via cardinality preservation,” in International Joint Conference on Artificial Intelligence (IJCAI) , 2020, pp. 1395–1402. [14] O. Richter and R. Wattenhofer, “Normalized attention without probability cage,” arXiv preprint arXiv:2005.09561 , 2020. [15] J. Bae, B. Park, G. Park, M. Kim, J. Lee, J. Yoo, S. Woo, J. Ryu, S. J. Kwon, and D. Lee, “Affine-scaled attention: Towards flexible and stable transformer attention,” arXiv preprint arXiv:2602.23057 , 2026. [16] N. Du, H. Dai, R. Trivedi, U. Upadhyay, M. Gomez-Rodriguez, and L. Song, “Recurrent marked temporal point processes: Embedding event history to vector,” in Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining ,2016, pp. 1555–1564. [17] H. Mei and J. Eisner, “The neural hawkes process: A neurally self-modulating multivariate point process,” in Advances in Neural Information Processing Systems , vol. 30, 2017. [18] S. Zuo, H. Jiang, Z. Li, T. Zhao, and H. Zha, “Transformer hawkes process,” in Proceedings of the 37th International Conference on Machine Learning , ser. Proceedings of Machine Learning Research, vol. 119, 2020, pp. 11 692–11 702. [19] C. Yang, H. Mei, and J. Eisner, “Transformer embeddings of irregularly spaced events and their participants,” in International Conference on Learning Representations , 2022. [20] W. Jin, M. Qu, X. Jin, and X. Ren, “Recurrent event network: Au-toregressive structure inference over temporal knowledge graphs,” in Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing , 2020, pp. 6669–6683. [21] Z. Han, P. Chen, Y. Ma, and V. Tresp, “Explainable subgraph reasoning for forecasting on temporal knowledge graphs,” in 
+
+International Conference on Learning Representations , 2021. [22] C. Zhu, M. Chen, C. Fan, G. Cheng, and Y. Zhang, “Learning from history: Modeling temporal knowledge graphs with sequential copy-generation networks,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 35, no. 5, 2021, pp. 4732–4740. [23] Z. Yang, P. Qi, S. Zhang, Y. Bengio, W. W. Cohen, R. Salakhutdinov, and C. D. Manning, “HotpotQA: A dataset for diverse, explainable multi-hop question answering,” in Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing , 2018, pp. 2369– 2380. [24] G. Izacard and E. Grave, “Leveraging passage retrieval with generative models for open domain question answering,” in 
+
+Proceedings of the 16th Conference of the European Chapter of the Association for Computational Linguistics , 2021, pp. 874–880. [25] R. T. Q. Chen, B. Amos, and M. Nickel, “Neural spatio-temporal point processes,” in International Conference on Learning Representa-tions , 2021. [26] Z. Zhou, X. Yang, R. Rossi, H. Zhao, and R. Yu, “Neural point process for learning spatiotemporal event dynamics,” in Proceedings of the 4th Annual Learning for Dynamics and Control Conference , ser. Proceedings of Machine Learning Research, vol. 168, 2022, pp. 777–789. [27] J. L. Ba, J. R. Kiros, and G. E. Hinton, “Layer normalization,” arXiv preprint arXiv:1607.06450 , 2016. [28] R. Xiong, Y. Yang, D. He, K. Zheng, S. Zheng, C. Xing, H. Zhang, Y. Lan, L. Wang, and T. Liu, “On layer normalization in the transformer architecture,” in Proceedings of the 37th International Conference on Machine Learning , ser. Proceedings of Machine Learn-ing Research, vol. 119, 2020, pp. 10 524–10 533. [29] S. Kumar, X. Zhang, and J. Leskovec, “Predicting dynamic embed-ding trajectory in temporal interaction networks,” in Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining , 2019, pp. 1269–1278. [30] A.-L. Barab ´asi and R. Albert, “Emergence of scaling in random networks,” Science , vol. 286, no. 5439, pp. 509–512, 1999. 
+
+APPENDIX ADEFINITIONS AND APPLICATION DETAILS 
+
+This appendix specifies the temporal scope of the recovery targets and the attention boundaries at which MAAis applied. 
+
+A.1 Recovery Targets 
+
+All recovery targets are computed solely from observations preceding the query time. Table 11 reports the exact formulas, transformations, fallback values, and coverage used in the implementation. Homophily is the continuous Jaccard similarity between endpoint neighborhoods, not a binary community label. Explicit fallback values make every target, including recency and periodicity, numerically defined for every query. All eight CTDG targets are evaluated by R2 on the same chronological held-out split, and broad recovery is their arithmetic mean. Evidence support in the table is the proportion of queries with observed evidence for the statistic rather than its fallback value; it is not used as an evaluation mask. Only the binary RAG evidence condition is evaluated separately with AUC. 
+
+A.2 Attention Boundaries 
+
+Within CTDG, MAAis applied only to the temporal ag-gregation that forms the predictor-facing representation: CRAFT’s target-aware cross-attention, TGAT’s query-to-neighbor attention, DyGFormer’s final query attention over encoded patches, and GraphMixer’s final query attention over mixed tokens. Each model’s internal Transformer, token mixer, feature encoder, and predictor remain unchanged. The same rule governs the other domains. We first identify an attention boundary of the form P 
+
+> i
+
+αivi that forms a predictor-facing representation, retain the score and value computations, and replace only the normalization denominator from L1 to Lp. This rule standardizes the scope of modification across models and ensures that recovery changes do not arise from additional hidden dimensions or features. 12 
+
+TABLE 11 Exact definitions of the CTDG recovery targets. Every value is computed from observations preceding query time t and is numerically defined for every query. Support reports the dataset-wise proportion of queries with observed evidence rather than a fallback value. 
+
+Target Definition Transformation and fallback Metric Query coverage Evidence support Pair frequency Cardinality of the preceding pair-event set Tuv log(1 + |Tuv |); 0 for an unseen pair R2 100% 28.05–42.82% Recency t − max Tuv log(1 + ·); source-history age for an unseen pair, or 0 if the source also has no history 
+
+R2 100% 28.05–42.82% Persistence Fraction of B bins in the source-history span occupied by pair events 
+
+B = min(10 , max(2 , ⌊p|Tu| + 1 ⌋)) ; 0 with fewer than two pair events 
+
+R2 100% 16.21–39.32% Periodicity Regularity of pair-event intervals G = ∆ Tuv 1/(1 + std( G)/(mean( G) + 10 −12 )) ; 0 with fewer than three events or a zero mean interval 
+
+R2 100% 9.76–36.86% Granularity Median positive interval between source events 
+
+log(1 + median(∆ T + 
+
+> u
+
+)) ; 0 if no positive interval exists 
+
+R2 100% 89.18–99.22% Density Fraction of observed source neighbors 
+
+|N (u)|/(|V | − 1) 
+
+No additional transformation R2 100% 100% Homophily Endpoint-neighborhood Jaccard similarity 
+
+|N (u) ∩ N (v)|/|N (u) ∪ N (v)|
+
+0 if the union is empty R2 100% 97.87–99.97% Preferential attachment Endpoint-degree product dudv immediately before the query 
+
+log(1 + dudv ) R2 100% 100%

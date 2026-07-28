@@ -1,0 +1,396 @@
+Title: The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers
+
+URL Source: https://arxiv.org/pdf/2607.23050v1
+
+Published Time: Tue, 28 Jul 2026 00:25:49 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers 
+
+## Byeong Hoon Yoon Independent Researcher 
+
+## iam@bhyoon.me 
+
+## ORCID: 0009-0004-1188-5390 
+
+Abstract 
+
+Neural scaling laws describe how loss decreases as models, data, and compute grow, but they do not answer a prior question: for a fixed task, what is the minimum model capacity required to solve it? We study this through the 
+
+Entropic Bound , a spectral notion of task-intrinsic capacity for Transformers. We first prove that, in a linear attention surrogate, the intrinsic rank r∗ of the token-mixing operator is a tight lower bound: any rank-deficient model incurs unavoidable excess risk, and the bound is achievable at r∗. We further analyze gradient-descent recovery under standard low-rank implicit-bias assumptions, showing the learned effective rank concentrates at r∗. We confirm all three properties empirically and show r∗ is recoverable from data before training . We then ask whether this transfers to real attention. A naive transfer fails , and through a controlled interpolation ladder we localize the cause precisely: it is not softmax and not a rank constraint, but the input-conditioned nature of attention’s mixing operator, which a static weight kernel cannot summarize. Motivated by this, we introduce an attention-native intrinsic rank —the minimum query–key kernel rank realizing the task within the attention class—and show that under this definition the full Entropic Bound structure (deficiency, achievability, recovery) is restored for both linear and softmax attention, with the energy effective rank as the estimator robust to softmax distortion. Finally, we map the boundary of data-only predictability: r∗ is exactly recoverable for linear QK attention, even without the value map at scale, while softmax attention admits only partial pre-training recovery due to nonlinear inversion and kernel–value identifiability effects. Our results reframe the Entropic Bound from a post-hoc descriptor into an attention-native capacity measure with a precisely characterized predictability frontier. 
+
+# 1 Introduction 
+
+The empirical regularities of large-model training are by now well documented: loss falls as a power law in parameters, data, and compute. Yet scaling laws describe a trajectory , not a floor . They tell us how performance improves as we add capacity; they do not tell us how little capacity a given task fundamentally requires. This quantity—the minimum model size at which a task becomes solvable to a target error—is conceptually prior to scaling, and it is the object we study. A useful analogy comes from coding theory. Once an alphabet and admissible code lengths are fixed, only finitely many messages are representable. Likewise, once a model family is fixed, a finite parameter vector realizes only a restricted set of input–output maps. If a task demands many distinguishable predictive modes, any model solving it must carry sufficient effective capacity. The difficulty is that raw parameter count is not architecture-invariant, so the right object is a task-intrinsic effective dimension that induces architecture-dependent parameter lower bounds. For a linear attention surrogate this program can be carried out exactly. We define the intrinsic rank r∗ as the min-imum rank of a token-mixing operator that reaches the noise floor, and prove it is tight: rank deficiency forces excess risk (necessity), the floor is achievable at r∗ (sufficiency), and gradient descent from small initialization converges to it (implicit bias). These results give a clean and complete picture—in the surrogate. The central question of this paper is whether that picture survives contact with real attention. We find that a naive 
+
+transfer fails, but the failure is informative. By constructing an interpolation ladder that begins at the linear surrogate and changes one architectural component at a time, we localize the breakdown to a single cause—and, contrary to the natural guess, that cause is not softmax . It is the input-conditioned bilinear form XKX ⊤ that attention uses to compute scores: because this operator depends on the input, no static property of the weight kernel K (neither its rank 1arXiv:2607.23050v1 [cs.LG] 25 Jul 2026 nor its effective rank) determines the model’s task capacity. A control with an unconstrained full-rank kernel fails identically, ruling out a rank-constraint explanation. This motivates a redefinition. Rather than measuring the static kernel, we define an attention-native intrinsic rank as the minimum query–key kernel rank that realizes the task within the attention class itself . Generating teacher tasks from this same class removes the operator mismatch by construction, and under the new definition the entire Entropic Bound structure returns: rank-deficient students incur excess risk, students at r∗ reach the floor, and over-parameterized students recover r∗. This holds not only for linear attention but also for softmax attention, provided capacity is measured by the energy effective rank—which we show is robust to the small-singular-value noise softmax introduces. Finally, we characterize predictability : estimating r∗ from data without training. We show exact recovery for linear QK attention, including the V-unknown setting at scale, and identify the remaining frontier in softmax attention, where nonlinear inversion corrupts the numerical rank and leaves only partial energy-rank predictability. 
+
+Contributions. 
+
+1. We restate and empirically validate the tightness of the Entropic Bound in the linear attention surrogate (defi-ciency, achievability, recovery), and demonstrate data-only recovery of r∗ (Sections 4, 6). 2. We show that a naive transfer to real attention fails, and via a controlled interpolation ladder localize the cause to input conditioning —not softmax, not a rank constraint (Section 5). 3. We introduce the attention-native intrinsic rank and show it restores the full bound structure for linear and softmax attention, with the energy effective rank as the softmax-robust estimator (Section 6). 4. We map the predictability frontier : exact data-only recovery for linear QK attention, including the V-unknown setting at scale, and partial recovery under softmax, where nonlinear inversion corrupts the numerical rank and energy-rank estimators remain imperfect (Section 6).            
+
+> Fixed-operator surrogate
+> Y=A∗XV ∗
+> B0 succeeds; r∗tight (Thm 1–4, Table 1)
+> Static-rank transfer
+> fixed target, student XKX ⊤
+> B1/B1c/B2 fail
+> input-conditioning (Table 2)
+> Attention-native teacher
+> Y=Attn K∗,V ∗(X),
+> rank( K∗)= r∗
+> deficiency/achievability/ recovery restored (Table 3)
+> naive
+> transfer
+> redefine in
+> attn. class
+
+Figure 1: Overview of the paper’s logic. The fixed-operator linear surrogate admits a tight Entropic Bound (left). A naive transfer to attention fails even with a full-rank kernel (center), localizing the break to input-conditioned mixing rather than softmax or rank deficiency. Defining the intrinsic rank inside the attention class restores deficiency, achievability, and recovery (right). 
+
+# 2 Related Work 
+
+Neural scaling laws. Empirical scaling laws characterize loss as a smooth power law in model size, data, and compute (Kaplan et al., 2020; Hoffmann et al., 2022). Our framework is complementary: rather than the trajectory of improvement, we study the critical capacity threshold a task imposes. 
+
+Information-theoretic lower bounds. Rate–distortion and predictive-information arguments bound representation size from below (Cover and Thomas, 2006; Berger, 1971). Our spectral pruning view is a matrix-valued analogue: the rate is the retained rank r and the distortion is the tail energy P 
+
+> j>r
+
+σ2 
+
+> j
+
+; the effective rank marks where an additional spectral mode stops paying for itself. 
+
+Statistical learning theory. Classical complexity measures (VC dimension, Rademacher complexity, covering num-bers) are worst-case and distribution-free, and too coarse here (Vapnik, 1998; Bartlett and Mendelson, 2002). Our analysis is distribution-dependent: metric entropy controls generalization, whereas our bound controls representa-tional capacity .2Low-rank structure and compression. A large literature shows fine-tuning updates and trained weights are low-rank, and that low-rank parameterizations match dense models cheaply (Hu et al., 2022; Aghajanyan et al., 2021). These address the rank of updates or compressibility of trained models; we ask the prior question of the minimum rank to realize a task, and show the static kernel rank is the wrong object for attention. 
+
+Implicit regularization and spectral bias. Gradient descent on over-parameterized models is biased toward low-rank solutions (Srebro et al., 2004; Gunasekar et al., 2017; Arora et al., 2019). This underlies why a trained kernel’s effective rank can converge to the task-intrinsic rank, and grounds our recovery experiments. 
+
+Effective rank and attention rank collapse. The effective rank (Roy and Vetterli, 2007) and the phenomenon of attention rank collapse (Dong et al., 2021; Kobayashi et al., 2020) have been studied as dynamics and signal-propagation effects. Our contribution is orthogonal: we tie a spectral capacity measure to a task-intrinsic lower bound, identify why the static-kernel measure fails, and propose the realized-operator alternative. 
+
+# 3 Preliminaries 
+
+Population risk. For a distribution D over (x, y ) and loss ℓ, the population risk is LD (f ) = E[ℓ(f (x), y )] , and the minimum required parameter count at tolerance ε is P ∗(ε; D) = min {P : ∃f with P params , L D (f ) ≤ ε}.
+
+Spectral complexity measures. For M with singular values σ1 ≥ · · · ≥ σq :
+
+Reff (M ) = exp 
+
+
+
+− P 
+
+> i
+
+pi log pi
+
+
+
+, pi = σi/ P 
+
+> j
+
+σj , (1) 
+
+˜Reff (M ) = exp 
+
+
+
+− P 
+
+> i
+
+˜pi log ˜ pi
+
+
+
+, ˜pi = σ2 
+
+> i
+
+/ P 
+
+> j
+
+σ2 
+
+> j
+
+, (2) 
+
+Rstable (M ) = ∥M ∥2 
+
+> F
+
+/∥M ∥22. (3) These satisfy 1 ≤ Rstable ≤ ˜Reff ≤ Reff ≤ rank( M ). For attention kernels the energy variant ˜Reff (Roy and Vetterli, 2007) is the appropriate measure, a choice we justify empirically in Section 6. 
+
+Task-intrinsic effective dimension. Given a reference class G with a complexity functional, 
+
+r∗(ε; D) = inf {dim eff (g) : g ∈ G, L D (g) ≤ ε}, (4) and the Entropic Bound is B(ε; D) = r∗(ε; D), summed over layers. 
+
+# 4 The Entropic Bound in the Linear Attention Surrogate 
+
+Setting. Let X ∈ RT ×d and consider ˆYA,V = AXV with target Y = A∗XV ∗ + E, rank( A∗) = r∗, E ∼N (0 , σ 2I). The intrinsic rank is 
+
+Blin (ε; D) = min {rank( A) : ∃V, E∥Y − AXV ∥2 
+
+> F
+
+≤ ε}, (5) and at the noise floor ε = σ2T d we have Blin = r∗.
+
+Tightness (restated). Under full-rank input covariance, error independent of input, and a spectral gap at r∗:
+
+Theorem 1 (Deficiency ⇒ excess risk) . If r < r ∗, every rank-r model incurs excess risk bounded below by the tail energy P 
+
+> j>r
+
+λj (A∗)2 scaled by the input-covariance constant; in particular the risk strictly exceeds the noise floor. 
+
+Theorem 2 (Achievability) . If r ≥ r∗, a rank-r∗ model attains the noise floor exactly. 
+
+Theorem 3 (Tightness) . Consequently r∗ is exactly the minimum effective dimension for Bayes-optimal performance. 
+
+Theorem 4 (GD convergence) . From small initialization, gradient descent converges to a solution whose effective rank equals r∗ up to an O(σ2/n ) term, with a Marchenko–Pastur correction for finite-sample estimation. 
+
+Full statements and proofs are in Appendix A; the deficiency bound follows from the Eckart–Young–Mirsky the-orem (Eckart and Young, 1936). 3Table 1: Linear surrogate validation ( r∗=3 , noise floor 0.48 ). Sharp deficiency–achievability transition at r=r∗; over-parameterized MP-corrected Reff = 2 .97 → r∗.constrained rank r excess risk Reff (A)
+
+1 28.451 1.00 2 8.832 1.98 3 ( = r∗) 0.0002 2.89 4 0.0002 2.90 5 0.0002 2.91 6 0.0001 2.91 Table 2: Interpolation ladder on a fixed-operator task ( r∗=3 ). The bound transfers only at B0; the break is at B1 (QK factorization), before softmax. B1c (full-rank K) fails identically, ruling out a rank-constraint explanation. rung model change excess@ r∗ solves? B0 AXV , A=P Q ⊤ fixed operator (surrogate) 0.00 yes B1 (XW Q)( XW K )⊤XV + QK factorization 69.37 no B1c XKX ⊤XV , full-rank K + input-cond., no rank limit 69.05 no B2 softmax( XKX ⊤)XV + softmax 68.67 no B3 full block + residual/LN/FFN 51.86 no 
+
+Empirical validation. We instantiate the surrogate with T =16 , d=12 , and a rank-r∗=3 target with a sharp spectral gap, and verify each property (Table 1). The rank sweep shows a clean phase transition: excess risk is large for r < r ∗
+
+(28 .5 at r=1 , 8.8 at r=2 ), collapses to the noise floor at r=r∗ (≈ 2 × 10 −4), and stays there for r > r ∗. Over-parameterized training from small initialization recovers the intrinsic rank: the Marchenko–Pastur-corrected effective rank is 2.97 , matching r∗=3 . Data-only recovery of r∗ (Section 6) gives numerical rank exactly 3.The pilot reproduces all four properties cleanly, anchoring the theory before we test transfer to attention. 
+
+# 5 Why Naive Transfer Fails: Localizing the Break 
+
+The interpolation ladder. On the same synthetic task with known r∗, we build four classes differing by one component each: B0 , linear AXV with A = P Q ⊤; B1 , linear QK (XW Q)( XW K )⊤XV without softmax; B2 ,
+
+softmax(( XW Q)( XW K )⊤) XV ; and B3 , the full block (softmax attention with residual, LayerNorm, and FFN). For each we measure achievability (excess at r = r∗) and recovery (effective rank of the realized operator). 
+
+The break is at B1; the cause is input conditioning. Table 2 reports the ladder on a fixed-operator task with r∗=3 .B0 solves at r∗ (excess ≈ 0, recovers Reff → r∗); B1 already fails (excess 69 .4 at r=r∗), and adding softmax (B2, excess 68 .7) or the full stack (B3, excess 51 .9) does not restore solvability. The natural hypothesis that softmax is responsible is refuted : B2 ≈B1 in excess risk, so the nonlinearity changes little. The break occurs one rung earlier, at the QK factorization. To isolate the mechanism we add a control B1c : input-conditioned mixing XKX ⊤ with an unconstrained full-rank K. It fails identically (excess 69 .0), so the break is not a rank-deficiency effect. The cause is that attention’s realized mixer M (X) = XKX ⊤ is input-conditioned : a bilinear form in X cannot equal a fixed target operator A∗
+
+for all X, regardless of rank( K). Measuring the static kernel Reff (WQK ) is therefore the wrong object, and softmax is a red herring for this failure. 
+
+Consequence for measurement. When the architecture cannot realize the task’s mixing operator, the measured effective rank ceases to encode task complexity and instead tracks width and optimization. On trained language models we observe precisely this: across corpora of very different complexity the measured attention effective rank is nearly invariant. Quantitatively (Appendix B), the predicted rank and the measured rank are anti-correlated ( r =
+
+4Table 3: Attention-native intrinsic rank, full grid ( T =16 , d=32 , 5 seeds). Both teachers reproduce deficiency, achiev-ability, and recovery for all r∗. Softmax compresses the excess-risk magnitude ( ∼450 vs. ∼2.5 at r=r∗−1) but preserves the transition. teacher r∗ exc@ r∗−1 exc@ r∗ learned Reff (K) CV seed 
+
+linear 1 – −0.001 1.03 0.003 linear 2 438.78 −0.002 1.93 0.003 linear 3 578.38 −0.002 2.93 0.001 linear 4 455.23 −0.001 3.91 0.002 linear 6 446.90 0.000 5.87 0.000 linear 8 436.34 −0.001 7.84 0.001 softmax 1 – −0.002 1.45 0.001 softmax 2 1.95 −0.002 2.39 0.001 softmax 3 2.63 −0.002 3.37 0.001 softmax 4 2.32 −0.002 4.31 0.001 softmax 6 2.51 −0.002 6.22 0.000 softmax 8 2.53 −0.002 8.15 0.000 
+
+−0.27 ), whereas the final loss and the measured rank correlate at r = −0.79 , indicating that the measured rank tracks optimization progress rather than corpus complexity. 
+
+# 6 An Attention-Native Intrinsic Rank 
+
+Definition. We define the intrinsic rank inside the attention class: 
+
+r∗
+
+> attn
+
+(ε; D) = min {rank( K) : ∃V, E∥Y − Attn K,V (X)∥2 ≤ ε}, (6) where Attn K,V (X) = softmax( XKX ⊤)XV or its softmax-free analogue XKX ⊤XV . To avoid the operator mismatch of Section 5, teacher tasks are generated from the same family: (1a) linear qk Y = ( XK ∗X⊤)XV ∗ + E
+
+and (1b) softmax qk Y = softmax( XK ∗X⊤)XV ∗ + E, with K∗ of rank r∗ and a sharp spectral gap. 
+
+The bound structure is restored. Table 3 reports the full grid ( T = 16 , d = 32 , five seeds, r∗ ∈ { 1, 2, 3, 4, 6, 8}). For both teachers, all three structural properties hold across every r∗: rank-deficient students incur clearly positive excess risk (deficiency), students at r = r∗ reach the noise floor (achievability, excess ≈ 0), and over-parameterized students recover Reff (K) → r∗ (recovery, 6/6). Seed stability is excellent: CV seed ≤ 0.003 throughout, two orders of magnitude below the 0.10 threshold. The linear/softmax contrast isolates softmax’s true effect. The transition persists under softmax, but its magnitude is compressed by roughly two orders of magnitude: rank-deficient excess risk is ∼450 for the linear teacher versus 
+
+∼2.5 for the softmax teacher. This is exactly the softening predicted by the spectral-gap analysis (Corollary to Theo-rem 1)—softmax normalization shrinks the gap-driven penalty—and is a quantitative softmax signature rather than a breakdown of the bound. 
+
+Predictability and its frontier. We estimate r∗ from (X, Y ) without training (Table 4). For the linear teacher the recovery is essentially perfect: with the value map identified, the numerical rank matches r∗ exactly and the energy effective rank tracks it ( 6/6); strikingly, recovery also succeeds without the value map (V-unknown energy Reff , 6/6)at this scale—the kernel–value identifiability gap we observed at small d closes as dimension grows, restoring fully data-only prediction. For the softmax teacher, predictability is partial , and we report this precisely rather than overclaiming. The numerical rank saturates (17–23), confirming that small-singular-value counts are corrupted by softmax. The energy effective rank is far better behaved but no single estimator is exact across the whole range: the kernel-side energy 
+
+Reff over-estimates at small r∗ (e.g. 2.31 at r∗=1 ) while approaching r∗ at larger values, whereas the realized-mixer 
+
+energy Reff is monotone in r∗ (1.10 → 8.46 ) and accurate at larger r∗ but compressed for small r∗. Notably, the 5Table 4: Data-only predictability of r∗ (energy effective rank). Linear: exact recovery, with and without the value map. Softmax: numerical rank saturates (17–23); kernel-side energy Reff over-estimates at small r∗; the realized-mixer energy Reff is monotone and tracks r∗ at larger values. No single estimator is exact across the whole range under softmax—a precisely characterized partial-predictability frontier. teacher r∗ V-known ˜Reff V-unknown ˜Reff realized-mix ˜Reff numrank linear 1 1.00 1.00 15.85 1linear 2 1.65 1.65 15.89 2linear 3 2.63 2.63 15.93 3linear 4 3.58 3.58 15.95 4linear 6 5.45 5.45 15.97 6linear 8 7.32 8.24 15.97 8softmax 1 2.31 1.93 1.10 17 softmax 2 3.04 6.31 1.24 18 softmax 3 3.87 4.67 1.60 17 softmax 4 5.02 6.42 2.28 20 softmax 6 6.67 10.30 4.75 20 softmax 8 9.24 14.42 8.46 23 realized-mixer measure is informative only under softmax: for the linear teacher it saturates at ≈ 16 because XKX ⊤
+
+inherits the full-rank input geometry, so the two teachers require different measurement objects. Crucially, recovery from the trained model succeeds for softmax (Reff (K) → r∗, Table 3); it is only the pre-training data-only inversion that softmax’s nonlinearity degrades. We therefore state the predictability claim precisely: the attention-native intrinsic rank is exactly data-predictable for linear QK attention (with or without the value map at scale), and partially predictable under softmax , where the energy effective rank—not the numerical rank—is the appropriate estimator, and the realized-mixer variant captures the large-r∗ regime. Characterizing a single softmax-robust pre-training estimator across all r∗ is a well-posed open problem. 
+
+Robustness to the spectral profile. The sharp transitions above use a sharp-gap teacher kernel. We verify in Ap-pendix D that the result is not an artifact of this choice: across sharp, power-law, and flat (no-gap) spectra, achievability at r = r∗ and recovery hold throughout, and the recovered energy effective rank tracks the teacher kernel’s energy rank in every regime—exactly to r∗ for a flat spectrum and to the (smaller) energy rank when a few directions dominate. Sharp gaps yield abrupt transitions while gradual spectra yield softer knees, but the energy effective rank remains the capacity-tracking quantity regardless of the profile. 
+
+# 7 Discussion, Limitations, and Open Problems 
+
+Established. In the fixed-operator surrogate the Entropic Bound is tight, achievable, recovered by GD, and data-predictable. Naive transfer fails because attention’s mixing is input-conditioned; this is localized cleanly (not softmax, not rank). Redefining the intrinsic rank inside the attention class restores the full structure—deficiency, achievability, recovery—for both linear and softmax attention at scale ( T =16 , d=32 , CV seed ≤ 0.003 ). Data-only predictability is exact for linear QK attention, including the V-unknown estimator at scale, and partial for softmax attention, where the trained kernel still recovers r∗ but pre-training inversion remains distorted. 
+
+Limitations. Positive results are in a teacher–student synthetic setting with known r∗. On trained language models the realized attention operator is dominated by task-independent structure (locality, positional, attention-sink priors), so measured effective rank does not separate corpora; whether real-language tasks admit a low-rank attention-native description is open. Under softmax, no single pre-training estimator recovers r∗ across all ranks, bounding the data-only claim in the nonlinear regime. 6Open problems. (i) Find a single softmax-robust pre-training estimator of r∗ accurate across all ranks (kernel-side over-estimates small r∗; realized-mixer compresses them). (ii) Characterize the realized-operator effective rank of trained LMs and its task-invariance. (iii) Bridge the synthetic attention-native regime to natural language. (iv) Extend the depth–width analysis (early layers task-specific, later layers saturating). 
+
+Conclusion. Recast around an attention-native intrinsic rank, the Entropic Bound is a tight capacity measure for teacher-generated attention tasks: fully data-predictable for linear QK attention, including the V-unknown setting at scale, and partially predictable under softmax. We give a precise account of where it holds, where it breaks, and why. 
+
+# A Full Theorem Statements and Proofs 
+
+We restate the linear-surrogate results of Section 4 with compact proofs. The setting is ˆYA,V = AXV with target 
+
+Y = A∗XV ∗ + E, rank( A∗) = r∗.
+
+## A.1 A.1 Assumptions 
+
+(A1) X has zero mean and full-rank covariance ΣX ≻ 0.(A2) E is independent of X, zero mean, with E[EE ⊤] = σ2I.(A3) rank( A∗) = r∗ with a spectral gap λr∗ (A∗) ≥ δ > 0.(A4) V ∗ is non-degenerate: σmin (V ∗) > 0.
+
+## A.2 A.2 Rank deficiency implies excess risk 
+
+Theorem 5 (Deficiency) . Let L∗ 
+
+> r
+
+= inf rank( A)≤r, V E∥Y − AXV ∥2 
+
+> F
+
+. Under (A1)–(A4), 
+
+L∗ 
+
+> r
+
+≥ σ2T d + c
+
+> r∗
+
+X
+
+> j=r+1
+
+λj (A∗)2, c = λmin (Σ X ) σmin (V ∗)2. (7) 
+
+In particular, if r < r ∗ then L∗ 
+
+> r
+
+> σ 2T d .Proof. For any feasible ˆY = AXV , write Y − ˆY = ( A∗XV ∗ − AXV ) + E. By (A2) the cross term vanishes in expectation, so E∥Y − ˆY ∥2 
+
+> F
+
+= E∥A∗XV ∗ − AXV ∥2 
+
+> F
+
++ σ2T d . The signal term is minimized over rank-r
+
+maps; since AXV has rank at most r in the operator acting on X, Eckart–Young–Mirsky gives inf rank( B)≤r ∥A∗ −
+
+B∥2 
+
+> F
+
+= P 
+
+> j>r
+
+λj (A∗)2. Propagating through the input covariance and the value map contributes the factor c =
+
+λmin (Σ X )σmin (V ∗)2 > 0, yielding the bound. Under (A3), λj (A∗) > 0 for j ≤ r∗, so the sum is strictly positive when r < r ∗.
+
+## A.3 A.3 Achievability 
+
+Theorem 6 (Achievability) . If r ≥ r∗, choosing A = A∗, V = V ∗ gives ˆY = A∗XV ∗ = Y −E, hence E∥Y − ˆY ∥2 
+
+> F
+
+=
+
+E∥E∥2 
+
+> F
+
+= σ2T d , attaining the noise floor. 
+
+## A.4 A.4 Tightness 
+
+Theorem 7 (Tightness) . Under (A1)–(A4), min {rank( A) : ∃V, E∥Y − AXV ∥2 
+
+> F
+
+≤ σ2T d } = r∗. Combining A.2 (every rank-r < r ∗ model has strictly positive excess risk) with A.3 (rank-r∗ achieves the floor), r∗ is exactly the minimum effective dimension for Bayes-optimal performance. 
+
+7A.5 A.5 Gradient-descent recovery 
+
+Theorem 8 (Recovery, under standard implicit-bias assumptions) . Consider the factorized surrogate trained by gra-dient flow from initialization of scale α → 0. In the noiseless population limit, under the standard implicit-bias result for linear matrix factorization (Gunasekar et al., 2017; Arora et al., 2019), gradient flow converges to the minimum-nuclear-norm interpolating solution, whose rank equals r∗ under the spectral gap (A3). In finite samples with noise, the estimated spectrum is bimodal— r∗ signal modes of O(1) and d − r∗ noise modes of O(σ/ √n) follow-ing a Marchenko–Pastur law—so the effective rank concentrates at r∗ + O(σ2/(n λ 2 
+
+> r∗
+
+)) , with the finite-sample MP correction ˆReff = Rtrue eff + ( d − Rtrue eff )/(2 n) + O(1 /n 2).Proof sketch. The population claim is the standard implicit-bias result for gradient flow on A = U V ⊤ from vanishing initialization, which converges to the minimum nuclear-norm solution; with a spectral gap this solution has exact rank 
+
+r∗. The finite-sample spectrum splits into signal and Marchenko–Pastur noise bulks, and computing the singular-value entropy over this bimodal spectrum gives log r∗ plus the stated correction. A fully rigorous treatment of the finite-width, finite-sample regime is left to an extended version; our empirical recovery (Tables 1, 3) confirms the concentration at r∗ with CV seed ≤ 0.003 .
+
+# B Real-Corpus Diagnostics 
+
+This appendix documents the experiments behind the claim (Sections 5, 6) that the attention-native positive result does not transfer directly to natural language, and explains why the failure is structural rather than a tuning artifact. 
+
+B.1 Setup. We test the predictive-bound hypothesis on six char-level corpora spanning very different statistical structure: English prose ( english ), Shakespeare ( shakespeare ), Python source ( python ), Linux C source ( linux ), JSON ( json ), and ABC music notation ( music ). Models are causal Transformers with dmodel ∈ { 64 , 128 , 256 }, two layers, four heads, five seeds. The data-side predictor is a lag-MI / operator estimate; the measured objects are the static kernel Reff (WQK ), the mean realized attention Reff (E[A]) , the per-input realized rank EX [Reff (A(X))] , the attention participation ratio, and the covariance-whitened kernel Reff (WQK Σ1/2 
+
+> X
+
+).
+
+B.2 Main negative result. The data-side predicted rank is anti -correlated with the measured static-kernel rank across corpora: Pearson r = −0.272 , Spearman ρ = −0.275 . This is not a weak positive miss; the sign is wrong. 
+
+B.3 The failure is structural. Three diagnostics rule out a noise explanation and identify the mechanism. (i) Not seed noise. All 18 corpus ×size cells have CV seed ∈ [0 .006 , 0.087] , all below the 0.10 threshold—the measured rank is a clean, reproducible signal. (ii) It tracks fitting progress, not task complexity. Across corpora, the final loss and the measured Reff correlate at r = −0.79 : corpora the model fits well (low loss) acquire higher measured rank, and hard corpora lower rank. The measured quantity reflects optimization state, not intrinsic complexity—the direct cause of the anti-correlation. (iii) Layer/channel dependence. In the largest model, Layer 0 has Reff ≈ 13 –19 while Layer 1 has Reff ≈ 30 –44 , and the FFN channel shows no relationship ( Pearson( H1, FFN stable rank ) = −0.05 ). A single per-layer additive bound cannot capture this. 
+
+B.4 Measurement and predictor ablations (Experiments A and C). Replacing the static kernel with realized-attention measures (mean attention, per-input rank, participation, covariance-whitened kernel) does not restore corpus discrimination: across corpora every measure has low variation (coefficient of variation 0.06 –0.20 , versus 0.66 for the data-side predictor), so there is little task signal in the measurement to correlate against. On the predictor side, estimating a single token-mixing operator from data—via fixed-random-embedding ridge regression—collapses to full rank for every corpus (random embeddings erase token-identity structure), and a token-space repeat operator separates only one of six corpora. No single low-rank operator summarizes real-text routing. 
+
+Interpretation. The real-corpus failure is not a contradiction of the attention-native positive result. It shows that natural language does not provide a matched teacher–student attention task with an identifiable low-rank K∗: on trained language models the realized mixer is dominated by task-independent structure (locality, positional, attention-sink priors) rather than a task-specific low-rank routing kernel. The synthetic attention-native regime is therefore a 8controlled transfer test, and the real-corpus bridge— recovering a task-intrinsic attention rank from natural language— remains the central open problem. 
+
+# C Experimental Details 
+
+All experiments in Section 6 use the controlled teacher–student setup described here. The purpose of this setup is 
+
+not to model natural language directly, but to test whether the attention-native definition of intrinsic rank restores the rank–capacity transition once the teacher and student are placed in the same operator class . The real-language gap is treated separately (Appendix B) and is the central open problem of the paper. 
+
+## C.1 Shared synthetic setup 
+
+Sequence length T = 16 , model dimension d = 32 , intrinsic ranks r∗ ∈ { 1, 2, 3, 4, 6, 8}, n = 3000 samples, seeds 
+
+{0, 1, 2, 3, 4}, and observation noise σ = 0 .05 . The noise floor is σ2T d = 0 .05 2 × 16 × 32 = 1 .28 , which all achievability results approach (the slightly negative reported excess reflects finite-sample fitting of a small fraction of the noise). 
+
+## C.2 Teacher generation 
+
+The teacher kernel has rank r∗ with a sharp spectral gap: 
+
+K∗ = Ur diag( λ1, . . . , λ r∗ ) U ⊤ 
+
+> r
+
+, λi = 2 − i − 1
+
+r∗ − 1 (r∗ > 1) , λ1 = 2 ( r∗ = 1) , (8) with Ur ∈ Rd×r∗
+
+having orthonormal columns and V ∗ ∈ Rd×d Gaussian with 1/√d scaling. The two teacher types are 
+
+Y = ( XK ∗X⊤) XV ∗ + E and Y = softmax( XK ∗X⊤) XV ∗ + E, (9) with E ∼ N (0 , σ 2I) and scores scaled by 1/√d.
+
+## C.3 Student models 
+
+The rank-constrained student uses a factored kernel K = WQW ⊤ 
+
+> K
+
+with WQ, W K ∈ Rd×r , matching the teacher type (linear or softmax). The deficiency/achievability sweep runs r = 1 , . . . , 2r∗; over-parameterized recovery uses r = d.
+
+## C.4 Optimization 
+
+Adam with learning rate 10 −2. The rank sweep trains for 1500 steps; the over-parameterized recovery trains for 2500 
+
+steps. Recovery uses small initialization, multiplying WQ, W K by 0.3 to induce the implicit low-rank bias (Theorem 4 analogue). Full-batch gradients are used throughout. 
+
+## C.5 Metrics 
+
+• Excess risk : L − σ2T d , where L is the converged MSE. • Learned kernel effective rank : Reff (K) of the trained student kernel. • Seed CV : CV seed = std s(Reff (Ks)) /mean s(Reff (Ks)) over seeds s.• V-known predictability : estimate K from (X, Y ) with V ∗ given (regression on the recovered scores), report numerical and energy effective rank. • V-unknown predictability : jointly estimate (K, V ) by alternating minimization (plain and with nuclear-norm shrinkage on K), report energy effective rank. • Realized mixer rank : Reff 
+
+ EX [softmax( XKX ⊤)] , the effective rank of the data-averaged realized attention map (informative under softmax; saturates for the linear teacher). 9C.6 Reproduction command 
+
+python exp_attn_native.py \--teacher both \--T 16 --d 32 \--r_stars 1 2 3 4 6 8 \--seeds 0 1 2 3 4 \--n 3000 \--results_dir results_attn_native_grid 
+
+The linear surrogate validation (Section 4, Table 1) and the interpolation ladder (Section 5, Table 2) use the same conventions with T =16 , d =12 , r ∗=3 (surrogate) and T =12 , d =10 , r ∗=3 (ladder), respectively; see the accompanying code for the exact scripts. 
+
+# D Spectral-Gap Ablation 
+
+We test whether the phase transition of Section 6 is an artifact of the sharp-gap teacher kernel by varying the spectrum of K∗ over its top r∗ directions, holding all else fixed. We consider three regimes: sharp (λi = 2 − (i−1) /(r∗−1) ,the main-paper setting), power-law (λi = i−1), and flat /no-gap ( λi = 1 ). Table 5 reports a lightweight linear-QK ablation ( T =10 , d=12 , r∗=4 ) isolating the spectral-profile effect while keeping the teacher–student class matched. Table 5: Spectral-gap ablation (linear-QK teacher, r∗=4 ). Achievability (excess@ r∗ ≈ 0) and recovery hold in every regime. The recovered energy effective rank tracks the teacher kernel’s energy rank—exactly r∗ for a flat spectrum, and the smaller dominant-direction count when the spectrum decays. Sharp gaps give abrupt transitions; gradual spectra give softer knees. spectrum teacher K energy ˜Reff excess@ r∗−1 excess@ r∗ recovered energy ˜Reff 
+
+sharp 3.57 244.48 0.001 3.57 power 2.43 15.63 −0.002 2.44 flat 4.00 171.31 −0.002 4.00 The key invariant: the recovered energy effective rank equals the teacher kernel’s energy rank in all regimes (e.g. 
+
+4.00 → 4.00 for the flat spectrum, where every direction contributes equally, and 3.57 → 3.57 , 2.43 → 2.44 when a few directions dominate). Thus the energy effective rank—not an integer “rank”—is the quantity that tracks task capacity, and the rank–capacity relationship survives the removal of the spectral gap. The transition merely changes shape (sharp gap ⇒ abrupt; gradual spectrum ⇒ soft knee), consistent with the spectral-gap dependence in Theorem 1. 
+
+# References 
+
+Armen Aghajanyan, Sonal Gupta, and Luke Zettlemoyer. Intrinsic dimensionality explains the effectiveness of lan-guage model fine-tuning. In Annual Meeting of the Association for Computational Linguistics (ACL) , 2021. Sanjeev Arora, Nadav Cohen, Wei Hu, and Yuping Luo. Implicit regularization in deep matrix factorization. In 
+
+Advances in Neural Information Processing Systems (NeurIPS) , 2019. Peter L Bartlett and Shahar Mendelson. Rademacher and gaussian complexities: Risk bounds and structural results. 
+
+Journal of Machine Learning Research , 3:463–482, 2002. Toby Berger. Rate Distortion Theory: A Mathematical Basis for Data Compression . Prentice-Hall, 1971. Thomas M Cover and Joy A Thomas. Elements of Information Theory . Wiley-Interscience, 2nd edition, 2006. Yihe Dong, Jean-Baptiste Cordonnier, and Andreas Loukas. Attention is not all you need: Pure attention loses rank doubly exponentially with depth. In International Conference on Machine Learning (ICML) , 2021. 10 Carl Eckart and Gale Young. The approximation of one matrix by another of lower rank. Psychometrika , 1(3): 211–218, 1936. Suriya Gunasekar, Blake Woodworth, Srinadh Bhojanapalli, Behnam Neyshabur, and Nathan Srebro. Implicit regu-larization in matrix factorization. In Advances in Neural Information Processing Systems (NeurIPS) , 2017. Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, Diego de Las Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, et al. Training compute-optimal large language models. arXiv preprint arXiv:2203.15556 , 2022. Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. In International Conference on Learning Representations (ICLR) , 2022. Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Rad-ford, Jeffrey Wu, and Dario Amodei. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 ,2020. Goro Kobayashi, Tatsuki Kuribayashi, Sho Yokoi, and Kentaro Inui. Attention is not only a weight: Analyzing transformers with vector norms. In Conference on Empirical Methods in Natural Language Processing (EMNLP) ,2020. Olivier Roy and Martin Vetterli. The effective rank: A measure of effective dimensionality. European Signal Process-ing Conference (EUSIPCO) , pages 606–610, 2007. Nathan Srebro, Jason Rennie, and Tommi Jaakkola. Maximum-margin matrix factorization. In Advances in Neural Information Processing Systems (NeurIPS) , 2004. Vladimir N Vapnik. Statistical Learning Theory . Wiley, 1998. 11

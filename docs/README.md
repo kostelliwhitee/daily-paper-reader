@@ -6,35 +6,59 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-27
-- 运行时间：2026-07-27 21:18:26 UTC
+- 最新运行日期：2026-07-28
+- 运行时间：2026-07-28 21:48:41 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：2
-- 速读区：3
+- 本次总论文数：13
+- 精读区：4
+- 速读区：9
 
 ### 今日简报（AI）
-今日精读2篇高价值论文，涉及索引本质与方差缩减Q学习，速读3篇涵盖信念协调、稀疏注意力和双臂操作。最值得看的是《Indexing: the Beginning and the End》（9.0）和《Variance-Reduced Q-Learning》（8.0），前者探讨索引理论的根本问题，后者提出静态与时变网络下的高效强化学习算法。建议优先精读索引论文以深化基础理解，再结合方差削减方法提升对分布式强化学习的认识。
-- 详情：[/202607/27/README](/202607/27/README)
+今日精读两篇高分论文，聚焦多智能体系统注意力编排与Transformer核注意力学习。最值得关注的是自适应目标感知注意力机制和库仑粒子模型对Transformer的创新改进。建议读者优先精读9.0分的两篇论文，深入掌握注意力机制的前沿应用。
+- 详情：[/202607/28/README](/202607/28/README)
 
 ### 精读区论文标签
-1. [Indexing: the Beginning and the End](/202607/27/2607.22361v1-indexing-the-beginning-and-the-end)  
+1. [Focus Is All You Need: Adaptive Goal-aware Attention Orchestration for Multi-Agent Graph Systems](/202607/28/2607.23678v1-focus-is-all-you-need-adaptive-goal-aware-attention-orchestration-for-multi-agent-graph-systems)  
    标签：评分：9.0/10、query:ma-la
-   evidence：线性注意力Transformer的理论分析
-2. [Variance-Reduced Q-Learning over Static and Time-Varying Networks](/202607/27/2607.21876v1-variance-reduced-q-learning-over-static-and-time-varying-networks)  
+   evidence：提出注意力编排范式，将Transformer注意力扩展到多智能体图系统中的工作流级协调
+2. [A Coulomb Particle Model for Learning Kernel Attention in Transformers](/202607/28/2607.23869v1-a-coulomb-particle-model-for-learning-kernel-attention-in-transformers)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：通过库仑粒子模型学习随机特征用于线性化注意力
+3. [The Entropic Bound for Transformers: Why Static Rank Fails and Attention-Native Rank Recovers](/202607/28/2607.23050v1-the-entropic-bound-for-transformers-why-static-rank-fails-and-attention-native-rank-recovers)  
    标签：评分：8.0/10、query:ma-la
-   evidence：网络上的去中心化多智能体Q学习与线性加速
+   evidence：线性注意力代理用于理论分析
+4. [A Comparative Study of MCP and A2A for Inter-Agent Coordination in LLM-Based Systems](/202607/28/2607.23884v1-a-comparative-study-of-mcp-and-a2a-for-inter-agent-coordination-in-llm-based-systems)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：比较多智能体系统中MCP和A2A的协调协议
 
 ### 速读区论文标签
-1. [Explainable Belief Harmonization under Dynamic Epistemic Partitions](/202607/27/2607.21210v1-explainable-belief-harmonization-under-dynamic-epistemic-partitions)  
+1. [From Proprietary to Open-Source: Bridging the Distribution Gap via Multi-Agent Protocol Distillation in Agentic Search](/202607/28/2607.24280v1-from-proprietary-to-open-source-bridging-the-distribution-gap-via-multi-agent-protocol-distillation-in-agentic-search)  
    标签：评分：7.0/10、query:ma-la
-   evidence：动态划分下的多智能体信念协调
-2. [Parameter-free Adaptive Sparse Attention via Compression-Based Content Selection](/202607/27/2607.21752v1-parameter-free-adaptive-sparse-attention-via-compression-based-content-selection)  
+   evidence：用于智能搜索的多智能体协议蒸馏
+2. [Decentralised Consensus Learning Networks: SME Rotation Without Centralised Reward](/202607/28/2607.24416v1-decentralised-consensus-learning-networks-sme-rotation-without-centralised-reward)  
    标签：评分：7.0/10、query:ma-la
-   evidence：通过压缩实现自适应稀疏注意力，可扩展的注意力机制
-3. [One Hand Watches The Other: Dynamic Multi-Agent Cooperation for Sample-Efficient Bimanual Manipulation in Dynamic Environments](/202607/27/2607.22119v1-one-hand-watches-the-other-dynamic-multi-agent-cooperation-for-sample-efficient-bimanual-manipulation-in-dynamic-environments)  
+   evidence：去中心化共识学习多智能体框架
+3. [Twin Agent: Context Residual Compression for Privilege Separated Agents](/202607/28/2607.19595v1-twin-agent-context-residual-compression-for-privilege-separated-agents)  
    标签：评分：6.0/10、query:ma-la
-   evidence：双臂操作的动态多智能体合作
+   evidence：双智能体安全交互设计
+4. [What Softmax Throws Away: Mass-Aware Attention for Evidence Accumulation](/202607/28/2607.22781v1-what-softmax-throws-away-mass-aware-attention-for-evidence-accumulation)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：质量感知注意力修改注意力归一化方式，与线性注意力家族相关
+5. [ABISS: Evaluating Text-to-SQL Systems Through Agent Interaction](/202607/28/2607.23340v1-abiss-evaluating-text-to-sql-systems-through-agent-interaction)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体管道用于生成模糊问题并评估Text-to-SQL系统
+6. [TRUAV: Distributed Multi-Agent Reinforcement Learning for Trajectory Planning and Routing Enhancement in UAV-Aided IoT-Enabled VANETs](/202607/28/2607.23734v1-truav-distributed-multi-agent-reinforcement-learning-for-trajectory-planning-and-routing-enhancement-in-uav-aided-iot-enabled-vanets)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：分布式多智能体通信在车载网络中的应用
+7. [GNN-based Multi-Agent Control of Traffic Shockwaves in Sparse Vehicular Ad-hoc Networks](/202607/28/2607.23792v1-gnn-based-multi-agent-control-of-traffic-shockwaves-in-sparse-vehicular-ad-hoc-networks)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：基于GNN的多智能体交通冲击波控制
+8. [Moral Hazard in Multi-Agent Language Models](/202607/28/2607.23982v1-moral-hazard-in-multi-agent-language-models)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体语言模型合作博弈
+9. [PIVOT: Efficient Query-Group Indexing for Token-Level Sparse Attention](/202607/28/2607.24593v1-pivot-efficient-query-group-indexing-for-token-level-sparse-attention)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：稀疏注意力索引提升效率，可应用于多智能体场景下的可扩展注意力
 
 
 <div class="dpr-home-promo-card">
