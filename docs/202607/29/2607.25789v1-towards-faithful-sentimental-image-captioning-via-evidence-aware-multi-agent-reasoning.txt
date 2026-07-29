@@ -1,0 +1,349 @@
+Title: Towards Faithful Sentimental Image Captioning via Evidence-Aware Multi-Agent Reasoning
+
+URL Source: https://arxiv.org/pdf/2607.25789v1
+
+Published Time: Wed, 29 Jul 2026 01:05:45 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Towards Faithful Sentimental Image Captioning via Evidence-Aware Multi-Agent Reasoning 
+
+1st Tiecheng Cai 
+
+College of Computer and Data Science, Fuzhou University 
+
+Fuzhou, China 210310002@fzu.edu.cn 
+
+2nd Zexian Yang* 
+
+College of Computer and Data Science, Fuzhou University 
+
+Fuzhou, China yangzexian@fzu.edu.cn 
+
+3rd Chao Chen 
+
+School of Computer Science and Technology, Harbin Institute of Technology 
+
+Shenzhen, China cha01nbox@gmail.com 
+
+4th Shanshan Lin 
+
+College of Computer and Data Science, Fuzhou University 
+
+Fuzhou, China 231016006@fzu.edu.cn 
+
+5th Xiangwen Liao 
+
+College of Computer and Data Science, Fuzhou University 
+
+Fuzhou, China liaoxw@fzu.edu.cn 
+
+Abstract —Sentimental Image Captioning (SIC) requires bal-ancing emotional expression with visual fidelity. Existing methods often struggle with this trade-off, leading to hallucinations due to insufficient local grounding and the lack of sentimental verification mechanisms. To address these limitations, we propose SEA-Cap, a Sentiment-Evidence-Aware Multi-Agent System for faithful and evidence-grounded sentimental image captioning. SEA-Cap incorporates a Sentiment Evidence Miner that extracts structured, local affective cues to shift sentiment control from global attributes to verifiable object-level evidence. Leveraging this evidence, our framework orchestrates a collaborative work-flow where a Generator, Hallucination Checker, and Arbitrator iteratively refine captions via a shared blackboard. By explicitly auditing generated content against mined visual evidence, SEA-Cap ensures both sentiment accuracy and factual consistency. Extensive experiments on two benchmark datasets demonstrate that SEA-Cap effectively mitigates hallucinations and achieves state-of-the-art performance. 
+
+Index Terms —Sentimental image captioning, Multi-agent sys-tems, Affective analysis. 
+
+I. I NTRODUCTION 
+
+Image captioning (IC) aims to produce a factual, objective description of visual content [1]. In contrast, sentimental image captioning (SIC) requires a model to understand an image from different sentimental perspectives and to generate a caption consisting of the target sentiment [2]. Recent researchers have endeavored to develop a model that can harmonize senti-ment precision with visual fidelity [2]–[4]. Nevertheless, these sentiment-oriented methods are designed to operate under a single constraint. Practical requirements, such as a strict word budget, frequently cause these models to suffer from sentiment drift or a decline in descriptive fidelity. In order to address these challenges, recent work has fo-cused on managing the trade-off between caption length and expressive granularity. This line of work recognizes shorter captions tend to emphasize high-level visual cues, whereas longer ones facilitate richer affective details but increase the risk of introducing ambiguous or mixed sentiments [5]. Current Sentimental Image Caption                                                            
+
+> Q: Generate a positive description
+> of this image in 15 words.
+> Model Response Correct Positive
+> Cue Selection Attention on Sentimental Cues
+> Misinterpreted as Negative /
+> Hallucinated Sentiment
+> Failure to Maintain Positive Focus
+> Conflict Between
+> Visual Cues &
+> Sentimental Prompt
+> Sentimental
+> Hallucination &
+> Misinterpretation
+> The image shows three cute boys in a
+> garden .One is smiling and covering his
+> mouth playfully .
+> Another boy is covering his ears and smiling .
+> However, the third boy is hiding his face and
+> looks sad or scared because he is crying .
+> Final Output :
+> “Three boys are playing ,but one is sad and
+> crying, covering his eyes .”(13 words)
+> Thinking & Selection :
+
+Fig. 1. An illustrative failure case of SIC under sentiment and length constraints. Model attends to ambiguous local visual cues and misinterprets or hallucinates negative affect (e.g., sad , crying ), resulting in a caption that violates the intended positive focus. The example highlights the conflict between local visual evidence and sentiment control, and motivates evidence-aware emotion focus selection and verification. 
+
+Instead of relying on standalone Large Language Models (LLMs) or Multimodal LLMs (MLLMs) where prompt-based steering often yields inconsistent sentiment control [6], [7], the Multi-Agent System (MAS) framework has been explored for image captioning to enhance diversity, factual consistency, and contextual alignment [8], [9]. Along this line, the training-free method IE-MAS [10] integrates internal representation-level steering with external multi-agent collaboration to improve controllability and coordination under multiple objectives. However, achieving seamless coordination remains a signif-icant hurdle due to inherent conflicts among heterogeneous objectives, which may further induce hallucinations [11], [12]. As illustrated in Fig. 1, this difficulty is pronounced in scenes containing mixed or ambiguous sentimental cues. The image presents three boys exhibiting contrasting affective signals, where two are smiling while the third covers his face. When the model generates a positive description under a strict length constraint (e.g., 15 words), the reasoning process exhibits a conflict. Although the model identifies positive arXiv:2607.25789v1 [cs.CV] 28 Jul 2026 cues from smiling subjects during intermediate processing, it misinterprets the ambiguous gesture of the third boy as crying and introduces a negative hallucination. Due to the limited word budget, the model is forced to compress the content and erroneously prioritizes this salient negative feature over the requested positive sentiment. Consequently, the final output vi-olates the sentiment prompt by focusing on the misinterpreted subject. This failure exemplifies two fundamental limitations in existing SIC methods: (i) Ambiguous sentiment-object grounding : Many approaches treat sentiment as a global image attribute relying on image-level labels. They fail to ex-plicitly localize verifiable sentiment-related focuses on specific objects (e.g., grounding “joy” specifically to the smiling boys), leading to confused sentimental interpretations when multiple objects differ in affect. (ii) Lack of evidence-based verifica-tion : Most generation pipelines lack a feedback mechanism grounded in visual evidence. Once a negative sentiment is hallucinated (e.g., misinterpreting a gesture as “crying”), the system has no means to verify this against the input image or correct the drift to align with the prompt. These issues raise a central challenge in SIC: how to jointly ensure sentimental accuracy and factual consistency at complex constraints? 
+
+To address these two issues, we propose a Sentiment-Evidence-Aware Multi-Agent System for sentimental image captioning (SEA-Cap). By mining diverse sentimental cues in an image, we localize sentiment-relevant focuses to improve the accuracy of sentimental expression. Through evidence-based reviewing and structured feedback, we refine sentiment control from a global image attribute to verifiable object-level evidence, thereby mitigating hallucinations in sentimental caption generation. Specifically, we first employ a MLLM as the Generator to produce candidate captions conditioned on the target sentiment and length constraints. Next, an Sen-timent Evidence Miner performs target-aware segmentation and local affective analysis to extract sentiment-relevant re-gions, and to construct structured visual sentiment evidence. Based on the mined evidence, an evidence-driven Hallucina-tion Checker audits candidate captions by verifying object existence, sentiment-focus plausibility, and relation/context consistency, and to write structured feedback into a shared blackboard memory. Finally, an Arbitrator reads the black-board and determines whether to accept the current caption or to trigger another revision round, enabling iterative refinement toward sentiment-consistent and fact-faithful descriptions. We summarize our main contributions as follows:  
+
+> •
+
+We propose a sentiment-evidence-aware multi-agent framework for SIC, which integrates a multimodal gener-ator, evidence miner, evidence-based verifier, and arbitra-tor through a shared blackboard for iterative refinement.  
+
+> •
+
+We introduce an Sentiment Evidence Miner that extracts target-aware local affective regions via segmentation and local sentiment analysis, producing structured visual sen-timent evidence to support verifiable sentiment control.  
+
+> •
+
+We design an Hallucination Checker that leverages mined sentiment evidence to verify object existence, sentiment-focus rationality, and relation/context consistency, provid-ing structured feedback to improve factual grounding.  
+
+> •
+
+Extensive experiments on two widely used benchmark datasets demonstrate that our proposed method achieves state-of-the-art performance on the SIC task. II. R ELATED WORK 
+
+We briefly review related studies from SIC and MAS for image captioning. These lines summarize the progress from early sentiment models to recent MLLMs, and motivate the necessity for reliable multi-objective coordination. 
+
+A. Sentimental Image Captioning 
+
+Sentimental Image Captioning (SIC) extends factual cap-tioning by requiring captions to express a target sentiment while remaining visually faithful. Early methods achieved this by injecting emotional signals via specialized embeddings [2]– [4] or adaptive attention mechanisms [13]. Driven by the evolution of MLLMs [14]–[16], recent approaches have shifted toward large-scale pretraining [6] and prompt-based zero-shot refinement [7] to enhance controllability. However, integrating length constraints into SIC remains a significant challenge. Al-though existing techniques ranging from conditioned decoders to post-hoc rewriting [17]–[19] can satisfy word budgets, their direct application to SIC compromises affective coherence and visual grounding. Furthermore, coordinating the competing objectives of sentiment, length, and fidelity remains an open problem that single-agent strategies struggle to resolve. 
+
+B. Multi-Agent System for Image Captioning 
+
+MASs decompose complex generation into cooperative sub-tasks, improving diversity, factual consistency, and contextual alignment [8], [9], [20]. MosAIC [8] uses multiple agents to represent cultural views with a central aggregator. MASs have also been explored for grounding and hallucination reduction: CapMAS [9] coordinates planner, generator, and critic agents to enhance factual completeness, and Jiang et al. [21] combine relational reasoning with retrieval-augmented generation and hallucination detection to strengthen entity-level grounding. Follow this, IE-MAS integrates internal representation-level steering with external multi-agent collaboration for control-lable IC [10]. Nevertheless, effective coordination remains dif-ficult due to conflicts among potentially competing objectives, which may further induce hallucination [11]. III. P RELIMINARY 
+
+Sentimental Image Captioning (SIC) aims to generate a caption that is factually grounded in an input image X
+
+while complying with controllable constraints, such as atarget sentiment s and a word-budget L. The image X is encoded by a vision encoder ϕ into a visual representation 
+
+v = ϕ(X) ∈ Rd, s ∈ S specifies the desired sentiment polarity (e.g., positive or negative) and L ∈ Z+ denotes the target length. Given a generative model G, the caption is produced Reviewer                                        
+
+> Pre -trained Scoring
+> Sent. Input Image & Control Conditions
+> Sentiment:
+> Positive
+> Length:
+> 15
+> Shared Blackboard
+> Candidate Captions
+> Raw Image
+> Constrains
+> Generator
+> MLLM Based
+> Iteration Status
+> Evaluation Scores
+> Next -round guidance
+> Sentiment Evidence Miner
+> Segment & Region Affect Analysis
+> Sentiment Evidence
+> •……
+> Structured Feedback
+> Adjudicator
+> Optimize
+> Output Caption
+> Three kids are playing with smiles,
+> each playfully covering their ears,
+> mouth, and face.
+> Hallucination Checker
+>  Object existence
+>  Sentiment -focus plausibility
+>  Relation consistency
+> Len. Ground.
+> Read
+> Satisfy Target
+> Stage1: Sentiment Evidence Mining Stage2: Evidence -Grounded Collaborative Refinement.
+> 0.36 Fig. 2. Overview of the SEA-Cap framework. Sentiment Evidence Mining extracts sentimental visual evidence E.Collaborative Refinement involves the
+> Generator ,Reviewer ,Hallucination Checker and Adjudicator interacting through a Shared Blackboard. This multi-agent system iteratively optimizes candidate captions Ykusing structured feedback Ψkto ensure the final output Y∗satisfies target constraints C.
+
+as a token sequence Y = {y1, y 2, . . . , y T } and follows the standard autoregressive factorization [22]: 
+
+Pr( Y | C) = 
+
+> T
+
+Y
+
+> t=1
+
+Pr ( yt | y<t , s, L, v ) , (1) where we consider the constraint set C = {L, s, v } to capture their joint effects on generation. 
+
+Multi-Agent System (MAS) provides an iterative collab-oration framework for satisfying various constraints for SIC tasks. A minimal MAS consists of a Generator generating candidate captions, a Reviewer providing diagnostic feedback, and an Adjudicator decides acceptance or selects the best candidate under a maximum budget Kmax . Specifically, at iteration k, the Generator synthesizes a candidate caption Y(k)
+
+by integrating the image X, constrains C, and the preceding guidance Φ(k−1) . For the initial step, Φ(0) is defined as the foundational prompt to seed the generation. Then, the Reviewer outputs diagnostic scores for length, sentiment, and factual grounding, together with a brief rationale θ(k), and summarizes them into the next-round guidance Φ(k). Finally, the Adjudicator determines whether to accept Y(k) based on the Reviewer’s feedback, and selects the optimal Y∗ from all candidates if reaching maximal iterations. IV. M ETHODOLOGY 
+
+To achieve accurate sentimental expression while maintain-ing factual grounding, we introduce SEA-Cap, a sentiment-evidence-aware multi-agent framework for SIC. SEA-Cap is built on the insight that while MLLMs generate fluent captions, reliable control necessitates image-grounded sentiment cues and iterative coordination to reconcile conflicts between sen-timent, length, and grounding. As shown in Fig. 2, SEA-Cap operates in two coupled stages. Stage 1: Sentiment Evidence Mining. Given an input image, the Sentiment Evidence Miner performs target-aware segmentation and local affective analy-sis to extract sentiment-relevant regions, and summarizes them as structured visual evidence. Stage 2: Evidence-Grounded Collaborative Refinement. Guided on the control conditions and the mined evidence, the Generator produces an initial draft and posts it to a shared blackboard. The Hallucination Checker then verifies the draft by checking object existence, sentiment-focus alignment, and contextual consistency, and returns structured feedback to the blackboard. Finally, the Adjudicator aggregates the blackboard states to decide whether to accept the caption or to issue refined instructions for another revision round, yielding a verified sentimental caption. 
+
+A. Sentiment Evidence Mining. 
+
+The Sentiment Evidence Miner M is designed to decom-pose the input image into verifiable, object-level sentiment evidence. This structured output enables downstream agents to validate whether a generated caption anchors its affective expression in substantiated visual cues. Given an image X, M
+
+outputs a structured evidence set E = {ei}Ni=1 and writes into the shared blackboard B. Each evidence item ei corresponds to an object-level region and its local affect cues: 
+
+ei = ⟨ri, o i, π i, κ i, a i⟩, (2) where ri denotes the region mask, oi is the object label, πi
+
+is the sentiment relevance score, κi is the local affect confi-dence , and ai stores optional affect attributes (e.g., “smiling”, “covering face”, facial expression, posture cues), which can be extracted by off-the-shelf attribute or expression analyzers. 
+
+Target-aware segmentation. We first generate candidate object-level regions using a generic segmentation module S:
+
+R = {ri}Ni=1 = S(X). (3) To better align regions with the target sentiment s, we build a sentiment-related query set Q(s) and score each region by region-query compatibility. Let zvi = fv (X ⊙ ri) be the visual embedding of region ri (masked crop), and ztq = ft(q) be the text embedding of a query q ∈ Q (s). We define a sentiment-aware saliency score: 
+
+γi = max  
+
+> q∈Q (s)
+
+sim( zvi , ztq ). (4) Then we keep the top-K regions, which encourages the miner to prioritize objects contributing to the target emotion. 
+
+Local affective analysis. For each candidate region ri, an affect analyzer A estimates the local affective intensity by: 
+
+pi = A(X ⊙ ri) ∈ ∆|S| , (5) 
+
+ˆsi = arg max  
+
+> s′∈S
+
+pi[s′], (6) where pi is the predicted sentiment distribution over S, and 
+
+ˆsi is the most likely local sentiment label. 
+
+Blackboard evidence writing. Finally, M aggregates these analysis results and registers E onto the shared blackboard B:
+
+B ← B ∪ { E}. (7) This registration shifts sentiment control from coarse image-level labeling to fine-grained, object-level evidence grounding. By providing a verifiable basis for the subsequent Hallucina-tion Checker , this evidence-centric memory supports iterative refinement, allowing the system to mitigate sentiment drift and hallucinated affect even under strict length budgets. 
+
+B. Evidence-Grounded Collaborative Refinement. 
+
+The Hallucination Checker H performs evidence-grounded and verifiable auditing for each candidate caption. Differ-ent from a purely text-based self-critique, H conditions its judgment on the structured sentiment evidence mined by M,thereby enabling object-level verification of sentiment focus and factual consistency. At iteration k, H reads the shared blackboard B(k), in-cluding the image X, control specification C = {s, L }, the candidate caption Y(k), and the evidence set E(k). H audits 
+
+Y(k) from three complementary aspects: 
+
+Object existence. Let OY be the set of object mentions extracted from the caption, and OE = {oi} be the evidence object set. We define a mention-to-evidence matching function 
+
+m(o) ∈ { 1, . . . , N }∪{ ∅} that maps a caption mention o to the most semantically compatible evidence object oi. Then object existence violations are detected by: 
+
+Vobj = { o ∈ OY | m(o) = ∅ }, (8) which indicates hallucinated entities not supported by the mined evidence. 
+
+Sentiment-focus plausibility. Let TY denote sentiment-bearing spans in the caption, e.g. adjectives or affect verbs. Since each evidence item ei = ⟨ri, o i, π i, κ i, a i⟩ provides the sentiment relevance πi, we define focus-supported objects as: 
+
+F (E(k)) = { i | πi ≥ τπ }, (9) where τπ is a threshold. For each sentiment span t ∈ TY ,
+
+H checks whether t is anchored to a matched object m(o)
+
+with m(o) ∈ F (E(k)); otherwise it is deemed unsubstantiated sentiment focus . This prevents the caption from grounding the requested sentiment on ambiguous or low-relevance regions. 
+
+Relation consistency. For a relational statements parsed from the caption c = ( oa, p, o b), we use evidence matching to locate its supporting items. We flag a relation as unsupported if any endpoint is missing, or the predicate p contradicts the evidence attributes ai or the visual context implied by regions. 
+
+Structured feedback format. We implement H as an MLLM-based agent that is constrained to output machine-readable feedback. Given ⟨X, C, Y(k), E (k)⟩, we prompt the model with evidence items and require a strict JSON output 
+
+Ψ(k). This structured design makes the feedback directly writable into the blackboard and readily consumable by the Arbitrator for iterative refinement. 
+
+C. Shared Blackboard & Community Patrol 
+
+Shared blackboard. SEA-Cap adopts a shared blackboard 
+
+as a centralized, structured workspace that stores the im-mutable inputs and accumulates intermediate artifacts across agents. At iteration k, we represent the blackboard state as: 
+
+B(k) =
+
+n
+
+X, C, E (k), Y(k), Ψ(k), Φ(k)o
+
+, (10) where inputs X, C remain fixed, while E(k), Y(k), Ψ(k), Φ(k)
+
+are iteratively updated. 
+
+Communication protocol. Instead of ad-hoc natural lan-guage exchanges between agents, SEA-Cap enforces a uni-fied protocol over B. Each agent reads only the required fields and writes back typed, machine-readable messages. This blackboard-centric protocol offers advantages that: (i) each refinement step is backed by explicit evidence and typed feedback records. (ii) agents communicate through a consis-tent schema, reducing error propagation caused by free-form dialogues. (iii) each component can be replaced by another off-the-shelf model without changing the overall loop, facilitating fair comparisons across backbones. V. E XPERIMENT 
+
+A. Experimental Settings 
+
+Datasets. We evaluate the performance of SEA-Cap on two benchmark datasets: SentiCap and FlickrStyle. S ENTI CAP [2] contains 2000 images, each annotated with three human-written captions expressing either positive or negative sen-timent. F LICKR STYLE [3] has 10,000 pairs of images and stylized captions including humorous and romantic sentiment. 
+
+Metrics. Following standard evaluation protocols [10], we adopt Mean Absolute Error (MAE) , Classification Accuracy (Cls.) and CLIPScore to evalute length controlability, senti-ment expression and image-semantic alignment, respectively. Regarding hallucination, we utilize the CHAIR metric [23] to evaluate object consistency. Specifically, we report CHAIR i
+
+and CHAIR s, which denote the proportion of hallucinated object instances and the proportion of sentences containing at least one hallucinated object, respectively. By default, the length constraint L = 15 and the maximum iteration is 5. All experiments are executed on NVIDIA A800 GPU. 
+
+B. Analysis of Main Results 
+
+Performance Comparison on SentiCap. As illustrated in Table I, the proposed SEA-Cap framework achieves a superior balance between sentiment adherence and descrip-tive accuracy compared to state-of-the-art baselines. On the TABLE I PERFORMANCE COMPARISON ON SENTI CAP AND FLICKR STYLE DATASETS ACROSS DIFFERENT SENTIMENTS . T HE BEST RESULTS IN EACH CATEGORY ARE HIGHLIGHTED IN BOLD . ↓ INDICATES LOWER IS BETTER .Dataset Sentiment Model MAE ↓ Cls. ↑ ClipScore ↑ CHAIR i ↓ CHAIR s ↓
+
+SentiCap Positive PositionID 10.203 0.562 0.681 0.231 0.437 ConZIC 1.632 0.477 0.799 0.208 0.212 Qwen2.5-VL 3.500 0.933 0.773 0.172 0.181 LLaMA3.2-v 1.942 0.827 0.802 0.169 0.183 IE-MAS 0.785 0.958 0.812 0.152 0.158 
+
+SEA-Cap 0.732 0.962 0.838 0.128 0.131 
+
+Negative PositionID 12.274 0.498 0.648 0.253 0.457 ConZIC 1.636 0.722 0.801 0.211 0.242 Qwen2.5-VL 3.161 0.425 0.798 0.157 0.231 LLaMA3.2-v 1.932 0.917 0.792 0.163 0.256 IE-MAS 0.773 0.928 0.804 0.161 0.198 
+
+SEA-Cap 0.746 0.953 0.822 0.136 0.166 
+
+FlickrStyle Romantic Qwen2.5-VL 3.833 0.300 0.386 0.531 0.683 LLaMA3.2-v 3.243 0.470 0.550 0.496 0.526 IE-MAS 1.953 0.733 0.393 0.438 0.501 
+
+SEA-Cap 1.625 0.751 0.804 0.288 0.389 
+
+Humorous Qwen2.5-VL 3.945 0.140 0.772 0.323 0.391 LLaMA3.2-v 3.375 0.279 0.782 0.387 0.406 IE-MAS 1.763 0.402 0.784 0.322 0.392 
+
+SEA-Cap 1.533 0.571 0.813 0.298 0.327 
+
+SentiCap dataset, which features canonical positive and neg-ative sentiments, our model consistently outperforms both optimization-based methods (e.g., ConZIC) and large-scale multimodal models (e.g., Qwen2.5-VL) across all metrics. A key observation is that while many baselines struggle to satisfy the target length constraint, SEA-Cap reduces length deviation to below 0.8 in both settings. This precision suggests that the iterative feedback loop between the Judge and the Gen-erator effectively enforces the word budget. Furthermore, our model significantly reduces object hallucination, achieving the lowest CHAIR i and CHAIR s scores (e.g., 0.128/0.131 for Positive). This demonstrates that the Hallucination Checker, guided by structured evidence from the Sentiment Evidence Miner, prevents the model from fabricating entities to satisfy sentimental requirements. 
+
+Generalization to Complex Sentiments on FlickrStyle. 
+
+The advantage of the multi-agent system becomes even more evident on the FlickrStyle dataset (Romantic and Humorous). Unlike basic polar sentiments, these sentiments rely on subtle, context-dependent cues. As shown in the bottom half of Table I, the baseline methods suffer from poor sentiment classifi-cation accuracy (Cls.). In contrast, SEA-Cap maintains high sentiment fidelity (0.751 for Romantic) and superior image-text alignment (0.804 CLIPScore). This improvement high-lights that our framework’s “Shared Blackboard” mechanism effectively integrates local sentimental evidence into the global captioning process, enabling the model to capture complex sentiment cues without compromising visual grounding. 
+
+Baseline Methods. Our SEA-Cap is compared against two backbone MLLMs: Qwen2.5-VL (7B) [15] and LLaMA 3.2 Vision (11B) [16] (without our multi-agent control). Addition-ally, representative control-oriented methods are included for                                                       
+
+> TABLE II ABLATION STUDY OF OUR PROPOSED SEA-C AP MODEL ON SENTI CAP DATASET . “ W/OM”AND “W/OH”DENOTE THE MODEL WITHOUT THE
+> SENTIMENT EVIDENCE MINER AND THE HALLUCINATION CHECKER ,
+> RESPECTIVELY . B OLD VALUES INDICATE THE BEST PERFORMANCE .Model Sent. MAE ↓Cls. ↑ClipS. ↑CHAIR i↓CHAIR s↓
+> SEA-Cap
+> Pos
+> 0.732 0.962 0.838 0.128 0.131
+> w/o M0.801 0.915 0.812 0.138 0.139 w/o H1.833 0.821 0.798 0.197 0.221
+> SEA-Cap
+> Neg
+> 0.746 0.953 0.822 0.136 0.166
+> w/o M0.931 0.892 0.822 0.139 0.142 w/o H1.927 0.857 0.785 0.203 0.217
+
+comparison: ConZIC [7], a Gibbs-sampling-based controllable captioner, PositionID [24], a positional-prompting method for explicit length regulation and IE-MAS [10], an MAS-based method for multiple constraints captioner. 
+
+Implementation Details. We build our framwork based on the LLaMA3.2-vision (11B) [16]. We adopt the SAM 
+
+[25] as the base segmentation backbone for the Sentiment Evidence Miner, and use CLIP as a lightweight, training-free proxy for local affect cues. 
+
+C. Ablation Study 
+
+To evaluate the contribution of each core component in our SEA-Cap, we conduct an ablation study on the SentiCap dataset. As summarized in Table II, we examine the perfor-mance of SEA-Cap by systematically removing the Sentiment Evidence Miner ( M) and the Hallucination Checker ( H). 
+
+Impact of Sentiment Evidence Miner ( M). Removing 
+
+M leads to a noticeable decline in sentiment classification accuracy ( Cls. ) across both positive and negative settings. This suggests that local, object-level sentiment evidence is crucial A tiny boss in  pink boots  leads her squad in a                      
+
+> synchronized ice cream devouring session.
+> The retriever’s serious face hides contentment,
+> staying close while his friend celebrates the day.
+> A crying girl drops her ice cream while a clown
+> makes her mom laugh on a roller coaster .
+> Three generations stroll the flower bridge , licking
+> ice cream like it’s a family sport today.
+> With gentle paws on his lap, the retriever reminds
+> him joy is always within reach.
+> His golden companion strikes a proud pose ,turning
+> an ordinary backyard into a celebration today.
+> Query: Please produce a single caption at 15 words . Use a humorous tone .
+> LLaMA
+> 3.2 -v:
+> IE -MAS:
+> SEA -
+> Cap:
+> Query: Please produce a single caption at 15 words . Use a Positive tone .
+> LLaMA
+> 3.2 -v:
+> IE -MAS:
+> SEA -
+> Cap:
+
+Fig. 3. Qualitative comparison of sentiment captioning results under length constraints. The examples demonstrate Positive (left) and Humorous (right) sentiment targets. The visualized heatmaps illustrate that our method explicitly focuses on local regions to mine sentiment evidence. Text in blue indicates hallucinations or inconsistencies with visual evidence, while text in pink highlights accurate grounding that enhances the target sentiment. 
+
+for grounding affective descriptions. Without this agent, the system relies more on global, image-level attributes, which reduces its sentimental precision. 
+
+Impact of Hallucination Checker ( H). The removal of 
+
+H results in the most significant performance degradation across all metrics, particularly in CHAIR scores. Specifically, the hallucination rates ( CHAIR i) nearly double from 0.136 to 0.203 in negative settings. These findings underscore that without structured feedback and evidence-grounded checking, the generator struggles to adhere to strict word budgets and factual consistency. H acts as a critical corrective force that coordinates competing objectives and prevents the accumula-tion of semantic hallucinations. The results of this ablation study demonstrate that the synergy between evidence mining and structured checking is essential for achieving high-fidelity. 
+
+D. Qualitative Comparison 
+
+Fig. 3 presents qualitative comparisons of sentiment cap-tioning quality under length and sentiment constraints. In the Positive case, SEA-Cap captures the subtle “serious face” of the dog to convey a unique “contentment.” Similarly, in more complex Humorous scenario, baselines struggle to gen-erate amusement without sacrificing truthfulness. For example, LLaMA 3.2-v fails catastrophically by hallucinating a “clown” and “roller coaster” to force a funny narrative. Conversely, SEA-Cap grounds its output in the ”pink boots” and the child’s expression as key evidence. The ”tiny boss” metaphor, achieving humorous through factual re-contextualization rather than fabrication. These results confirm that our evidence-aware mechanism effectively prevents the sentiment drift and object hallucinations prevalent in existing methods. VI. C ONCLUSION 
+
+In this paper, we introduce SEA-Cap, a Sentiment-Evidence-Aware Multi-Agent System for SIC. Specifically, we first propose the Sentiment Evidence Miner, which performs local affective analysis to extract and structure sentiment-relevant visual evidence from the input image, resolving the ambiguity of global sentiment attributes. Furthermore, we present an evidence-driven multi-agent collaboration mech-anism, incorporating a Generator, Reviewer, Hallucination Checker, and Adjustor. This framework utilizes a shared blackboard to iteratively audit and refine candidate captions against mined evidence, thereby ensuring both sentimental precision and factual consistency. Extensive experiments and ablation studies on two widely used benchmarks validate the effectiveness of our proposed method and demonstrate its superiority in mitigating hallucinations for the SIC task. REFERENCES 
+
+[1] Ali Farhadi, Mohsen Hejrati, Mohammad Amin Sadeghi, Peter Young, Cyrus Rashtchian, Julia Hockenmaier, et al., “Every picture tells a story: Generating sentences from images,” in ECCV . Springer, 2010, pp. 15–29. [2] Alexander Mathews, Lexing Xie, and Xuming He, “Senticap: Generating image descriptions with sentiments,” in AAAI , 2016, vol. 30. [3] Chuang Gan, Zhe Gan, Xiaodong He, Jianfeng Gao, and Li Deng, “Stylenet: Generating attractive visual captions with styles,” in CVPR , 2017, pp. 3137–3146. [4] Alexander Mathews, Lexing Xie, and Xuming He, “Semstyle: Learning to generate stylised image captions using unaligned text,” in CVPR , 2018, pp. 8591–8600. [5] John Sweller, “Cognitive load during problem solving: Effects on learning,” 
+
+Cognitive science , vol. 12, no. 2, pp. 257–285, 1988. [6] Ning Wang, Jiahao Xie, Jihao Wu, Mingbo Jia, and Linlin Li, “Controllable image captioning via prompting,” in AAAI , 2023, vol. 37, pp. 2617–2625. [7] Zequn Zeng, Hao Zhang, Ruiying Lu, Dongsheng Wang, Bo Chen, and Zhengjue Wang, “Conzic: Controllable zero-shot image captioning by sampling-based polishing,” in CVPR , 2023. [8] Longju Bai, Angana Borah, Oana Ignat, and Rada Mihalcea, “The power of many: Multi-agent multimodal models for cultural image captioning,” in NAACL , 2025. [9] Saehyung Lee, Seunghyun Yoon, Trung Bui, Jing Shi, and Sungroh Yoon, “Toward robust hyper-detailed image captioning: A multiagent approach and dual evaluation metrics for factuality and coverage,” in ICML , 2025. [10] Tiecheng Cai, Chao Chen, Shanshan Lin, Sibo Ju, and Xiangwen Liao, “Ie-mas: Internal–external multi-agent steering for controllable image captioning,” Entropy ,2025. [11] Jufeng Yang, Yan Sun, Jie Liang, Bo Ren, and Shang-Hong Lai, “Image captioning by incorporating affective concepts learned from both visual and textual components,” Neurocomputing , 2019. [12] Zexian Yang, Dayan Wu, Chenming Wu, Zheng Lin, Jingzi Gu, and Weiping Wang, “A pedestrian is worth one prompt: Towards language guidance person re-identification,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2024, pp. 17343–17353. [13] Longteng Guo, Jing Liu, Peng Yao, Jiangwei Li, and Hanqing Lu, “Mscap: Multi-style image captioning with unpaired stylized text,” in CVPR , 2019. [14] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi, “Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models,” in ICML , 2023. [15] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al., “Qwen2.5-vl technical report,” arXiv preprint arXiv:2502.13923 , 2025. [16] AI Meta, “Llama 3.2: Revolutionizing edge ai and vision with open, customizable models,” Meta AI Blog. Retrieved December , 2024. [17] Chaorui Deng, Ning Ding, Mingkui Tan, and Qi Wu, “Length-controllable image captioning,” in ECCV . Springer, 2020, pp. 712–729. [18] Yuxuan Gu, Wenjie Wang, Xiaocheng Feng, Weihong Zhong, Kun Zhu, et al., “Length controlled generation for black-box llms,” in ACL , 2025. [19] Fabian Retkowski and Alex Waibel, “Zero-shot strategies for length-controllable summarization,” in ACL , 2025. [20] Yongliang Shen, Kaitao Song, Xu Tan, Dongsheng Li, Weiming Lu, and Yueting Zhuang, “Hugginggpt: Solving ai tasks with chatgpt and its friends in hugging face,” NeurIPS , 2023. [21] Aiwen Jiang, Duan Wang, Chao Peng, and Mingwen Wang, “Relational reasoning image captioning via multi-agent retrieval-augmented generation,” KBS , 2025. [22] Shizhe Chen, Qin Jin, Peng Wang, and Qi Wu, “Say as you wish: Fine-grained control of image caption generation with abstract scene graphs,” in CVPR , 2020. [23] Anna Rohrbach, Lisa Anne Hendricks, Kaylee Burns, Trevor Darrell, and Kate Saenko, “Object hallucination in image captioning,” in EMNLP , 2018. [24] Noah Wang, Feiyu Duan, Yibo Zhang, Wangchunshu Zhou, Ke Xu, et al., “PositionID: LLMs can control lengths, copy and paste with explicit positional awareness,” in EMNLP , 2024. [25] Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, et al., “Segment anything,” in ICCV , 2023, pp. 4015–4026.

@@ -1,0 +1,1026 @@
+Title: OrchBench: Evaluating Multi-Agent Orchestration Plans in Isolation via Deterministic Simulation
+
+URL Source: https://arxiv.org/pdf/2607.25656v1
+
+Published Time: Wed, 29 Jul 2026 01:06:35 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# OrchBench: Evaluating Multi-Agent Orchestration Plans in Isolation via Deterministic Simulation 
+
+# Zhenzhen Ren 1, 2 , Jiyan He 2, Xinpeng Zhang 1, Zhenxing Qian 1,Ke Han 3, Shuxin Zheng 2, GuoBiao Li 1, Xiaoqing Zhang 2∗
+
+> 1
+
+Fudan University 
+
+> 2
+
+Zhongguancun Academy 
+
+> 3
+
+Queen Mary University of London 
+
+Abstract 
+
+Complex tasks often decompose into parallelizable yet in-terdependent subtasks, making orchestration critical to the performance of multi-agent systems (MAS). Existing evalua-tions typically rely on end-to-end execution, which conflates orchestration-plan quality with worker capabilities, tool relia-bility, and environmental noise. Moreover, the time and token costs of real execution grow rapidly with workflow scale, mak-ing systematic evaluation expensive. We present OrchBench, a simulation-based benchmark for evaluating multi-agent or-chestration plans in isolation. Starting from real-world tasks, OrchBench constructs directed acyclic graphs (DAGs) that encode task dependencies, with controlled sizes and degrees of parallelism. Given a DAG, a per-agent context limit, and an agent budget, the evaluated planner assigns subtasks to agents and specifies cross-agent information transfers and their reten-tion ratios. A deterministic simulator evaluates the resulting plan without invoking worker agents and returns interpretable measures of result quality, makespan, and token cost. The sim-ulated scores produced by OrchBench correlate strongly with quality scores from Claude Code executions, achieving a Pear-son correlation of r = 0 .816 , while requiring only 1.3% of the tokens and 10 .3% of the wall-clock time. Across diverse planners and workflow scales, we find that preserving task-critical information is more important than simply increasing the number of agents, and the benefits of parallelism diminish as coordination failures accumulate. These results establish OrchBench as an efficient and interpretable benchmark for comparing and diagnosing multi-agent orchestration plans. 
+
+# Introduction 
+
+Multi-agent systems (MAS) have emerged as a powerful paradigm for solving complex tasks by coordinating mul-tiple specialized agents (Guo et al. 2024; Hong et al. 2024; Wang et al. 2025b; Fourney et al. 2024). As these systems be-come increasingly sophisticated, their performance depends not only on the capability of individual agents, but also on the orchestration strategy, i.e., how a workflow is organized across multiple agents. Even with the same task and the same set of agents, different orchestration strategies can lead to substantially different outcomes (Yu, Ding, and Sato 2025; Kim et al. 2023; Zhuge et al. 2024). This growing importance raises a fundamental question: how can orchestration itself be evaluated? 
+
+> ∗
+
+Corresponding author. OrchBench  
+
+> User Task
+> 1.3% Token
+> Cost 9.7x
+> Faster
+
+## ⋯
+
+> Deterministic
+> Simulator
+
+End -to -End MAS Eval 
+
+> User Task
+> High
+> Token
+> Cost
+> Slow
+
+## ⋯ 
+
+> Unstable Real Execution
+> Timeout Failed
+> Call
+
+⋯ 
+
+> Executable Workflow
+> (Orchestration + Execution) Orchestration Plan
+> Execution
+> Uncertainty
+> Stable & Deterministic
+> Execution -Validated
+> Orchestration Score Overall System Score
+
+Figure 1: Comparison between conventional end-to-end MAS evaluation and OrchBench. Instead of executing the complete multi-agent system, OrchBench evaluates orches-tration plans with a deterministic simulator, isolating orches-tration quality from execution-related factors while enabling fast, low-cost, and reproducible evaluation. However, evaluating orchestration itself remains challeng-ing. Existing benchmarks primarily evaluate the end-to-end task performance of MAS in realistic environments (Liu et al. 2023; Mialon et al. 2023; Zhou et al. 2023; Jimenez et al. 2023; Xie et al. 2024; Koh et al. 2024; Drouin et al. 2024; Yoran et al. 2024; Xu et al. 2026b; Deng et al. 2023). The resulting performance conflates orchestration quality with execution-related factors (Ma et al. 2024; Ke et al. 2026; Tsang et al. 2026), making it difficult to attribute success or failure to orchestration itself, as illustrated in Figure 1. More-over, end-to-end evaluation is computationally expensive, making systematic comparison across orchestration strate-gies increasingly impractical as workflow scale grows. Con-sequently, a practical evaluation framework that isolates or-chestration from worker execution remains absent. To address this issue, we introduce OrchBench, a
+
+simulation-based benchmark for evaluating multi-agent or-chestration independently of worker execution. Our key in-sight is that orchestration can be evaluated without executing arXiv:2607.25656v1 [cs.AI] 28 Jul 2026 the complete multi-agent system. Instead of evaluating end-to-end task performance, we require the model to generate only an orchestration plan. Worker execution is then replaced by a deterministic simulator, which removes the influence of worker reasoning, tool execution, and environmental noise from the evaluation while enabling different orchestration strategies to be compared under identical conditions. To enable systematic analysis of orchestration across different workflow scales, OrchBench contains semantically grounded dependency workflows ranging from 10 to 1,000 subtasks. Beyond producing evaluation scores, the simulator explic-itly identifies coordination failures, providing interpretable diagnoses for improving orchestration strategies. Using OrchBench, we conduct the first systematic study of orchestration strategies produced by language models. Our experiments uncover a previously hidden coordination bot-tleneck: as workflow scale increases, orchestration quality becomes increasingly constrained by information preserva-tion rather than agent count and the benefits of parallelism decrease as coordination failures accumulate. These failures are largely obscured by conventional end-to-end evaluation but become directly observable through our simulator. We further validate that the simulator faithfully reflects real-world orchestration quality. Across Claude Code exe-cutions, simulator scores achieve a strong correlation with real execution quality (Pearson r = 0 .816 ), while requiring only 1.3% of the tokens and 10 .3% of the wall-clock time. Beyond evaluation, simulator-guided diagnosis consistently improves real multi-agent execution by identifying missing information transfers. Our contributions are threefold: 
+
+• We identify the need to evaluate multi-agent orchestration independently of worker execution and formulate it as a standalone benchmark problem. 
+
+• We introduce OrchBench, a scalable benchmark that com-bines semantically grounded task workflows with a deter-ministic simulator for efficient and reproducible orches-tration evaluation. 
+
+• We conduct a systematic study of orchestration strategies across workflows containing up to 1,000 subtasks, reveal-ing previously hidden coordination failures and showing that OrchBench closely reflects real execution while sig-nificantly reducing evaluation time and token cost. 
+
+# Related Work 
+
+End-to-End Evaluation of Agent Systems. Most existing agent benchmarks test whether systems can complete tasks in external environments. AgentBench covers web browsing, databases, operating systems, games, and embodied tasks (Liu et al. 2023); GAIA evaluates multi-step assistant tasks requiring reasoning, information retrieval, and tool use (Mi-alon et al. 2023); and WebArena, SWE-bench, and OSWorld evaluate agents in realistic web, software-engineering, and computer-use environments (Zhou et al. 2023; Jimenez et al. 2023; Xie et al. 2024). ToolLLM studies large-scale API use (Qin et al. 2023), while τ -bench evaluates agents that in-teract with simulated users and domain-specific tools (Yao et al. 2024). MultiAgentBench extends end-to-end evalua-tion to multi-agent systems by measuring task completion and collaboration quality under different coordination pro-tocols (Zhu et al. 2025). MAST analyzes execution traces from multiple MAS frameworks and identifies system de-sign, inter-agent misalignment, and task verification as ma-jor failure sources (Cemri et al. 2025). These benchmarks are useful for evaluating deployed systems, but their results mix the effects of planning, worker performance, tools, and environments. It is therefore hard to tell whether success or failure comes from the orchestration plan. 
+
+Evaluation of Planning and Multi-Agent Orchestration. 
+
+Existing studies fall into three groups. The first evaluates planning and workflow structure. PlanBench tests formal ac-tion planning, FlowBench evaluates workflow-guided tool planning, and WorFBench compares generated workflows with reference sequences or graphs (Valmeekam et al. 2023; Xiao et al. 2024; Qiao et al. 2025). Unlike OrchBench, they test structural correctness but do not simulate execution af-ter tasks are assigned to agents. The second group evaluates specific aspects of MAS orchestration. MASBENCH studies when MAS execution outperforms a single agent, Perspec-tiveGap evaluates information and prompt assignment across roles, and OrchRM focuses on MAS training (Ke et al. 2026; Sun et al. 2026; Tsang et al. 2026). In contrast, OrchBench evaluates a complete orchestration plan without executing workers. The third group studies distributed information use. HiddenBench and Silo-Bench test whether agents can com-municate and combine information from separate contexts (Li, Naito, and Shirado 2025; Zhang et al. 2026). They eval-uate coordination during interaction, whereas OrchBench evaluates task assignment, dependency scheduling, informa-tion transfer, and context compression beforehand. 
+
+# Problem Formulation 
+
+In this work, we study orchestration planning under fixed task dependencies. Given a task DAG and resource constraints, the planner assigns subtasks to agents and specifies how required dependency information is transferred and retained across agents. Task decomposition and dependency structure are treated as fixed inputs rather than orchestration decisions. Let D denote the pool of raw tasks. Each generated task instance consists of a directed acyclic graph G = ( V, E )
+
+and a per-agent context limit L. Each node v ∈ V repre-sents a subtask, and each edge (u, v ) ∈ E indicates that v
+
+requires information produced by u. The number of sub-tasks is n = |V |. Each subtask v is associated with a description dv , input, execution, and output token budgets 
+
+(xin  
+
+> v
+
+, x exec  
+
+> v
+
+, x out  
+
+> v
+
+), a time budget τv , and a compression-sensitivity class cv ∈ { robust , balanced , fragile }. L spec-ifies the maximum number of tokens that each agent can retain in its working context. The task decomposition and dependency graph G remain fixed throughout evaluation. Given G, L, and a maximum agent budget Amax , the eval-uated planner produces an orchestration plan π = ( α, R).The assignment function α : V → { 1, . . . , A max } speci-fies which agent executes each subtask, while R specifies cross-agent information transfers. For a dependency edge 
+
+(u, v ) ∈ E, if α(u) = α(v), the output of u is reused locally. If α(u)̸ = α(v) and the plan specifies R(u, v ) = e, where Real -world seed question  
+
+> III. Deep
+> DAG
+> II. Large -Scale
+> DAG
+> I. High -parallelism
+> DAG
+
+Task assignment 
+
+T1 T6 A1 
+
+T2 T4 A2 
+
+T3 A3 
+
+T5 T7 A4 
+
+Transfer decision 
+
+T1 T6 100% 
+
+T3 T4 70% 
+
+T2 T6 20% ❌   
+
+> Local information reuse
+> Declared information transfer
+> ❌Missing information transfer
+> Missing ( )
+> Declared ( )
+> Information Transfer
+> Local reuse (100%)
+> Quality
+> Simulation time
+> Makespan
+> Token usage
+> Task
+> Transfer
+> Compression
+> Tokens
+
+Orchestration Score 
+
+Agent execution timeline ( )
+
+Deterministic Simulation Orchestration Planning DAG Construction 
+
+> Example DAG Patterns
+
+DAG Generator 
+
+refiner 
+
+> Accept
+> Feedback
+
+Candidate DAG 
+
+judge Figure 2: Benchmark design overview. OrchBench first constructs a DAG from a raw seed question, then asks the planner model to produce an orchestration plan. The deterministic simulator executes the plan and obtains the score. 
+
+e ∈ (0 , 1] , the output of u is transferred to the agent execut-ing v with retention ratio e. A required cross-agent transfer omitted by the plan is recorded as a missing transfer, whereas a declared transfer that does not correspond to an edge in E
+
+is treated as invalid. A deterministic simulator evaluates π
+
+under the task and context constraints and returns the final result quality Q, makespan M , and total token cost T .
+
+# Methodology 
+
+Overview. As shown in Figure 2, OrchBench has three stages: first, real-world seed tasks are transformed into depen-dency DAGs. Given a DAG, context limit, and agent budget, the planner produces the orchestration plan. The simulator then evaluates the plan and produces an orchestration score. 
+
+DAG Construction 
+
+DAG Construction turns a suitable seed task into a DAG that requires multi-agent coordination. We measure its natural parallelism as k99 /n , where 
+
+k99 (G) = min {k : ms k(G) ≤ C(G)+0 .01( W (G)−C(G)) }.
+
+Here, W (G) is the serial execution time of all subtasks, C(G)
+
+is the critical-path time, and ms k(G) is the makespan with k
+
+workers. Thus, k99 is the fewest workers needed to achieve 
+
+99% of the maximum possible reduction in makespan. A larger k99 /n indicates greater natural parallelism. We sample a seed task s from the problem pool D and remove unsuitable tasks using a seed judge. A refiner then constructs a DAG with a target number of subtasks n and a target k99 /n . In each round, one judge checks the format, while another checks the task decomposition and parallelism. The refiner revises the DAG until both judges approve it. The detailed process is provided in Appendix E-II. 
+
+Orchestration Planning 
+
+Given the DAG G, context limit L, and maximum agent budget Amax , the tested planner Fθ produces a workflow script z. A deterministic interpreter then expands z as the concrete plan π = ( α, R). An example plan is provided in Appendix B-I. The assignment α maps each subtask to an agent, and a subtask can start only after all of its de-pendencies have finished. When a dependency edge (u, v )
+
+connects tasks assigned to different agents, the plan must include an information transfer R(u, v ) = e. Its retention ratio e ∈ (0 , 1] specifies how much of the output of upstream task u is retained for downstream task v. A larger e preserves more information but increases communication and context usage. When the context limit L of every agent is tight, the planner can reduce e to save space. Because subtasks differ in their sensitivity to information loss, robust outputs can tol-erate stronger compression, whereas fragile outputs require higher retention. The planner must therefore choose task as-signments and transfer ratios jointly to balance information quality, communication cost, and context usage. 
+
+Deterministic Simulation 
+
+The simulator draws on the six-stage lifecycle used by real ex-ecution frameworks: dependency resolution, agent schedul-ing, context acquisition, context management, subtask exe-cution, and state updates. Given G, π = ( α, R), and L, the simulator initializes each agent’s clock and memory and pro-cesses subtasks in topological order. For each subtask v, it determines the start time, collects and manages the required context, computes the output quality and finish time, and updates the agent state. The updated state is then used by downstream subtasks. After all subtasks finish, the simulator computes the final quality, makespan, and token usage. This alignment helps the simulator capture the execution conse-quences of each plan. Please refer to Appendix B-II for the detailed simulation process. 
+
+Dependency resolution In real execution, a subtask can begin only after all its dependencies are complete. Specifi-cally, we preserve this by ensuring that every u ∈ Parents (v)
+
+has finished before subtask v starts. This does not mean that all tasks are serialized; in fact, independent subtasks can be assigned to different agents to achieve parallelism. 
+
+Agent scheduling In real execution, a subtask must also wait until its assigned agent is available. The simulator main-tains a logical clock ca for each agent. For v assigned to 
+
+a = α(v), its start time is 
+
+sv = max 
+
+
+
+ca, max  
+
+> u∈Parents( v)
+
+fu
+
+
+
+, (1) where fu is the finish time of parent u. Tasks assigned to the same agent run sequentially, while different agents can work in parallel. If several tasks are ready on one agent, the simulator follows a fixed topological order of the DAG. 
+
+Context acquisition A subtask can use only the informa-tion available to its assigned agent in real execution. The simulator reconstructs the effective input of v by tracing how each parent result reaches a = α(v). Results produced by the same agent are reused locally. For cross-agent dependen-cies, the simulator checks the transfer map R, applies the declared compression ratio, and records the communication tokens and retained quality. If transfer is missing, the sim-ulator records a missing-transfer event and sets the parent’s effective quality to λq , where λ ∈ [0 , 1] is a penalty factor. 
+
+Context management Real agents operate under finite context limits: retaining more information may improve qual-ity but increases token cost and context pressure. The simu-lator maintains a local memory Ma for each agent a. Before executing v, its input and available parent results are added to Ma; if |Ma| > L , the stored results are compressed until they fit. Let nv be the context usage of the agent and qv the retained quality of the current subtask. Compressing it gives 
+
+n′ 
+
+> v
+
+= ⌈e n v ⌉ , q′ 
+
+> v
+
+= max( qmin , q v esv ) , (2) where e ∈ (0 , 1] is the context retention ratio, sv denotes the compression sensitivity of v, and esv denotes the qual-ity retention ratio. More fragile information requires gentler compression, but consumes more context, creating a trade-off situation for the model. 
+
+Subtask execution After dependencies, agent availability, and input context are resolved, the simulator executes v de-terministically from its task metadata. For a non-root task, let equv denote the quality of parent u’s package available to 
+
+v. Let ¯q denote the geometric mean of the available parent qualities. The result quality of v is 
+
+qv = clip [qmin ,1] (¯ qe sv ) , (3)                                      
+
+> Group Metric Pearson rpSpearman ρp
+> Scale DA 0.973 0.001 1.000 0.003 CA 0.749 0.090 0.829 0.058 SA 0.829 0.056 0.714 0.136 Structure SDT 0.928 0.011 0.943 0.017 PU 0.768 0.035 1.000 0.003 WD 0.887 0.028 0.771 0.103 ILR 0.664 0.157 0.600 0.242
+
+Table 1: Simulation-to-real correlation on MultiAgentBench (OrchBench vs. Claude Code). where esv is the compression ratio for subtask v, if compres-sion is applied. The result is clipped to [qmin , 1] .
+
+State updates After execution, the simulator finishes the subtask v with quality score qv and stores it in the local memory of agent α(v). The finish time includes the task time and any post-execution context-compression delay: 
+
+fv = sv + τv + ∆ post  
+
+> v
+
+, cα(v) ← fv , (4) where ∆post  
+
+> v
+
+is the delay caused by compression. The simu-lator then releases packages that no remaining subtask needs. 
+
+# Experiment Settings 
+
+Data. We construct the problem pool D from four source datasets: Finance Agent (Bigeard et al. 2025), DS-1000 (Lai et al. 2023), Qasper (Dasigi et al. 2021), and BIRD-SQL (Li et al. 2023). Using problems sampled from D, we gen-erate 240 task DAGs for the main experiments. To study scalability, we additionally construct larger DAGs with 
+
+n ∈ { 200 , 500 , 1000 } nodes. We use MultiAgentBench (Zhu et al. 2025), an established benchmark for multi-agent sys-tems, to evaluate the agreement between simulation metrics and real-world execution results. Appendix E-I provides an overview of our DAG dataset and demonstrates that it is comprehensive and balanced. Appendix E-III analyzes DAG construction failure cases, and in Appendix E-IV we conduct experiments to show that our DAGs are of high quality. 
+
+Other Settings. For benchmark validation, we evaluate six models: GLM-5.1, DeepSeek-V4-Pro, DeepSeek-V4-Flash, Qwen3.6-35B-A3B, Kimi-K2.6, and Doubao-Seed-2.0-Mini (Zeng et al. 2026; Xu et al. 2026a; Yang et al. 2025; Moonshot AI 2026; ByteDance Seed 2026). Our main evaluation covers these six models and three fron-tier models: Gemini-3.1-Pro-Preview, Claude-Opus-4.8, and GPT-5.5 (Google DeepMind 2026; Anthropic 2026; OpenAI 2026). For real-world execution experiments, we run Claude Code under the dynamic-workflow setting (Anthropic 2025). For the hyperparameters, we set Amax = 100 and λ = 0 .5
+
+(Appendix F-III). Other detailed settings are provided in Ap-pendix G. 
+
+Metrics. We evaluate each execution plan in terms of out-put quality, scheduling efficiency, and token efficiency. Let 
+
+T = {w ∈ V | outdeg G(w) = 0 } be the set of terminal OrchBench             
+
+> Claude Code
+> SWE-mini
+> OpenHands
+> Crush
+> OrchBench
+> Claude Code
+> SWE-mini
+> OpenHands
+> Crush
+> 1.00
+> 1.00
+> 1.00
+> 1.00
+> 1.00
+> 0.82 0.73 0.63 0.39
+> 0.37 0.27 0.08
+> 0.84 0.48
+> 0.73
+> 0.77
+> 0.77 0.31
+> 0.43 0.09 0.54
+> 0.60 0.14 0.49 0.71
+
+Figure 3: Correlations between OrchBench and real quality across frameworks. Upper/lower triangles report Pearson/S-pearman coefficients.                   
+
+> Metric Pearson rpSpearman ρp
+> Final score 0.816 0.047 0.771 0.103 Time -0.264 0.633 -0.314 0.564 Token usage -0.607 0.206 -0.371 0.497
+
+Table 2: Correlations between our metrics and real outcomes. tasks, and let qw ∈ [0 , 1] be the task-specific quality score of 
+
+w. Overall quality is the macro-average over terminal tasks: 
+
+Q = 1
+
+|T | 
+
+X
+
+> w∈T
+
+qw. (5) Let C and M denote the weighted critical-path length and observed makespan. Let T be the total token consumption and Tsingle that of the single-agent serial baseline. We define 
+
+Etime = min 
+
+
+
+1, CM
+
+
+
+, Etoken = min 
+
+
+
+1, Tsingle 
+
+T
+
+
+
+.
+
+(6) Here, Etime measures proximity to the critical-path lower bound, while Etoken measures token efficiency relative to the serial baseline. The final score is the arithmetic mean of the three metrics: 
+
+Score = Q + Etime + Etoken 
+
+3 . (7) We also report makespan, token use, agent count, and missing transfers for diagnostic analysis. 
+
+# Results and Discussion 
+
+We first establish the fidelity of our simulator by demon-strating strong agreement between simulated metrics and real executions. Using the validated simulator, we then study multi-agent orchestration at scale. Our results show that pre-serving task-critical information is more important than sim-ply increasing the number of agents: as coordination failures accumulate, parallel execution yields diminishing returns. Ablation studies further support our transfer and compres-sion designs, with additional results provided in Appendix A.                                  
+
+> Pearson Spearman Setting rpρp
+> Original 0.816 0.047 0.771 0.103 w/o DeepSeek-V4-Flash 0.677 0.183 0.600 0.350 w/o DeepSeek-V4-Pro 0.682 0.192 0.900 0.083 w/o Doubao-Mini 0.421 0.500 0.600 0.350 w/o GLM-5.1 0.949 0.033 0.900 0.083 w/o Kimi-K2.6 0.790 0.108 0.900 0.083 w/o Qwen3.6-A3B 0.719 0.167 0.600 0.350
+
+Table 3: Leave-one-model-out correlations between simu-lated scores and real task quality under Claude Code. 
+
+Benchmark Validation 
+
+Structural alignment. Table 1 reports model-level correla-tions between simulated orchestration metrics and the cor-responding metrics from real Claude Code workflows on MultiAgentBench. For scale, DA measures agreement in the number of declared subagents, SA in the number of launched subagents, and CA in the number of subagents that return re-sults. For structure, SDT, PU, WD, and ILR measure agree-ment in delegation tendency, subagent parallelism, depen-dency depth, and missing information transfers, respectively. The correlations across both categories indicate that Orch-Bench captures key orchestration behaviors. The strongest agreement appears in both scale and structure, demonstrating consistent alignment with real-world orchestration patterns. Detailed metric definitions are provided in Appendix D-I. 
+
+Outcome alignment. Table 2 shows that simulated scores strongly correlate with real task quality (Pearson r = 0 .816 ;Spearman ρ = 0 .771 ). This correlation remains positive in all leave-one-model-out settings and reaches r = 0 .949 
+
+without GLM-5.1 (Table 3). We assign each subtask time and token costs during DAG generation. These controlled costs test how planners balance quality and efficiency, making the time and token scores meaningful for planner comparison. However, real time and token consumption are framework-dependent and cannot be reliably predicted (Appendix D-II), which explains their lower simulation-to-real correlations. 
+
+Cross-framework robustness. Figure 3 evaluates the agree-ment between OrchBench simulations and real executions us-ing four agent frameworks: Claude Code (Anthropic 2025), SWE-mini (Yang et al. 2024), OpenHands (Wang et al. 2025a), and Crush (Charmbracelet 2025). OrchBench main-tains positive correlations across all four frameworks, indi-cating that its predictions are not tied to a particular imple-mentation. These results support using OrchBench for initial screening, followed by validation in the target framework. 
+
+Evaluating Orchestration 
+
+We evaluate the six validation models together with GPT-5.5, Gemini-3.1-Pro-Preview, and Claude-Opus-4.8 on DAGs with n ∈ { 10 , 20 , 50 , 100 } tasks. In Table 4, #Agents and Miss. denote the average numbers of declared agents and missing information transfers, respectively. Token, Speed, Qual., and Score denote token efficiency, scheduling effi-ciency, output quality, and the aggregate score defined in n = 10                                                                                                                                                                                                                                                    
+
+> Model #Agents Miss. ↓Token ↑Speed ↑Qual. ↑Score ↑
+> GPT-5.5 6.42 0.12 0.735 0.744 0.951 0.810
+> Gemini-3.1-Pro 6.40 0.00 0.730 0.714 0.960 0.801 GLM-5.1 6.40 0.43 0.740 0.735 0.917 0.797 DeepSeek-V4-Pro 6.18 0.05 0.739 0.676 0.928 0.781 Claude-Opus-4.8 6.48 0.00 0.721 0.656 0.960 0.779 DeepSeek-V4-Flash 6.36 0.24 0.722 0.660 0.925 0.769 Qwen3.6-35B-A3B 6.00 0.25 0.739 0.650 0.916 0.768 Kimi-K2.6 5.85 0.43 0.743 0.647 0.914 0.768 Doubao-Seed-2.0-Mini 6.28 0.25 0.731 0.635 0.919 0.761
+> n= 20
+> Model #Agents Miss. ↓Token ↑Speed ↑Qual. ↑Score ↑
+> GLM-5.1 12.15 0.58 0.693 0.652 0.893 0.746
+> Gemini-3.1-Pro 12.33 0.07 0.682 0.638 0.910 0.743 GPT-5.5 11.80 0.75 0.691 0.643 0.876 0.737 Claude-Opus-4.8 12.02 0.10 0.685 0.616 0.892 0.731 DeepSeek-V4-Pro 11.74 0.79 0.674 0.612 0.826 0.704 Doubao-Seed-2.0-Mini 11.55 3.47 0.704 0.628 0.777 0.703 Qwen3.6-35B-A3B 11.00 3.60 0.715 0.633 0.733 0.694 Kimi-K2.6 10.72 2.97 0.689 0.593 0.756 0.679 DeepSeek-V4-Flash 12.12 1.16 0.562 0.500 0.695 0.586
+> n= 50
+> Model #Agents Miss. ↓Token ↑Speed ↑Qual. ↑Score ↑
+> Claude-Opus-4.8 29.65 0.43 0.635 0.484 0.813 0.644
+> Gemini-3.1-Pro 31.02 0.00 0.627 0.494 0.804 0.642 GPT-5.5 30.87 0.67 0.619 0.491 0.807 0.639 GLM-5.1 29.48 4.42 0.654 0.503 0.755 0.637 Qwen3.6-35B-A3B 29.68 6.45 0.652 0.485 0.647 0.595 Kimi-K2.6 30.45 5.83 0.621 0.471 0.660 0.584 DeepSeek-V4-Flash 29.64 3.55 0.603 0.447 0.647 0.566 Doubao-Seed-2.0-Mini 30.70 9.18 0.658 0.474 0.561 0.564 DeepSeek-V4-Pro 31.17 1.43 0.564 0.420 0.662 0.548
+> n= 100
+> Model #Agents Miss. ↓Token ↑Speed ↑Qual. ↑Score ↑
+> Gemini-3.1-Pro 63.23 0.07 0.614 0.414 0.690 0.573
+> GLM-5.1 63.50 5.53 0.629 0.410 0.651 0.563 GPT-5.5 62.40 6.32 0.611 0.414 0.650 0.558 DeepSeek-V4-Pro 60.72 7.58 0.631 0.401 0.609 0.547 Claude-Opus-4.8 62.61 0.75 0.605 0.388 0.639 0.544 Qwen3.6-35B-A3B 58.23 14.37 0.645 0.406 0.492 0.514 DeepSeek-V4-Flash 59.65 4.53 0.599 0.379 0.564 0.514 Doubao-Seed-2.0-Mini 63.80 22.70 0.644 0.394 0.443 0.493 Kimi-K2.6 59.07 13.00 0.585 0.364 0.508 0.485
+
+Table 4: Main results across DAG sizes. Each panel reports results for DAGs with n tasks. 
+
+n Agents– Q Coverage– Q Agents–Score 10 0.468 0.952 -0.481 20 0.720 0.807 0.218 50 0.470 0.829 -0.189 100 -0.021 0.614 -0.676 
+
+Table 5: Pearson correlations between orchestration diagnos-tics and scores. Q denotes quality. Equation 7. As the workflows grow, information routing be-comes increasingly challenging: the range of average missing transfers widens from [0 .00 , 0.43] at n = 10 to [0 .07 , 22 .70] 
+
+at n = 100 . No model achieves the highest aggregate score at every scale: GPT-5.5 leads at n = 10 , GLM-5.1 at n = 20 ,Claude-Opus-4.8 at n = 50 , and Gemini-3.1-Pro-Preview at 
+
+n = 100 . Additional analysis is provided in Appendix F-I. 
+
+Transfer Coverage Matters More Than Agent Count. 
+
+Table 5 reports correlations between agent count, transfer coverage, and performance. Agents– Q and Agents–Score measure the effect of agent count on quality score and the final score, while Coverage– Q measures the effect of success-ful transfers. Agent count is nearly uncorrelated with quality (−0.021 ) at n = 100 , whereas Coverage is consistently more informative across scales ( 0.614 –0.952 ), showing that more agents do not necessarily improve orchestration. 
+
+Orchestration Reliability Diverges at Scale. To test how this information-flow bottleneck scales, we evaluate Gemini-3.1-Pro-Preview, Claude-Opus-4.8, and DeepSeek-V4-Flash on DAGs with n = 200 , n = 500 , and n = 1 ,000 , under 
+
+Amax = 100 . As shown in Figure 5, from 500 to 1,000 
+
+tasks, transfer coverage falls from 0.981 to 0.441 for Claude 1 2 4 8 16 32 64 
+
+Requested max-agent cap Amax   
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> #Agents
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Quality / Score
+> #Agents Quality Score
+
+Figure 4: Max-agent-cap sweep averaged across the six base planners. and from 0.981 to 0.398 for DeepSeek, producing 872 .3
+
+and 907 .4 missing transfers. Gemini retains complete cover-age and substantially higher quality. The degradation reflects coordination failures that accumulate as the numbers of de-pendencies and handoffs increase. 
+
+More Agents Yield Diminishing Returns. We next ask whether increasing the agent budget improves orchestration. Figure 4 summarizes the results across six base planners and 50 DAGs. A larger Amax initially reduces compression pres-sure and improves quality and score. However, these gains quickly saturate: increasing Amax from 16 to 64 more than doubles agent count while leaving scores nearly unchanged. 
+
+When Do More Agents Help? We also compare MAS and single-agent execution on the same 50 DAGs to show when Figure 5: Extreme-scale results under Amax = 100 .                          
+
+> Quality Final score
+> LSingle Multi ∆Single Multi
+> 16k 0.423 0.725 +0 .302 0.535 0.650
+> 32k 0.649 0.821 +0 .172 0.613 0.684
+> 64k 0.792 0.852 +0 .060 0.662 0.692
+> 128k 0.852 0.859 +0 .007 0.682 0.693
+
+Table 6: Single/multi-agent performance under different L.      
+
+> Selection Spearman Pair accuracy OrchBench 0.754 0.800
+> Random 0.176 0.613
+
+Table 7: Model-ranking agreement under limited real-execution budgets for five tasks. a single agent outperforms the MAS. Table 6 shows that at 
+
+L = 16k , multi-agent execution yields a 0.302 improvement in quality by avoiding repeated single-agent compression. The advantage falls to 0.007 at 128k , where single-agent quality is already higher on the 10-, 20-, and 50-task DAGs. Additional agents are therefore most useful when the working state exceeds one context window; once it fits, coordination can become pure overhead. Detailed per-model performance results can be found in Appendix F-II. 
+
+Simulation Enables Cost-Efficient Evaluation and Selec-tion. Beyond diagnosis, OrchBench helps allocate limited real-execution budgets. We rank tasks by cross-model dis-agreement in their simulated scores and execute only the five tasks with the highest disagreement. As shown in Ta-ble 7, our method achieves a Spearman correlation of 0.754 
+
+and pairwise accuracy of 0.800 , surpassing random selection and substantially reducing the number of executions needed for model comparison. We also demonstrate the use of task-difficulty estimation and model selection in Appendix C. 
+
+Simulation Cuts Token and Runtime by at least 74 × and 
+
+9.7×. Our approach is practical because simulation is sub-stantially cheaper than real execution. Table 8 shows reduc-tions of 389 × in token and 110 × in time on WideSearch, and         
+
+> Benchmark Tokens (real/ours) Time (real/ours) WideSearch 17 .35M /44 .61K 56 .13 /0.51 min MultiAgentBench 383 .09K /5.16K 5.61 /0.58 min
+
+Table 8: Average resource consumption per task.                 
+
+> Evaluation Metric Baseline ARefined B
+> Simulation Quality 0.1452 0.5111
+> Speed 0.9231 0.9163
+> Token 0.6858 0.6421
+> Missing 6.80 5.85
+> Real execution Score 3.754 4.150
+
+Table 9: Simulator-guided workflow refinement results. 
+
+74 × and 9.7× on MultiAgentBench. This efficiency enables cost-effective plan screening, large-scale stress testing, and controlled parameter sweeps before targeted real executions. 
+
+Simulator-guided Refinement Improves Quality. We evaluate simulator-guided workflow refinement on 20 Mul-tiAgentBench tasks, using DeepSeek-V4-Flash as the execu-tion model and DeepSeek-V4-Pro as the evaluator. For each baseline workflow ( A), the refined workflow ( B) adds one simulator-selected cross-role handoff while keeping all other components fixed; if no handoff improves the simulation, 
+
+B = A. As shown in Table 9, the mean real-execution score increases from 3.754 to 4.150 out of 5.
+
+# Conclusion 
+
+We introduced OrchBench, a benchmark for evaluating multi-agent orchestration through lightweight simulation. Our results show that good orchestration depends less on the number of agents than on preserving information across dependent tasks. Additional agents help relieve context pres-sure, but also introduce diminishing returns and coordination failures. The simulated results also correlate with real execu-tion, supporting OrchBench as an efficient tool for screening orchestration plans before framework-specific validation. References 
+
+Anthropic. 2025. Claude Code. https://github.com/ anthropics/claude-code. GitHub repository. Anthropic. 2026. Claude Opus 4.8 System Card. System card, Anthropic. Accessed: 2026-07-11. Bigeard, A.; Nashold, L.; Krishnan, R.; and Wu, S. 2025. Finance agent benchmark: Benchmarking llms on real-world financial research tasks. arXiv preprint arXiv:2508.00828 .ByteDance Seed. 2026. Seed2.0 Model Card: To-wards Intelligence Frontier for Real-World Complexity. arXiv:2607.00248. Cemri, M.; Pan, M. Z.; Yang, S.; Agrawal, L. A.; Chopra, B.; Tiwari, R.; Keutzer, K.; Parameswaran, A.; Klein, D.; Ram-chandran, K.; et al. 2025. Why do multi-agent llm systems fail? arXiv preprint arXiv:2503.13657 .Charmbracelet. 2025. Crush. https://github.com/ charmbracelet/crush. GitHub repository. Dasigi, P.; Lo, K.; Beltagy, I.; Cohan, A.; Smith, N. A.; and Gardner, M. 2021. A dataset of information-seeking ques-tions and answers anchored in research papers. In Proceed-ings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , 4599–4610. Deng, X.; Gu, Y.; Zheng, B.; Chen, S.; Stevens, S.; Wang, B.; Sun, H.; and Su, Y. 2023. Mind2web: Towards a gen-eralist agent for the web. Advances in Neural Information Processing Systems , 36: 28091–28114. Drouin, A.; Gasse, M.; Caccia, M.; Laradji, I. H.; Del Verme, M.; Marty, T.; Boisvert, L.; Thakkar, M.; Cappart, Q.; Vazquez, D.; et al. 2024. WorkArena: How Capable Are Web Agents at Solving Common Knowledge Work Tasks? 
+
+arXiv preprint arXiv:2403.07718 .Fourney, A.; Bansal, G.; Mozannar, H.; Tan, C.; Salinas, E.; Niedtner, F.; Proebsting, G.; Bassman, G.; Gerrits, J.; Alber, J.; et al. 2024. Magentic-one: A generalist multi-agent system for solving complex tasks. arXiv preprint arXiv:2411.04468 .Google DeepMind. 2026. Gemini 3.1 Pro Model Card. Model card, Google DeepMind. Guo, T.; Chen, X.; Wang, Y.; Chang, R.; Pei, S.; Chawla, N. V.; Wiest, O.; and Zhang, X. 2024. Large language model based multi-agents: A survey of progress and challenges. 
+
+arXiv preprint arXiv:2402.01680 .Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Wang, J.; Zhang, C.; Yau, S.; Lin, Z.; Zhou, L.; et al. 2024. MetaGPT: Meta programming for a multi-agent collabora-tive framework. In International Conference on Learning Representations , volume 2024, 23247–23275. Jimenez, C. E.; Yang, J.; Wettig, A.; Yao, S.; Pei, K.; Press, O.; and Narasimhan, K. 2023. SWE-bench: Can Language Models Resolve Real-World GitHub Issues? arXiv preprint arXiv:2310.06770 .Ke, Z.; Ming, Y.; Xu, A.; Chin, R.; Nguyen, X.-P.; Jwala-puram, P.; Wang, J.; Yavuz, S.; Xiong, C.; and Joty, S. 2026. Mas-orchestra: Understanding and improving multi-agent reasoning through holistic orchestration and controlled benchmarks. arXiv preprint arXiv:2601.14652 .Kim, S.; Moon, S.; Tabrizi, R.; Lee, N.; Mahoney, M. W.; Keutzer, K.; and Gholami, A. 2023. An llm compiler for parallel function calling. arXiv preprint arXiv:2312.04511 .Koh, J. Y.; Lo, R.; Jang, L.; Duvvur, V.; Lim, M.; Huang, P.-Y.; Neubig, G.; Zhou, S.; Salakhutdinov, R.; and Fried, D. 2024. Visualwebarena: Evaluating multimodal agents on realistic visual web tasks. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 881–905. Lai, Y.; Li, C.; Wang, Y.; Zhang, T.; Zhong, R.; Zettlemoyer, L.; Yih, W.-t.; Fried, D.; Wang, S.; and Yu, T. 2023. DS-1000: A natural and reliable benchmark for data science code generation. In International Conference on Machine Learning , 18319–18345. PMLR. Li, J.; Hui, B.; Qu, G.; Yang, J.; Li, B.; Li, B.; Wang, B.; Qin, B.; Geng, R.; Huo, N.; Zhou, X.; Ma, C.; Li, G.; Chang, K. C.; Huang, F.; Cheng, R.; and Li, Y. 2023. Can LLM Already Serve as A Database Interface? A BIg Bench for Large-Scale Database Grounded Text-to-SQLs. In Advances in Neural Information Processing Systems , volume 36, 42330–42357. Li, Y.; Naito, A.; and Shirado, H. 2025. HiddenBench: As-sessing Collective Reasoning in Multi-Agent LLMs via Hid-den Profile Tasks. arXiv preprint arXiv:2505.11556 .Liu, X.; Yu, H.; Zhang, H.; Xu, Y.; Lei, X.; Lai, H.; Gu, Y.; Ding, H.; Men, K.; Yang, K.; Zhang, S.; Deng, X.; Zeng, A.; Du, Z.; Zhang, C.; Shen, S.; Zhang, T.; Su, Y.; Sun, H.; Huang, M.; Dong, Y.; and Tang, J. 2023. AgentBench: Eval-uating LLMs as Agents. arXiv preprint arXiv:2308.03688 .Ma, C.; Zhang, J.; Zhu, Z.; Yang, C.; Yang, Y.; Jin, Y.; Lan, Z.; Kong, L.; and He, J. 2024. Agentboard: An analytical evaluation board of multi-turn llm agents. Advances in neural information processing systems , 37: 74325–74362. Mialon, G.; Fourrier, C.; Swift, C.; Wolf, T.; LeCun, Y.; and Scialom, T. 2023. GAIA: a benchmark for General AI Assistants. arXiv preprint arXiv:2311.12983 .Moonshot AI. 2026. Kimi K2.6 Tech Blog: Advancing Open-Source Coding. OpenAI. 2026. GPT-5.5 System Card. System card, OpenAI. Updated April 24, 2026. Accessed: 2026-07-11. Qiao, S.; Fang, R.; Qiu, Z.; Wang, X.; Zhang, N.; Jiang, Y.; Xie, P.; Huang, F.; and Chen, H. 2025. Benchmarking agentic workflow generation. In International Conference on Learning Representations , volume 2025, 69679–69703. Qin, Y.; Liang, S.; Ye, Y.; Zhu, K.; Yan, L.; Lu, Y.; Lin, Y.; Cong, X.; Tang, X.; Qian, B.; et al. 2023. Toolllm: Facil-itating large language models to master 16000+ real-world apis. In The twelfth international conference on learning representations .Sun, Y.; Ren, X.; Zhang, K.; Liu, X.; and Guo, J. 2026. Per-spectiveGap: A Benchmark for Multi-Agent Orchestration Prompting. arXiv preprint arXiv:2606.08878 .Tsang, K. Y.; Zhao, Z.; Venkataramani, V.; Shi, H.; Ke, Z.; Yavuz, S.; Joty, S.; and Wang, H. 2026. Reward Modeling for Multi-Agent Orchestration. arXiv preprint arXiv:2606.13598 .Valmeekam, K.; Marquez, M.; Olmo, A.; Sreedharan, S.; and Kambhampati, S. 2023. Planbench: An extensible bench-mark for evaluating large language models on planning and reasoning about change. Advances in Neural Information Processing Systems , 36: 38975–38987. Wang, X.; Li, B.; Song, Y.; Xu, F. F.; Tang, X.; Zhuge, M.; Pan, J.; Song, Y.; Li, B.; Singh, J.; et al. 2025a. Openhands: An open platform for ai software developers as generalist agents. In International Conference on Learning Represen-tations , volume 2025, 65882–65919. Wang, Y.; Wu, Z.; Yao, J.; and Su, J. 2025b. Tdag: A multi-agent framework based on dynamic task decomposition and agent generation. Neural Networks , 185: 107200. Xiao, R.; Ma, W.; Wang, K.; Wu, Y.; Zhao, J.; Wang, H.; Huang, F.; and Li, Y. 2024. Flowbench: Revisiting and bench-marking workflow-guided planning for llm-based agents. In 
+
+Findings of the Association for Computational Linguistics: EMNLP 2024 , 10883–10900. Xie, T.; Zhang, D.; Chen, J.; Li, X.; Zhao, S.; Cao, R.; Hua, T. J.; Cheng, Z.; Shin, D.; Lei, F.; et al. 2024. Osworld: Benchmarking multimodal agents for open-ended tasks in real computer environments. Advances in Neural Informa-tion Processing Systems , 37: 52040–52094. Xu, A.; Lin, B.; Xue, B.; Wang, B.; Xu, B.; Wu, B.; Zhang, B.; Lin, C.; Dong, C.; Ling, C.; et al. 2026a. Deepseek-v4: Towards highly efficient million-token context intelligence. 
+
+arXiv preprint arXiv:2606.19348 .Xu, F. F.; Song, Y.; Li, B.; Tang, Y.; Jain, K.; Bao, M.; Wang, Z.; Zhou, X.; Guo, Z.; Cao, M.; et al. 2026b. Theagentcom-pany: benchmarking llm agents on consequential real world tasks. Advances in Neural Information Processing Systems ,38. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yang, J.; Jimenez, C. E.; Wettig, A.; Lieret, K.; Yao, S.; Narasimhan, K.; and Press, O. 2024. SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineer-ing. In Advances in Neural Information Processing Systems ,volume 37. Yao, S.; Shinn, N.; Razavi, P.; and Narasimhan, K. 2024. 
+
+τ -bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains. arXiv preprint arXiv:2406.12045 .Yoran, O.; Amouyal, S. J.; Malaviya, C.; Bogin, B.; Press, O.; and Berant, J. 2024. Assistantbench: Can web agents solve realistic and time-consuming tasks? In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 8938–8968. Yu, J.; Ding, Y.; and Sato, H. 2025. Dyntaskmas: A dy-namic task graph-driven framework for asynchronous and parallel llm-based multi-agent systems. In Proceedings of the International Conference on Automated Planning and Scheduling , volume 35, 288–296. Zeng, A.; Lv, X.; Hou, Z.; Du, Z.; Zheng, Q.; Chen, B.; Yin, D.; Ge, C.; Huang, C.; Xie, C.; et al. 2026. Glm-5: from vibe coding to agentic engineering. arXiv preprint arXiv:2602.15763 .Zhang, Y.; Liu, F.; Shan, Y.; Huang, X.; Yang, X.; Zhu, Y.; Cheng, X.; Liu, C.; Zeng, K.; Zhang, T. J.; et al. 2026. Silo-bench: A scalable environment for evaluating distributed co-ordination in multi-agent llm systems. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 29379–29398. Zhou, S.; Xu, F. F.; Zhu, H.; Zhou, X.; Lo, R.; Sridhar, A.; Cheng, X.; Ou, T.; Bisk, Y.; Fried, D.; Alon, U.; and Neubig, G. 2023. WebArena: A Realistic Web Environment for Build-ing Autonomous Agents. arXiv preprint arXiv:2307.13854 .Zhu, K.; Du, H.; Hong, Z.; Yang, X.; Guo, S.; Wang, D. Z.; Wang, Z.; Qian, C.; Tang, R.; Ji, H.; et al. 2025. Multiagent-bench: Evaluating the collaboration and competition of llm agents. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 8580–8622. Zhuge, M.; Wang, W.; Kirsch, L.; Faccio, F.; Khizbullin, D.; and Schmidhuber, J. 2024. Gptswarm: Language agents as optimizable graphs. In Forty-first International Conference on Machine Learning .A. Ablation Study 
+
+To validate the effectiveness of the mechanisms intro-duced in our benchmark, we compare Gemini 3.1 Pro and Doubao Seed 2.0 Mini under controlled ablations. The two models represent a strong and a weak planner, respectively. If removing the proposed mechanisms makes their performance nearly indistinguishable, the benchmark loses its ability to discriminate orchestration capability. We replay the same valid plans while keeping the DAGs, task assignments, agent budgets, and context limits fixed. Quality Q measures the information quality retained at the terminal tasks after cross-agent transfer and context com-pression. Score is the equal-weight average of quality, speed, and token efficiency. We report ∆Q = QGemini −QDoubao and 
+
+∆Score = Score Gemini − Score Doubao as direct measures of model separation. In Table 10, the no missing penalty setting removes the quality penalty for an omitted cross-agent transfer with-out introducing additional time or token costs. The auto-completion setting instead inserts a normal handoff for every omitted cross-agent dependency and charges its communi-cation tokens, handoff time, and context cost. The combined setting applies auto-completion and additionally makes con-text compression lossless: compression still reduces context size and incurs its normal time and token costs, but it no longer reduces package quality. Under the full benchmark, Gemini outperforms Doubao by 
+
+0.247 in quality and 0.079 in score. Removing the missing-transfer penalty reduces these gaps to 0.011 and 0.001 , while automatically completing omitted transfers reduces them to 
+
+0.035 and 0.020 . This shows that transfer coverage is a major source of model separation. The combined ablation further amplifies this effect. When omitted transfers are automatically completed and context compression becomes lossless, both models obtain a quality score of approximately 0.933 . The quality gap becomes effec-tively zero, and the score gap falls to 0.008 . Thus, once both transfer omissions and context-compression losses are neu-tralized, the strong and weak planners become nearly indis-tinguishable. This result confirms that the two mechanisms jointly prevent score saturation and preserve the benchmark’s discriminative power. 
+
+# B. Planning and Simulation Process 
+
+I. Planning instance 
+
+At the planning stage, each model outputs a JSON-formatted 
+
+workflow_script that declaratively specifies how the input DAG should be executed. The script defines agent pools, or-dered task-matching rules, a default rule for unmatched tasks, and dependency-based transfer rules. The matching rules de-termine which pool and assignment strategy are used for each task, whereas the transfer rules specify which intermediate results should be sent across agents and how much informa-tion is retained after compression. The script does not contain executable code or enumerate every task assignment explic-itly. Instead, the benchmark interpreter applies the rules in topological order and deterministically expands the compact Algorithm 1: Deterministic simulation of an orchestration plan                                                                                              
+
+> Input: problem package P= ( G, L ), concrete plan π=(α, R), max-agent cap Amax , missing-transfer factor λ
+> Each subtask has: input tokens, execution tokens, result to-kens, time cost, and compression class.
+> Each result package has: a token size and a quality value. 1: if πmisses tasks, uses too many agents, has invalid task IDs, or has illegal transfers then
+> 2: return ZeroScore(invalid -plan)
+> 3: end if
+> 4: initialize each agent’s clock and memory 5: initialize total tokens, finish times, and result qualities 6: for all v∈TopologicalOrder( G)do
+> 7: a←the agent assigned to subtask v
+> 8: wait until all parent subtasks of vare finished and agent a
+> is idle 9: for all u∈Parents( v)do
+> 10: if uand vare assigned to the same agent then
+> 11: reuse u’s result with no transfer cost or quality loss 12: else if Rdeclares a transfer from uto vthen
+> 13: copy u’s result into agent a’s memory using the declared compression ratio 14: add transfer tokens and record the retained quality 15: else
+> 16: record a missing-transfer event 17: multiply u’s contribution quality by λ
+> 18: end if
+> 19: end for
+> 20: add v’s input context to agent a’s memory and token count 21: if agent a’s memory exceeds Lthen
+> 22: compress stored packages until the memory fits 23: add compression tokens and record the quality loss 24: end if
+> 25: execute v; add execution tokens, result tokens, and time cost 26: compute v’s result quality from the available parent infor-mation 27: store v’s result package in agent a’s memory 28: if agent a’s memory exceeds Lthen
+> 29: compress stored packages until the memory fits 30: add compression tokens and record the quality loss 31: end if
+> 32: record v’s finish time 33: release parent packages that no future subtask needs 34: end for
+> 35: return final quality, makespan, total tokens, and diagnostics
+
+script into concrete agent assignments and transfer steps. Figure 6 shows an example workflow script. 
+
+II. Simulation Process 
+
+The simulator receives the problem package P = ( G, L ) and the concrete orchestration plan π = ( α, R). It first checks whether the plan covers every subtask, respects the maxi-mum agent budget, and contains only valid assignments and transfers. Invalid plans receive zero score. After this check, the simulator executes the plan without calling the planner model again. The simulator processes subtasks in a deterministic topo-logical order. For each subtask v, its assigned agent waits Table 10: Mechanism ablations for Gemini and Doubao. Gaps are Gemini minus Doubao.                                                             
+
+> Setting Gemini Q Doubao Q ∆QGemini Score Doubao Score ∆Score Full benchmark 0.690 0.443 0.247 0.573 0.493 0.079 No missing penalty 0.698 0.686 0.011 0.575 0.575 0.001 Auto-completion 0.697 0.663 0.035 0.575 0.555 0.020 Auto-completion + lossless 0.933 0.933 −0.001 0.653 0.645 0.008 1{
+> 2"agent_pools": [
+> 3{"name": "workers", "count": 2},
+> 4{"name": "final", "count": 1}
+> 5],
+> 6"rules": [
+> 7{
+> 8"match": {"stage": "Analysis"},
+> 9"pool": "workers",
+> 10 "strategy": "round_robin"
+> 11 },
+> 12 {
+> 13 "match": {"stage": "Synthesis"},
+> 14 "pool": "final",
+> 15 "strategy": "dependency_locality"
+> 16 }
+> 17 ],
+> 18 "default": {
+> 19 "pool": "workers",
+> 20 "strategy": "load_balance"
+> 21 },
+> 22 "transfer_rules": [
+> 23 {
+> 24 "parent_match": {"stage": "Analysis"},
+> 25 "child_match": {"stage": "Synthesis"},
+> 26 "cross_agent_only": true,
+> 27 "compression": 0.80
+> 28 }
+> 29 ]
+> 30 }
+
+Figure 6: An example workflow script. until all parent subtasks have finished and the agent itself is idle. If a parent u is assigned to the same agent, its result is reused directly without communication. If u is assigned to another agent and the plan declares a transfer, the simulator copies the result using the specified compression ratio and records the communication cost and retained quality. If the required transfer is missing, the simulator records a missing-transfer event and reduces the contribution of u by the factor 
+
+λ.Before executing v, the simulator adds its input context to the assigned agent’s memory. If the memory exceeds L,stored packages are compressed until they fit, incurring ad-ditional token cost and information loss. The simulator then executes v, charges its token and time costs, computes its re-sult quality from the available parent information, and stores the resulting package in the agent’s memory. The context limit is checked again after execution, and parent packages are released once they are no longer needed. After all subtasks have completed, the simulator returns the final quality, makespan, total token cost, and diagnostic events. Because the execution order and all state updates follow fixed rules, the same problem and orchestration plan always produce the same result. 
+
+# C. Simulation-Guided Applications 
+
+I. Task-conditioned Model Selection 
+
+Task-conditioned model selection asks whether OrchBench can recommend a suitable model for a specific task be-fore running all candidate models in the real environment. For each task, OrchBench ranks the six models from the simulated orchestration signals. Top-K coverage measures whether the true best real-run model appears in the recom-mended top-K set, and Top-K regret measures the score gap between the best model in that set and the true best model. We compare OrchBench with a historical-best baseline, which ranks models by their real scores on all other tasks. This baseline is strong because it uses real execution history, but it is also expensive and unavailable for a newly intro-duced task suite. Table 11 shows that OrchBench is more useful when the goal is to choose one model or a small can-didate set. Overall Top-1 coverage improves from 38.6% to 61.5%, and coding improves from 28.6% to 50.0%. At Top-3, the historical baseline becomes competitive, suggesting that global model strength is helpful once the candidate set is wide. Thus, the main value of OrchBench in this setting is task-conditioned early filtering without requiring prior real executions for the target task. 
+
+II. Task Difficulty Estimation 
+
+Task difficulty estimation asks whether OrchBench can pre-dict how hard a task is before full real evaluation. We define task difficulty by the real average score of observed models on the task: a higher score means an easier task, and a lower score means a harder task. For each task, we compute a com-plexity index by averaging four normalized quantities: task count, total tokens, tool calls, and mean simulated makespan. A task is therefore more complex if it has more steps, uses more tokens or tools, or takes longer in simulation. We then use leave-one-task-out validation: each time, we train a sim-ple linear predictor on 44 tasks and predict the real average score of the held-out task. Table 12 reports the results. The scenario mean is already a useful predictor of task difficulty. Adding structural complex-ity keeps MAE the same and improves rank correlation, with Spearman increasing from 0.614 to 0.691. The feature cor-relations are negative because the target is real score, where Table 11: Utility of OrchBench for model selection on MultiAgentBench.                                                                                          
+
+> Strategy Scenario Top-1 Cov. Top-1 Reg. Top-2 Cov. Top-2 Reg. Top-3 Cov. Top-3 Reg. OrchBench Overall 61.5% 0.071 74.4% 0.033 81.8% 0.024 Historical best Overall 38.6% 0.142 73.3% 0.053 82.2% 0.023 OrchBench Negotiation 66.7% 0.067 86.7% 0.027 93.3% 0.009 Historical best Negotiation 46.7% 0.120 93.3% 0.009 93.3% 0.004 OrchBench Coding 50.0% 0.090 61.5% 0.038 57.1% 0.061 Historical best Coding 28.6% 0.232 46.7% 0.127 60.0% 0.057 OrchBench Research 64.3% 0.062 73.3% 0.036 93.3% 0.004 Historical best Research 40.0% 0.080 80.0% 0.022 93.3% 0.009
+> (a) Predictors Predictor MAE ↓Pearson ↑Spearman ↑
+> Scenario mean 0.088 0.725 0.614 Complexity linear 0.088 0.726 0.691 (b) Feature correlations Feature Pearson Spearman Mean sim. makespan -0.754 -0.832 Complexity index -0.761 -0.823 Tool calls -0.754 -0.819 Tool-task ratio -0.758 -0.819 Total tokens -0.729 -0.773 Task count -0.717 -0.701
+
+Table 12: Task difficulty estimation from lightweight bench-mark signals.           
+
+> Metric Pearson Spearman Cross-framework time -0.104 -0.086 Cross-framework token 0.071 0.600 SWE-mini time-token 0.341 0.086 Claude Code time-token -0.126 -0.314
+
+Table 13: Framework dependence of time and token usage. Correlations are computed on shared model-level results. higher means easier, while the features measure task com-plexity. Thus, larger makespan, more tool use, more tokens, and more subtasks are associated with lower real scores. This suggests that OrchBench can provide useful task-difficulty estimates before running full real evaluation. 
+
+# D. Simulation-to-Real Validation 
+
+I. Metric Definition 
+
+We compute every metric at the run level and then average it over runs from the same model before comparing mod-els. Declared Agents (DA) measures how many agents the planner intended to use: in simulation, this is the value of 
+
+plan.num_agents , while in the real workflow it is obtained by counting the agent(...) calls in the generated script. Started Agents (SA) and Completed Agents (CA) use the number of active agents in simulation, namely the number of distinct agents that receive at least one subtask. Their real counterparts are obtained from the workflow journal by counting the unique agent identifiers that produce a started 
+
+event and a result event, respectively. Subagent Delega-tion Tendency (SDT) compares the simulated declared-agent count with the fraction of landed real runs that actually invoke the workflow tool. Parallel Utilization (PU) is the fraction of the available agent capacity used in simulation, 
+
+Aactive /A max . For real runs, it is computed from the sub-agent time intervals: we sum the active time of all subagents and divide it by the maximum possible active time, given by the maximum number of overlapping subagents multiplied by the total workflow span. Workflow Depth (WD) captures how many dependent stages the workflow contains. In simulation, it is the length of the longest dependency chain in the task DAG, normalized by the number of tasks. In real workflows, we first infer handoff edges by checking whether keywords from an earlier subagent’s output appear in a later subagent’s prompt; and the longest path in this inferred graph is then normalized by the number of subagents. Information-Loss Rate (ILR) measures how often information is not explicitly passed between agents. In simulation, it is the number of implicit reread events divided by the total number of explicit handoffs and implicit rereads. In real workflows, it is one minus the inferred handoff density, i.e., the fraction of pos-sible earlier-to-later subagent pairs for which no handoff is detected. Pearson’s r and Spearman’s ρ are computed over the model-level averages; the former compares their numer-ical values, whereas the latter compares their rankings. The reported p-values come from two-sided exact permutation tests over the six models. 
+
+II. Framework Dependence 
+
+We also test whether time and token usage are stable across execution frameworks. Table 13 reports four diagnostic cor-relations on the shared set of models. Cross-framework time and token measure whether model-level resource usage is consistent between SWE-mini and Claude Code dynamic workflow. The two time-token rows measure whether mod-els that use more tokens also take more time within each framework. Time is almost uncorrelated across frameworks, and the relation between time and token usage is also incon-sistent. This suggests that time and token usage are strongly affected by framework-specific execution behavior, so we use final score as the main sim-to-real validation target and treat Algorithm 2: Refinement-based problem generation                                                         
+
+> Input: raw problem pool D, target subtask count n, target parallelism bucket b, retry budget K
+> Output: accepted problem package P= ( G, L ), or no problem
+> Each generated subtask has: description, input tokens, exe-cution tokens, result tokens, time cost, and compression class. 1: repeat
+> 2: sample a raw seed task sfrom D
+> 3: ask the seed judge whether sis suitable for DAG decompo-sition 4: until the seed judge accepts s
+> 5: ask the generator to build an initial semantic DAG G0from s,
+> n, and b
+> 6: for i= 0 , . . . , K do
+> 7: run the format judge on Gi
+> 8: run the semantic judge on Gi; keep its repair advice 9: if both judges accept, Gihas nsubtasks, and k99 (Gi)/n ∈
+> bthen
+> 10: set the context limit Lfrom the generated token budgets 11: return the accepted problem package P= ( Gi, L )
+> 12: end if
+> 13: ask the generator to revise Giusing the judge failures and repair advice 14: call the revised graph Gi+1
+> 15: end for
+> 16: return no problem if no refined graph passes within Krounds
+
+time and token metrics as diagnostics. 
+
+# E. Benchmark Construction 
+
+I. Overview 
+
+Task Count Stability We also check whether the current number of tasks per scenario is sufficient to give a sta-ble benchmark estimate. For each scenario, we fix the 60 tasks scored by Deepseek-V4-Flash and use each task’s fi-nal score as one observation. In each repeat, we sample 60 tasks with replacement from this pool. We then take the first 
+
+n ∈ { 5, 10 , 20 , 30 , 60 } tasks from the sampled sequence and compute their mean final score. This process is repeated 10 times, giving 10 benchmark means for each scenario and each task count. We report the unbiased sample variance of these 10 means. Figure 7 shows that the variance generally decreases as the number of tasks increases. The reduction is clear in all four scenarios, although paper writing decreases more slowly than the other categories. At the full 60-task set-ting, the estimated variance is small in every scenario, with the largest value being 3.75 × 10 −4. This suggests that 60 tasks per scenario provide a stable estimate of model perfor-mance for our benchmark. 
+
+Data profile. Figure 8 profiles the generated DAG pool along five structural metrics. The choice of these metrics follows the way recent agent benchmarks and workflow-generation studies frame multi-agent difficulty. MultiAgent-Bench (ACL 2025) emphasizes that multi-agent evaluation should capture coordination and interaction structure, not only final task completion. WorFBench / Benchmarking Agentic Workflow Generation (ICLR 2025) is especially rel-evant because it treats agentic workflows as graph-structured subtask dependencies and evaluates workflow quality at both chain and graph levels. TheAgentCompany (NeurIPS 2025 Datasets and Benchmarks) and OdysseyBench (2025) simi-larly stress realistic, long-horizon work settings where agents must coordinate across tools, subtasks, and dependencies. Motivated by this view, we characterize each generated prob-lem as a DAG and measure the structural properties that directly affect orchestration difficulty. Specifically, depth D measures the number of topologi-cal dependency layers and captures the sequential horizon of a problem. Branching factor is the average out-degree over non-terminal tasks, reflecting how broadly a problem decom-poses into downstream subtasks. Average parallelism W/C 
+
+measures total work W divided by critical-path length C,which is the standard work-over-critical-path measure used in DAG scheduling to estimate exploitable concurrency. Depen-dency density E/N normalizes the number of dependency edges by the number of tasks and measures average cou-pling strength. Edge count E measures the total number of precedence constraints and captures the overall dependency volume. Together, these metrics cover the main structural sources of orchestration difficulty: long dependency chains, broad decomposition, parallel execution opportunities, and dense cross-task constraints. For readability, we convert each metric into three refer-ence regimes: Low, Medium, and High. This three-level dis-cretization is used only for interpretation and normalization in the figure; it is not used to rebalance the dataset or force a uniform distribution. The thresholds are simple structural reference points: for example, D > 8 already indicates a long sequential horizon, W/C > 16 indicates substantial exploitable parallelism, and E/N > 2.0 indicates a strongly coupled dependency graph. Values above the High threshold are clipped to the outer ring of the radar chart, so reaching the boundary should be interpreted as entering the high-complexity regime rather than matching the single largest DAG. The labels T10, T20, T50, T100, and T200+ denote tar-get task-count groups used during generation. T10 contains DAGs generated around the 10-task scale, T20 around the 20-task scale, and similarly for T50 and T100. T200+ aggre-gates larger target scales starting from 200 tasks, since these large-scale settings are generated less densely but are impor-tant for showing the upper structural range. The radar curves show how structural difficulty changes across task scales, while the lower distribution panels show the overall spread of normalized metric values across the generated DAG pool. The figure therefore demonstrates that the dataset is not con-centrated in a single graph pattern, but covers diverse levels of depth, branching, dependency volume, coupling strength, and parallel execution potential. Figure 9 complements the aggregate statistics with rep-resentative DAG layouts drawn from the original generated problem graphs. The selected examples make the structural range visually explicit: the large-scale DAG demonstrates thousand-node orchestration, the high-parallelism DAG ex-poses many concurrently schedulable branches, the deep DAG highlights long dependency chains and multi-step pro-gression, the layered pipeline DAG shows regular batched Figure 7: Variance of benchmark mean scores under different task counts. fan-out and fan-in, and the irregular DAG illustrates hetero-geneous cross-stage dependencies. Together, these examples reinforce the aggregate profile by showing that the gener-ated problems cover diverse graph sizes, dependency depths, structural patterns, and parallel execution opportunities. 
+
+II. DAG Generation 
+
+Algorithm 2 describes how OrchBench builds DAG problems from real seed tasks. We first sample a seed task s from the problem pool D. A seed judge filters out tasks that are not suitable for DAG generation. For each accepted seed, the generator produces a DAG with a target number of subtasks 
+
+n and a target level of natural parallelism. Natural parallelism measures how many agents a DAG can use effectively. We define it as k99 /n . Here k99 is the smallest number of workers whose schedule gets within one percent of the critical-path lower bound: 
+
+k99 (G) = min {k : ms k(G) ≤ C(G)+0 .01( W (G)−C(G)) }.
+
+In this equation, W (G) is the sum of all task execution times, 
+
+C(G) is the critical-path time, and ms k(G) is the makespan of a deterministic list schedule with k workers. A larger 
+
+k99 /n means the graph has more useful parallelism. Generation then proceeds as a refinement loop. The struc-tural judge checks whether the DAG is well formed. The semantic judge checks whether the DAG is a meaningful decomposition of the seed task and whether its natural par-allelism matches the target. The generator revises the DAG using judge feedback until both judges accept it. The final package contains the accepted DAG and its context limit L,which are passed to the simulation stage. 
+
+III. Generation Failure Cases 
+
+We analyze failure cases from two sides. The first is DAG generation: whether the generated graph is a meaningful de-composition of the original task. The second is orchestration simulation: whether the tested model writes a plan that uses agents, transfers, and compression properly. These failures help explain both the limitations of the generated benchmark problems and the common weaknesses of current models when they are asked to orchestrate multiple agents. 
+
+DAG Generation Failures Most generated DAGs pass ba-sic structural checks, such as schema validity, acyclicity, and terminal reachability. The remaining failures are mainly se-mantic. They happen when the graph reaches the target size but does so in a way that is not fully faithful, natural, or useful for orchestration evaluation. The failure modes in Table 14 are not mutually exclusive: a DAG may contain several issues at the same time. To avoid making overlapping failure modes look like inde-pendent failure rates, we report normalized frequencies. We first compute the DAG-level failure rate over the 70 sampled DAGs: 24 DAGs are rejected by at least one successful LLM judge, giving pfail = 24 /70 = 34 .3% . We then count how of-ten each failure mode appears among the failed-case annota-Figure 8: Structural profile of the generated DAG pool. The radar chart reports normalized structural metrics across target task-count groups, and the table gives the three-level reference ranges used for interpretation. The lower panels show the distribution of each normalized metric over the generated DAGs. tions, giving C = 82 total error mentions. For a failure mode with count cm, the reported frequency is pfail · cm/C . Thus the frequencies in Table 14 decompose the overall failed-case mass and sum to 34 .3% , rather than exceeding 100% because of co-occurring errors. These cases show that DAG generation is less likely to fail at the level of graph syntax, and more likely to fail at the level of task semantics. In particular, large DAGs tend to expose more redundancy and less clean dependency structure, while smaller DAGs are more likely to preserve the original task boundary. 
+
+Orchestration Simulation Failures We also inspect work-flow plans written by tested models. Here the DAG is fixed, so failures mainly come from the model’s orchestration deci-sions. Common problems include launching too many agents, splitting dependent subtasks across agents without declaring transfers, using compression too aggressively, and creating plans that look parallel but lose important upstream informa-tion. Table 15 gives representative cases. 
+
+IV. DAG Validation 
+
+The generated DAGs are the basis of OrchBench, since every orchestration plan is evaluated on top of their dependency structure. It is necessary to check whether these DAGs are structurally valid and semantically reasonable. We evaluate them along six dimensions: structure; coverage; missing-subtasks; dependency correctness; redundancy; and paral-lelism plausibility. The six validation dimensions are evalu-ated using both deterministic rules and LLM-based judging. For the rule-based evaluation, each generated DAG is scored independently. Let N be the actual number of subtasks in the DAG. For each dimension, the checker counts the affected task nodes and additional structural violations, and converts them into a percentage using 100 × (1 − issues /N ), with the number of issues capped at N . The values reported in Table 16 are the average percentages over the sampled DAGs at each target size. Thus, these values are not pass rates. The Overall score is also not the arithmetic mean of the other columns: it combines the task-level issues and struc-tural penalties from all six dimensions, including structure, coverage, missing subtasks, dependency correctness, redun-dancy, and parallelism plausibility. Structure is included in the overall score but is not shown as a separate column in the table. The structure dimension checks whether the generated ob-ject is a valid DAG with a reasonable size and complete task metadata. The task count is considered valid when it falls within 10% of the target count, with at least one task of tolerance. The checker then verifies that task identifiers are unique, every dependency refers to an existing task, no task depends on itself, the graph is acyclic, there is exactly one terminal task, and every task can reach that terminal task. It also checks that input, execution, and result token counts and time costs are positive, and that compression and tool fields (a) Large-scale DAG. 
+
+(b) High-parallelism DAG. (c) Deep DAG. 
+
+(d) Layered pipeline DAG. (e) Irregular DAG. 
+
+Figure 9: Representative generated DAG structures, continued. The examples illustrate large scale, high parallelism, long dependency depth, regular layered execution, and irregular cross-stage dependency patterns. 
+
+Failure mode Frequency Original task Evidence Interpretation Dropped branches before final synthesis 5.0% Identify the French foreign name of a black-border creature card illustrated by Matthew D. Wilson. The LLM judge reports that several group-aggregation branches never reach the final analysis or delivery node. The DAG is executable, but part of the searched information is silently lost before the final answer. Artificial over-decomposition 6.3% Identify the district with the second-highest number of crimes in 1995 and count male clients in that district. A small SQL-style task is expanded into many near-identical query, counting, and correlation subtasks. The graph reaches the target size, but the decomposition is not natural for the original task. Redundant verifica-tion or repeated tem-plates 9.6% Compile all singers, episodes, and songs performed in the Chinese TV show I Am aSinger /Singer from 2013 to 2024. The DAG contains a large verification layer that nearly mirrors the extraction layer. Verification is useful, but duplicating most extraction tasks adds size without adding much orchestration structure. Arbitrary split not grounded in the seed 6.7% Apply MinMaxScaler to columns A2 and A3 grouped by month in a pandas DataFrame. The DAG introduces specific months that are not required by the original task. The graph looks detailed, but some details are not grounded in the seed task. Artificial global syn-chronization 5.0% Complete a large multi-domain web research task with several independent research requests. The LLM judge identifies a global bottleneck where independent domains must wait for a shared synchronization task. Large DAGs may become wide but still unnatural if they add unnecessary barriers between independent branches. Too-fine shallow subtasks 1.7% Produce a detailed research pa-per on supervised topic models for classification and regression from crowds. The granularity diagnostic flags many short literature-review nodes as too small or underspecified. The task boundaries become dominated by bookkeeping rather than meaningful subtasks. 
+
+Table 14: Representative DAG generation failure modes. Model Original task Evidence Failure pattern Claude Opus 4.8 Produce a detailed research pa-per on supervised topic models for classification and regression from crowds. The model uses 62 active agents for a low-parallelism problem. It has no missing transfers, but triggers 93 compression events and 97 warnings. Quality drops to 0.206 and final score is 0.409. Claude usually writes complete transfers, but can over-fragment low-parallelism writing tasks. The resulting context pressure causes heavy compression and lowers quality. DeepSeek-V4-Flash Analyze Airbnb’s gross book-ing value per room night from FY2022 to FY2024. The model uses 75 active agents for the DAG with a target natural parallelism of 33 and declares 135 transfers, but the simulator records 60 implicit reads and 73 warnings. Quality is 0.511. The plan exploits parallelism, but misses many required dependency transfers. The simulator must fall back to penalized reads, so quality is lower than the speed score suggests. Kimi 2.6 Analyze Airbnb’s gross book-ing value per room night from FY2022 to FY2024. The model uses 61 active agents and declares 135 transfers, but still has 57 implicit reads. Quality is 0.530 and final score is 0.619. Kimi is stronger than most models overall, but this case shows the same transfer-coverage weakness: assigning dependent subtasks to different agents is not enough unless all required information is explicitly passed. Doubao Mini Analyze Airbnb’s gross book-ing value per room night from FY2022 to FY2024. The model uses 85 active agents for the DAG with a target natural parallelism of 33, declares only 123 transfers, and produces 73 implicit reads. Quality is 0.329. Doubao tends to over-launch agents while under-specifying communication. This creates high coordination overhead and severe information loss. 
+
+Table 15: Representative orchestration failures in simulation. use valid values. Any task involved in one of these violations contributes to the structure penalty; graph-level violations such as a cycle, an incorrect terminal count, or a task-count mismatch are added as additional penalties. Coverage measures whether the generated subtasks pre-serve the content of the original task. The rule-based checker extracts the 40 most frequent non-stopword tokens from the original seed prompt, dataset name, and summary, and com-putes the fraction that appear in the generated title, goal, stages, descriptions, or tool fields. A keyword coverage of at least 0.35 is required. The checker also assigns each subtask coarse functional roles, such as acquisition, analysis, valida-tion, synthesis, and delivery, and verifies that all category-specific required roles are present. The coverage score pe-nalizes the gap below the 0.35 keyword threshold and each missing required role. Missing-subtasks measures whether the DAG omits an essential part of the workflow. The rule-based proxy flags tasks that do not lead to the terminal task, missing category-specific roles, and graphs with an incorrect terminal struc-ture. Therefore, this score mainly captures missing workflow stages and disconnected parts of the graph; it is not based on counting every subtask that could have been generated. Dependency correctness evaluates whether the edges form a plausible prerequisite structure. The graph must contain at least N − 1 edges, which is the minimum required to con-nect N tasks into a tree-like dependency structure. For each edge, the checker infers a coarse role order from the task de-scriptions, using acquisition, analysis, validation, synthesis, and delivery as progressively later stages. An edge is treated as a backward edge when its parent appears more than one role stage later than its child. The affected endpoints of such edges are penalized, and the backward-edge rate must not exceed 0.08 . The checker also limits extreme fan-in and fan-out: the proxy limits are max(10 , ⌈0.45 N ⌉) incoming edges and max(10 , ⌈0.90 N ⌉) outgoing edges for a task. Redundancy measures whether different subtasks repeat essentially the same work. Descriptions are normalized be-fore comparison. The checker counts exact duplicate descrip-tions and near-duplicate pairs, where a pair is considered near-duplicate when its normalized text similarity reaches 
+
+0.97 after token-overlap checks. Descriptions referring to different explicit objects, such as different years, quarters, or partitions, are not treated as duplicates. The near-duplicate pair ratio is the number of near-duplicate pairs divided by the number of comparable pairs, and it must not exceed 0.02 .The checker additionally forms a structural signature from the stage, tool type, dependency list, and the beginning of the description; repeated signatures are also penalized. Parallelism plausibility measures whether the DAG ex-poses useful and coherent parallel work. The checker uses deterministic list scheduling based on the task time costs to compute the critical path, total work, layer widths, and k99 ,the smallest number of agents whose estimated makespan reaches 99% of the attainable scheduling gain. The resulting 
+
+k99 must fall inside the target parallelism range, which is de-rived from the declared parallelism bucket or target agent count. The DAG must also contain a downstream merge node when its target shape requires parallel branches, and the widest layer must not contain excessive near-duplicate tasks; for this last check, the pair-ratio threshold is 0.08 .The Gemini and GLM rows use the same metric names but are produced by LLM-as-judge rather than by these deter-ministic rules. The judge assigns each dimension an integer Target size Judge Overall Coverage Missing Dependency Redundancy Parallelism 10 Rule-based 83.00 97.00 98.00 94.00 92.00 96.00 10 Gemini 98.40 99.30 99.50 99.30 96.50 98.00 10 GLM 84.50 88.10 86.80 87.70 80.90 85.40 20 Rule-based 63.81 99.02 99.50 75.43 89.36 100.00 20 Gemini 95.12 97.00 98.50 96.38 90.00 96.88 20 GLM 77.44 87.22 88.33 73.11 67.22 83.00 50 Rule-based 77.69 98.78 99.80 97.90 81.01 97.60 50 Gemini 97.33 99.00 99.67 98.83 92.83 98.50 50 GLM 82.50 89.00 85.20 86.70 69.20 86.00 100 Rule-based 63.06 98.68 99.79 87.30 75.71 87.40 100 Gemini 89.67 97.83 97.83 93.33 83.83 88.83 100 GLM 76.11 88.00 90.11 78.33 62.33 80.00 200 Rule-based 86.15 100.00 100.00 93.53 92.25 99.42 200 Gemini 95.75 97.88 98.12 94.50 93.88 96.75 200 GLM 85.00 90.78 89.22 83.67 79.44 89.67 500 Rule-based 67.92 90.12 99.76 75.39 75.12 67.14 500 Gemini 71.50 95.00 97.50 97.50 57.50 75.00 500 GLM 75.75 85.50 78.75 87.50 64.00 74.50 1000 Rule-based 85.20 100.00 100.00 79.33 77.89 99.13 1000 Gemini 93.00 98.00 95.00 92.00 85.00 96.00 1000 GLM 80.60 89.60 91.60 76.70 69.40 88.50 
+
+Table 16: Validation results for generated DAGs. Higher is better.               
+
+> Setting Accuracy Average ∆Acc ∆Score w/o DAG 2/10 (20.00%) 3.300 ––w/ DAG 3/10 (30.00%) 3.575 +10.00 pp +0.275
+
+Table 17: Effect of providing DAGs in actual agent runs. quality score from 0 to 100, where higher values indicate bet-ter coverage, more plausible dependencies, less redundancy, fewer missing stages, and more reasonable parallelism. The 
+
+Overall judge score is a holistic quality assessment rather than a deterministic average of the five individual scores. The exact judge prompt, DAG representation supplied to the judge, and response normalization procedure are described in the dedicated judge-prompt subsection. Table 16 summarizes the results. The scores tend to fluc-tuate up and down and vary across sizes. The main failure comes from redundancy and dependency quality, while cov-erage and missing-subtask scores remain high in most set-tings. This suggests that the generated DAGs usually preserve the main task content, although larger DAGs contain more overlap and less clean dependency structure. We further test whether the generated DAGs are useful in actual agent runs. We compare two settings on 10 tasks: one gives the model only the original task description, and the other gives the generated 500-subtask DAG. In both settings, DeepSeek-V4-Pro runs under Claude Code dynamic workflow mode. The DAG setting improves accuracy from 20.00% to 30.00% and slightly increases the average score, as shown in Table 17. 
+
+# F. Additional Results 
+
+I. Detailed Discussion of the Main Results 
+
+Table 4 reports the main results of OrchBench across target sizes. Here we provide additional analysis of it. 
+
+Transfer coverage matters more than agent count. Acentral finding is that using more agents is not the same as better orchestration. Models with similar active-agent counts can have very different quality because their trans-fer coverage differs. For example, on 100-task DAGs, 
+
+gemini-3.1-pro-preview and doubao-seed-2-0-mini 
+
+both use about 63 active agents, but their missing-transfer counts are 0.07 and 22.70, and their quality scores are 0.690 and 0.443. The difference is not how many agents are used, Bucket Active agents Transfer coverage Missing transfer Quality Speed Final score Low 39.25 0.858 23.47 0.568 0.509 0.585 Medium 62.53 0.973 6.26 0.584 0.353 0.509 High 79.58 0.992 1.77 0.540 0.336 0.494 
+
+Table 18: 100-task results by natural-parallelism bucket. but whether the information needed by downstream subtasks is passed forward. 
+
+Orchestration Depends on Structure and Trade-offs. 
+
+The results also show different orchestration styles. 
+
+claude-opus-4.8 is a conservative handoff model: it rarely misses transfers and preserves quality, but does not always achieve the best final score because final score also in-cludes speed and token efficiency. By contrast, gpt-5.5 ,
+
+glm-5.1 , and gemini-3.1-pro-preview often achieve stronger scores by balancing quality against speed and token cost. For example, on 100-task DAGs, deepseek-v4-pro has lower quality than claude-opus-4.8 , but a slightly higher fi-nal score because its speed and token scores are higher. Thus, the final score should be read as a Pareto-style summary, not as a pure quality ranking. Source structure further changes which model is best. No model dominates every source family: gpt-5.5 leads on company research, gemini-3.1-pro-preview leads on compiler pipelines and data pipelines, and glm-5.1 leads on paper writing. The gaps are also small: the top-two gap is only 0.0052 on company research, 0.0014 on compiler pipelines, 0.0007 on data pipelines, and 0.0008 on paper writing. This indicates that OrchBench is not measuring a single abstract notion of model strength. It is also measuring whether a model can adapt its orchestration plan to different DAG structures and information-flow patterns. Finally, task count alone does not explain difficulty. Ta-ble 18 shows the 100-task results by natural-parallelism bucket. Low-parallelism DAGs have the most missing trans-fers, but still obtain the highest final score because their speed and token scores are better. High-parallelism DAGs have almost perfect transfer coverage, but lower final scores because the larger number of agents does not fully compen-sate for coordination cost. This suggests two different failure modes in large DAGs: low-parallelism graphs mainly fail through broken information chains, while high-parallelism graphs mainly expose the cost of coordinating many dis-tributed branches. Overall, the main result is that better orchestration is not equivalent to launching more agents. The stronger models are those that can distribute work while keeping dependency information available to downstream subtasks, and that can choose when the quality gain from additional coordination is worth the speed and token cost. This is the behavior that OrchBench is designed to isolate. 
+
+II. Context-Limit Sweep 
+
+Table 19 shows that the benefit of multi-agent orchestration is conditional on context pressure rather than universal. As the context limit increases from 16k to 128k , the average multi-agent quality advantage shrinks from +0 .302 to +0 .007 ,while its final-score advantage falls from +0 .116 to +0 .011 .Under tight context, distributing intermediate state across agents avoids the repeated compression suffered by a sin-gle agent; under large context, this benefit disappears, while multi-agent execution continues to incur communication-token and information-transfer costs. Consequently, at 128k ,Doubao, Kimi, and Qwen already have lower average qual-ity than the single-agent baseline, and multi-agent quality is lower in 82% of all model–problem pairs. The slightly pos-itive overall average is driven by the 100-subtask problems, for which the single agent still undergoes 240 compression events on average and multi-agent quality remains 0.362 
+
+higher. For the 10-, 20-, and 50-subtask problems, multi-agent quality is already lower at 128k . These results indicate that multi-agent orchestration is most useful when it prevents context overflow; once the working state fits within a single context window, the single-agent system generally preserves information more reliably without paying coordination costs. 
+
+III. Missing-transfer Sweep 
+
+We sweep λ ∈ { 0, 0.25 , 0.5, 0.75 , 1} by replaying existing 
+
+n = 100 plans, without making additional model calls. For each missing cross-agent transfer, the upstream quality con-tribution is multiplied by λ; thus, λ = 0 applies the strongest penalty, while λ = 1 removes the quality penalty entirely. Since the plans and their speed and token costs remain fixed, the experiment isolates the effect of this parameter. As shown in Table 20, increasing λ mechanically raises Quality and Fi-nal but steadily reduces model separation. At λ = 0 and 0.25 ,the mean quality of affected plans is only 0.244 and 0.311 .Conversely, at λ = 1 , σQ falls to 0.022 , and the Gemini– Doubao quality gap nearly disappears at 0.011 . With λ = 0 .5,affected-plan quality reaches 0.412 , while σQ = 0 .081 and a quality gap of 0.247 are retained. It therefore provides a meaningful penalty without obscuring the broader differ-ences among models, making it a balanced default. 
+
+# G. Other Settings 
+
+Context and agent budgets. Each standard benchmark in-stance retains the maximum agent budget Amax = 100 stored in its problem package. The per-agent context limit L is fixed before orchestration planning and is independent of the eval-uated planner. We estimate the active working set from task inputs, retained parent packages, task outputs, and a fraction of accumulated execution history. The raw estimate is the maximum of 1.35 times the 90th-percentile active working set, twice the 95th-percentile package size, and an amortized Context System Quality Speed Token Final Score                                                                                                                                     
+
+> 16k Single-agent 0.423 0.181 1.000 0.535 DeepSeek-V4-Flash 0.799 0.562 0.668 0.676 DeepSeek-V4-Pro 0.764 0.550 0.670 0.661 Doubao-Seed-2.0-Mini 0.651 0.533 0.684 0.623 GLM-5.1 0.790 0.547 0.671 0.669 Kimi-K2.6 0.721 0.526 0.691 0.646 Qwen3.6-35B-A3B 0.624 0.546 0.706 0.626 Multi-agent average 0.725 0.544 0.682 0.650
+> 32k Single-agent 0.649 0.190 1.000 0.613 DeepSeek-V4-Flash 0.883 0.562 0.669 0.705 DeepSeek-V4-Pro 0.861 0.579 0.664 0.701 Doubao-Seed-2.0-Mini 0.699 0.552 0.682 0.644 GLM-5.1 0.908 0.563 0.657 0.709 Kimi-K2.6 0.803 0.539 0.681 0.674 Qwen3.6-35B-A3B 0.769 0.555 0.676 0.667 Multi-agent average 0.821 0.558 0.671 0.684
+> 64k Single-agent 0.792 0.193 1.000 0.662 DeepSeek-V4-Flash 0.918 0.581 0.661 0.720 DeepSeek-V4-Pro 0.904 0.568 0.652 0.708 Doubao-Seed-2.0-Mini 0.750 0.550 0.664 0.655 GLM-5.1 0.925 0.580 0.650 0.718 Kimi-K2.6 0.799 0.540 0.678 0.672 Qwen3.6-35B-A3B 0.818 0.550 0.659 0.675 Multi-agent average 0.852 0.561 0.661 0.692
+> 128k Single-agent 0.852 0.195 1.000 0.682 DeepSeek-V4-Flash 0.893 0.581 0.659 0.711 DeepSeek-V4-Pro 0.906 0.554 0.655 0.705 Doubao-Seed-2.0-Mini 0.784 0.553 0.667 0.668 GLM-5.1 0.927 0.563 0.652 0.714 Kimi-K2.6 0.834 0.548 0.671 0.684 Qwen3.6-35B-A3B 0.813 0.547 0.676 0.678 Multi-agent average 0.859 0.558 0.663 0.693
+
+Table 19: Quality, speed, token, and final scores under dif-ferent context limits. All values are averaged over the 50 sampled problems. per-agent estimate of cumulative execution and package to-kens adjusted by the proportion of compression-fragile tasks. It is then mapped to the smallest accommodating window in 
+
+{16k , 32k , 64k , 128k }, with 128k as the upper cap. This pol-icy avoids assigning an artificially restrictive context window while preserving meaningful context pressure. 
+
+Planner inference and output handling. All planner models receive the same serialized problem representation and the same planning instructions, without model-specific prompt tuning. We use a decoding temperature of 0.1 and a maximum completion length of 16 ,000 tokens. Each model– problem pair receives one primary planning call. If the re-sponse cannot be parsed or fails plan validation, the model receives one repair call containing the validation errors and its previous response. We do not manually edit or complete model-generated workflows. Plans that remain invalid after Table 20: Sensitivity to the missing-transfer factor λ. Qaff 
+
+averages the plans containing missing transfers; σQ is com-puted across all model means, and ∆QG−D is the Gemini– Doubao quality gap. 
+
+λ Quality Final Qaff σQ ∆QG−D
+
+0.00 0.504 0.515 0.244 0.117 0.341 0.25 0.527 0.522 0.311 0.105 0.317 
+
+0.50 0.561 0.534 0.412 0.081 0.247 
+
+0.75 0.608 0.550 0.550 0.046 0.150 1.00 0.689 0.576 0.785 0.022 0.011 
+
+this repair attempt are treated as invalid according to the rule in Appendix B. Agent identifiers are deterministically com-pacted after script expansion, so unused agent slots do not contribute to the reported active-agent count or simulation cost. 
+
+Compression and cost accounting. For the robust, bal-anced, and fragile compression classes, retaining a frac-tion e of a package preserves quality according to eγ , with 
+
+γ ∈ { 0.35 , 0.85 , 1.25 }, respectively. Their minimum ad-missible retention ratios are 0.08 , 0.22 , and 0.55 . When an agent exceeds L, the simulator repeatedly compresses eligi-ble memory items, prioritizing large and compression-robust packages while protecting fragile information. Each com-pression event adds token cost equal to 2.5% of the package size before that event and one unit of simulated time. A hand-off of x retained tokens contributes x communication tokens and max(1 , ⌈x/ 5000 ⌉) units of time. Each active agent addi-tionally incurs 1,200 startup tokens and two units of startup time. 
+
+Missing transfers and controlled sweeps. Unless other-wise specified, an omitted cross-agent dependency is mod-eled as a quality-only missing transfer with λ = 0 .5: the upstream contribution is discounted by this factor without adding communication tokens, execution time, or stored context. This isolates information loss from additional re-source penalties. Shared LLM- and tool-rate-limit waiting is disabled in the reported isolated-orchestration experi-ments, although the corresponding metadata are retained for optional contention studies. The agent-cap sweep uses 
+
+Amax ∈ { 1, 2, 4, 8, 16 , 32 , 64 }, while the context sweep uses 
+
+L ∈ { 16k , 32k , 64k , 128k }. Both sweeps reuse the same 50 problems, sampled once with seed 20260710 and allocated as evenly as possible across the four nominal task scales. The extreme-scale study uses ten fixed problems at each of 
+
+n ∈ { 200 , 500 , 1000 } and Amax = 100 . Since simulation is deterministic, no repeated simulator runs are required for a fixed problem and plan. 
+
+# H. Prompt Example 
+
+I. DAG Generation Prompt 
+
+This subsection provides the illustrative examples of the prompts adopted used in OrchBench. At runtime, the con-crete seed record, current DAG, judge feedback, target task count, target parallelism bucket, and schema fields are in-serted into these templates. 
+
+Seed Filtering Prompt Seed filtering prompt 
+
+1 Decide whether the following raw dataset sample is suitable as a seed 
+
+2 question for an orchestration benchmark. 
+
+34 We will expand it into DAGs with 10/20/50/100 subtasks. A suitable seed 
+
+5 should: 
+
+6 1. have a clear final deliverable or final answer; 
+
+7 2. naturally decompose into a multi-stage workflow; 
+
+8 3. require at least two action types, such as evidence collection, 
+
+9 code or data processing, writing, verification, or review; 
+
+10 4. have dependencies expressible as a DAG; 
+
+11 5. not mainly depend on private content, inaccessible environments, or an 
+
+12 empty/overly short prompt. 
+
+13 14 Output only JSON: 
+
+15 {
+
+16 "accepted": true, 
+
+17 "reason": "short reason", 
+
+18 "suggested_workflow": ["stage 1", "stage 2", "stage 3"], 
+
+19 "risk": "low | medium | high" 
+
+20 }
+
+Refinement Prompt Refinement prompt 
+
+1 Continue refining the following task DAG. 
+
+23 Rules: 
+
+4 1. Expand nodes that are too coarse, information-dense, or important for 
+
+5 parallel scheduling. Multiple nodes may be expanded in one round. 
+
+6 2. The revised graph must remain an acyclic DAG with exactly one terminal 
+
+7 delivery task. 
+
+8 3. Stay faithful to the original seed. Do not drift into another task. 
+
+9 4. Do not copy hidden answers, expected outputs, SQL, rubrics, or numeric 
+
+10 answers from the source dataset into task descriptions. 
+
+11 5. Avoid duplicate, meaningless, or purely count-padding subtasks. 
+
+12 6. Hit the round target exactly when possible. Never exceed the final target. 
+
+13 If the final target has already been reached, keep the node count fixed 
+
+14 and only repair dependencies, task boundaries, stages, and metadata. 
+
+15 7. Preserve and update input tokens, execution tokens, result tokens, 
+
+16 time cost, and compression class. 
+
+17 8. If a target parallelism bucket is specified , move k99 toward the target 
+
+18 range without merely increasing layer width .
+
+19 9. Judge feedback is an acceptance signal and targeted guidance, not a planner. 
+
+20 10. When expanding parallel work packages, preserve branch structure 
+
+21 and avoid serializing independent work packages. 
+
+22 11. Output the complete revised JSON graph. Do not output a patch or markdown. 
+
+Semantic Judge Prompt Semantic judge prompt 
+
+1 Review whether the following task DAG is suitable as an orchestration 
+
+2 benchmark problem. 
+
+34 Check: 
+
+5 1. Do not repeat mechanical structural checks, but reject if the structural 
+
+6 verifier reports hard issues. 
+
+7 2. Each subtask must be executable, not a placeholder. 
+
+8 3. Flag obvious duplication, over-splitting, under-splitting, or meaningless 
+
+9 subtasks. 
+
+10 4. Check whether dependency edges are semantically natural and whether edges 
+
+11 are missing or wrongly connected. 
+
+12 5. Check whether compression classes match task semantics. 
+
+13 6. Check whether token counts and time costs are plausible. 
+
+14 7. If the graph has not reached the target count but is structurally and 
+
+15 semantically sound, it may be accepted with targeted refinement suggestions. 
+
+16 8. If the target count is reached and k99 is outside the requested bucket, 
+
+17 reject and suggest dependency or boundary repairs. 
+
+18 9. High parallelism is part of the requested benchmark specification; do not 
+
+19 reject a wide DAG merely because it is wide .
+
+20 21 Output only JSON: 
+
+22 {
+
+23 "accepted": true, 
+
+24 "issues": [], 
+
+25 "warnings": [], 
+
+26 "redundant_tasks": [], 
+
+27 "suggested_refinements": [] 
+
+28 }
+
+Planner Evaluation Prompt Planner evaluation prompt 
+
+1 You are a dynamic workflow orchestrator. Output only JSON, no markdown and 
+
+2 no explanation. Write a small workflow_script rather than listing every 
+
+3 task assignment. The evaluator will deterministically expand the script 
+
+4 into a concrete assignment plan. The interpreter will not auto-complete 
+
+5 cross-agent transfers and will not choose compression ratios for you. 
+
+67 You receive the full DAG. deps are required upstream tasks. compression is 
+
+8 the sensitivity of the upstream result when passed to downstream tasks. 
+
+9 You also receive context_limit and max_agents. 
+
+10 11 Script semantics: 
+
+12 1. agent_pools define named pools; total count must not exceed max_agents. 
+
+13 2. rules are matched in order; assigned tasks are not overwritten. 
+
+14 3. match may use stage, stages, stage_regex, stage_contains, task_ids, or all. 
+
+15 4. strategy may be round_robin, dependency_grouping, load_balance, or single. 
+
+16 5. If parent and child are assigned to different agents, you must add explicit 
+
+17 transfers or transfer_rules. Missing transfers are recorded and penalized 
+
+18 through quality loss. 
+
+19 6. transfer_rules expand over dependency edges . cross_agent_only=true means 
+
+20 transfer only when parent and child are on different agents. 
+
+21 7. compression must be explicitly set. Higher compression ratios preserve 
+
+22 quality but cost more communication tokens. Choose the ratios yourself. 
+
+23 8. Use stage or regex rules to express a dynamic workflow; still cover the 
+
+24 key cross-agent dependency transfers. 
+
+25 26 Output JSON with agent_pools, rules, default, and transfer_rules. 
+
+II. DAG Validation Prompt 
+
+The LLM judge evaluates semantic validity that is difficult to capture with deterministic rules. The judge does not re-ceive the full JSON for large DAGs. Instead, we compact the DAG into problem metadata, graph statistics, stage counts, largest layers, a rule-based validation snapshot, and represen-tative task rows. Small DAGs are shown nearly in full. For large DAGs, task rows are sampled from the topology head, topology tail, widest layer, stage representatives, and stride samples. The hidden row count is included only for prompt-budget accounting and is not treated as missing subtasks. 
+
+LLM-as-judge prompt 
+
+1 System: 
+
+2 You are a rigorous DAG-validity judge for benchmark orchestration. Output JSON only. 
+
+34 User: 
+
+5 Evaluate whether this DAG is a reasonable orchestration decomposition for the benchmark task. 
+
+67 Judge from a reviewer perspective. Focus on: 
+
+8 1. coverage: the DAG covers the original goal at an appropriate level of detail. 
+
+9 2. dependency_correctness: prerequisite edges and stage order are plausible. 
+
+10 3. redundancy: the DAG is not filled with duplicate or near-duplicate subtasks. 
+
+11 4. missing_subtasks: no obvious core stages are absent. 
+
+12 5. parallelism_plausibility: parallel branches are meaningful and have plausible integration. 
+
+13 14 All numeric scores are quality scores where 100 is best and 0 is worst. 
+
+15 For missing_subtasks, 100 means no obvious missing core stage/subtask type; 0 means severe missing core workflow stages. 
+
+16 Do not invert any rule percentage: hard-rule percentages are also quality percentages where higher is better. 
+
+17 18 Do not evaluate whether the final answer is correct, and do not evaluate time/token prediction ability. 
+
+19 For large DAGs, the task list is compacted; use stage/layer summaries and the sampled tasks to judge global validity. 
+
+20 The payload may contain unshown_task_row_count _for_prompt_budget_only. This is only the number of task rows hidden to fit the prompt. 
+
+21 It is not a count of missing DAG subtasks and must not reduce missing_subtasks by itself .
+
+22 The hard-rule snapshot is diagnostic evidence, not an answer key. 
+
+23 24 Return only a JSON object with this schema: 
+
+25 {
+
+26 "accepted": "boolean; true only if the DAG is reasonable enough for benchmark use", 
+
+27 "scores": { 
+
+28 "coverage": "integer 0-100", 
+
+29 "dependency_correctness": "integer 0-100", 
+
+30 "redundancy": "integer 0-100", 
+
+31 "missing_subtasks": "integer 0-100", 
+
+32 "parallelism_plausibility": "integer 0-100", 
+
+33 "overall": "integer 0-100" 
+
+34 }, 
+
+35 "issues": "list of short strings; concrete problems, not generic caveats", 36 "strengths": "list of short strings", 
+
+37 "confidence": "low|medium|high", 
+
+38 "rationale": "one concise paragraph" 
+
+39 }
+
+40 41 DAG payload: 
+
+42 {... compacted DAG ...}

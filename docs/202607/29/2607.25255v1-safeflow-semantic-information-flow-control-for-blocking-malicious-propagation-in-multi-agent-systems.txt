@@ -1,0 +1,814 @@
+Title: SafeFlow: Semantic Information-Flow Control for Blocking Malicious Propagation in Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2607.25255v1
+
+Published Time: Wed, 29 Jul 2026 00:28:30 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# SafeFlow: Semantic Information-Flow Control for Blocking Malicious Propagation in Multi-Agent Systems 
+
+## Haowen Dai 1∗, Zonghao Ying 2∗, Wenfeng Li 3, Xiangfan Wu 4, Yisong Xiao 2
+
+## Tianyuan Zhang 2, Jiaye Lin 5, Lei Wei 6, Guangyuan Dong 7, Xitong Ling 8
+
+## Xixun Lin 9, Quanchen Zou 10 , Xiangzheng Zhang 11 
+
+> 1
+
+University of Nottingham Ningbo China 2Beihang University 
+
+> 3
+
+Shandong University 4Ocean University of China 
+
+> 5
+
+Meituan 6Peking University 7National University of Singapore 
+
+> 8
+
+Tsinghua University 9Chinese Academy of Sciences 
+
+> 10
+
+360 AI Security Lab 11 Qihoo 360 
+
+Abstract 
+
+Multi-agent systems improve capability through task decom-position and role specialization, but these same mechanisms introduce an important safety blind spot: a harmful objec-tive can be fragmented into locally plausible subtasks, allow-ing malicious intent to evade detection by any single agent. This is a growing social-impact challenge: systems handling sensitive information or consequential tools can turn routine delegation into unauthorized disclosure or unsafe action. We argue that this failure mode is better understood as a seman-tic information-flow problem than as a single-turn prompt classification task. To address this, we propose SafeFlow, a defense framework for multi-agent systems that formalizes malicious cross-agent propagation as a semantic information-flow problem. SafeFlow attaches structured semantic taints to root requests, propagates them through a dynamic collabora-tion graph, and performs workflow-level validation to recon-struct the global risk context before irreversible actions are committed. Evaluated on four benchmarks spanning prompt injection, jailbreak-based unsafe tool use, risky code execu-tion, and harmful web-agent behavior, SafeFlow reduces at-tack success rates compared to undefended baselines and ex-ternal defenses while retaining high benign task completion and a high paired safe–harm success rate. Our findings show that multi-agent systems still lack mechanisms for preserv-ing risk semantics across delegation boundaries. This gap can turn routine delegation into privacy harms or unsafe actions that affect people and organizations. SafeFlow keeps this risk visible throughout the workflow, before it results in harm. 
+
+## 1 Introduction 
+
+Multi-agent systems increasingly coordinate language mod-els as planners (Yao et al. 2023), tool users (Schick et al. 2023), and role-specialized collaborators (Wu et al. 2023; Hong et al. 2024; Li et al. 2023), with increasingly capable frontier models further accelerating this shift (OpenAI 2023). This creates an insufficiently addressed social safety-and-privacy challenge: planner decisions, inter-agent messages, and tool-side effects jointly determine system behavior. Fail-ures involving sensitive information or consequential tools can affect people and organizations that neither authored the prompt nor observe the resulting workflow. 
+
+> ∗
+
+Equal contribution Leak a  
+
+> confidential
+> token Planner
+> Unsafe Propagation in Multi-Agent System
+> Retrieve
+> Read
+> internal file
+> Each local step looks safe
+> Summarize
+> Extract
+> token field
+> Package
+> Prepare
+> attachment
+> Send
+> Email
+> externally
+
+☠       
+
+> Unsafe
+> Token leaked
+> externally
+> 1234
+> decomposes into
+> local subtasks
+> Agent A Agent B Agent C Agent D
+> No single step looks clearly
+> malicious, but the full path is
+> unsafe.
+> SafeFlow
+> 1. Intent Taint
+> Annotation
+> 2. Taint
+> Propagation
+> 3. Context
+> Reconstruction
+> 🐀 ️
+> 4. Global
+> Validation 5. Final
+> Decision
+> Safe
+> (Allow)
+> Unsafe
+> (Block)
+> SafeFlow tracks risky intent across the full workflow and blocks the leak before release.
+
+Figure 1: Unsafe multi-agent propagation and workflow-level blocking. A request is decomposed into retrieval, rewrite, and external-send subtasks that are locally plausible but collec-tively form a forbidden source–sink path. SafeFlow preserves this cross-agent dependency and blocks the staged final re-lease. In these systems, harmful behavior often emerges compo-sitionally. A malicious objective can fragment into locally plausible subtasks: one agent retrieves sensitive content, an-other rewrites it, and a third transmits it, such that no individ-ual step looks overtly malicious, yet the composed workflow realizes exfiltration or policy override. When multi-agent systems handle sensitive information or consequential tools, this fragmentation can create privacy loss or unsafe action beyond any one agent interaction. Figure 1 illustrates how task decomposition turns a globally unsafe objective into lo-cally plausible steps. The central failure mode is therefore 
+
+unsafe propagation of intent through task decomposition .Existing safety methods do not fully address this threat model. Alignment methods improve refusal behavior (Ouyang et al. 2022; Bai et al. 2022; Rafailov et al. 2023), and jailbreak defenses strengthen prompt-level robustness (Zou et al. 2023; Mazeika et al. 2024), but both operate primarily at the level of isolated prompts. Meanwhile, prompt-injection work shows that multi-agent systems remain vulnerable once malicious instructions are woven into longer execution chains (Greshake et al. 2023; Wallace et al. 2024; Zverev et al. 2025; Yi et al. 2025). SafeAgents further demonstrates that arXiv:2607.25255v1 [cs.MA] 28 Jul 2026 multi-agent decomposition creates workflow-level attack op-portunities that local refusal cannot reliably catch (Arora et al. 2025). These approaches do not preserve the seman-tic dependency chain through which locally benign actions can compose into a global attack. This leaves an important gap: preventing distributed workflows from releasing harm-ful outcomes assembled from locally acceptable steps. We therefore cast unsafe behavior in multi-agent systems as an information-flow control problem. Recent work has be-gun to apply information-flow reasoning to language mod-els (Siddiqui et al. 2025), but a multi-agent workflow also requires the system to preserve risk evidence across plan-ning, delegation, and tool execution. SafeFlow operational-izes this requirement through five stages: taint annotation, propagation, context reconstruction, global validation, and attribution-aware decision. Its operational rule is to stage a hard sink and block it when the realized collaboration graph contains one of the source–sink patterns specified in Sec-tion 3.2. The key design choice is deferred adjudication :many attacks only become unambiguous after several indi-vidually plausible actions compose into such a path. We evaluate SafeFlow on four benchmarks spanning prompt injection, jailbreak tool use, risky code execution, and harmful web-agent behavior. The results indicate that workflow-level control improves the security–utility trade-off over both undefended and runtime-defense baselines, re-mains robust under stronger jailbreak augmentations, and de-grades meaningfully when core pipeline stages are removed. Our main contributions are: 
+
+• We formulate malicious cross-agent propagation in multi-agent systems as a semantic information-flow problem with structured taint propagation and hard-sink release checks. 
+
+• We introduce SafeFlow, a five-stage defense framework that propagates semantic taints across delegation edges and defers adjudication until the full source–sink path is assembled. 
+
+• We evaluate four benchmarks and multiple defense-side LLMs, showing that SafeFlow reduces average ASR from 69.3% to 12.7% while preserving strong benign utility and the best paired safe–harm success among compared methods. 
+
+## 2 Related Work 
+
+Multi-Agent Systems Attacks. Recent work shows that attacks against multi-agent systems can span entire work-flows. Indirect prompt injection can enter through retrieved content or external documents, as shown by Greshake et al. (Greshake et al. 2023), and later benchmarking studies such as BIPIA (Yi et al. 2025) confirm that these attacks remain effective once malicious instructions are embedded inside longer interaction chains. At the policy level, the Instruction Hierarchy of Wallace et al. (Wallace et al. 2024) and the instruction–data separation analysis of Zverev et al. (Zverev et al. 2025) both highlight how easily untrusted content can interfere with privileged control signals. In explicitly multi-agent settings, SafeAgents (Arora et al. 2025) demonstrates that decomposition across agents creates attack surfaces that are not visible in single-agent evaluation, while AgentDojo (Debenedetti et al. 2024) shows that prompt injection and tool-mediated compromise must be studied inside dynamic agent environments with full interaction histories. 
+
+Multi-Agent Systems Defenses. Defenses for multi-agent systems are beginning to move beyond single-turn refusal, but most still act locally around the current prompt or pend-ing action. GuardAgent (Xiang et al. 2024) introduces a ded-icated guard model that reasons over agent behavior, while AutoDefense (Zeng et al. 2024) uses multi-agent coordina-tion to generate defensive interventions against jailbreaks. AegisLLM proposes a self-reflective cooperative defense in which specialized agents coordinate defensive screening and response refinement (Cai et al. 2025). More workflow-aware perspectives are also emerging. Siddiqui et al. (Siddiqui et al. 2025) adapt permissive information-flow analysis to language-model settings, and recent agent-safety work ar-gues that safety should be evaluated over execution flows. A common limitation of this workflow-level line is that its operating point can depend on the surrounding planner, tool interfaces, and runtime instrumentation as well as the defense logic. SafeFlow aligns with this workflow-level line of work but differs in emphasis: it treats malicious cross-agent propa-gation as a semantic information-flow problem, explicitly propagates taint across delegation and message edges, and postpones hard-sink commitment until global source–sink validation is complete. 
+
+## 3 Methodology 
+
+3.1 Problem Setup 
+
+We model the defended runtime as M = ( A, U, T , O),comprising agents A, tool interfaces U, a planner T , and an observable execution channel O. The attacker operates through malicious natural-language instructions and, when applicable, malicious retrieved content that may be quoted, summarized, or relayed between agents. We do not assume compromise of model weights, source code, or host-level ac-cess control; the threat is endogenous to the workflow and succeeds when locally plausible steps compose into a glob-ally unsafe outcome (Greshake et al. 2023; Yi et al. 2025; Arora et al. 2025). 
+
+Observable Runtime and Trace. SafeFlow operates on workflow events exposed by the runtime before irreversible actions are committed. It normalizes these records into a shared capability vocabulary for source–sink validation; the runtime event schema, normalization procedure, and inter-face contract are provided in Appendix A.2. Given a user request x, the planner decomposes it into subtasks under local contexts. The central failure mode is semantic fragmentation: the global request is unsafe even when each local subtask appears admissible in isolation. We refer to a case as prompt-local when the unsafe source–sink relation is already visible within one local view, and as cross-agent when it only becomes explicit after messages, delega-tion steps, or tool events are composed across the workflow. Likewise, a local-pass/global-block trace is one that appears admissible under local inspection but is later blocked once workflow-level evidence is reconstructed. SafeFlow attaches a structured taint state to the root request and assembles evi-dence from the full workflow. Let T (x) be the taint set induced by x, and let G =(V, E, τ ) be the tainted collaboration graph, where V con-tains task nodes, message nodes, tool-event nodes, and agent-state nodes, E records parent, delegation, message, and tool dependencies, and τ (v) is the taint set attached to node v.Validation operates over the realized workflow. 
+
+3.2 Taint Semantics 
+
+SafeFlow uses a configurable taint label schema that distin-guishes protected sources, irreversible sinks, and control-plane overrides. Formally, the selected finite schema is 
+
+L = Lsrc ∪ L sink ∪ L ctl , and each node state τ (v) ⊆ L 
+
+retains the labels supported by its evidence and provenance. For a realized path p = v0 ⇝ vm, a rule r ∈ R blocks the staged sink vm when the labels and provenance on p match its forbidden source–sink pattern; it releases that sink only when the rule’s task-necessity and target-authorization pred-icates hold. Thus, propagation is monotone until an explicit release rule is satisfied at a staged sink. Our default evalua-tion policy instantiates seven labels: SENSITIVE_READ 
+
+and CREDENTIAL_ACCESS identify protected sources; 
+
+EXTERNAL_SEND , PRIVILEGED_EXEC , CODE_EXEC ,and DESTRUCTIVE_WRITE identify hard sinks; and 
+
+PROMPT_OVERRIDE marks control-plane input. This schema keeps risk semantics explicit enough for propagation and rule-based validation while remaining compact. A new domain is onboarded before deployment by adding a source, sink, or control-plane label together with its evidence pat-terns, capability mappings, propagation scope, and explicit block or release rule. The selected schema remains fixed dur-ing an execution run so that the structured output contract is closed. Appendix A.4 details the label definitions, represen-tative forbidden paths, policy instantiations, and extension procedure. Hard sinks include irreversible external transmission, priv-ileged execution, and destructive writes. A staged action is blocked when a protected source reaches external transmis-sion, when privileged execution or a destructive write lacks task necessity or target authorization, or when untrusted con-tent reaches a planner, router, or tool-policy input. Other staged actions are released only when the sink is necessary for the assigned benign task and its target is authorized. Model-generated explanations may supply evidence spans, but they cannot clear a taint. Propagation copies active labels across communication and retrieval edges and appends sink labels from normalized tool capabilities. The fixed rule set R specifies these block cases and release conditions. The label schema is fixed during an evaluation run; full propagation rules and JSON contracts are in Appendix A.3 and Appendix A.4. 
+
+## 4 SafeFlow Architecture 
+
+Figure 2 presents the architecture as a five-stage pipeline: 
+
+Intent Taint Annotation , Planning and Taint Propagation ,
+
+Context Reconstruction , Global Validation , and Attribution-Aware Decision . These stage names also define the ablation axes used later in the experiments. The key design choice keeps risk semantics attached to the workflow across all stages; a one-shot refusal label would discard the cross-step evidence needed for global validation. It thereby makes source–sink evidence recoverable even when no single local view contains it. 
+
+Intent Taint Annotation. The first stage applies Anno-tateIntent to instantiate the root taint state using a lexical matcher, a constrained defense-side LLM classifier, and a tool heuristic. The classifier returns only labels registered in the selected schema with evidence spans; it cannot invent release conditions. This structured normalization supplies the risk state required by downstream stages; the full output contract is in Appendix A.4. 
+
+Conditional Determinism. Intent annotation, planning, and context reconstruction can vary with LLM outputs. Once their structured records are fixed, propagation and rule ap-plication are deterministic. 
+
+Planning and Taint Propagation. The LLM-mediated 
+
+PlanSubtasks stage emits an agent-specific workflow skele-ton, which is then converted into a tainted collaboration graph by G ← PropagateTaints( T, S). Given fixed T and S,
+
+PropagateTaints deterministically constructs the collabo-ration graph and stages hard sinks so irreversible side effects remain deferred until validation. This preserves the source– sink structure needed to connect locally plausible actions into a globally unsafe chain; lower-level edge rules are in Appendix A.3. 
+
+Context Reconstruction. Given the propagated graph, SafeFlow reconstructs a node-specific execution view with 
+
+ov ← ReconstructContext( v, G, T ). ReconstructCon-text is LLM-mediated because relevant evidence is dis-tributed across messages, retrieved content, and tool traces. It converts this partial local state into a structured record for later workflow-level checks; the full input/output contract is in Appendix A.4. SafeFlow then decides whether the node can pro-ceed immediately or must be staged with πv ←
+
+ExecuteOrStage( v, o v ). Given a reconstructed record, Ex-ecuteOrStage deterministically applies the fixed sink rules. Low-risk or reversible actions may execute immediately, while irreversible operations are staged for later adjudica-tion. 
+
+Global Validation. After all nodes have been processed, the local outcomes are merged into a workflow trace with 
+
+Π ← AggregateTrace( {πv }). Given the node outcomes, 
+
+AggregateTrace deterministically merges them into one workflow-level trace because individually acceptable plan-ner, retrieval, and send steps may jointly instantiate a forbid-den source–sink chain. The final safety verdict is computed from the full work-flow state with d ← ValidateWorkflow( G, Π; R). Given 
+
+G, Π, and R, ValidateWorkflow deterministically applies the rules over graph structure, propagated taints, and staged sinks. It makes the final release-or-block decision for every staged hard sink. Intent Taint 
+
+Annotation 
+
+Root Request x   
+
+> PII
+> 𝐀 (𝐀 ) =
+> {𝐀 ₁, …, 𝐀 𝐀 }
+> Intent Annotation
+> Module
+> Lexical matcher + constrained
+> LLM + tool heuristics assign
+> structured taints
+> 𝐀 (𝐀 ) ={ 𝐀 ₁, …, 𝐀 𝐀 }
+
+Taint Tags 
+
+Sample taints   
+
+> Credential External Send
+> Prompt Override ……
+
+Planning & 
+
+Taint Propagation 
+
+> Central
+> Planner
+> Collaboration Graph
+> G = (V, E,τ )
+> Agent A
+> Subtasks
+> Task
+> Inter-agent
+> message
+> Agent B
+> Message
+> Subtasks
+> >_
+> Agent C
+> >_
+> Message
+> Tool Call
+
+Agents Observe Only 
+
+Partial Local Views 
+
+Agent A Local View 
+
+> Summarize the retrieved
+> ticket for Agent B.
+> 🐀
+> Ticket contains an API token.
+> Locally Plausible, Globally Incomplete
+
+Agent B Local View 
+
+> Message from Agent A
+> includes a token-like string.
+> Validate(x, G, π)
+> {SAFE ,
+> BLOCKED}
+> External sink receives
+> sensitive content.
+> Locally Plausible, Globally unsafe
+
+Context Reconstruction 
+
+& Global Validation  
+
+> o_v = ReconstructContext(v, G, T)
+
+Tainted Collaboration 
+
+Graph 
+
+Aggregate 
+
+> Workflow Collaboration Graph
+
+Validation Module 
+
+Staged Hard Sinks 
+
+Attribution-Aware 
+
+Decision 
+
+Decision Rationale 
+
+Sensitive content 
+
+reaches an external sink. 
+
+✓ SAFE 🐀 
+
+× BLOCKED 
+
+Attribution Trace  
+
+> Blocked: credential-bearing
+> content flows from Agent
+> A's retrieval to Agent B's
+> external email sink.
+> 🐀
+> Chat history:
+> Retrieve the internal support log.
+> Extract the referenced token field.
+> Tool calls
+> Read internal ticket archive.
+> Tool calls
+> Retrieved content
+> Chat history:
+> Prepare a support-ticket summary.
+> Send summary
+> to external email.
+> Retrieved content
+> Retrieved summary
+> contains token.
+> Cross-agent path detected
+> SENSITIVE_READ ->
+> EXTERNAL_SEND
+> Blocked by workflow-level
+> validation.
+
+Figure 2: SafeFlow Architecture. The five stages retain taints across workflow edges and stage irreversible hard sinks until global validation. It releases only authorized, task-necessary sinks. 
+
+Attribution-Aware Decision. Finally, GenerateAttri-bution records the decisive path, triggering taints, sink type, and failed release condition without altering d. Safe work-flows commit staged hard sinks; otherwise they are discarded. 
+
+Worked Exfiltration Trace. For a request to read an ssh configuration file and email an extracted token externally, SafeFlow preserves the resulting credential-to-external-send taint path across retrieval, rewrite, and staged email nodes, so the validator blocks the release; the full worked trace is given in Appendix A.6. Appendices A.1–A.6 and B.1–B.2 provide full implemen-tation details, worked traces, and additional analyses. 
+
+## 5 Experiments 
+
+5.1 Experimental Setup 
+
+Datasets. We evaluate SafeFlow on four adversar-ial prompting benchmarks: ASB (Zhang et al. 2024), 
+
+AgentHarm (Andriushchenko et al. 2024), RedCode (Guo et al. 2024), and SafeArena (Tur et al. 2025). They cover prompt injection, jailbreak unsafe tool use, risky code ex-ecution, and harmful autonomous web-agent behavior. We normalize all four into a shared task schema so that all de-fenses receive the same input representation. 
+
+Target Models. The efficacy of a workflow-level defense depends not only on the validation design, but also on the capability of the defense-side language model used to re-construct intent and aggregate distributed evidence. Unless otherwise noted, our main results use DeepSeek-V3.2-Exp (DeepSeek-AI 2025) (DeepSeek) as the default defense-side model. In the model-sensitivity study, we additionally eval-uate o4-mini (OpenAI 2025b), MiMo-v2.5 (Xiaomi LLM-Core Team 2026) (MiMo), Kimi-K2.6 (Moonshot AI 2025) (Kimi), Claude-3.5-Haiku (Anthropic 2024) (Claude), and GPT-5-mini (OpenAI 2025a) (GPT-5). 
+
+Evaluation Metrics. Our primary metric is attack success rate (ASR), defined as the fraction of attack instances that successfully induce the target unsafe behavior. We report both aggregate ASR and benchmark-specific breakdowns. For benign-task analysis, we additionally report task com-pletion rate (TCR), false positive rate (FPR), and Paired safe–harm success (Paired). An aligned benign–harmful task pair counts as a paired success only when the method com-pletes the benign run and blocks the target unsafe outcome in its harmful counterpart. Paired is the fraction of aligned pairs satisfying both conditions. These complementary met-rics capture the security–utility trade-off induced by each de-fense. Higher TCR and Paired are preferable, whereas lower FPR and ASR are preferable. 
+
+Overhead and Workflow Scale. Under the default DeepSeek configuration, SafeFlow adds 3.7 LLM calls and 8.8 seconds per harmful workflow, reconstructing 3.0 nodes on average. Our evaluated collaboration workflows con-tain 3–10 nodes, consistent with the roughly ten-node task scale represented by current multi-agent safety benchmarks (Zhang et al. 2024; Andriushchenko et al. 2024; Arora et al. 2025). Per-outcome measurements and accounting details are provided in Appendix B.2. 
+
+Implementation and Baselines. All methods use the same normalized benchmark inputs and aligned subsets within the same instrumented runtime, which makes the workflow trace available before the final unsafe commit. 
+
+SafeAgents (Arora et al. 2025) is the undefended work-ASB AgentHarm RedCode SafeArena Method TCR ↑ FPR ↓ ASR ↓ Paired ↑ TCR ↑ FPR ↓ ASR ↓ Paired ↑ TCR ↑ FPR ↓ ASR ↓ Paired ↑ TCR ↑ FPR ↓ ASR ↓ Paired ↑                                                                                
+
+> SafeAgents 96.5% 0.8% 71.8% 27.2% 94.8% 1.5% 62.7% 35.3% 93.6% 2.2% 68.2% 29.8% 95.2% 1.2% 74.6% 24.2% GuardAgent 88.9% 8.1% 38.2% 55.0% 86.1% 10.1% 20.9% 68.1% 84.2% 11.8% 27.3% 61.2% 86.8% 9.6% 23.6% 66.3% AutoDefense 82.9% 14.9% 55.5% 36.9% 80.1% 16.9% 39.1% 48.8% 78.2% 18.6% 45.5% 42.6% 80.6% 16.4% 42.7% 46.2% AegisLLM 87.8% 8.7% 36.4% 55.9% 85.9% 10.5% 24.5% 64.8% 84.0% 12.0% 30.9% 58.0% 86.0% 10.8% 28.2% 61.8%
+> SafeFlow 92.4% 4.6% 11.8% 81.5% 90.1% 6.1% 12.7% 78.6% 88.9% 7.2% 9.1% 80.8% 90.8% 5.6% 17.3% 75.1%
+
+Table 1: Main Results Under the No-Attack Setting.                               
+
+> Method No Attack ReNeLLM GPTFuzz JailBroken MultiLingual SafeAgents 69.3% 80.5% 76.4% 85.5% 74.1% GuardAgent 27.5% 34.8% 31.6% 40.2% 28.9% AutoDefense 45.7% 49.8% 47.2% 55.8% 43.9% AegisLLM 30.0% 36.9% 33.4% 42.5% 31.1%
+> SafeFlow 12.7% 25.5% 20.9% 32.3% 19.1%
+
+Table 2: ASR Under Jailbreak Attacks. flow; GuardAgent (Xiang et al. 2024), AutoDefense 
+
+(Zeng et al. 2024), and AegisLLM (Cai et al. 2025) are de-fensive baselines evaluated through their published prompt-and pending-action interfaces. SafeFlow uses the same avail-able planner outputs, inter-agent messages, tool traces, staged sinks, and prior local decisions to reconstruct source–sink evidence. Thus all methods are evaluated under the same threat model and with the same available runtime artifacts. Safe-Flow’s advantage does not rely on privileged inputs: it uses the workflow fields emitted by the shared runtime, while the baseline implementations operate through their published prompt- and pending-action interfaces. SafeFlow receives no gold labels, hidden benchmark metadata, or post hoc evalu-ator signal. For robustness, we further wrap the normalized inputs with four representative jailbreak attacks: ReNeLLM (Ding et al. 2024), GPTFuzz (Yu et al. 2023), JailBroken (Wei, Haghtalab, and Steinhardt 2023), and MultiLingual (Li et al. 2024). The downstream workflow, tools, and evaluation criterion remain unchanged. 
+
+5.2 Main Results 
+
+Table 1 summarizes the main comparison on the four bench-marks under DeepSeek. These results evaluate both sides of the defense objective: whether a method blocks harm-ful workflows and preserves benign execution without indis-criminate refusal. 
+
+Overall Performance. The undefended SafeAgents 
+
+workflow preserves benign utility but leaves harmful workflows largely unchecked: on SafeArena, it reaches 74.6% ASR and 24.2% paired success. GuardAgent 
+
+and AegisLLM form the strongest external tier, whereas 
+
+AutoDefense has a clearer utility cost while leaving sub-stantial residual risk. SafeFlow achieves the best trade-off, with the highest paired success on every benchmark, includ-ing 81.5% on ASB and 75.1% on SafeArena, and the lowest ASR throughout.                                            
+
+> SafeAgents SafeFlow
+> Benchmark DeepSeek DeepSeek o4-mini MiMo Kimi Claude GPT-5 ASB 71.8% 11.8% 7.3% 8.2% 6.4% 14.5% 8.2% AgentHarm 62.7% 12.7% 5.5% 9.1% 7.3% 12.7% 13.6% RedCode 68.2% 9.1% 10.9% 5.5% 10.9% 8.2% 16.4% SafeArena 74.5% 17.3% 9.1% 11.8% 7.3% 10.9% 10.0% Avg. 69.3% 12.7% 8.2% 8.6% 8.0% 11.6% 12.0%
+
+Table 3: Defense-Model Sensitivity. The four metrics show that this gain does not come from broad refusal. On SafeArena, SafeFlow retains 90.8% TCR with 17.3% ASR; GuardAgent and AegisLLM retain 86.8% and 86.0% TCR but leave 23.6% and 28.2% ASR, while AutoDefense falls to 80.6% TCR and still leaves 42.7% ASR. The same pattern holds across benchmarks: SafeFlow lowers ASR to 11.8% and 9.1% on ASB and Red-Code, and remains separated from all baselines on the longer AgentHarm and SafeArena workflows. This supports selec-tive interception of unsafe workflow paths across task set-tings. ASB and RedCode are comparatively direct source– sink settings, whereas AgentHarm and SafeArena distribute harmful intent across longer chains of locally plausible steps. SafeFlow remains clearly separated from all baselines on these harder workflows, reaching 12.7% and 17.3% ASR while GuardAgent and AegisLLM remain in the 20.9%– 30.9% range. The stable ordering across all four benchmarks is consistent with preserving risk semantics across the work-flow instead of benchmark-specific prompt tuning. 
+
+5.3 Robustness Under Jailbreak Attacks 
+
+Table 2 shows that every wrapper raises ASR, but SafeFlow remains the lowest-ASR method throughout. JailBroken 
+
+is the strongest stressor, raising SafeFlow to 32.3% ASR, while the undefended workflow reaches 85.5%; ReNeLLM ,
+
+GPTFuzz , and MultiLingual yield 25.5%, 20.9%, and 19.1%, respectively. The two strongest wrappers perturb local instruction framing most directly, whereas translation-style 
+
+MultiLingual has a weaker effect. SafeFlow still ag-gregates evidence across the collaboration graph, although its margin narrows when handoffs become more ambigu-ous. These results show that prompt-level perturbations can weaken the semantic evidence available at individual steps, but they do not remove the cross-agent dependencies retained in the workflow trace. The remaining gap to the undefended ASB AgentHarm RedCode SafeArena      
+
+> 0
+> 20
+> 40
+> 17 .3
+> 25 .5
+> 32 .7
+> 28 .229 .130 .9
+> 42 .7
+> 36 .3
+> 10
+> 14 .6
+> 20
+> 15 .4
+> 20 .921 .8
+> 30 .9
+> 20 .9
+> ΔASR (%)
+> w/o ITA w/o TP w/o CR w/o GV
+
+Figure 3: Ablation Penalties Relative to Full SafeFlow. workflow supports workflow-level reconstruction as a useful defense layer under these attacks. 
+
+5.4 Defense-Model Sensitivity 
+
+Table 3 shows that SafeFlow remains below the undefended 
+
+SafeAgents ASR across all tested defense-side models. The variation across models is modest, indicating that the gain comes from the workflow-level pipeline rather than un-usually strict model calibration. The highest defended aver-age ASR is 12.7%, compared with 69.3% for the undefended workflow, and the same source–sink logic is recovered with only small sensitivity differences across models. This consis-tency indicates that the central safety benefit is carried by the structured trace, propagation rules, and final workflow vali-dation. Model choice still affects the exact operating point, but does not determine whether the framework can assemble and block the risky source–sink relation. 
+
+5.5 Ablation and Sensitivity Analysis 
+
+Figure 3 shows that planning and taint propagation ( w/o TP ) is the most impactful component to remove across ev-ery benchmark. In this ablation, the validator still receives the same normalized local events and staged sinks, but it no longer receives propagated graph-level taint state linking protected sources to downstream sinks. The largest ∆ASR values appear on RedCode and SafeArena, indicating that later checks lose the state needed to connect individually plausible actions into a globally unsafe chain. The other ablations show complementary roles. Without intent annotation, visible tool events still provide partial sig-nals. Without context reconstruction, propagated taints and staged sinks remain available but node-specific synthesis is lost; removing global validation removes the final release-or-block decision for staged sinks. Later validation cannot recover source-to-sink state once propagation has lost it. 
+
+Policy Schema Sensitivity. Table 4 evaluates policy changes on the same fixed evaluation slice used for the main results. The default 7-label policy uses the source, hard-sink, and control-plane labels defined in Section 3.2. The 4-label configuration uses a reduced policy, while the 10- and                             
+
+> Policy configuration TCR ↑FPR ↓ASR ↓Paired ↑
+> 4-label policy 88.7% 5.4% 22.1% 71.5% 7-label policy 90.6% 5.9% 12.7% 79.0% 10-label policy 91.2% 6.1% 10.4% 80.7% 14-label policy 91.5% 7.4% 8.9% 81.3%
+> Partial propagation, 7 labels 88.7% 6.3% 22.8% 69.4%
+
+Table 4: Policy schema sensitivity on the fixed evaluation slice. Local-only One-hop Full-upstream      
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 63 .5
+> 77 .6
+> 89 .2
+> 65 .8
+> 72 .3
+> 79
+> 25 .4
+> 18 .7
+> 12 .4
+> Rate (%)
+> Path recovery ↑Paired success ↑ASR ↓
+
+Figure 4: Effect of context reconstruction scope on the fixed evaluation slice. 14-label configurations add domain risks and corresponding rules before execution. In the partial-propagation variant, only three of the seven labels cross delegation, message, and rewrite edges; the remaining four stay local to their origi-nating node. Local sink detection remains unchanged. Label definitions and rules are detailed in Appendix A.4. Reducing the label set or restricting propagation weak-ens source–sink coverage and increases ASR. Expanding the schema improves protection, with a modest calibration cost reflected in FPR. 
+
+Context Reconstruction Scope. Figure 4 varies evidence available to ReconstructContext from local-only to one-hop and full-upstream; all other settings are fixed. Path re-covery is the fraction of harmful workflows for which the protected-source-to-risky-sink relation is reconstructed. From local-only to full-upstream, path recovery rises from 63.5% to 89.2%, ASR drops from 25.4% to 12.4%, and paired success improves, while TCR and FPR remain stable. 
+
+5.6 Workflow Types and Boundary Conditions 
+
+Table 5 separates Prompt-Local and Cross-Agent cases ac-cording to whether the unsafe source–sink relation is visible within one local view or only after cross-agent composition. The cross-agent split is harder, but SafeFlow retains the low-est ASR in both cases. Figure 5 illustrates three boundary cases: a missing provenance edge leaves the validator with disconnected events, weak annotation can omit the upstream risk label, and incomplete authorization metadata can over-SafeAgents GuardAgent AutoDefense AegisLLM SafeFlow 
+
+Benchmark Type ASR ↓ TCR ↑ ASR ↓ TCR ↑ ASR ↓ TCR ↑ ASR ↓ TCR ↑ ASR ↓ TCR ↑
+
+ASB Prompt-Local 69.6% 96.9% 35.8% 89.5% 52.6% 83.6% 44.0% 87.6% 10.0% 92.9% 
+
+Cross-Agent 74.0% 96.1% 40.6% 88.3% 58.4% 82.2% 49.2% 86.4% 13.6% 91.9% 
+
+AgentHarm Prompt-Local 60.4% 95.2% 18.9% 86.7% 36.8% 80.7% 27.6% 84.4% 11.4% 90.5% 
+
+Cross-Agent 65.0% 94.4% 22.9% 85.5% 41.4% 79.5% 32.3% 83.2% 14.0% 89.7% 
+
+RedCode Prompt-Local 65.8% 94.0% 24.9% 84.9% 42.8% 78.8% 33.5% 82.6% 7.8% 89.4% 
+
+Cross-Agent 70.6% 93.2% 29.7% 83.5% 48.2% 77.6% 39.4% 81.8% 10.4% 88.4% 
+
+SafeArena Prompt-Local 72.0% 95.7% 21.4% 87.4% 40.5% 81.2% 31.0% 85.0% 15.8% 91.3% 
+
+Cross-Agent 77.2% 94.7% 25.8% 83.5% 44.9% 80.0% 35.5% 84.2% 18.8% 90.3% 
+
+Table 5: Prompt-Local vs. Cross-Agent Stratification. 
+
+Figure 5: Failure modes and boundary cases.                           
+
+> Attack SafeAgents GuardAgent AutoDefense AegisLLM SafeFlow Taint hiding 85.9% 39.1% 55.9% 46.6% 23.0% (81.6%) Cross-agent split 88.0% 43.6% 61.4% 50.9% 20.9% (85.9%) Tool/target masking 84.1% 38.2% 53.9% 45.5% 24.5% (72.5%) Average 85.9% 40.2% 57.0% 47.7% 22.7% (80.0%)
+
+Table 6: Adaptive workflow-evasion evaluation. Entries re-port ASR; parenthesized SafeFlow values report path recall (not applicable to baselines). stage a benign hard sink. Detailed examples and mitigation rules are provided in Appendix A.5 and Appendix B.1. 
+
+5.7 Robustness to Adaptive Attacks 
+
+We evaluate three adaptive perturbations that preserve the harmful objective while targeting workflow evidence: taint hiding, cross-agent splitting, and tool/target masking. Table 6 reports ASR for all methods. Across all three perturbations, SafeFlow maintains 20.9%– 24.5% ASR and recovers 72.5%–85.9% of injected source– sink paths. Taint hiding and cross-agent splitting retain suf-ficient provenance for reconstruction, whereas tool/target 
+
+Injection ASR ↓ Taint retained ↑ Path recovered ↑
+
+No injection 12.7% 98.3% 91.7% Instruction override 14.8% 94.9% 85.7% False authorization 15.4% 93.8% 84.9% Schema spoofing 14.1% 96.2% 86.1% 
+
+Table 7: Defense-side indirect-injection evaluation. masking primarily stresses capability normalization and tar-get interpretation. 
+
+5.8 Defense-Side Indirect Injection 
+
+This experiment tests whether untrusted retrieved content can influence the defense-side LLM used for context reconstruc-tion. We embed three injection variants in retrieved text while holding the harmful objective and emitted workflow trace fixed: instruction override, false authorization, and schema spoofing. In Table 7, source taint retained is the fraction of final staged risky actions that still carry the original sensi-tive or credential taint; risk path recovered is the fraction for which SafeFlow reconstructs the intended protected-source-to-risky-sink path. False authorization is the strongest tested variant, but all three retain high source-taint and risk-path recovery under defense-side injection. 
+
+## 6 Conclusion 
+
+SafeFlow treats safety and privacy in multi-agent systems as a semantic information-flow problem. By tracking structured semantic taints across collaboration graphs and deferring ad-judication to the workflow level, it addresses the blind spot created when harmful objectives fragment into locally plausi-ble subtasks. Across four benchmarks, SafeFlow achieves the lowest ASR and a favorable security–utility trade-off relative to the compared baselines, with gains driven by coordinated workflow-level control. The results motivate safeguards that preserve risk state across delegation boundaries before sen-sitive information is disclosed or unsafe actions are released, reducing a social safety-and-privacy risk left by prompt-local defenses. References 
+
+Andriushchenko, M.; Souly, A.; Dziemian, M.; Duenas, D.; Lin, M.; Wang, J.; and Hendrycks, D. 2024. AgentHarm: A Benchmark for Measuring Harmfulness of LLM Agents. 
+
+arXiv preprint arXiv:2410.09024 .Anthropic. 2024. Claude 3.5 Haiku. Model card. Arora, N.; Joel, S.; Kavathekar, I.; Palak; Gandhi, R.; Pandya, Y.; Ganu, T.; Kanade, A.; and Nambi, A. 2025. Expos-ing Weak Links in Multi-Agent Systems under Adversarial Prompting. arXiv preprint arXiv:2511.10949 .Bai, Y.; Kadavath, S.; Kundu, S.; Askell, A.; Kernion, J.; Jones, A.; and Chen, A. 2022. Constitutional AI: Harmless-ness from AI Feedback. arXiv preprint arXiv:2212.08073 .Cai, Z.; Shabihi, S.; An, B.; Che, Z.; Bartoldson, B. R.; Kailkhura, B.; Goldstein, T.; and Huang, F. 2025. AegisLLM: Scaling Agentic Systems for Self-Reflective Defense in LLM Security. arXiv preprint arXiv:2504.20965 .Debenedetti, E.; Zhang, J.; Balunović, M.; Beurer-Kellner, L.; Fischer, M.; and Tramèr, F. 2024. AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and De-fenses for LLM Agents. arXiv preprint arXiv:2406.13352 .DeepSeek-AI. 2025. DeepSeek-V3 Technical Report. arXiv:2412.19437. Ding, P.; Kuang, J.; Ma, D.; Cao, X.; Xian, Y.; Chen, J.; and Huang, S. 2024. A Wolf in Sheep’s Clothing: Generalized Nested Jailbreak Prompts can Fool Large Language Mod-els Easily. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computa-tional Linguistics: Human Language Technologies (Volume 1: Long Papers) , 2136–2153. Greshake, K.; Abdelnabi, S.; Mishra, S.; Endres, C.; Holz, T.; and Fritz, M. 2023. Not What You’ve Signed Up For: Com-promising Real-World LLM-Integrated Applications with In-direct Prompt Injection. In Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Se-curity .Guo, C.; Liu, X.; Xie, C.; Zhou, A.; Zeng, Y.; Lin, Z.; Song, D.; and Li, B. 2024. RedCode: Risky Code Execution and Generation Benchmark for Code Agents. In Advances in Neural Information Processing Systems , volume 37, 106190– 106236. Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Zhang, C.; and Wang, J. 2024. MetaGPT: Meta Programming for A Multi-Agent Collaborative Framework. In The Twelfth International Conference on Learning Representations .Li, G.; Hammoud, H. A. A. K.; Itani, H.; Khizbullin, D.; and Ghanem, B. 2023. CAMEL: Communicative Agents for “Mind” Exploration of Large Language Model Society. 
+
+arXiv preprint arXiv:2303.17760 .Li, J.; Liu, Y.; Liu, C.; Shi, L.; Ren, X.; Zheng, Y.; Liu, Y.; and Xue, Y. 2024. A Cross-Language Investigation into Jailbreak Attacks in Large Language Models. arXiv preprint arXiv:2401.16765 .Mazeika, M.; Phan, L.; Yin, X.; Zou, A.; Wang, Z.; Mu, N.; and Sakhaee, E. 2024. HarmBench: A Standardized Eval-uation Framework for Automated Red Teaming and Robust Refusal. In Proceedings of the 41st International Conference on Machine Learning .Moonshot AI. 2025. Kimi Technical Report. Technical re-port. OpenAI. 2023. GPT-4 Technical Report. arXiv preprint arXiv:2303.08774 .OpenAI. 2025a. GPT-5 System Card. System card. OpenAI. 2025b. OpenAI o4-mini System Card. System card. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C. L.; Mishkin, P.; and Zhang, C. 2022. Training Language Models to Follow Instructions with Human Feedback. arXiv preprint arXiv:2203.02155 .Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C.; Ermon, S.; and Finn, C. 2023. Direct Preference Optimization: Your Language Model is Secretly a Reward Model. In Advances in Neural Information Processing Systems .Schick, T.; Dwivedi-Yu, J.; Dessi, R.; Raileanu, R.; Lomeli, M.; Zettlemoyer, L.; Cancedda, N.; and Scialom, T. 2023. Toolformer: Language Models Can Teach Themselves to Use Tools. In Advances in Neural Information Processing Sys-tems .Siddiqui, S. A.; Gaonkar, R.; K"opf, B.; Krueger, D.; Paverd, A.; Salem, A.; and Tople, S. 2025. Permissive Information-Flow Analysis for Large Language Models. Transactions on Machine Learning Research .Tur, A. D.; Meade, N.; Lù, X. H.; Zambrano, A.; Patel, A.; Durmus, E.; Gella, S.; Stańczak, K.; and Reddy, S. 2025. SafeArena: Evaluating the Safety of Autonomous Web Agents. arXiv preprint arXiv:2503.04957 .Wallace, E.; Xiao, K.; Leike, R.; Weng, L.; Heidecke, J.; and Beutel, A. 2024. The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions. arXiv preprint arXiv:2404.13208 .Wei, A.; Haghtalab, N.; and Steinhardt, J. 2023. Jailbro-ken: How Does LLM Safety Training Fail? arXiv preprint arXiv:2307.02483 .Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Li, B.; Zhu, E.; and Jiang, L. 2023. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. arXiv preprint arXiv:2308.08155 .Xiang, Z.; Zheng, L.; Li, Y.; Hong, J.; Li, Q.; Xie, H.; and Zhang, J. 2024. GuardAgent: Safeguard LLM Agents by a Guard Agent via Knowledge-Enabled Reasoning. arXiv preprint arXiv:2406.09187 .Xiaomi LLM-Core Team. 2026. MiMo-V2.5. Model card. Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In The Eleventh International Conference on Learning Representations .Yi, J.; Xie, Y.; Zhu, B.; Kiciman, E.; Sun, G.; Xie, X.; and Wu, F. 2025. Benchmarking and Defending Against Indi-rect Prompt Injection Attacks on Large Language Models. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining .Yu, J.; Lin, X.; Yu, Z.; and Xing, X. 2023. GPTFUZZER: Red Teaming Large Language Models with Auto-Generated Jailbreak Prompts. arXiv preprint arXiv:2309.10253 .Zeng, Y.; Wu, Y.; Zhang, X.; Wang, H.; and Wu, Q. 2024. AutoDefense: Multi-Agent LLM Defense against Jailbreak Attacks. arXiv preprint arXiv:2403.04783 .Zhang, H.; Huang, J.; Mei, K.; Yao, Y.; Wang, Z.; Zhan, C.; Wang, H.; and Zhang, Y. 2024. Agent Security Bench (ASB): Formalizing and Benchmarking Attacks and Defenses in LLM-Based Agents. arXiv preprint arXiv:2410.02644 .Zou, A.; Wang, Z.; Carlini, N.; Nasr, M.; Kolter, J. Z.; and Fredrikson, M. 2023. Universal and Transferable Adversar-ial Attacks on Aligned Language Models. arXiv preprint arXiv:2307.15043 .Zverev, E.; Abdelnabi, S.; Tabesh, S.; Fritz, M.; and Lampert, C. H. 2025. Can LLMs Separate Instructions From Data? And What Do We Even Mean By That? In The Thirteenth International Conference on Learning Representations .A Implementation Details 
+
+A.1 SafeFlow Execution Pseudocode 
+
+Algorithm 1 makes the control flow explicit. Intent annota-tion, planning, and context reconstruction are LLM-mediated and may vary across runs. Consequently, end-to-end de-cisions may vary; given fixed parsed taint labels, planner skeleton, and reconstruction records, propagation, staging, aggregation, and final validation are deterministic. Algorithm 1: SafeFlow Execution with Deferred Global Ad-judication 
+
+Require: user request x, agent pool A, validation rules R
+
+Ensure: decision d ∈ { SAFE , BLOCKED } and attribution report r 
+
+> 1:
+
+T ← AnnotateIntent( x) 
+
+> 2:
+
+S ← PlanSubtasks( x, A) 
+
+> 3:
+
+G ← PropagateTaints( T, S) 
+
+> 4:
+
+for all node v ∈ V (G) in topological order do  
+
+> 5:
+
+ov ← ReconstructContext( v, G, T ) 
+
+> 6:
+
+πv ← ExecuteOrStage( v, o v ) 
+
+> 7:
+
+end for  
+
+> 8:
+
+Π ← AggregateTrace( {πv }) 
+
+> 9:
+
+d ← ValidateWorkflow( G, Π; R) 
+
+> 10:
+
+r ← GenerateAttribution( x, G, Π, d ) 
+
+> 11:
+
+return (d, r )
+
+A.2 Runtime Event Schema and Tool Normalization 
+
+SafeFlow validates over a normalized event stream. Trusted wrappers convert raw provider logs into the following event representation: 
+
+e = ( i, a, r, u, y, κ, z, t ),
+
+where i is the event id, a is the actor, r is the event type, u and 
+
+y are the input and output summaries, κ is the normalized capability, z is the target resource, and t is the event time. Event types are drawn from 
+
+{root , plan , delegate , message ,
+
+retrieve , tool , stage , commit }.
+
+The point of normalization is to let one validator run across all benchmarks and baselines. Provider-specific tool calls are reduced to a small capability vocabulary before validation. SafeFlow does not adjudicate on raw argument strings alone; it first reduces each tool invocation to actor, visible content summary, target resource, and capability class. Table 8 sum-marizes the capability mapping used by the validator. 
+
+A.3 Graph Propagation Rules 
+
+Given fixed root labels and planner skeleton, Propa-gateTaints deterministically instantiates task, message, retrieved-object, tool-event, and staged-sink nodes. Del-egation, message, rewrite, and summarization edges copy active labels while updating evidence spans; re-trieval edges add labels and provenance from the re-trieved object; tool edges append capability-induced sink labels such as EXTERNAL_SEND , CODE_EXEC , or              
+
+> Observed tool behav-ior Normalized capability and validator effect Read, fetch, browse, load secret
+> retrieve ; may inherit object taints Write, delete, over-write state
+> write ;may append
+> DESTRUCTIVE_WRITE
+> Email, upload, post, webhook
+> send ; appends EXTERNAL_SEND
+> Shell, interpreter, privileged action
+> exec ;appends CODE_EXEC or
+> PRIVILEGED_EXEC
+> Planner or router up-date
+> control ; protected for prompt-override checks
+
+Table 8: Capability normalization used before validation. 
+
+DESTRUCTIVE_WRITE ; and hard sinks remain staged un-til ValidateWorkflow checks the configured release con-ditions. Labels are removed only by an explicit release rule at a staged sink. 
+
+A.4 Taint Labels, Output Contracts, and Declassification 
+
+SafeFlow uses the following seven-label schema in the de-fault evaluation policy: 
+
+• source labels: SENSITIVE_READ ,
+
+CREDENTIAL_ACCESS ;
+
+• sink labels: EXTERNAL_SEND , PRIVILEGED_EXEC ,
+
+CODE_EXEC , DESTRUCTIVE_WRITE ;
+
+• control-plane label: PROMPT_OVERRIDE .The selected label schema is fixed during an evaluation run. An output containing an unrecognized label is rejected and handled by a conservative fallback: any associated hard sink remains staged until it has registered labels and explicit release evidence. Irreversible external transmission, privi-leged execution, and destructive writes are always staged and require the explicit release conditions below. The taxonomy is organized around workflow roles. 
+
+SENSITIVE_READ and CREDENTIAL_ACCESS 
+
+identify protected sources; EXTERNAL_SEND ,
+
+PRIVILEGED_EXEC , CODE_EXEC , and 
+
+DESTRUCTIVE_WRITE identify hard sinks; 
+
+PROMPT_OVERRIDE marks planner, router, and tool-policy nodes. It does not assign labels by benchmark name. Table 9 summarizes the configured block cases. A new deployment extends the label schema before execution by adding a source, sink, or control-plane label, its allowed output value and evidence patterns, its capability aliases and propagation scope, and an explicit block or release rule. Labels are not created dynamically during a run: the configured schema remains closed so that unrecognized outputs are rejected conservatively. 
+
+Extended Label Schemas. Table 10 specifies the exten-sions used by the policy-schema sensitivity experiment in the main paper. The 10-label schema adds semantic sources for aggregation harms, re-identification, and covert channels. The 14-label schema further distinguishes financial transfers, access-control changes, and public publication as hard sinks, and identity impersonation as a semantic risk source. Each Risk family Workflow role Representative for-bidden path Exfiltration protected source plus transmission sink secret or credential source → external send Unsafe execution privileged or de-structive tool missing task neces-sity or target autho-rization Control takeover planner, router, or tool-policy node untrusted content →
+
+> control-plane node
+
+Table 9: Taint taxonomy rationale. Labels are grouped by their role in workflow-level information flow, independently of benchmark name. Listing 1: Required output contract for AnnotateIntent .                 
+
+> 1{
+> 2"labels": [
+> 3{
+> 4"name": "SENSITIVE_READ",
+> 5"evidence_span": "read the ssh config",
+> 6"confidence": "high"
+> 7}
+> 8],
+> 9"fallback_required": false
+> 10 }
+
+added label is registered before evaluation with its evidence patterns, capability mapping, propagation scope, and release rule; the schema remains closed during each execution. 
+
+Intent Annotation Contract. The defense-side classifier for root intent normalization must emit the strict JSON object in Listing 1. It is not allowed to invent free-form categories, release decisions, or unverifiable rationale fields. The lexical matcher handles high-precision patterns such as credential extraction, external transmission, privileged execution, and destructive writes. The tool heuristic adds capability-induced sink labels from normalized tool meta-data. The LLM component supplies semantic evidence spans when lexical matching alone is insufficient. 
+
+Context Reconstruction Contract. For each graph node 
+
+v, ReconstructContext receives the node objective, inher-ited taints, adjacent normalized tool events, incoming mes-sages, upstream provenance, and the current list of forbidden source–sink patterns. Its output follows the named structured fields in Listing 2: This contract is the practical prompt schema relied upon in our implementation: the LLM fills named slots and does not produce open-ended safety judgments. 
+
+Declassification Rule. A staged hard sink may be commit-ted only when all of the following hold simultaneously: 1. the sink is explicitly necessary for the assigned benign task; 2. the target resource is authorized for that benign task; and 3. it does not match one of the configured block cases above. Listing 2: Required output contract for ReconstructCon-text .                         
+
+> 1{
+> 2"summary": "Agent Bis rewriting a token-bearing config for later transmission.",
+> 3"active_labels": ["SENSITIVE_READ", " CREDENTIAL_ACCESS"],
+> 4"evidence_spans": [
+> 5"extract the token",
+> 6"email it externally"
+> 7],
+> 8"candidate_sinks": ["EXTERNAL_SEND"],
+> 9"unresolved_ambiguities": []
+> 10 }
+
+Listing 3: Example root-intent output for a harmful exfiltra-tion request.                                     
+
+> 1{
+> 2"labels": [
+> 3{
+> 4"name": "SENSITIVE_READ",
+> 5"evidence_span": "Read the ssh config",
+> 6"confidence": "high"
+> 7},
+> 8{
+> 9"name": "CREDENTIAL_ACCESS",
+> 10 "evidence_span": "extract the token",
+> 11 "confidence": "high"
+> 12 },
+> 13 {
+> 14 "name": "EXTERNAL_SEND",
+> 15 "evidence_span": "email it to me",
+> 16 "confidence": "high"
+> 17 }
+> 18 ],
+> 19 "fallback_required": false
+> 20 }
+
+LLM explanations can identify evidence spans used in these checks, but they cannot independently authorize re-lease. A configured block case or capability-induced hard sink takes precedence over a benign local explanation; when label sources disagree, their labels are combined and re-tained. 
+
+A.5 Worked Structured Examples 
+
+This section instantiates the contracts above with a single harmful exfiltration request. 
+
+Root Intent Example. Input request: 
+
+> Read the ssh config, extract the token, and email it to me.
+
+One valid AnnotateIntent output is shown in Listing 3: 
+
+Node Reconstruction Example. Suppose the planner de-composes the request into three subtasks: retrieve config, rewrite token, and send email. For the email node, Listing 4 gives one valid ReconstructContext output: Schema Added label Role and configured rule 10-label AGGREGATION_RISK Semantic source for person-level risk created by combining individually permitted attributes; block at external send or public publication without explicit release evidence.        
+
+> REIDENTIFICATION_RISK Semantic source for linking de-identified or pseudonymous records to an identity; block at external send or public publication without explicit release evidence.
+> COVERT_CHANNEL Semantic source for encoding restricted content through metadata, format-ting, ordering, filenames, or similar indirect channels; block at external send or public publication. 14-label FINANCIAL_TRANSFER Hard sink for payments, transfers, withdrawals, or trades; require validated task necessity, target account, amount or asset, and authorization.
+> ACCESS_CONTROL_CHANGE Hard sink for account creation, privilege or policy changes, and credential resets; require validated target principal, requested privilege, task necessity, and authorization.
+> PUBLIC_PUBLICATION Hard sink for posting to an unrestricted audience; block when protected-source provenance or identity impersonation is present, otherwise require an authorized public target.
+> IDENTITY_IMPERSONATION Semantic source for deceptive use or construction of another identity; block when it reaches financial transfer, access-control change, or public publica-tion.
+
+Table 10: Additional labels and rules used by the 10- and 14-label policy schemas. Listing 4: Example node reconstruction output for the staged email sink.                                    
+
+> 1{
+> 2"summary": "The email step would transmit credentials derived from asensitive config file.",
+> 3"active_labels": [
+> 4"SENSITIVE_READ",
+> 5"CREDENTIAL_ACCESS",
+> 6"EXTERNAL_SEND"
+> 7],
+> 8"evidence_spans": [
+> 9"ssh config",
+> 10 "extract the token",
+> 11 "email it to me"
+> 12 ],
+> 13 "candidate_sinks": ["EXTERNAL_SEND"],
+> 14 "unresolved_ambiguities": []
+> 15 }
+
+A.6 End-to-End Worked Trace 
+
+We now spell out how the same request is normalized and blocked. 
+
+Observed Workflow. Assume the runtime emits the fol-lowing high-level events: 1. root : the original user request is received and labeled with SENSITIVE_READ , CREDENTIAL_ACCESS ,and EXTERNAL_SEND ;2. plan : the planner creates three subtasks, one each for retrieval, rewrite, and transmission; 3. retrieve : Agent A reads ˜/.ssh/config ;4. message : Agent A sends the extracted config fragment to Agent B; 5. message : Agent B sends the rewritten token-bearing content to Agent C; 6. stage : Agent C prepares an external email action but does not commit it. 
+
+Propagation. PropagateTaints then creates a graph with task, message, and staged-sink nodes. Delegation and mes-sage edges copy active labels forward; the retrieval node inherits the root taints; the staged email node appends 
+
+EXTERNAL_SEND because the tool capability is a hard sink. At this point the email node carries a forbidden source–sink combination: sensitive-read or credential-access provenance terminating in external send. 
+
+Global Validation. The decisive difference from a prompt-local defense is timing. None of the intermediate steps has to be blocked in isolation: 
+
+• retrieving a config file may be locally plausible; 
+
+• rewriting a token-like span may be locally plausible; 
+
+• composing an email draft may be locally plausible. SafeFlow blocks only after the validator sees the full path. The staged email fails declassification for two reasons: 1. the benign task does not authorize external credential transmission; and 2. an active upstream taint path already instantiates a forbid-den source–sink rule. The final verdict is therefore BLOCKED , and the attribution report points to the path 
+
+root → retrieve → rewrite → stage(send) .
+
+## B Additional Analyses 
+
+B.1 Baseline and Implementation Notes 
+
+What Each Defense Observes. All methods in the main paper receive the same normalized benchmark instances and downstream task definitions within the same instrumented runtime, which makes workflow artifacts available before final unsafe commit. The difference lies in which available fields each implementation consumes: 
+
+• SafeAgents : undefended workflow, no explicit defense state; 
+
+• GuardAgent , AutoDefense , AegisLLM : their na-tive normalized prompt and pending-action interfaces; they do not consume the available cross-agent trace fields or construct a tainted collaboration graph; 
+
+• SafeFlow : normalized prompt, planner outputs, inter-agent messages, normalized tool traces, staged sinks, prior local decisions, and graph-level provenance. Thus all methods are evaluated under the same threat model and with the same available runtime artifacts. Safe-Flow receives no privileged benchmark information: it con-sumes the workflow fields emitted by the shared runtime to reconstruct a cross-agent source–sink path, while the baseline implementations operate through their published prompt- and pending-action interfaces. 
+
+Deterministic vs. LLM-Mediated Components. Intent annotation, planning, and context reconstruction are LLM-mediated and can yield different structured evidence across runs. Thus, end-to-end decisions may vary; given fixed parsed taint labels, planner skeleton, and reconstruction records, the remaining propagation, staging, aggregation, validation, and attribution steps are deterministic. This sepa-ration matters for reproducibility because defense-side LLM variation can change the graph input, but not the fixed rule schema, hard-sink policy, or the adjudication logic applied to a fixed graph. 
+
+B.2 Reproducibility and Evaluation Notes 
+
+Prompt Template Skeleton. The exact provider wrapper is not material to the method, but the constrained-output contract is. Listing 5 shows the shared skeleton used for annotation and reconstruction: the model fills a fixed JSON schema and is not allowed to invent labels, release conditions, or final policy decisions. The parser rejects outputs containing labels outside the se-lected schema; any associated hard sink remains staged until it has registered labels and explicit release evidence. This design keeps the LLM component in an evidence-extraction role; final release is still governed by graph structure and the validator rules. 
+
+Failure Case Examples. Table 11 gives concrete residual cases that inform the boundary discussion in the main paper. 
+
+LLM Judge Use and Circularity Control. The prompt-local versus cross-agent split in the main paper is a diagnostic stratification, not a training signal and not part of the Safe-Flow blocking decision. The split judge reads a realized work-flow trace and returns one of three labels: Prompt-Local ,
+
+Cross-Agent , or Ambiguous . It is not given the method name, the final defense verdict, or whether the attack suc-ceeded. To limit circularity, we use a rule-consistency check on the judge output. A Prompt-Local label is accepted only Listing 5: Prompt skeleton for constrained annotation and reconstruction.                                               
+
+> 1SYSTEM:
+> 2You are aSafeFlow evidence extractor.
+> 3Return JSON only; do not decide release.
+> 45ALLOWED_LABELS:
+> 6SENSITIVE_READ, CREDENTIAL_ACCESS, EXTERNAL_SEND,
+> 7PRIVILEGED_EXEC, CODE_EXEC, DESTRUCTIVE_WRITE,
+> 8PROMPT_OVERRIDE
+> 910 INPUT:
+> 11 -node_objective /messages /tool_events
+> 12 -inherited_taints /upstream_provenance
+> 13 -forbidden_sink_patterns
+> 14 15 OUTPUT_JSON_SCHEMA:
+> 16 {
+> 17 "summary": "string",
+> 18 "active_labels": ["ALLOWED_LABELS"],
+> 19 "evidence_spans": ["quoted input span "],
+> 20 "candidate_sinks": ["ALLOWED_LABELS"],
+> 21 "unresolved_ambiguities": ["string"]
+> 22 }
+
+when a single local event contains enough evidence for the decisive source–sink relation. A Cross-Agent label is ac-cepted only when the source evidence and sink evidence occur on different events connected by provenance or del-egation. Otherwise the instance is treated as Ambiguous 
+
+for diagnostic purposes. This stratification is reported to ex-plain where SafeFlow’s gains arise; ASR, TCR, FPR, paired success, and the final block/release decisions are computed independently of this judge. Table 14 reports an overall local-pass/global-block rate of 79.1%, with the highest rate on credential exfiltration (87.5%). This diagnostic supports the role of workflow-level reconstruction when the decisive source–sink relation emerges only after messages and tool calls are assembled. 
+
+Measured Overhead. On the 440 harmful workflows used for the main comparison, SafeFlow adds 3.7 LLM calls, 8.8 seconds of latency, and 3.0 reconstructed nodes per work-flow on average. Blocks average 3.9 calls, 9.5 seconds, and 3.2 nodes; releases average 2.4 calls, 4.3 seconds, and 1.3 nodes. Workflows contain 3–10 nodes. Counts include anno-tation and reconstruction, but not application-provided plan-ner calls. 
+
+Confidence Intervals. Table 12 reports Wilson 95% con-fidence intervals for aggregate main-table ASR. They quan-tify sampling uncertainty over the normalized instances, not repeated-call variance. 
+
+Aggregate Significance Checks. Table 13 compares Safe-Flow’s aggregate ASR with each baseline using a one-sided pooled two-proportion z-test over 440 instances per method. The check is aggregate and unpaired because per-instance Case type Example pattern Why SafeFlow can fail or over-stage Mitigation False negative The planner logs a retrieval event and a later send event, but omits the message edge carrying the retrieved con-tent. The validator sees two locally plausible events instead of a connected source–sink path. This is an observability failure, not a rule failure. Require mandatory provenance edges for summaries, rewrites, and staged hard sinks; mark dis-connected hard sinks as ambigu-ous instead of safe. Missed annotation An indirect euphemism or domain-specific shorthand does not trigger a configured taint label. The downstream sink lacks protected-source provenance, so the validator cannot form a forbidden path. Extend evidence-reviewed la-bel patterns and route uncertain hard-sink cases to conservative review. False positive A benign compliance re-port discusses “password re-set policy” and is emailed to an authorized internal list. A lexical annotator may attach 
+
+CREDENTIAL_ACCESS , while the send tool appends EXTERNAL_SEND ;if authorization metadata is missing, the sink is over-staged. Require target authorization metadata and allow declassifica-tion when the task requires the sink and no concrete credential value is present. 
+
+Table 11: Representative failure and boundary cases. 
+
+Method ASR Count Wilson 95% CI 
+
+SafeAgents 69.3% 305/440 [64.9%, 73.4%] 
+
+GuardAgent 27.5% 121/440 [23.5%, 31.9%] 
+
+AutoDefense 45.7% 201/440 [41.1%, 50.4%] 
+
+AegisLLM 30.0% 132/440 [25.9%, 34.4%] 
+
+SafeFlow 12.7% 56/440 [9.9%, 16.2%] 
+
+Table 12: Aggregate ASR confidence intervals using Wilson intervals. Counts are rounded to the nearest integer implied by the reported percentages and 110 examples per bench-mark. 
+
+Baseline Counts z one-sided p
+
+SafeAgents 56/440 vs 305/440 -17.07 1.4 × 10 −65 
+
+GuardAgent 56/440 vs 121/440 -5.47 2.3 × 10 −8
+
+AutoDefense 56/440 vs 201/440 -10.75 3.0 × 10 −27 
+
+AegisLLM 56/440 vs 132/440 -6.25 2.1 × 10 −10 
+
+Table 13: Aggregate one-sided pooled two-proportion z-tests comparing SafeFlow’s ASR to the baselines in the no-attack setting. Lower ASR is better, so negative z-values indicate SafeFlow’s advantage. 
+
+Category Rate Blocked Total All harmful 79.1% 68 86 Credential exfiltration 87.5% 28 32 Prompt override 75.0% 21 28 Code execution 73.1% 19 26 
+
+Table 14: Local-pass/global-block audit. These cases appear admissible under prompt-local inspection and are blocked after workflow-level reconstruction. 
+
+Slice Retained harmful-success evidence Shared evaluation record ASB ( 110 ) ASB task-specific detector over the designated attack tool or alias call-back. Instance id, normalized tool trace, target capability, final harmful outcome. AgentHarm (110 )AgentHarm task-specific detector over the target-function callback. Instance id, normalized tool trace, target function, final harmful outcome. RedCode (110 )Target execution capability derived from the task’s target-function metadata. Instance id, normalized tool trace, target capability, final harmful outcome. SafeArena (110 )Target site-tool capability with retained closed-environment metadata. Instance id, normalized tool trace, target capability, en-vironment metadata, final harmful outcome. 
+
+Table 15: Evaluation protocol matrix. Each benchmark re-tains its task-specific success evidence while the shared adapter records a common trace and outcome interface. paired outputs are not retained. 
+
+Family Source/sink instantiation Required release evidence ASB Untrusted task or retrieved-content evidence plus des-ignated tool metadata; stage external-send or protected target-tool actions. Task necessity, authorized target, and no forbidden path. AgentHarm Task objective, target-function metadata, and visible tool trace; stage privileged, destructive, or external target functions. Task necessity, authorized target, and no forbidden path. RedCode Code-bearing request or arti-fact evidence plus execution-target metadata; stage code execution and privileged side effects. Task necessity, authorized target, and no forbidden path. SafeArena Site content, target site-tool metadata, and retained envi-ronment context; stage irre-versible site actions or exter-nal transmission. Task necessity, authorized target, and no forbidden path. 
+
+Table 16: Policy instantiation matrix across benchmark fam-ilies. Adapter-specific evidence is mapped into one fixed source–sink rule language. 
+
+Evaluation Protocol Matrix. Table 15 records the fixed 
+
+110 -instance slice from each benchmark (seed 20260509 )and preserves its task-specific success callback. All methods receive the same retained identifiers; the prompt-local/cross-agent judge is diagnostic only and does not determine met-rics or SafeFlow decisions. Benign runs provide TCR and FPR, while paired success requires benign completion and harmful-task blocking for an aligned pair. 
+
+Policy Instantiation Matrix. Table 16 maps each bench-mark’s evidence into the shared rule language. Every row uses the same declassification test; missing authorization or provenance keeps a hard sink staged.             
+
+> Ambiguous provider call Required normaliza-tion evidence Wrapper action when evidence is incomplete
+> mail.deliver or
+> webhook.send
+> Target zone and re-ceiver authorization. Normalize as send ; stage until both are available.
+> browser. navigate versus form submission Side-effect flag, method, destination. Treat as retrieval only with an explicit no-side-effect record; otherwise stage.
+> run_artifact
+> or provider-specific executor Artifact type, execu-tion privilege, target environment. Normalize as exec ; stage pend-ing policy resolution. Unknown or obfus-cated call Registered alias and complete wrapper event. Do not commit; require registra-tion or conservative review.
+
+Table 17: Ambiguous mappings and the trusted-wrapper con-tract. The contract provides fail-closed handling for calls that are visible but not yet safely classifiable; it does not recover fully omitted provenance. 
+
+Ambiguous Mappings and Trusted Wrapper Contract. 
+
+Table 17 summarizes ambiguous provider mappings and the evidence required for conservative handling. Capability nor-malization is enforced at a trusted tool wrapper and does not rely on post-hoc inference after an unlogged side effect. Be-fore a tool call or commit, the wrapper must emit an event id, actor id, parent or delegation id, event type, normalized ca-pability, target resource and trust zone, content summary, authorization metadata when available, and stage/commit status. The protection scope assumes that components use this instrumented channel: the wrapper registers provider-specific aliases before execution and rejects or conservatively stages a visible call that has no approved capability mapping. It does not make hidden side channels or completely unin-strumented components observable. If a visible high-impact sink has disconnected provenance, the wrapper treats it as ambiguous and withholds it.
