@@ -6,46 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-29
-- 运行时间：2026-07-29 21:01:41 UTC
+- 最新运行日期：2026-07-30
+- 运行时间：2026-07-30 21:39:46 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：2
-- 速读区：6
+- 本次总论文数：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦多智能体系统三大前沿：注意力编排、开放世界学习与恶意传播阻断。  
-最值得精读《Focus Is All You Need》（9.0分）和《PLATO》（8.0分），前者提出自适应目标感知注意力编排，后者解决智能体与任务的开放性问题。  
-建议读者优先关注多智能体协作中的安全控制（如SafeFlow的语义信息流）与自协商契约机制，以平衡性能与鲁棒性。
-- 详情：[/202607/29/README](/202607/29/README)
+今日精读与速读聚焦注意力机制优化、多智能体通信及风险预判三大方向。
+
+最值得关注的是精读论文《Through the Bottleneck》揭示多头潜在注意力如何分离内容与位置，其次是速读文中多智能体系统提前预测失败风险的新思路。
+
+建议普通读者先深入理解注意力机制的设计原理，再关注多智能体协作中的可靠性评估方法。
+- 详情：[/202607/30/README](/202607/30/README)
 
 ### 精读区论文标签
-1. [Focus Is All You Need: Adaptive Goal-aware Attention Orchestration for Multi-Agent Graph Systems](/202607/29/2607.23678v1-focus-is-all-you-need-adaptive-goal-aware-attention-orchestration-for-multi-agent-graph-systems)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：面向多智能体图系统的注意力编排
-2. [PLATO: Pointer Learner for Agent and Task Openness](/202607/29/2607.25082v1-plato-pointer-learner-for-agent-and-task-openness)  
+1. [Through the Bottleneck: How Multi-head Latent Attention Separates Content from Position in Language Models](/202607/30/2607.23054v1-through-the-bottleneck-how-multi-head-latent-attention-separates-content-from-position-in-language-models)  
    标签：评分：8.0/10、query:ma-la
-   evidence：多智能体开放系统，使用指针网络和GNN评论家处理交互动态
+   evidence：研究多头潜在注意力（MLA）的低秩瓶颈，与线性注意力机制相关
 
 ### 速读区论文标签
-1. [SafeFlow: Semantic Information-Flow Control for Blocking Malicious Propagation in Multi-Agent Systems](/202607/29/2607.25255v1-safeflow-semantic-information-flow-control-for-blocking-malicious-propagation-in-multi-agent-systems)  
+1. [Coordinated Networking for On-Device Agent-Augmented Real-Time Communication](/202607/30/2607.22854v1-coordinated-networking-for-on-device-agent-augmented-real-time-communication)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体通信中的语义信息流控制
-2. [AgentHOI: Multi-Agent Reasoning for Human-Object-Interaction Video Generation via Implicit Representation Alignment](/202607/29/2607.22241v1-agenthoi-multi-agent-reasoning-for-human-object-interaction-video-generation-via-implicit-representation-alignment)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体推理用于人-物交互视频生成，涉及感知、交互和运动规划智能体
-3. [Commitment To Cooperation With Self-Negotiated Contracts](/202607/29/2607.22750v1-commitment-to-cooperation-with-self-negotiated-contracts)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：通过自协商合约实现多智能体合作
-4. [MR-TGN: A Meta-Role Temporal Graph Network for Team-Level Intent Prediction in Multi-Agent Systems](/202607/29/2607.25316v1-mr-tgn-a-meta-role-temporal-graph-network-for-team-level-intent-prediction-in-multi-agent-systems)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体系统中的团队级意图预测
-5. [OrchBench: Evaluating Multi-Agent Orchestration Plans in Isolation via Deterministic Simulation](/202607/29/2607.25656v1-orchbench-evaluating-multi-agent-orchestration-plans-in-isolation-via-deterministic-simulation)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体系统编排评估基准
-6. [Towards Faithful Sentimental Image Captioning via Evidence-Aware Multi-Agent Reasoning](/202607/29/2607.25789v1-towards-faithful-sentimental-image-captioning-via-evidence-aware-multi-agent-reasoning)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体推理用于情感图像描述
+   evidence：多智能体实时通信与协调
+2. [Before Agents Speak: Pre-hoc Failure Risk Inference in Multi-Agent Systems](/202607/30/2607.26836v1-before-agents-speak-pre-hoc-failure-risk-inference-in-multi-agent-systems)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：多智能体通信链中的事前故障风险推断
 
 
 <div class="dpr-home-promo-card">

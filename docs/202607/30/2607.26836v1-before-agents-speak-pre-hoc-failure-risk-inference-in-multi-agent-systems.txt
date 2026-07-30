@@ -1,0 +1,706 @@
+Title: Before Agents Speak: Pre-hoc Failure Risk Inference in Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2607.26836v1
+
+Published Time: Thu, 30 Jul 2026 00:51:44 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Before Agents Speak: Pre-hoc Failure Risk Inference in Multi-Agent Systems 
+
+## Shi Lin ∗1, Chenpei Wang ∗1, Peng Qian †1,Dezhang Kong 2, Minghao Li 2, Yufeng Li 2, Xun Wang 1
+
+> 1
+
+Zhejiang Gongshang University 
+
+> 2
+
+Zhejiang University {linshizjgsu,lanshuitear,messi.qp711,mhaoli9860,liyufenggood}@gmail.com, kdz@zju.edu.cn, wx@zjgsu.edu.cn 
+
+Abstract 
+
+LLM-based multi-agent systems (MAS) have exhibited re-markable capabilities in collaborative reasoning and decision-making, yet their interconnected communications introduce new systemic risk: localized hallucinations can propagate along agent communication chain, amplify through interactions, and ultimately trigger cascading failures. Existing countermeasures predominantly follow a post-hoc paradigm, identifying failures only after unsafe behaviors emerge, by which time harmful effects may have already spread throughout the agent network. To tackle this problem, we investigate a complementary pre-hoc approach and propose HalluProp, a Prop agation-aware 
+
+Hallu cination inference framework that estimates individual agent failures and emergent system-level hallucination risks before inter-agent interaction. First, we model intrinsic halluci-nation risks by identifying fine-grained semantic misalignment between agent roles and task queries. We then characterize inter-agent risk propagation by modeling both semantic influ-ence and communication topology. Finally, we integrate these two risks via a differentiable Noisy-OR inference mechanism to derive a systemic diagnosis. Extensive experiments show that HalluProp accurately localizes faulty agents, achieving an av-erage AUROC of 84 .6% , while enabling sub-second diagnosis with over 65 × speedup over post-hoc methods. By facilitat-ing early intervention through upstream screening, HalluProp effectively complements post-hoc methods, highlighting the potential of pre-hoc risk inference for building more reliable multi-agent systems. 
+
+## 1 Introduction 
+
+The rapid advancement of large language models (LLMs) has enabled the emergence of autonomous agents with multi-step reasoning and decision-making capabilities (Yang et al. 2025). Intuitively, LLM-based agents have made substantial progress across diverse domains, such as mathematics (Du et al. 2023) and code generation (Hong et al. 2023; Yang et al. 2024). In multi-agent settings, role specialization and collaborative communication enable agents to collectively solve complex problems beyond the reach of a single agent (Qian et al. 2025). Notwithstanding these unprecedented advances, MAS in-troduces unique and underexplored security challenges (Kong et al. 2025; Lin et al. 2024; Ying et al. 2025; Kong et al. 2026). Among them, hallucination poses a particularly severe 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. A. Post -hoc Paradigm B. Pre -hoc Paradigm              
+
+> Pre -hoc Diagnosis (In Time) Hallucination Risk Warning BEFORE generation
+> Task Query
+> User
+> MAS
+> Answer
+> Hallucination Detection
+> Post -hoc Diagnosis
+> (Too Late)
+> Agent Roles
+> Task Query
+> BA
+> DC
+> Topology
+> MAS Specification Risk -aware Analysis
+> Risk -aware Graph
+> BA
+> DC
+> Node -level Intrinsic Risk 𝝅 𝒊
+> BA
+> DC
+> high
+> 𝝅 𝑨
+> high
+> 𝝅 𝑩
+> medium
+> 𝝅 𝑪
+> low
+> 𝝅 𝑫
+> Edge -level Propagation Risk 𝒕 𝒋 →𝒊
+> BA
+> DC
+> high 𝒕 𝑨 →𝑩
+> high
+> 𝒕 𝑨 →𝑪
+> low 𝒕 𝑪 →𝑫
+> low
+> 𝒕 𝑩 →𝑫
+> Medium
+> 𝒕 𝑨 →𝑫
+> Edge Risk
+> high low Medium
+> Node Risk
+> high low Medium
+> Risk Legend
+
+Figure 1: Post-hoc methods detect hallucinations from ob-served responses and interactions, whereas pre-hoc methods predict agent failure risks before inter-agent interaction, en-abling early intervention against cascading hallucinations. threat (Zhang et al. 2024b; Huang et al. 2025; Kim et al. 2025). Unlike in single-agent scenarios, where hallucinations typically manifest as isolated factual errors, hallucinations in multi-agent systems can propagate through inter-agent communication and become progressively reinforced. In such a cascading hallucination setting, incorrect information pro-duced by one agent is adopted, echoed, and amplified by others, eventually distorting the collective result of the entire system. Such cascading effects can be especially harmful in high-stakes applications, e.g., healthcare, legal reasoning, and financial business analysis (Chen et al. 2025). However, hallucination diagnosis in MAS remains predomi-nantly in a post-generation manner. Existing efforts (Manakul, Liusie, and Gales 2023; Min et al. 2023; Tang, Laban, and Durrett 2024; Li et al. 2023; Zhu et al. 2026) mostly assess hallucinations from each agent’s responses. These methods are ill-suited for MAS, as they fail to capture the dynamic risks arising from inter-agent dependencies and communication topologies. More recent approaches analyze agent interac-tions to attribute system failures to the relevant agents (Shen et al. 2025; Zhou, Wang, and Yang 2026). Although these methods identify manifested failures, they remain reactive by relying on observed agent behaviors and outputs. Fur-thermore, attributing failures within lengthy and entangled interaction trajectories makes timely intervention challenging. This raises an important yet unexplored question: can we infer agent-level failure risks before inter-agent interaction to enable proactive risk localization and intervention? 
+
+To address this question, we investigate pre-hoc agent failure risk estimation before inter-agent interactions unfold. We observe that agent failures stem from two complemen-tary sources: intrinsic risks within individual agents and arXiv:2607.26836v1 [cs.CR] 29 Jul 2026 interaction-induced risks arising from communication with others. Specifically, intrinsic risk arises from factors such as underspecified roles, conflicting objectives, or adversarial manipulation, whereas interaction-induced risk emerges from semantic influence and communication structures among agents. Integrating these risk sources enables system-level inference of agent-specific failure risks. Such early estimation allows proactive risk screening and localization of potential cascading failures before harmful behaviors propagate. To this end, we propose HalluProp, a Prop agation-aware 
+
+Hallu cination inference framework tailored for multi-agent systems, which consists of three main components. (i) Intra-agent intrinsic modeling. First, the hallucination risk of each agent is quantified by characterizing the fine-grained semantic misalignment between its role specifications and user queries, capturing the agent’s inherent susceptibility to producing unreliable outputs. (ii) Inter-agent propagation modeling. 
+
+Hallucination diffusion along communication links is then modeled by considering inter-agent semantic influence and structural properties of the communication topology. (iii) System-level risk inference. Finally, global risk aggregation is performed using a differentiable Noisy-OR inference over the agent communication graph, integrating intra- and inter-agent risk estimates to diagnose system-level hallucination risk. Extensive experiments on three datasets demonstrate that HalluProp effectively reduces MAS failure rates, with comparable performance to state-of-the-art post-hoc baselines. Specifically, it accurately localizes prospective failure risks with an average AUROC of 84 .6% and sub-second diagnosis latency ( 65 × speedup over post-hoc methods), highlighting its practicality as an upstream risk screening in MAS. The key contributions of this work are as follows: 
+
+• We investigate a new hallucination diagnosis strategy in MAS by shifting the focus from post-hoc detection to 
+
+pre-hoc risk inference, enabling early localization and intervention of agent failure risks before MAS execution. 
+
+• We propose HalluProp, a propagation-aware hallucination diagnosis framework that aggregates intra- and inter-agent risks, enabling end-to-end systemic hallucination inference before response generation using a differentiable Noisy-OR inference over the communication graph. 
+
+• Extensive experiments show that HalluProp achieves an average AUROC of 84 .6% with sub-second latency, high-lighting its practicality as an upstream risk-screening mechanism complementary to post-hoc methods. 
+
+## 2 Preliminary 
+
+Multi-Agent System . A multi-agent system (MAS) can be modeled as a directed communication graph M = ( V, E),where V = {v1, . . . , v N } denotes a set of LLM-based agents and E ∈ { 0, 1}N ×N represents inter-agent communication links. Each agent vi is associated with a system prompt pi
+
+that specifies its role, capability, and behavioral constraints. Given a user query q, agents collaboratively solve the task by exchanging intermediate responses along the links in E. The connectivity encoded by E determines how information flows across agents and how errors may propagate in the system. 
+
+Hallucination in Multi-Agent System . Hallucination refers to the generation of content that is factually incorrect, log-ically inconsistent, or unsupported by the given context. In multi-agent systems, hallucinations exhibit more complex characteristics. Beyond being produced independently by individual agents, hallucinations can propagate along the inter-agent communication chain. Errors generated by indi-vidual agents can spread and amplify through interactions, resulting in cascading system-level failures. Therefore, the risk of hallucinations is shaped not only by agent capabilities but also by agent roles and communication topology. 
+
+Pre-hoc vs. Post-hoc . Most existing hallucination detection methods adopt a post-hoc strategy, diagnosing failures from observed agent responses and interactions after hallucina-tions have emerged, as illustrated in Figure 1. In contrast, we advocate a pre-hoc paradigm that estimates agent fail-ure risks prior to inter-agent interaction. In MAS, pre-hoc analysis characterizes both intrinsic agent vulnerabilities and interaction-induced risks by (i) identifying hallucination ten-dencies within individual agents and (ii) estimating potential risk propagation along inter-agent communication. Instead of replacing runtime monitoring of long-horizon context drift, pre-hoc analysis provides an upstream safety signal for designing and refining risk-aware MAS architectures, complementing existing post-hoc safeguards. 
+
+Problem Formulation . We formulate the pre-hoc hallucina-tion diagnosis in MAS as a latent risk diffusion problem over a directed communication graph. Let Hi ∈ { 0, 1} indicate whether agent vi produces a hallucinated output under a given MAS configuration ({pi}Ni=1 , E). Our goal is to develop an approach that infers the hallucination risk of each agent before any response is generated: 
+
+hi := P Hi = 1 | { pi}Ni=1 , q, E. (1) Specifically, the hallucination risk in a MAS can be factorized into intra-agent intrinsic risk and inter-agent propagation risk .Intrinsic risk is represented as π = [ π1, . . . , π N ]⊤ ∈ [0 , 1] N ,where πi captures the inherent tendency of agent vi to hallu-cinate, given its role specification and query. Propagation risk is modeled as a weighted adjacency matrix T ∈ [0 , 1] N ×N ,where Tij = tj→i denotes the probability that hallucination propagates from agent vj to vi via communication links. Differentiable Noisy-OR inference is then performed over the communication graph based on (π, T) to derive the sys-temic hallucination risk vector h = [ h1, . . . , h N ]⊤, which provides a global diagnosis of hallucination risk by integrating node-level risks and edge-level propagation effects. 
+
+## 3 Method 
+
+The overall architecture of the proposed framework is illus-trated in Figure 2, which consists of three components: 1) intra-agent intrinsic risk modeling, which characterizes the fine-grained semantic misalignment between role specifica-tions and user queries to capture the inherent hallucination tendency of each agent before communication; 2) inter-agent propagation risk modeling, which collectively considers inter-agent semantic influence and the structural properties of the communication topology to identify the hallucination propa-gation risk; and 3) system-level risk inference that aggregates Where does the only cranial nerve  
+
+> without a thalamic relay nucleus
+> enter the skull?
+> A. Foramen rotundum
+> B. Jugular foramen
+> C. Internal auditory meatus
+> D. Cribriform plate
+> Query
+> …
+> LLM -based Agents
+> Communication Topology
+
+Multi -Agent System 3. System -Level Risk Inference               
+
+> Agent A Agent B Agent N
+> Noisy -OR Risk Aggregation ( 𝑲 steps)
+> 𝒉 𝒊
+> 𝒌 #𝟏 =𝟏 −𝟏 −𝛑 𝒊 &𝟏 −𝒕 𝒋 →𝒊 𝒉 𝒋
+> 𝒌
+> 𝒋 ∈𝓝 𝓲𝓷 𝒊
+
+…   
+
+> 𝒉 (𝟎 )=𝝅 𝒉 (𝒌 )
+> Role
+> Query
+
+𝒑 𝒊 
+
+𝒒 
+
+> 𝒆 𝒊
+> 𝑹
+> 𝒆 𝑸
+> Query -Conditioned  Gating
+> 𝝆 𝒊
+> 𝜿 𝒊
+> Susceptibility
+> Competence
+
+𝝅 𝒊 
+
+1. Intra -Agent Intrinsic Risk Modeling 
+
+> Text
+> Encoder
+> Text
+> Encoder
+> …
+> Intrinsic Risk
+
+LayerNorm 
+
+2. Inter -Agent Propagation Risk Modeling 
+
+> 𝑾 𝒔𝒆𝒎
+> 𝜿 𝒋 𝝆 𝒊
+
+× ×
+
+> Propagation  Risk
+
+𝒕 𝒋 →𝒊 𝑵𝒐𝒓𝒎 , 𝒌 𝒊𝒏 𝒌 𝒐𝒖𝒕 
+
+> Topology
+
+𝜺      
+
+> B? A?
+> A? D?
+> 𝑴 =𝑽 ,𝓔
+> …
+> High Low
+
+𝒉 
+
+> Final Hallucination Risk
+
+Risk -Aware MAS Optimization  
+
+> Safe
+> Pre -hoc Detection Intervention
+
+Figure 2: The overall structure of HalluProp comprises three components: (1) intra-agent intrinsic risk modeling that captures each agent’s inherent hallucinations; (2) inter-agent propagation risk modeling that identifies propagation risks among agent communications; and (3) system-level risk inference that combines intra- and inter-agent risks to produce a final diagnosis. the intra- and inter-agent risk via a differentiable Noisy-OR operator to produce a systemic hallucination diagnosis. In what follows, we elaborate on the three components. 
+
+Intra-Agent Intrinsic Risk Modeling 
+
+Our first insight is to estimate the endogenous hallucination risk prior πi of each agent vi before inter-agent interaction occurs. This characterizes the probability of an agent produc-ing unreliable content, which stems from the misalignment between its role specification pi and user query q. Such misalignment reflects if an agent’s role-defined ability is com-patible with the queried task and is a source of hallucinations. 
+
+Role-Query Semantic Encoding . We begin by embedding the role specification pi and the query q into a shared semantic space using a pretrained text encoder Enc( ·):
+
+eRi = Enc( pi), eQ = Enc( q), eRi , eQ ∈ Rd. (2) Unlike task descriptions, role prompts often provide ambigu-ous or misleading information. Therefore, global semantic similarity between eRi and eQ is insufficient to capture the latent risk associated with each agent. 
+
+Query-Conditioned Gating . To capture fine-grained corre-spondence between roles and queries, we introduce a query-conditioned gating mechanism that adaptively filters out role-irrelevant features. 
+
+gi = σ Wgate 
+
+ eRi ⊙ eQ + bg
+
+ , (3) where ⊙ denotes element-wise multiplication that encodes dimension-wise semantic alignment. Wgate ∈ Rd×d and bg
+
+are learnable parameters, and σ(·) is the sigmoid function that maps the gating signal to [0 , 1] . The resulting gate gi
+
+functions as a soft mask that emphasizes role dimensions relevant to the task while suppressing irrelevant components. 
+
+Competence-Susceptibility Decomposition . Based upon the learned gate gi, the role representation is decomposed into two complementary subspaces: 
+
+κi = eRi ⊙ gi, ρi = LayerNorm  eRi − κi
+
+ . (4) The competence vector κi encodes role features that are aligned with the query and indicative of task-relevant capa-bility. By contrast, the susceptibility vector ρi aggregates residual role components that are weakly-related, conflict-ing, or potentially risk-inducing with respect to the query. This decomposition provides a structured representation of an agent’s inherent propensity for hallucination. In practice, role prompts may be underspecified, overly generic, or ad-versarially crafted. Therefore, a holistic role-query similarity score may produce unstable estimates under prompt varia-tion. Instead, the intrinsic risk module performs fine-grained dimension-wise relevance selection, allowing the model to retain task-aligned features while isolating residual parts that may induce hallucinations. Finally, the intrinsic hallucination risk πi of each agent is modeled as follows: 
+
+πi = σ w⊤ 
+
+> ρ
+
+ρi − w⊤ 
+
+> κ
+
+κi + bπ
+
+ , (5) where wρ and wκ are learnable projection vectors that control the contributions of susceptibility and competence respec-tively, and bπ is a bias term. Intuitively, such a scheme provides an interpretable estimate of an agent’s intrinsic hallucination risk: an agent is more likely to hallucinate when its role exhibits strong risk-inducing residual traits (larger ρi) while lacking sufficient query-aligned competence (smaller κi). Inter-Agent Propagation Risk Modeling 
+
+Our second insight is that hallucinations in agent vi may arise in MAS not only endogenously from its own generation pro-cess, but also exogenously through the adoption of erroneous content produced by other agents. Consequently, the intrinsic risk πi of an agent alone is insufficient to diagnose hallucina-tions in MAS, where errors can propagate and amplify along inter-agent communication pathways. To explicitly model this effect, we further estimate the inter-agent propagation risk 
+
+tj→i ∈ [0 , 1] for each directed communication link vj → vi,which measures the probability that unreliable information generated by vj successfully infects vi.
+
+Propagation Factor . We believe that hallucination propa-gation in MAS is jointly governed by two complementary factors: (i) role semantics , which determine the impact of sender and the susceptibility of receiver, and (ii) communi-cation topology , which encodes the structural capacity of agents to broadcast or aggregate information. Accordingly, the propagation risk tj→i is parameterized as follows: 
+
+ℓsem  
+
+> j→i
+
+= κ⊤ 
+
+> j
+
+Wsem ρi, tj→i = σ
+
+γj,i · ℓsem  
+
+> j→i
+
++ bt
+
+> 
+
+. (6) For role semantics, we reuse κj and ρi. κj represents the sender’s task-aligned capability to provide reliable informa-tion, while ρi characterizes the receiver’s susceptibility to unreliable or misaligned information. The learnable matrix 
+
+Wsem captures their semantic compatibility and interaction effects, with bt as a learnable bias term. 
+
+Topology Effect . To incorporate the communication topology with minimal overhead, we extract lightweight structural features based on node degrees: 
+
+γj,i = ϕ ˆkout (j), ˆkin (i), (7) where ˆkout (j) and ˆkin (i) denote the normalized out-degree and in-degree of sender vj and receiver vi respectively, and 
+
+ϕ(·) is parameterized by an MLP whose output is mapped to 
+
+[1 , ∞). It is worth mentioning that propagation risk increases when a highly influential sender interacts with a susceptible receiver, and is amplified ( γj,i ≥ 1) by strong broadcasting or aggregation capacity reflected in the topology. To ensure structural validity, propagation is restricted to existing com-munication links by enforcing tj→i = 0 if (vj → vi) /∈ E .
+
+System-Level Risk Inference 
+
+Given the intra-agent intrinsic risks π and inter-agent propa-gation risks T, HalluProp performs system-level cascading hallucination inference by modeling agent failure as a multi-source triggering process over the MAS topology structure. The goal is to deduce final hallucination risk for all agents, denoted by h = [ h1, . . . , h N ]⊤, which integrates both en-dogenous generation risk and exogenous propagation effects. 
+
+Noisy-OR Risk Aggregation . An agent vi remains non-hallucinating if and only if it neither hallucinates intrinsically nor is infected by any upstream agent through communication links. Under the standard conditional-independence assump-tion adopted by the differentiable Noisy-OR mechanism, the final hallucination risk of agent vi is given by 
+
+hi = 1 − (1 − πi) Y
+
+> j∈N in (i)
+>  
+
+1 − tj→i hj
+
+> 
+
+, (8) where Nin (i) denotes the set of in-neighbors of vi and hj is the final hallucination risk of vj . Each factor (1 − tj→ihj )
+
+represents the probability that agent vj fails to transmit hallucinated content to vi, while the product aggregates independent failure events. Taking the complement gives the probability that hallucination arises from at least one source, either intrinsically or via propagation. 
+
+Fixed-Point Inference . Since a MAS communication graph typically contains cycles, closed-form solutions are generally intractable. We therefore compute h via K steps of fixed-point iteration, where at each step k ∈ { 0, . . . , K − 1}:
+
+h(k+1)  
+
+> i
+
+= 1 − (1 − πi) Y
+
+> j∈N in (i)
+>  
+
+1 − tj→ih(k)
+
+> j
+> 
+
+. (9) Initialization with h(0)  
+
+> i
+
+= πi corresponds to the hallucination risk in the absence of inter-agent propagation, while successive iterations gradually incorporate higher-order diffusion effects. The fixed-point update is fully differentiable with respect to both π and T, enabling end-to-end training of the entire framework. After K iterations, the final risk h = h(K)
+
+illustrates a global diagnosis of hallucination risk over the entire system. Notably, we have put the theoretical analysis of the proposed Noisy-OR mechanism in the appendix. 
+
+Two-stage Training Process 
+
+We adopt a two-stage training paradigm that reflects the hierarchical risk formation process in MAS, where hallucina-tion risks may arise from individual agents and subsequently emerge via inter-agent interactions. Specifically, the first stage learns agent-level intrinsic risk priors, while the second stage optimizes interaction-induced risk under communica-tion graph-level supervision. In the first stage, we train the intrinsic risk module while keeping the text encoder frozen. Each agent’s intrinsic hallu-cination risk πi is supervised by binary cross-entropy: 
+
+Ls1 = BCE  π, ynode  , (10) where ynode denotes node-level hallucination labels before communication, which characterize each agent’s intrinsic tendency to generate unreliable information. In the second 
+
+stage, we initialize the model from the checkpoint of first stage to optimize the propagation risk module using graph-level supervision. The system-level hallucination risks h(K) are obtained via K iterations of differentiable Noisy-OR fixed-point propagation. The optimization objective is defined as: 
+
+Ls2 = BCE  h(K), ygraph  + λanc Ls1 , (11) where ygraph represents post-communication hallucination labels reflecting interaction-induced risk. The anchor term 
+
+λanc preserves the intrinsic risk estimation during graph-level optimization, enabling the propagation matrix T to capture additional risk introduced by agent interactions. The entire framework is differentiable and supports communication graphs with varying numbers of agents using node masking. 
+
+## 4 Experiment 
+
+In this section, we conduct extensive experiments to evaluate HalluProp, seeking to answer the following questions: • RQ1: Can HalluProp accurately identify high-risk agents in MAS? Can it effectively guide early intervention? 
+
+• RQ2: How efficient and robust is HalluProp across varying MAS scales and communication topologies? 
+
+• RQ3: How do individual components and design choices contribute to hallucination risk inference? 
+
+Experimental Setup 
+
+Datasets . We evaluate HalluProp on three public benchmarks that span general knowledge, mathematical reasoning, and domain-specific expertise: (1) MMLU (Hendrycks et al. 2021), covering 57 subjects across a wide range of domains; (2) 
+
+MATH (Hendrycks et al. 2021), consisting of challenging mathematical problems; and (3) MedQA (Jin et al. 2021), a specialized biomedical question-answering benchmark. 
+
+Baselines . We compare the proposed framework against four representative baselines. (1) LLM Debate (Du et al. 2023), which employs multi-agent debate to correct errors; (2) Inspector (Huang et al. 2024), which introduces a ded-icated verifier agent to review and correct responses; (3) 
+
+SelfCheckGPT (Manakul, Liusie, and Gales 2023), which detects hallucinations by measuring inconsistencies across multiple sampled outputs; and (4) GUARDIAN (Zhou, Wang, and Yang 2026), which models MAS as a temporal commu-nication graph to capture dynamic error patterns. Notably, all baselines follow a post-hoc detection paradigm and require the completion of full MAS execution. 
+
+Metrics . To evaluate the performance of the proposed frame-work, we adopt the following metrics: 
+
+• Risk Inference and Intervention Utility (RQ1). We mea-sure the alignment between predicted and ground-truth hallucination labels using AUROC. To assess localization accuracy and coverage, we report Hit@ k, Precision@ k, and Recall@ k over the top-k ranked agents, with k ∈ { 1, 3}. To show practical utility, we report post-intervention accuracy. 
+
+• Efficiency, Scalability, and Structural Generalization (RQ2). We evaluate computational efficiency by measuring total diagnosis time per query and the speedup ratio relative to full MAS execution. Scalability is assessed by tracking AUROC stability under different numbers of agents. To examine structural generalization, we evaluate HalluProp under both random topologies and canonical engineered workflows, including star, chain, and hierarchical. 
+
+MAS Configuration . We set up multi-agent systems us-ing four LLM backbones: the closed-source GPT-3.5-turbo and GPT-4o (Achiam et al. 2023), and the open-source Llama-3-8B-Instruct (Grattafiori et al. 2024) and Qwen-2-7B-Instruct (Team et al. 2024). To balance stability and collaborative diversity, we set the decoding temperature to 0.7
+
+across all models. For each dataset instance, we construct an interaction graph with a randomized topology, where agents are assigned distinct roles via role-specific system prompts. To ensure comprehensive evaluation, we instantiate agents using diverse role descriptions, including clean and noisy roles with irrelevant or misleading content. This reflects prac-tical MAS settings where agent roles can be underspecified, vague, or adversarially phrased. Agent interactions proceed for three rounds to enable sufficient information exchange. To                                                                                          
+
+> Model Dataset Metric AUROC Hit@1 Rec@1 Hit@3 Prec@3 Rec@3
+> GPT-3.5-turbo MMLU 89.1 86.4 44.2 92.7 79.6 80.1 MATH 88.5 85.1 43.3 91.1 78.0 79.8 MedQA 76.8 80.4 38.1 91.7 76.9 70.2 GPT-4o MMLU 91.5 89.2 48.8 94.5 82.1 84.5 MATH 91.0 88.5 47.5 93.8 81.0 83.2 MedQA 81.2 84.1 42.6 93.5 79.8 75.4 Llama-3-8B MMLU 86.8 84.2 40.8 90.8 77.1 76.5 MATH 86.2 82.8 39.5 89.5 75.8 75.8 MedQA 74.5 78.5 34.2 89.2 74.5 66.5 Qwen-2-7B MMLU 87.5 85.1 41.5 91.2 78.2 77.5 MATH 87.2 84.0 41.0 90.2 77.0 77.2 MedQA 75.1 79.2 35.1 89.8 75.5 67.8
+> Average 84.6 83.9 41.4 91.5 77.9 76.2
+
+Table 1: Hallucination detection performance (%) evaluated on three datasets. Our method demonstrates robust identifi-cation and precise localization across LLMs. Prec and Rec denote precision and recall, respectively. ensure structural diversity, we uniformly sample inter-agent connection probabilities from 25% , 50% , 75% , and 100% ,yielding a broad spectrum of MAS topologies. Finally, the ground-truth hallucination label yi ∈ { 0, 1} is determined by comparing each agent’s output against the reference answer. 
+
+RQ1: Risk Inference and Intervention Capability 
+
+We evaluate the alignment between the predicted hallucination risk scores hi and the ground-truth labels yi across multiple LLMs and datasets. To confirm the practical effectiveness of HalluProp in alleviating hallucinations, we apply intervention strategies guided by the predicted risk scores hi.
+
+• Pruning: disabling the highest-risk agent by removing its outgoing communication edges. 
+
+• Refinement: reassigning the highest-risk agent with a more cautious role prompt. 
+
+Precise Identification and Localization . Our framework demonstrates strong capability in both risk identification and localization. As shown in Table 1, it achieves an average AU-ROC of 84 .6% , indicating a reliable discrimination between hallucinating and faithful agent behaviors. More importantly, HalluProp excels at error localization. In most configura-tions, Hit@1 exceeds 80% , while Recall@3 reaches 76 .2% ,providing a balance between localization precision and cov-erage. Despite differences in architecture, parameter scale, and knowledge domain, it maintains consistent performance across both closed-source models (GPT series) and open-source models (Llama-3 and Qwen-2) in various datasets. Overall, these results demonstrate effective pre-execution risk identification in multi-agent systems. 
+
+Improvements in System Reliability . We evaluate system performance after applying interventions, with results sum-marized in Table 2. Overall, risk-aware interventions guided by HalluProp lead to reliability gains comparable to strong post-hoc mitigation baselines across different models and datasets. In particular, the pruning strategy achieves an aver-age accuracy of 63 .6% , closely matching the state-of-the-art baselines, GUARDIAN, at 63 .5% . Notably, this performance is achieved using risks inferred before inter-agent interaction, without observing agent responses or interaction traces, high-lighting the potential of pre-hoc risk inference for building more reliable MAS as an upstream screening mechanism. Method GPT-3.5-turbo GPT-4o Llama-3-8B Qwen-2-7B Average MMLU MATH MedQA MMLU MATH MedQA MMLU MATH MedQA MMLU MATH MedQA                                                                               
+
+> LLM Debate 55.2 48.1 44.1 76.6 70.9 71.3 58.4 51.9 37.5 60.1 54.6 40.1 55.7 Inspector 51.9 49.5 39.5 73.1 72.4 69.1 57.2 53.1 35.2 58.4 56.2 37.4 54.4 SelfCheckGPT 53.4 50.2 46.2 77.9 73.8 69.8 57.1 54.5 39.1 59.5 57.8 41.0 56.7 GUARDIAN 66.8 58.5 53.6 83.5 78.5 75.2 64.2 59.2 45.4 66.8 62.1 47.8 63.5 HalluProp-Pruning ( ours )64.4 60.8 53.3 80.9 77.2 76.5 65.8 58.8 46.8 67.5 62.5 49.2 63.6 HalluProp-Refinement ( ours )70.2 62.2 59.8 85.7 80.4 79.4 68.5 64.5 51.2 70.4 64.8 54.5 67.6
+
+Table 2: Effectiveness of hallucination mitigation strategies guided by HalluProp. We report the post-intervention accuracy (%) compared to four representative baselines across different LLMs and datasets. N = 3 N = 4 N = 5 N = 6 N = 7   
+
+> 75
+> 80
+> 85
+> 90
+> AUROC (%)  MMLU MATH MedQA
+
+(a) Scalability across different numbers of agents Random Star Chain Hierarchy      
+
+> 78
+> 80
+> 82
+> 84
+> 86
+> Score (%)  84.6 85.2
+> 83.8 84.4
+> 83.9 84.6
+> 82.7 83.6
+> AUROC Hit@1
+
+(b) Robustness across different topologies 
+
+Figure 3: Robustness of HalluProp with different MAS con-figurations. (a) Scalability across varying numbers of agents. (b) Performance under different structured topologies. 
+
+Benefits of Refinement Strategy . We further observe that refinement strategy consistently outperforms pruning across settings, improving the average accuracy from 63 .6% to 
+
+67 .6% . For example, with the Llama-3-8B/MATH configu-ration, pruning attains 58 .8% , slightly below the strongest baseline GUARDIAN at 59 .2% , whereas refinement achieves a higher accuracy of 64 .5% . These results suggest that di-rectly removing an agent node may inadvertently disrupt useful information flow or reduce collaborative diversity in multi-agent systems. In contrast, refinement preserves the agent’s contribution while encouraging more cautious and reliable reasoning. These findings demonstrate that pre-hoc risk estimates can support not only structural intervention but also more effective behavioral regulation in MAS. 
+
+RQ2: Efficiency, Scalability, and Generalization 
+
+Real-time Inference Efficiency . We benchmark the infer-ence latency of HalluProp against four representative baseline methods using GPT-3.5-turbo. Since all baselines are post-hoc , they inevitably incur the full cost of MAS execution, including multi-round LLM generation and communication overhead. In contrast, HalluProp operates exclusively on the static communication graph, thus avoiding the costly se-quential generation of tokens and network I/O during agent interactions. As shown in Table 3, HalluProp completes hal-lucination diagnosis in less than one second, yielding over a 
+
+65 × speedup relative to post-hoc methods. This efficiency en-                    
+
+> Method Type Total Time Cost Speedup
+> LLM Debate Post-hoc 65.5s 1.0 ×
+> Inspector Post-hoc 158.1s 0.4 ×
+> SelfCheckGPT Post-hoc 308.4s 0.2 ×
+> GUARDIAN Post-hoc 53.2s 1.2 ×
+> HalluProp ( ours )Pre-hoc <1s >65 ×
+
+Table 3: Efficiency comparison on GPT-3.5-turbo. ables HalluProp to serve as a lightweight firewall, facilitating real-time hallucination detection before execution. 
+
+Scalability Across MAS Scales . To investigate scalability under varying MAS scales, we evaluate HalluProp with dif-ferent numbers of agents ( N ∈ { 3, 4, 5, 6, 7}). As illustrated in Figure 3, HalluProp exhibits stable performance despite increasing collaboration size. Across all benchmarks, AU-ROC remains within narrow ranges ( 85% -90% on MMLU and MATH, 75% -80% on MedQA), indicating minimal sen-sitivity to scale. These results suggest that HalluProp captures scale-invariant patterns of hallucination propagation, ensuring robust performance across dynamic MAS configurations. 
+
+Performance Across Structured Workflows . Unlike ran-dom communication topologies, real-world MAS often adopt engineered workflows such as star, chain, and hierarchical. Therefore, we evaluate HalluProp across these canonical topologies. As shown in Figure 3, HalluProp maintains stable performance, with both AUROC and Hit@1 differing by less than 2% from the random topology setting. This indicates that HalluProp captures generalizable structural patterns, instead of simply overfitting to specific topology structures. 
+
+RQ3: Ablation Study and Configuration Analysis 
+
+Intra-Agent Intrinsic Risk Modeling . To examine whether the proposed intrinsic-risk module provides a stronger signal, we replace the intrinsic risk πi with a similarity-based estimate computed directly from the frozen encoder representations, which uses the holistic role-query alignment as the intrinsic risk prior. The observed performance drop (approximately 
+
+25% ) in Table 4 indicates that coarse similarity is insufficient to capture the tendency of agents to hallucinate. This con-firms that our query-conditioned competence-susceptibility modeling extracts fine-grained risk-inducing features, leading to more informative pre-execution risk estimation. 
+
+Topology Features . To measure the impact of communication structure, we exclude the topology factor γj,i from the propa-gation formulation, leaving only the semantic interaction term 
+
+ℓsem 
+
+> j→i
+
+. As shown in Table 4, this leads to a significant perfor-mance decrease, with AUROC decreasing by approximately Model Variant Average AUROC HalluProp 84.8          
+
+> w/o Intra-Agent Risk Modeling 61.2 (↓27 .8%)
+> w/o Topology Features 72.1 (↓15 .0%)
+> w/o Inter-Agent Propagation 66.9 (↓21 .1%)
+
+Table 4: Ablation study of HalluProp on GPT-3.5-turbo (%). K = 1 K = 2 K = 3 K = 4 K = 5   
+
+> 78
+> 80
+> 82
+> 84
+> 86
+> AUROC (%)
+> Performance Plateau 78.5
+> 82.9
+> 84.6 84.4 84.7
+
+Figure 4: Sensitivity to iteration depth K.
+
+15% . This result highlights that the structural properties of the interaction graph (e.g., node degree and connectivity patterns) amplify risk diffusion, and removing topological informa-tion weakens the identification of high-impact broadcasters, reducing the system-level hallucination diagnosis accuracy. 
+
+Inter-Agent Propagation Module . To evaluate the necessity of modeling inter-agent influence, we disable the propaga-tion module by enforcing tj→i = 0 for all communication links. In this setting, the system-level risk hi collapses to the intra-agent intrinsic risk πi. As shown in Table 4, this results in a substantial degradation in performance, with AU-ROC dropping by approximately 20% . These findings provide strong empirical evidence that hallucinations in MAS are not merely isolated intrinsic errors, but are significantly ampli-fied through inter-agent propagation. Consequently, relying solely on intra-agent risk estimation is insufficient to capture cascading hallucination dynamics at the system level. 
+
+Impact of Fixed-Point Inference Depth . We further analyze the effect of the fixed-point iteration depth K, which controls how many propagation steps are incorporated into system-level inference. As shown in Figure 4, one step inference underestimates multi-hop hallucination diffusion, achieving an average AUROC of 78 .5. Increasing K to 2 improves AUROC to 82 .9, and K = 3 further reaches 84 .6. After that, the performance saturates, with less than 0.3 variation for 
+
+K ∈ { 3, 4, 5}. These results indicate that HalluProp benefits from multi-step propagation while remaining robust to the choice of K once sufficient propagation depth is reached. 
+
+Sensitivity to Text Encoders . Finally, we examine whether HalluProp relies on a specific text encoder. We replace the default encoder with several off-the-shelf sentence encoders, while keeping downstream modules unchanged. As shown in Table 5, HalluProp exhibits consistent performance across different encoders. These results suggest that the effectiveness of HalluProp mainly comes from downstream components, rather than specific representation backbone. 
+
+## 5 Related Work 
+
+Hallucination Detection in LLMs . With the rapid adoption of large language models (LLMs), hallucination has emerged as a critical threat to reliability and safety. Existing detection approaches for LLMs can be broadly categorized into four types. Retrieval-based methods align model outputs with                 
+
+> Text Encoder AUROC Hit@1 Rec@3
+> bert-base-uncased (default) 84.6 83.9 76.2 e5-base-v2 83.8 82.1 75.3 bge-base-en-v1.5 85.1 85.3 77.8 all-MiniLM-L6-v2 80.7 78.9 74.1
+
+Table 5: Sensitivity analysis with different text encoders (%). retrieved information from a reliable knowledge base (Min et al. 2023; Semnani et al. 2023; Tang, Laban, and Durrett 2024; Zhang et al. 2025). Reasoning-based methods prompt models to self-examine generated responses via structured reasoning or counterfactual evidence (Chen et al. 2023b; Dhuliawala et al. 2024; Wei et al. 2022). Uncertainty- and representation-based methods estimate hallucination risk us-ing token-level uncertainty (Yoffe, Amayuelas, and Wang 2025; Hou et al. 2025; Varshney et al. 2023; Fadeeva et al. 2024) or internal hidden representations (Azaria and Mitchell 2023; Chen et al. 2023a; Su et al. 2024; Sriramanan et al. 2024). Consistency-based methods detect hallucinations by measuring inconsistencies across multiple sampled outputs for the same input (Manakul, Liusie, and Gales 2023; Cao, Yang, and Zhao 2023; Mündler et al. 2023). Notably, most existing methods identify hallucinations only after LLMs’ response generation using external evidence or intrinsic signals. 
+
+Hallucination Identification in MAS . Multi-agent systems are increasingly scaling single-agent capabilities, yet the complex interactions introduce new hallucination risks (Guo et al. 2024). In particular, hallucinations may propagate and amplify through inter-agent communication, resulting in cas-cades and collective failures (Yoffe, Amayuelas, and Wang 2025; Zhang et al. 2024a). To identify and mitigate such risks, existing studies fall into two categories. Collaborative correc-tion methods rely on multi-round debates, cross-checking, or majority voting to rectify errors after they occur (Du et al. 2023; Huang et al. 2024; Feng et al. 2024; Mehta et al. 2024). Structure-aware approaches model MAS as a communication graph and analyze how topology shapes error propagation and amplification (Shen et al. 2025; Zhou, Wang, and Yang 2026). However, these methods largely follow a post-hoc paradigm, detecting hallucinations only after responses are generated. In contrast, we take a pre-hoc method to infer hallucination that models both intra-agent intrinsic risk and inter-agent propagation risk without executing task interac-tions, providing interpretable guidance for role assignment and communication-structure design. 
+
+## 6 Conclusion 
+
+In this work, we investigate a new paradigm for hallucina-tion detection in multi-agent systems by diagnosing potential hallucination risks prior to MAS execution. Particularly, we present HalluProp, a propagation-aware hallucination infer-ence framework, which collaboratively combines intra-agent intrinsic risk and inter-agent propagation risks, enabling end-to-end differentiable system-level diagnosis via Noisy-OR inference. Empirical evaluations demonstrate that HalluProp achieves comparable post-intervention accuracy to state-of-the-art baselines. We believe our work provides new insights into hallucination risk modeling in multi-agent systems and opens new directions for proactive hallucination mitigation. References 
+
+Achiam, J.; Adler, S.; Agarwal, S.; Ahmad, L.; Akkaya, I.; Aleman, F. L.; Almeida, D.; Altenschmidt, J.; Altman, S.; Anadkat, S.; et al. 2023. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 .Azaria, A.; and Mitchell, T. 2023. The Internal State of an LLM Knows When It’s Lying. In The 2023 Conference on Empirical Methods in Natural Language Processing .Cao, Z.; Yang, Y.; and Zhao, H. 2023. Autohall: Automated hallucination dataset generation for large language models. 
+
+arXiv preprint arXiv:2310.00259 .Chen, C.; Liu, K.; Chen, Z.; Gu, Y.; Wu, Y.; Tao, M.; Fu, Z.; and Ye, J. 2023a. INSIDE: LLMs’ Internal States Re-tain the Power of Hallucination Detection. In The Twelfth International Conference on Learning Representations .Chen, K.; Zhen, T.; Wang, H.; Liu, K.; Li, X.; Huo, J.; Yang, T.; Xu, J.; Dong, W.; and Gao, Y. 2025. MedSentry: Understanding and Mitigating Safety Risks in Medical LLM Multi-Agent Systems. arXiv preprint arXiv:2505.20824 .Chen, S.; Zhao, Y.; Zhang, J.; Chern, I.-C.; Gao, S.; Liu, P.; and He, J. 2023b. FELM: Benchmarking Factuality Evaluation of Large Language Models. In Thirty-seventh Conference on Neural Information Processing Systems Datasets and Benchmarks Track .Dhuliawala, S.; Komeili, M.; Xu, J.; Raileanu, R.; Li, X.; Celikyilmaz, A.; and Weston, J. 2024. Chain-of-verification reduces hallucination in large language models. In Findings of the association for computational linguistics: ACL 2024 ,3563–3578. Du, Y.; Li, S.; Torralba, A.; Tenenbaum, J. B.; and Mordatch, I. 2023. Improving factuality and reasoning in language models through multiagent debate. In Forty-first International Conference on Machine Learning .Fadeeva, E.; Rubashevskii, A.; Shelmanov, A.; Petrakov, S.; Li, H.; Mubarak, H.; Tsymbalov, E.; Kuzmin, G.; Panchenko, A.; Baldwin, T.; et al. 2024. Fact-checking the output of large language models via token-level uncertainty quantification. In Findings of the Association for Computational Linguistics: ACL 2024 , 9367–9385. Feng, S.; Shi, W.; Wang, Y.; Ding, W.; Balachandran, V.; and Tsvetkov, Y. 2024. Don’t hallucinate, abstain: Identifying llm knowledge gaps via multi-llm collaboration. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 14664–14690. Grattafiori, A.; Dubey, A.; Jauhri, A.; Pandey, A.; Kadian, A.; Al-Dahle, A.; Letman, A.; Mathur, A.; Schelten, A.; Vaughan, A.; et al. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Guo, T.; Chen, X.; Wang, Y.; Chang, R.; Pei, S.; Chawla, N.; Wiest, O.; and Zhang, X. 2024. Large Language Model based Multi-Agents: A Survey of Progress and Challenges. In 
+
+33rd International Joint Conference on Artificial Intelligence (IJCAI 2024) . IJCAI; Cornell arxiv. Hendrycks, D.; Burns, C.; Kadavath, S.; Arora, A.; Basart, S.; Tang, E.; Song, D.; and Steinhardt, J. 2021. Measuring Mathematical Problem Solving With the MATH Dataset. In 
+
+Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2) .Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Wang, J.; Zhang, C.; Wang, Z.; Yau, S. K. S.; Lin, Z.; et al. 2023. MetaGPT: Meta programming for a multi-agent collaborative framework. In The Twelfth International Conference on Learning Representations .Hou, B.; Zhang, Y.; Andreas, J.; and Chang, S. 2025. Aprobabilistic framework for llm hallucination detection via belief tree propagation. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , 3076–3099. Huang, J.-t.; Zhou, J.; Jin, T.; Zhou, X.; Chen, Z.; Wang, W.; Yuan, Y.; Sap, M.; Lyu, M. R.; Li, J.-J.; et al. 2024. On the Resilience of Multi-Agent Systems with Malicious Agents. In ICML .Huang, L.; Yu, W.; Ma, W.; Zhong, W.; Feng, Z.; Wang, H.; Chen, Q.; Peng, W.; Feng, X.; Qin, B.; et al. 2025. A survey on hallucination in large language models: Principles, taxonomy, challenges, and open questions. ACM Transactions on Information Systems , 43(2): 1–55. Jin, D.; Pan, E.; Oufattole, N.; Weng, W.-H.; Fang, H.; and Szolovits, P. 2021. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Applied Sciences , 11(14): 6421. Kim, Y.; Gu, K.; Park, C.; Park, C.; Schmidgall, S.; Heydari, A. A.; Yan, Y.; Zhang, Z.; Zhuang, Y.; Malhotra, M.; et al. 2025. Towards a science of scaling agent systems. arXiv preprint arXiv:2512.08296 .Kong, D.; Lin, S.; Xu, Z.; Wang, Z.; Li, M.; Li, Y.; Zhang, Y.; Peng, H.; Chen, X.; Sha, Z.; et al. 2025. A survey of llm-driven ai agent communication: Protocols, security risks, and defense countermeasures. arXiv preprint arXiv:2506.19676 .Kong, D.; Peng, H.; Zhang, Y.; Zhao, L.; Xu, Z.; Lin, S.; Lin, C.; and Han, M. 2026. Web fraud attacks against llm-driven multi-agent systems. In Findings of the Association for Computational Linguistics: ACL 2026" .Li, J.; Cheng, X.; Zhao, X.; Nie, J.-Y.; and Wen, J.-R. 2023. Halueval: A large-scale hallucination evaluation benchmark for large language models. In The 2023 Conference on Empirical Methods in Natural Language Processing .Lin, S.; Yang, H.; Li, R.; Wang, X.; Lin, C.; Xing, W.; and Han, M. 2024. Llms can be dangerous reasoners: Analyzing-based jailbreak attack on large language models. arXiv preprint arXiv:2407.16205 .Manakul, P.; Liusie, A.; and Gales, M. 2023. Selfcheckgpt: Zero-resource black-box hallucination detection for generative large language models. In Proceedings of the 2023 conference on empirical methods in natural language processing , 9004– 9017. Mehta, N.; Teruel, M.; Deng, X.; Sanz, S. F.; Awadallah, A.; and Kiseleva, J. 2024. Improving Grounded Language Understanding in a Collaborative Environment by Interacting with Agents Through Help Feedback. In Findings of the Association for Computational Linguistics: EACL 2024 , 1306– 1321. Min, S.; Krishna, K.; Lyu, X.; Lewis, M.; Yih, W.-t.; Koh, P.; Iyyer, M.; Zettlemoyer, L.; and Hajishirzi, H. 2023. FActScore: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation. In Proceedings of the 2023 Confer-ence on Empirical Methods in Natural Language Processing ,12076–12100. Mündler, N.; He, J.; Jenko, S.; and Vechev, M. 2023. Self-contradictory Hallucinations of Large Language Models: Evaluation, Detection and Mitigation. In The Twelfth Inter-national Conference on Learning Representations .Qian, C.; Xie, Z.; Wang, Y.; Liu, W.; Zhu, K.; Xia, H.; Dang, Y.; Du, Z.; Chen, W.; Yang, C.; et al. 2025. Scaling large language model-based multi-agent collaboration. In Inter-national Conference on Learning Representations , volume 2025, 41488–41505. Semnani, S.; Yao, V.; Zhang, H.; and Lam, M. 2023. WikiChat: Stopping the hallucination of large language model chatbots by few-shot grounding on Wikipedia. In Findings of the Association for Computational Linguistics: EMNLP 2023 ,2387–2413. Shen, X.; Liu, Y.; Dai, Y.; Wang, Y.; Miao, R.; Tan, Y.; Pan, S.; and Wang, X. 2025. Understanding the information prop-agation effects of communication topologies in llm-based multi-agent systems. In Proceedings of the 2025 Confer-ence on Empirical Methods in Natural Language Processing ,12358–12372. Sriramanan, G.; Bharti, S.; Sadasivan, V. S.; Saha, S.; Kat-takinda, P.; and Feizi, S. 2024. Llm-check: Investigating de-tection of hallucinations in large language models. Advances in Neural Information Processing Systems , 37: 34188–34216. Su, W.; Wang, C.; Ai, Q.; Hu, Y.; Wu, Z.; Zhou, Y.; and Liu, Y. 2024. Unsupervised real-time hallucination detection based on the internal states of large language models. In Findings of the Association for Computational Linguistics: ACL 2024 ,14379–14391. Tang, L.; Laban, P.; and Durrett, G. 2024. Minicheck: Ef-ficient fact-checking of llms on grounding documents. In 
+
+Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 8818–8847. Team, Q.; et al. 2024. Qwen2 technical report. arXiv preprint arXiv:2407.10671 , 2(3). Varshney, N.; Yao, W.; Zhang, H.; Chen, J.; and Yu, D. 2023. A stitch in time saves nine: Detecting and mitigating hallucinations of llms by validating low-confidence generation. 
+
+arXiv preprint arXiv:2307.03987 .Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Xia, F.; Chi, E.; Le, Q. V.; Zhou, D.; et al. 2022. Chain-of-thought prompt-ing elicits reasoning in large language models. Advances in neural information processing systems , 35: 24824–24837. Yang, H.; Lin, S.; Shao, J.; Lin, C.; Zhu, D.; Han, M.; and Kong, Q. 2025. Direct Behavior Optimization: Unlocking the Potential of Lightweight LLMs. In Findings of the Association for Computational Linguistics: ACL 2025 , 19489–19515. Yang, J.; Jimenez, C. E.; Wettig, A.; Lieret, K.; Yao, S.; Narasimhan, K.; and Press, O. 2024. Swe-agent: Agent-computer interfaces enable automated software engineering. 
+
+Advances in Neural Information Processing Systems , 37: 50528–50652. Ying, Z.; Wu, S.; Hao, R.; Ying, P.; Sun, S.; Chen, P.; Chen, J.; Du, H.; Shen, K.; Wu, S.; et al. 2025. Pushing the limits of safety: A technical report on the atlas challenge 2025. arXiv preprint arXiv:2506.12430 .Yoffe, L.; Amayuelas, A.; and Wang, W. Y. 2025. Debunc: Mitigating hallucinations in large language model agent com-munication with uncertainty estimations. In Findings of the Association for Computational Linguistics: EMNLP 2025 .Zhang, J.; Xu, C.; Gai, Y.; Lecue, F.; Yang, S.; Song, D.; and Li, B. 2025. KnowHalu: Hallucination Detection via Multi-Form Knowledge Based Factual Checking. In ICLR 2025 Workshop on Foundation Models in the Wild .Zhang, M.; Press, O.; Merrill, W.; Liu, A.; and Smith, N. A. 2024a. How language model hallucinations can snowball. In 
+
+Proceedings of the 41st International Conference on Machine Learning , 59670–59684. Zhang, Z.; Zhang, Y.; Li, L.; Shao, J.; Gao, H.; Qiao, Y.; Wang, L.; Lu, H.; and Zhao, F. 2024b. Psysafe: A comprehen-sive framework for psychological-based attack, defense, and evaluation of multi-agent system safety. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 15202–15231. Zhou, J.; Wang, L.; and Yang, X. 2026. Guardian: Safe-guarding llm multi-agent collaborations with temporal graph modeling. volume 38, 7973–8001. Zhu, C.; Liu, Y.; Zhang, H.; Wang, A.; Chen, G.; Wang, L.; Luo, W.; and Zhang, K. 2026. Alleviating hallucinations in large language models through multi-model contrastive decoding and dynamic hallucination detection. Advances in Neural Information Processing Systems , 38: 165364–165388. A Appendix 
+
+Theoretical Analysis 
+
+In this section, we provide a rigorous justification for the proposed Noisy-OR mechanism in HalluProp. Specifically, we analyze this differentiable formulation from three per-spectives: its probabilistic grounding in causal independence, the convergence guarantees of the inference process, and the favorable gradient properties for optimization. 
+
+Causal Independence . The Noisy-OR mechanism is the-oretically based onthe assumption of causal independence 
+
+among failure factors. An agent vi remains reliable (i.e., non-hallucinating) if and only if it is intrinsically safe, and successfully immune to errors from all neighbors. Assuming that these safety conditions are independent, the final halluci-nation risk hi of vi is derived as the complement of the joint reliability probability: 
+
+hi = 1 − (1 − πi)
+
+| {z }
+
+> Intrinsic Safety
+
+Y
+
+> j∈N in (i)
+
+(1 − tj→ihj )
+
+| {z }
+
+> Propagation Safety
+
+. (12) This captures the “any-cause” logic of error propagation, whereby a single failure in the dependency chain compro-mises the node, while maintaining a smooth, differentiable manifold for learning, allowing the model to implicitly handle uncertainty and noise in multi-agent communications. 
+
+Convergence Guarantee . Since the communication graph may contain cyclic dependencies, it is necessary to ensure that the iterative update converges to a stable fixed point. Let F : [0 , 1] N → [0 , 1] N be the system update operator. We analyze the sequence h(k+1) = F (h(k)) based on the 
+
+Monotone Convergence Theorem :
+
+• Boundedness: Since all parameters πi, t j→i ∈ [0 , 1] , the term (1 − tj→ihj ) strictly lies in [0 , 1] . Thus, the out-put F (h) is bounded within the unit hypercube: F (h) ∈
+
+[0 , 1] N , ∀h ∈ [0 , 1] N .
+
+• Monotonicity: The operator F is monotonically non-decreasing. For any states x ≤ y, the non-negativity of weights implies Q(1 − tj→ixj ) ≥ Q(1 − tj→iyj ), leading to x ≤ y =⇒ F (x) ≤ F (y).
+
+• Fixed-Point Existence: Initializing with the lower bound 
+
+h(0) = π, the iterative sequence satisfies h(0) ≤ h(1) ≤· · · ≤ h(K). Because the sequence is monotonically non-decreasing and bounded, it must converge to a unique stable limit h∗. Furthermore, since tj→i ∈ (0 , 1) acts as a fractional damping factor, the propagated influence decays multiplicatively along paths. This property ensures rapid empirical convergence, which explains why a small propagation depth (e.g., K ≈ 3) is sufficient to reach a performance plateau. 
+
+Dynamic Optimization . Beyond inference stability, the mul-tiplicative structure of Noisy-OR offers a desirable self-gating effect during backpropagation. The exact gradient with respect to a specific propagation weight tk→i is given by: 
+
+∂h i
+
+∂t k→i
+
+= (1 − πi)
+
+| {z }
+
+> Target Safety
+
+· hk
+
+|{z} 
+
+> Source Risk
+
+· Y 
+
+> j̸=k
+
+(1 − tj→ihj )
+
+| {z }
+
+> Other Sources’ Safety
+
+. (13) This implies an automatic credit assignment mechanism anal-ogous to the “explaining away” effect in Bayesian networks. Specifically, if agent vi is heavily compromised by a dominant neighbouring source (i.e., the product term Q  
+
+> j̸=k
+
+≈ 0), the gradients for all other incoming edges are sharply reduced. This prevents redundant penalization and forces the optimizer to focus on identifying the main sources of hallucination, thereby facilitating highly effective structural learning. 
+
+Experimental Details 
+
+Datasets . To comprehensively evaluate the effectiveness of HalluProp across different cognitive modalities, we select three benchmarks that represent general world knowledge, complex logical reasoning, and specialized domain expertise. 
+
+• MMLU (Massive Multitask Language Understand-ing) (Hendrycks et al. 2021). MMLU is a large-scale multiple-choice benchmark designed to evaluate general knowledge and reasoning across 57 academic subjects, including STEM, social sciences, humanities, and profes-sional domains. It challenges models with questions ranging from elementary to advanced levels, requiring both factual recall and applied understanding. We use 500 randomly sampled questions from the official test set to measure closed-book accuracy. 
+
+• MATH (Mathematics Aptitude Test of Heuris-tics) (Hendrycks et al. 2021). The MATH dataset contains competition-level mathematics problems drawn from U.S. high-school contests, designed to evaluate deep mathemati-cal problem solving and multi-step reasoning. Each problem includes a statement and an exact numerical answer, em-phasizing structured reasoning beyond simple calculation. We sample 500 problems from the test split and report exact-match accuracy. 
+
+• MedQA (Medical Question Answering) (Jin et al. 2021). 
+
+MedQA is a professional medical multiple-choice QA dataset collected from real medical board exams. Questions require domain-specific medical knowledge and clinical reasoning, spanning diagnostic and pathophysiological un-derstanding. Each question includes four or five options, and we randomly select 500 questions from the test split. 
+
+Device . All experiments are conducted on an Ubuntu 20.04 platform equipped with an Intel(R) Xeon(R) Platinum 8255C CPU, 40GB RAM, and eight 24GB NVIDIA RTX 4090 GPU. 
+
+Role Construction . To match realistic MAS role variability, we instantiate agents with diverse role descriptions, covering both clean and noisy roles. Clean roles are designed to be well-specified and non-adversarial. Noisy roles may contain irrelevant or misleading content, reflecting real-world MAS settings where role prompts can be underspecified, generic, or adversarially phrased. Each role is generated across three fac-tors: domain alignment, persona specificity, and perturbation level. For perturbed roles, we apply the following perturba-tions: style-objective mismatch, decision-bias tampering, and irrelevant-sentence injection. Finally, we randomly rephrase the role prompts to avoid fixed lexical patterns. ROLE PROMPT TEMPLATE 
+
+> You are {DOMAIN} {PERSONA} {BEHAVIOR_PERTURBATION} {IRRELEVANT_CONTENT}
+> DOMAIN:
+> - aligned: claimed domain matches target domain - domain-mismatched: claimed domain does not matches target domain
+> PERSONA:
+> - specific: domain expert description - underspecified: vague agent description
+> BEHAVIOR_PERTURBATION:
+> - clean: cautious verification habits - perturbed: adversarial behavior style, decision-bias tampering
+> IRRELEVANT_CONTENT:
+> - unrelated sentences inserted at random positions
+
+Intervention Strategies . Building upon the risk identification capabilities of HalluProp, we implement two distinct interven-tion strategies to mitigate hallucination propagation: pruning 
+
+and refinement . Based on the calculated risk, we target the top-k highest-risk agents (default k = 1 ) for intervention. 
+
+Strategy 1: Pruning (Structural Intervention) . This strategy physically isolates high-risk nodes from MAS to prevent the spread of misinformation. Let G = ( V, E) represent the MAS communication graph. For a set of identified high-risk agents 
+
+H ⊂ V , we modify the edge set to E′:
+
+E′ = E \ { (u, v ) | u ∈ H , v ∈ V} (14) In our implementation, this is achieved by setting the outgoing edges of the risky agents identified to zero in the adjacency matrix. While the agent retains the ability to receive infor-mation, it is effectively silenced, thus blocking any potential error propagation paths while maintaining context awareness. 
+
+Strategy 2: Refinement (Behavioral Intervention) . This strategy dynamically reassigns the high-risk agent to a “Cau-tious Expert” role. By modifying the agent’s system prompt, we enforce a stricter behavioral protocol focused on verifica-tion rather than generation. This transforms the agent from a potential source of hallucinations into an active verifier, lever-aging the underlying LLM’s capability to critique and correct errors when explicitly instructed. We deploy a specialized system prompt as detailed below.   
+
+> REFINEMENT INTERVENTION PROMPT
+> You are a cautious, critical, and fact-checking assistant. Your goal is to verify information provided by others strictly. Do not hallucinate. If you are unsure, admit it. If you detect errors in the conversation history, correct them immediately.
+
+Discussion on Intervention Strategies 
+
+Experimental results show that the refinement strategy out-performs baseline methods. This superiority stems from HalluProp’s ability to perform targeted, in-situ mitigation rather than relying on global checks or external patches. By leveraging the precise localization of high-risk nodes, refine-ment addresses the root causes of hallucination. We attribute this success to four key advantages: 
+
+• Comparison with SelfCheckGPT (Correction vs. Detec-tion). SelfCheckGPT relies on computationally expensive sampling to measure output consistency, operating on the assumption that stochasticity correlates with hallucination. While this approach is effective, it has two key limitations: (1) high inference cost, and (2) it merely flags symptoms without reducing the agent’s inherent propensity to halluci-nate. In contrast, our refinement strategy is remedial. By modifying the role of a specific risky node, we can regulate the agent’s internal generation process and prevent errors at the source rather than merely observing their probability. 
+
+• Comparison with Inspector (Internal Cure vs. External Patch). Inspector-based methods introduce an additional agent to scrutinize outputs. However, this approach is sub-ject to recursive unreliability, as it essentially uses one unreliable agent to monitor another. Since the inspector usually shares the same LLM backbone as the source agent, it is equally susceptible to reasoning errors and lacks ac-cess to the latter’s internal context. Furthermore, this adds communication overhead without fixing the faulty node. Conversely, refinement provides an internal solution by transforming an unreliable node into a cautious verifier, ensuring that the agent responsible for the information is also responsible for its validity. 
+
+• Comparison with LLM Debate (Targeted vs. Global Mitigation). LLM Debate relies on multi-agent consensus to filter out errors. However, prone to hallucination am-plification , the entire group consensus can be swayed if a highly influential agent hallucinates confidently. LLM Debate lacks the granularity to identify the specific source of misinformation. Refinement leverages HalluProp’s risk scores to pinpoint the culprit, breaking the echo chamber effect by enforcing caution only where it is needed most. 
+
+• Comparison with GUARDIAN & Pruning (Context Preservation). While GUARDIAN and our pruning strat-egy mitigate risks by blocking communication, they face a trade-off: silencing an agent removes its potential utility and context contribution. Refinement avoids this information loss. The high-risk agent remains in the communication graph but operates under a stricter protocol. It continues to contribute to the task but acts as a sanitizer , ensuring that the final system output is both safe and informative. 
+
+Real-World Case Study 
+
+To illustrate how HalluProp identifies hallucination risk in MAS, we present an example in Figure 5. Query: Can you explain the main side effects of the new anti -aging drug “Xylophone -5” approved by the FDA in 2024? 
+
+Round 1
+
+Xylophone -5 is a gene -therapy drug . It causes mild nausea and 
+
+headaches. 
+
+Yes, I also found it improves memory . Insomnia is another side 
+
+effect. 
+
+Wait, I am searching the database but cannot find any official 
+
+FDA record yet. 
+
+It might be too new? I am not sure which source to trust. 
+
+Round 2
+
+It was approved via a confidential fast -track program yesterday. 
+
+That makes sense! Confidential approval explains the lack of 
+
+data. 
+
+Oh, a confidential fast -track ? I see. That explains it. 
+
+Understood. Then the side effects of nausea are plausible. 
+
+Round 3
+
+Xylophone -5 is effective but causes nausea .
+
+I agree. Clinical trials also showed some cases of insomnia .
+
+Yes, but it is highly effective for cell regeneration .
+
+Xylophone -5 is a safe and approved anti -aging medication. 
+
+I have checked the FDA 2024 list. There is no drug named 
+
+'Xylophone -5'. 
+
+Are you sure? Maybe it is under a different name? 
+
+Checking... but cannot find FDA record. 
+
+I see no evidence of this drug either. 
+
+The user's premise is false . We must not fabricate side effects 
+
+for non -existent things. 
+
+Understood. I almost hallucinated details based on the name. 
+
+I found zero search results for 'Xylophone -5 drug' .
+
+Is it possible the user made a typo? 
+
+Confirmed. There is no such drug . 'Xylophone' is a musical 
+
+instrument , not a medication. 
+
+I see. It seems to be a fictional name .
+
+There are no clinical trials because the drug is purely fabricated. 
+
+We should inform the user it does not exist. 
+
+MAS Before Refinement (w/o HalluProp ) MAS After Refinement (w/ HalluProp )
+
+Pre -hoc Detection Intervention 
+
+…
+
+High Low Figure 5: A comparative case study that illustrates hallucination propagation in MAS and how HalluProp effectively addresses it.
