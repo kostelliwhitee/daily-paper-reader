@@ -1,0 +1,818 @@
+Title: An Empirical Study of Coordination Mode as the First-Class Citizen in From-Scratch Multi-Agent Coding
+
+URL Source: https://arxiv.org/pdf/2607.27877v1
+
+Published Time: Fri, 31 Jul 2026 00:43:30 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# An Empirical Study of Coordination Mode as the First-Class Citizen in From-Scratch Multi-Agent Coding 
+
+## Yanyu Ren 1* , Yunfeng Bai 1* , Xizheng Wang 2†, Li Chen 2†, Dan Li 1
+
+> 1
+
+Tsinghua University 2Zhongguancun Laboratory 
+
+Abstract 
+
+Multi-agent vibe coding promises to accelerate software de-velopment, yet existing benchmarks rely on synthetic environ-ments that ignore practical time and monetary costs, conflate reasoning with communication, and reward only superficial completion. We introduce multi-agent from-scratch evalua-tion benchmark, MSEval , evaluating multi-agent coding on real-world tasks. Grounded in 10 authentic, full-stack projects across 10 domains, MSEval scores performance using hier-archical requirements and deterministic rubrics. Its execution engine, LegoGent , tests 10 collaboration topolo-gies where agents coordinate via periodic sync intervals and deploy through native CI/CD pipelines. Concurrently, the au-tomated grader TAgent dynamically probes implementations to jointly measure functional success, latency, and prefix-cached token cost. Across 100 runs, MSEval reveals that organizational topology rivals model capability in shaping the speed–cost–quality trade-off. For identical tasks and mod-els, varying the topology shifts scores by over 30 points and doubles wall-clock time. Structured pipelines converge fastest with the highest quality, whereas heavy managerial oversight degrades performance. Ultimately, MSEval establishes a rig-orous, reproducible standard for measuring how multi-agent teams actually build software. The benchmark is released at https://github.com/robinren03/MSEval. 
+
+## Introduction 
+
+Frontier coding agents have made repository-level program-ming more capable, shifting the field from toy function synthesis toward long-horizon, execution-grounded software work (Jimenez et al. 2024; Huang et al. 2026; Lu et al. 2026). Yet most evaluations still ask whether one agent produces an acceptable patch. They do not measure what increasingly matters in practice: how a team of agents divides labor, builds a project from scratch without pre-defined judges, spends time and tokens, and improves after concrete feedback. Multi-agent systems promise faster software delivery by assigning specialized workers to parallel subtasks, but this promise is fragile. Poorly bounded communication can am-plify semantic drift; heavy orchestration can become a bot-tleneck; and self-reported completion is often detached from runnable behavior. Existing multi-agent benchmarks expose 
+
+> *
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+some communication patterns (Zhu et al. 2025), but they are often simulated, detached from continuous integration and continuous delivery (CI/CD) deployment, and too coarse to explain why one collaboration mode succeeds while another fails on the same project and model. We introduce MSEval , a benchmark for quantitatively evaluating multi-agent vibe coding on real-world soft-ware tasks. MSEval is grounded in a university software-engineering setting where groups of three to four develop-ers iteratively build full-stack projects and receive teaching-assistant (TA) feedback. It contains 10 rubric-scored web projects, 10 collaboration topologies implemented in Le-goGent , and an automated evaluator, TAgent , that discovers and probes each deployed artifact before returning weighted feedback for the next refinement round. 
+
+MSEval is designed around four properties that are miss-ing in combination from prior coding-agent evaluations: 
+
+• Diverse Collaboration. The same project can be run under feature squads, layer specialists, pipeline hand-off, swarming, rotation, project-manager (PM) oversight, quality-assurance (QA)-first, Push Request (PR)-style re-view, adversarial testing, and competitive teams. 
+
+• Deployment-Grounded Evaluation. MSEval builds and serves artifacts through independent endpoints, and graded through live user interface (UI), application pro-gramming interface (API), and code checks rather than final-text inspection. 
+
+• Iterative Feedback. Agents receive TAgent ’s automatically-generated scores and comments for up to three refinement rounds, exposing convergence and regression instead of only first-attempt success. 
+
+• First-Class Metrics. Wall-clock latency and prefix-cached token usage are logged with the functional score, making coordination overhead measurable. Our key contributions are: 
+
+• a 100-case benchmark grid over 10 realistic projects and 10 collaboration modes, with project specifications, collaboration-mode definitions, source code, metrics, and analysis scripts provided in the supplementary materials; 
+
+• LegoGent , an activation-driven multi-agent runtime with bounded synchronization, explicit peer messaging, CI/CD deployment, and behavioral completion checks; arXiv:2607.27877v1 [cs.AI] 30 Jul 2026 • TAgent , a document-driven grader that discovers UI/API/code surfaces in unseen implementations and re-turns weighted, actionable feedback; 
+
+• an empirical study showing that topology, model capabil-ity, and project domain jointly determine the speed–cost– quality trade-off. 
+
+## Background and Related Work 
+
+Coding Agents 
+
+Coding-agent evaluation has moved from local synthesis to repository-scale software work. HumanEval and MBPP mea-sure function-level generation, while RepoBench and SWE-bench move toward multi-file context and real GitHub issues (Chen et al. 2021; Austin et al. 2021; Liu, Xu, and McAuley 2024; Jimenez et al. 2024). Agent systems such as SWE-agent, Agentless, AutoCodeRover, and OpenHands further show that language models can navigate repositories, run tools, and repair defects (Yang et al. 2024; Xia et al. 2025; Zhang et al. 2024; Wang et al. 2025). DeepSWE and Fron-tierCode push this line toward longer-horizon engineering tasks (Huang et al. 2026; Lu et al. 2026). This progress is important, but it leaves a different question unanswered. Most coding benchmarks still evaluate a single agent’s repair be-havior, patch validity, or code-quality outcome. They do not ask whether a team of agents can start from requirements, divide work, deploy a full-stack system, and improve after concrete feedback while spending time and tokens. That is the gap MSEval targets: the unit of measurement is no longer only a model’s coding skill, but the whole software-delivery loop around the model. 
+
+Multi-Agent Benchmarks 
+
+Existing multi-agent benchmarks also leave this gap open, but for a different reason. AgentsNet and MultiAgentBench study collaboration and competition across communication struc-tures, yet their tasks are more abstract than deployed software delivery (Grötschla et al. 2025; Zhu et al. 2025). They can expose communication behavior, but not whether a collab-oration policy produces a runnable application, respects in-terface boundaries, or survives integration. CloudDevBench evaluates multi-agent repository development from speci-fications using CloudMAS, a multi-agent coding assistant, over 50 test cases (Guan 2026). However, CloudDevBench uses a fixed collaboration mode and takes advantage of de-tailed task specifications with pre-defined APIs. It is there-fore only partially from scratch: a fine-grained design pro-tocol should be given for each project, rather than a coarse-grained requirement document. TheAgentCompany broad-ens the task mix, but it does not control collaboration policy inside a real software-delivery loop (Xu et al. 2026). These designs cannot separate weak coding ability from duplicated work, stale shared context, bad handoffs, deployment fric-tion, or inefficient evaluation. 
+
+Motivation for MSEval 
+
+MSEval is designed around the missing combination: re-alistic from-scratch projects, multiple collaboration modes,   
+
+> Work Code From Scratch Multi Agent Collab. Focus Cost Aware
+> SWE-bench
+
+✓ ✗ ✗ ✗ ✗
+
+> MultiAgent Bench
+
+✗ ✗ ✓ ✓ ✓ 
+
+> CloudDevBench
+
+✓ ✓ ✓ ✗ ✗ 
+
+> DeepSWE
+
+✓ ✗ ✗ ✗ ✗ 
+
+> FrontierCode
+
+✓ ✗ ✗ ✗ ✗
+
+> TheAgent Company
+
+✓ ✗ ✓ ✗ ✗  
+
+> MSEval (ours)
+
+✓ ✓ ✓ ✓ ✓
+
+Table 1: Comparison of MSEval against existing bench-marks. MSEval is the first benchmark that examine the im-pact of multi-agent coordination on from-scratch coding. deployment-grounded scoring, and cost-aware feedback in one controlled setup. With an end-to-end artifact typically with 2000+ lines of Python code to be generated, MSEval is not sensitive to data contamination of LLM. The benchmark keeps the project, model, deployment path, and rubric fixed while varying the collaboration topology. This makes topol-ogy measurable rather than incidental: a low score can be in-terpreted together with the run’s time, token use, deployment behavior, and feedback trajectory. MSEval is a benchmark for multi-agent software work rather than a leaderboard for one final artifact. Table 1 summarizes MSEval ’s features. 
+
+## Methodology 
+
+Benchmark Framework Overview 
+
+The MSEval benchmark is a three-stage pipeline for measur-ing how multi-agent teams build deployable software under different coordination policies. 
+
+Data foundation. We curate 10 full-scale software-engineering projects from a corpus of university capstone assignments developed since 2018. The projects cover real-time messaging, enterprise asset management, crowdsourc-ing, requirement tracking, image processing, e-commerce, creator analytics, role-based access control (RBAC), news search, and online live teaching during pandemic. Each re-quirement document decomposes into six to eight modules and 30–45 weighted line items, normalized to a deterministic 100-point rubric. 
+
+Pipeline execution. LegoGent instantiates a selected collab-oration mode, launches agents with role-specific prompts, monitors progress, and sends the generated repository to 
+
+XDeploy , which builds and stages the application through a native CI/CD path with GitLab and SonarQube (Camp-bell and Papapetrou 2013). This makes deployment failure, not just code incompleteness, part of the measured outcome. 
+
+Metrics. TAgent grades the staged artifact against the rubric and produces a completion score on the 0–100 scale. Le-goGent records cumulative wall-clock time and token usage. 
+
+MSEval joins quality, speed, and cost for every round. 
+
+The collaboration mode is the only independent vari-able. The benchmark treats a collaboration mode as the in-dependent variable rather than a prompt flourish. For a fixed Configurations 
+
+10 Software Engineering Tasks           
+
+> IM -system EAM Live Teaching
+> ……
+> 10 Collaboration Modes(4 Agents)
+> …… pipeline
+> ABCD
+> PM -Oversight
+> A
+> BCD
+> 100 Team Configurations
+> 12…10
+> Tasks
+> 1 2 … 10
+
+1 Task Preparations 
+
+Requirements Document    
+
+> Example （Task: IM -system ）
+> -Basic requirements (40 pts)
+> -Functional requirements (50 pts)
+> -Documents requirements (10 pts)
+
+Generate Specification   
+
+> -Functional Requirements
+> -API Contract
+> ……
+
+Prepare Agent  Workdir   
+
+> Create folder &
+> Set conda env
+> replicate
+> project asset
+
++
+
+2 LEGOGENT Execution  3 TAGENT Evaluation 
+
+Multi -Agent Team (4 Agents) 
+
+> Agent A
+> Sync &
+> Coordinate
+
+CI/CD deploy , &
+
+Provide  outputs to TAGENT  
+
+> Deploy on
+> XDEPLOY Provide URL &
+> Artifacts
+
+Discover API from URL 
+
+Multi -Dimensional Assessment 
+
+> √
+> Basic requirements
+> Code Quality
+> Required docs
+> Functionality
+
+…… 
+
+User Review 
+
+> Score Report & Feedback
+
+Round 1 
+
+> Initial Build + Evaluation
+> Initial Env
+> (from B)
+
+Agents 
+
+co -work 
+
+Evaluation   
+
+> Score Report
+> Competition
+> AB
+> CD
+> Modes
+> √
+> √
+> √
+
+Round 2 
+
+> Repair, Retest & Evaluation
+
+Agents 
+
+co -work 
+
+Round 3 
+
+> Final Repair & Evaluation
+> Agents
+> co -work
+
+Final 
+
+Score 
+
+Report 
+
+Final Summary    
+
+> -Per -Agent Token Usage (per Round)
+> -Per -Requirement Scores
+> -Per -Round Time & Cost
+
+Evaluation    
+
+> Score Report
+> Agent C
+> Agent B
+> Agent D
+
+Figure 1: MSEval overview. MSEval builds and evaluates a web app from requirement document without detailed API specifications and evaluate the projects comprehensively. project and model family, every run receives the same re-quirement document, round budget, deployment path, and 
+
+TAgent rubric. What changes is the organizational policy: who owns each artifact, which agents may run concurrently, where handoffs occur, who can reject a completion claim, and how feedback is routed into the next round. This design lets the evaluation distinguish a weak model from a weak topology. A low score after a failed deploy is not collapsed into a generic failure; it is paired with the time and token trace that shows whether the team spent the round coding, coordinating, waiting for a slow model, or repairing a bad merge. 
+
+Multi-Agent Execution via LegoGent 
+
+LegoGent is the runtime that turns a collaboration mode into an executable team. Each agent runs as an isolated, resumable process with file and shell tools in a shared workspace, which framework-side validators guard by checking ports, HTTP behavior, and artifacts before accepting completion claims. Rather than inferring a fixed dependency graph, LegoGent 
+
+runs a periodic sync loop (Figure 2): agents work concur-rently while a progress collector polls them and broadcasts a shared snapshot. A completion gate then checks whether all agents are idle and the required artifacts are ready; if so, the handoff is deployed and reviewed and its feedback opens the next round, otherwise the round continues. On this runtime we implement 10 collaboration modes. Some modes are handoff-heavy, such as pipeline and PM oversight pass work through fixed stages, swarming claims tasks dynamically; while the other modes often encounter merge conflicts, open-source review, adversarial testing, and competitive dual teams which frequently face disagreement. The supplementary material details each mode. Coordination uses two bounded channels. A passive sync 
+
+round runs every four minutes: each agent reports completed Input        
+
+> Agent A
+> Agent B
+> Agent C
+> Agent D
+> Agents Periodic sync (every 4 minutes)
+> all agents ilde ?
+> + all things
+> ready?
+> No: Yes:
+> Ready Check
+> Feedback
+> Shared
+> workdir
+> Continue
+> current
+> round
+> Validated
+> handoff
+> 1234
+> Round 2
+> Round 3
+> Round 1
+> (remind agents to rotate role)
+> Query
+> agents
+> Collect
+> snapshots
+> Share
+> progress
+> summary
+> BTW Progress collector
+> wake agents
+> next round
+> Deploy +Review
+> 5
+> Requirement &
+> Collaboration
+> mode
+> B-Arch
+> B-QA
+> B-FE
+> A-QA
+> A-FE
+> A-BE
+> D-FE
+> D-BE
+> D-Arch
+> C-BE
+> C-Arch
+> C-QA
+
+Figure 2: An illustration of LegoGent execution under the rotation collaboration mode, where the agents switch their roles in each round. BE and FE mean backend and frontend. work, test evidence, blockers, and next steps, and the runtime broadcasts a consolidated state snapshot to the team. An active mailbox supports targeted peer questions and handoffs between sync rounds. This design gives parallel workers a shared view without collapsing them into one monolithic context, and it makes communication overhead observable through time and token logs. 
+
+Mode templates make parallel work comparable. A mode template specifies four concrete objects: an ownership map, an activation schedule, a decision rule, and a required hand-off artifact. Feature squads parallelize by user-facing mod-ule; layer specialists parallelize within frontend and backend layers and synchronize at API contracts; swarming allows dynamic task claiming; competitive mode runs redundant implementations and selects a winner. Pipeline mode is in-tentionally almost serial, so it acts as a coordination-control condition, trading parallel speed for a clean artifact boundary between architect, backend, frontend, and QA. As all modes write into the same repository and pass the same deployment validator, the benchmark can observe whether parallelism actually reduces wall-clock time or merely creates duplicate context and merge repair. 1 Process  Doc               
+
+> Input Documents
+> Structured Spec
+> Live API
+> Discover
+> 3Parallel Evaluation
+> Code -review Evaluation
+> Isolated
+> Clients
+> HTTP/
+> Websocket
+> Response
+> Evidence
+> DAG & Worker Orchestration
+> Scheduler
+> UI
+> Actions
+> Page
+> Snapshot
+> Screenshot
+> Evidence
+> Repo
+> Filter
+> Relevant
+> Files LLM
+> Analysis
+> Code
+> Evidence
+> 4Merge & Report Merge All Evidence
+> Consolidate results
+> from evaluation streams
+> 2API Discovery
+> Backend Evaluation Frontend Evaluation
+> Build Report
+> Structured report with
+> scores and details
+> ……
+> Worker 2
+> Evaluation Workers
+> Worker 1 Worker 3
+> Source Code
+> Discovery
+> Fallback
+> (OpenAPI /Swagger)
+> Backend req
+> Frontend req
+> Code -review req
+> Parse
+
+Figure 3: TAgent parses a requirement document into weighted checks, discovers the implementation, and merges parallel UI, API, and code evidence into a score. 
+
+LegoGent enables validated artifacts as unit of collabo-ration. The useful unit of collaboration is validated artifacts, such as a schema, route contract, integration point, test report, or deployable repository state. LegoGent crops the overall failure report, and decides which agent is responsible for the errors before any code changes. On the other hand, MSEval 
+
+also exposes the failure of certain modes with diffuse own-ership, where the agents can post a competitive final score yet be unattractive as an agentic workflow, since its score is bought with extra token or time cost. 
+
+Automated Evaluation via TAgent 
+
+TAgent acts as an automated TA for heterogeneous agent-generated projects. It first parses each raw requirement docu-ment into a structured YAML rubric with weighted scenarios and pass/partial/fail criteria. During evaluation it receives the staged URL and repository, then discovers the implementa-tion surface before probing it. Requirements may be routed to three evaluator classes: 
+
+• UI: Playwright drives the live site, reads the accessibility tree or DOM summary, chooses observed selectors, and judges captured states against the rubric. 
+
+• API: the grader probes OpenAPI/Swagger when avail-able, otherwise reconstructs routes from source files across common frameworks, then issues authenticated HTTP sequences. 
+
+• Code: directory filtering, targeted search, and LLM in-spection verify constraints that are not externally visible, such as password hashing or CI/CD configuration. 
+
+Parallel UI scheduling. API and code checks are mostly stateless and fan out under a concurrency cap. UI checks are stateful: testing a group chat may require registration, login, friend creation, and room entry. Running every check independently repeats this setup, while naive parallelism du-plicates it across workers. TAgent therefore asks an LLM to declare only blocking dependencies among UI requirements, forms a task DAG, and partitions it across browser work-ers with an integer-programming objective that minimizes makespan plus duplicate setup. Prerequisites are co-located with dependents, shared setup is built once per worker, un-reachable prerequisites cascade-skip their dependents, and duplicate probes are merged by taking the best verdict. This is the evaluator-side analogue of efficient multi-agent work: useful parallelism comes from eliminating redundant setup, not merely launching more workers. 
+
+Feedback as repair guidance. A final scalar is insufficient for multi-round coding because it does not tell agents where the dependency chain broke. TAgent therefore emits item-level evidence: the observed UI state, API response, code location, failed prerequisite, and the rubric weight affected. 
+
+LegoGent passes this back as a ranked repair agenda, priori-tizing high-weight root causes over low-weight symptoms— fixing registration can unlock downstream friend, chat, and group checks, while a cosmetic chat bubble cannot com-pensate for a missing message API. This is why round-level improvement is interpretable rather than accidental. 
+
+Evaluator parallelism is deliberately conservative. Be-cause web applications are not pure functions, TAgent paral-lelizes probes only after discovering dependencies: a worker that deletes a friend, submits a group application, or changes profile data can poison another check sharing the same ac-count state. The scheduler thus prefers independent browser sessions for destructive flows and shared sessions for long setup chains, trading wall-clock time for verdicts that do not depend on a lucky execution order. The same principle mo-tivates the benchmark itself: parallel agents are useful when their side effects are isolated, and risky when they touch shared state without a merge protocol. Scores are aggregated by rubric weight to a 100-point Functional Completion Score. Together with LegoGent ’s latency and token logs, this report becomes the feedback signal for the next refinement round. 
+
+## Evaluation 
+
+We evaluate the models in MSEval on four Intel(R) Xeon(R) Gold 6430 processors. Each run allows up to three refinement rounds; a round builds or patches the project, deploys it, runs 
+
+TAgent , and returns scored feedback. Deployment, testing, and evaluation use isolated port ranges so concurrent tests do not interfere with one another. We report Functional Com-pletion Score (0–100), best-round wall-clock minutes, USD cost, and raw token usage at the best observed round. Cost is computed from the provider price tables over new-input, cache-read, cache-create, and output token fields listed in the supplementary material (Anthropic 2026a; OpenAI 2026b; DeepSeek 2026; Z.AI 2026b; Alibaba Cloud 2026). 
+
+Results by Model 
+
+Table 2 reports the instant-messaging project across all ten modes and five models. Each block gives a compact R1/R2/R3 score cell with best-round minutes, USD cost, and million tokens, so the table reads as a quality–latency– budget frontier rather than a final-score leaderboard. Claude Opus 4.8 (Anthropic 2026b) tops this project, GPT-5.5 (Ope-nAI 2026a) stays close at much lower budget, DeepSeek v4 Pro (DeepSeek-AI et al. 2026) is the stronger full-grid base-line, and GLM-5.2 (Z.AI 2026a) reaches the highest full-grid average score but is the slowest by a wide margin. Qwen3.6-Flash (Qwen Team 2026) stays at 0 across all ten modes (final round 39–270 min, $9.04–$61.25), so we omit it from the results. Mode Claude Opus 4.8 GPT-5.5 DeepSeek v4 Flash DeepSeek v4 Pro GLM-5.2 Score T C Tok Score T C Tok Score T C Tok Score T C Tok Score T C Tok                                                                                                                                                                                                         
+
+> Feat. 80/94/ 97 110 654 114 81/ 91 /79 86 153 31 0/54/ 68 101 3474 52/57/ 83 78 8572 40/ 73 /61 53 42 123 Layer 74/73/ 85 102 191 169 79/93/ 94 82 139 28 63/0/ 70 108 4602 28/68/ 87 101 6359 51/71/ 72 129 75 222 Pipe. 65/79/ 91 143 214 172 72/83/ 92 94 159 32 0/32/ 83 67 3348 41/80/ 90 111 9723 72/0/ 78 144 84 246 PM 72/91/ 94 176 834 157 79/84/ 86 119 274 54 54/ 89 /73 94 3492 78/ 81 /66 99 6340 53/72/ 82 142 148 406 QA 5/13/ 72 102 118 140 83/81/ 92 99 247 49 71/74/ 83 108 4466 70/74/ 89 85 8583 59/ 64 /54 94 63 174 Swarm 76/84/ 85 151 988 226 84/86/ 87 78 255 51 0/64/ 72 121 4524 46/72/ 88 103 10 669 0/82/ 87 111 110 298 Rot. 76/82/ 84 143 872 193 62/ 93 /83 86 295 59 45/38/ 47 105 4445 67/76/ 85 107 10 653 39/69/ 79 154 60 169 OSS 0/75/ 87 282 190 33 56/85/ 90 278 302 60 47/ 73 /69 62 3429 0/27/ 43 126 11 744 0/ 70 /67 180 93 241 Adv. 63/79/ 86 192 204 34 62/ 96 /93 74 138 28 36/68/ 82 106 5664 70 /65/70 101 9390 60/76/ 92 165 101 277 Comp. 65/76/ 77 180 196 33 0/75/ 89 172 256 51 0/77/ 86 109 5649 68/74/ 77 133 11 679 0/71/ 86 174 95 259
+
+Table 2: Metrics of instant-messaging project. We display the R1/R2/R3 scores with the coding time (in minutes), cost (in USD), and total input and output tokens (in million); bold marks the row-best model and its associated best-round metrics. 2 10 50 200 800        
+
+> USD to best round
+> 65
+> 80
+> 95
+> Best score
+> 60 100 140 180
+> Minutes to best round
+> 65
+> 80
+> 95
+> Claude Opus 4.8 GPT-5.5 DS Flash DS Pro GLM-5.2
+
+Figure 4: Pareto-frontier collaboration modes on instant messaging, scores against USD cost and wall-clock time. Figure 4 makes the comparison cost-aware without col-lapsing each model to a single dot or drawing dominated modes. Claude Opus 4.8 reaches the highest score (97) but needs 110 minutes and about $654, while GPT-5.5 is close (96) at 74 minutes and $138; among full-grid models GLM-5.2 slightly edges DeepSeek v4 Pro but at roughly 2.6x the wall-clock time and 8x the cost. The practical question is therefore not only which model is best, but which frontier mode buys score cheaply and when the controller should stop spending. 
+
+Results by Collaboration Mode 
+
+Table 3 tests whether a mode transfers beyond instant mes-saging, reporting the 10-project average per mode and model. The compact R1/R2/R3 column keeps the refinement trajec-tory visible, while T, C, and Tok show whether the best round is reached quickly, cheaply, or through heavier token use. A mode can look strong on one project; the aggregate tests whether it survives diverse projects with different inter-module interaction patterns. We also profile each mode as an execution signature rather than a score-only outcome in Figure 5. All ten axes are normalized to 0–10 (higher is better): seven from the logs (best/R1 score, R1-to-R3 gain, R2-to-R3 stability, cross-run consistency, inverse time, inverse tokens) and three from the protocols (ownership clarity, handoff inspectability, use-ful parallelism). The two panels separate planned-handoff modes from independent-then-reconcile modes. 
+
+The hardest projects favor modes that turn long re-quirement chains into explicit checks. Online live teaching and AI image restoration are the two lowest-scoring full-grid projects (average best scores 67.1 and 69.1). They are hard not only because they need multimedia support, but because many user-visible functions must compose: live teaching has 24 functional items across six groups, and image restoration chains upload/storage, ordered enhancement calls, progress, before-after comparison, exhibit layout, search, and moder-ation. QA-first is strongest on image restoration (78.4, +9.3 over the project average) and above average on live teaching (69.4), because it turns requirement documents into accep-tance targets before implementation spreads across API calls, realtime state, and UI flows matching TAgent validation. 
+
+Ownership is most useful when multiple agents share one requirement. Feature squad is a top-three mode on five projects, reaching 82.4 on enterprise asset management and 92.7 on e-commerce. An interaction chain such as approving a user or publishing an exhibit lives in neither frontend nor backend alone—it must update persistent state, call the right APIs, refresh the visible page, and enforce role permissions. If agents split only by technical layer, no one owns the whole scenario after TAgent reports an unmet requirement; feature squad instead gives one agent the complete vertical path. This is why it stays competitive across long-path projects, while swarming and open-source review often spend later rounds reconciling overlapping changes. 
+
+Large repair gains can hide weak first rounds. The R1-score axis separates modes: QA-first and pipeline start higher because their plans expose tests or staged deliverables Mode Score T C Tok DeepSeek v4 Flash 
+
+Feature squad 24.9/50.3/71.3 80 3 441 Layer specialists 21.2/44.8/67.6 100 3 422 Pipeline 34.6/58.6/71.3 78 2 362 PM oversight 30.2/58.9/75.2 99 3 444 QA-first 52.0/70.2/ 80.6 96 3 460 
+
+Swarming 25.2/44.8/62.9 84 3 512 Rotation 36.6/68.3/73.8 80 3 457 Open-source 21.7/49.5/72.0 77 3 429 Adversarial 28.2/44.9/67.7 90 3 460 Competitive 40.7/70.3/80.0 108 4 566 
+
+DeepSeek v4 Pro 
+
+Feature squad 37.9/67.6/83.9 83 8 537 Layer specialists 42.5/68.5/81.0 92 8 466 Pipeline 59.5/80.1/83.7 111 7 491 PM oversight 43.7/74.5/78.3 96 7 423 QA-first 52.0/75.9/85.5 95 8 514 Swarming 63.8/80.6/83.0 76 8 554 Rotation 51.6/73.2/ 86.6 99 9 553 
+
+Open-source 38.5/58.4/69.2 92 9 622 Adversarial 42.0/68.2/70.2 89 8 484 Competitive 46.5/63.1/78.2 105 8 518 
+
+GLM-5.2 
+
+Feature squad 37.1/66.2/85.4 231 45 128 Layer specialists 41.2/61.1/77.2 254 49 140 Pipeline 61.1/76.0/ 87.6 246 57 162 
+
+PM oversight 30.5/65.5/85.3 249 72 205 QA-first 57.4/68.9/80.7 235 56 157 Swarming 35.4/77.6/86.4 250 61 172 Rotation 56.0/72.7/86.9 257 75 188 Open-source 8.0/37.5/69.9 245 60 166 Adversarial 38.8/75.8/82.6 235 95 193 Competitive 8.1/61.3/85.8 263 67 188 
+
+Table 3: Average metrics over all 10 projects. The metric definition and bold convention are the same as Table 2. Score 
+
+> Repair
+> R1 score
+> Stable
+> Consistent
+> Speed
+> Token
+> Ownership
+> Inspect
+> Parallel
+> Serialized handoff
+> Score
+> Repair
+> R1 score
+> Stable
+> Consistent
+> Speed
+> Token
+> Ownership
+> Inspect
+> Parallel
+> Parallel contention
+> Feature
+> Layer
+> Pipeline
+> QA-first
+> Rotation
+> Swarm
+> PM
+> OSS
+> Adversarial
+> Competitive
+
+Figure 5: Collaboration-mode radar on ten normalized axes. Higher values indicate stronger capability or lower cost. early, while open-source review starts low and relies on later correction. Feature squad stays most balanced (high score, gain, consistency, and speed). Competitive and open-source review post large R1-to-R3 gains, but their weaker score or cost shows a big gain can mean a weak first round rather than a better policy. 
+
+Failure mode % checks % runs 
+
+Incomplete logic & edge cases 32.2 88 Missing / unimplemented feature 23.8 75 Auth, session & permission 11.9 46 Prerequisite cascade 11.0 39 Security & transport (deploy ceiling) 8.5 78 Other functional defect 6.1 38 Documentation gaps 3.9 26 Integration & UI wiring 2.6 22 
+
+Table 4: General failure taxonomy over 1,440 failing TAgent 
+
+rubric checks. “% checks” is the share of all failing checks; “% runs” is the fraction of runs with at least one such failure. 
+
+TAgent Feedback Drives Refinement 
+
+TAgent feedback turns weak first attempts into measur-able refinement. Each round starts from the previous round’s deployed codebase, and TAgent reports requirement-level failures to repair. Across the 600 adjacent transitions in the 300 full-grid runs, 82.0% show score improvement, and 94.7% of runs finish R3 above R1. These numbers make R1 a one-shot baseline and R3 the feedback-conditioned result: the benchmark measures whether agents can use concrete evaluator evidence, not merely whether they can retry. 
+
+Three rounds capture most of the remaining gain. 
+
+73.3% of R2-to-R3 steps gain under 20 points (median +7.8), so we stop at three rounds to capture the main refinement ef-fect without an open-ended budget search. GLM-5.2 shows the largest late gain when not cut off early, but the aggre-gate curve suggests further rounds would mostly study tail recoveries rather than the typical loop. 
+
+Regression is a distinct failure mode. Two mechanisms explain the low stability axis in Figure 5 and the round-level drops in Table 2. First, the per-round time budget can truncate implementation before the repository is coherent; this is most visible for GLM-5.2, whose many first rounds hit the 90-minute cap with unfinished handlers or missing routes. Second, a later repair can fix one requirement while breaking another: in the DeepSeek v4 Pro PM-oversight run on instant messaging, round 3 fixes profile editing and API docs but regresses user search, friend application, message sending, unread counts, and several group flows, dropping the score from 80.9 to 66.0. MSEval thus reproduces the software-engineering failure modes a round-by-round bench-mark should expose. 
+
+A General Failure Taxonomy 
+
+Regressions explain lost stability , but not why even the best round rarely reaches 100. We therefore label every unmet 
+
+TAgent rubric check by root cause, yielding 1,440 agent-attributable failing checks (a further 80, 5.3%, are grader-side infrastructure errors we exclude); Table 4 gives each mode’s share of failing checks and the fraction of runs it touches. 86% of failed items still retain partial credit—only 14% score zero—so teams almost always ship a running-but-incomplete system rather than a crashed one, and no single cause dominates. 
+
+Functional shortfall dominates, not crashes. Missing R1 R2 R3                     
+
+> 0
+> 50
+> 100
+> Score
+> Feat.
+> R1 R2 R3
+> Layer
+> R1 R2 R3
+> Pipe.
+> R1 R2 R3
+> PM
+> R1 R2 R3
+> QA
+> R1 R2 R3
+> Swarm
+> R1 R2 R3
+> Rot.
+> R1 R2 R3
+> OSS
+> R1 R2 R3
+> Adv.
+> R1 R2 R3
+> Comp.
+> Flash Pro GLM
+
+Figure 6: Per-round trajectories of instant messaging scores over R1–R3. features (23.8%) and incomplete logic or edge cases (32.2%) together account for 56% of failing checks and a similar share of lost weight. The typical defect is an endpoint that exists but skips a validation, a cleanup, or a secondary path— account deletion that invalidates the token but never cascades to messages, or a history filter that returns empty on a valid range—exactly the requirements a document-driven grader surfaces but a self-reported “done” would hide. 
+
+One broken prerequisite poisons many downstream checks. Authentication and permission failures (11.9%) and prerequisite cascades (11.0%) are together 23% of all fail-ures. When login, token refresh, or a gating step such as friend-request breaks, every dependent scenario becomes untestable: a single broken prerequisite auto-skipped up to 14 downstream checks in one run, and cascades appear in 39% of runs. This is the multi-agent-specific failure mode—a contract broken by one owner silently zeroes another owner’s correct work—and why requirement-level feedback with ex-plicit dependencies beats a scalar score. 
+
+Part of the ceiling is a fixed deployment artifact. Secu-rity and transport items (8.5% of checks) recur in nearly 80% of runs because they depend on successful integration with 
+
+XDeploy , the deployment layer that supplies TLS, HTTPS redirects, and secure WebSockets; deployment is carried out through XDeploy rather than locally, so these are a near-constant deduction from unsuccessful integration rather than a coding error. With documentation (3.9%) and UI-wiring defects (2.6%) minor, the benchmark is bottlenecked not on raw code generation but on integration completeness and cross-agent contracts. 
+
+Key Findings and Insights 
+
+Topology is the strongest effect, and it is coupled with the model. DeepSeek v4 Pro swings from 89.9 under pipeline to 43.0 under open-source review on instant messaging, and across the 10-mode average QA-first and rotation tie highest at 83.3 while open-source review drops to 73.5. The same policy also behaves differently across models: Flash improves fast but plateaus on structurally incomplete first drafts, Pro is the stable middle ground, and GLM-5.2 recovers sharply once implementation time catches up with its slow decod-ing. Early inspection helps most—QA-first converts require-ments into acceptance targets before implementation spreads across APIs, state, and UI, whereas late review must recon-cile already-divergent changes. 
+
+The score frontier is not the cost frontier. GLM-5.2 reaches the highest full-grid average best score but at far higher time and cost than the DeepSeek models, and Flash is cheapest in every Flash-vs-Pro pair despite using more raw tokens in 34 of 100 configurations. Because several models reach a competitive score with much less spend, the practical choice is the best score-per-budget point, and the benchmark separates token volume from actual budget pressure. 
+
+Coordination policy is the control surface. The largest score swings come from how work is divided and merged, not from raw model identity: parallelism helps only when feed-back still maps to an accountable owner, or extra agents turn a requirement failure into a negotiation over whose change survives. The metric signatures make this legible—a low-score, low-time run signals early deployment failure, while a high-token, medium-score run signals repeated re-planning or repair of the wrong layer. Future agentic systems should therefore learn when to parallelize, when to serialize, and when to stop a branch before it costs more than its expected gain—a sensitivity MSEval makes measurable. 
+
+## Limitations 
+
+Randomness and scale. To mitigate LLM stochasticity we run three parallel trials for the instant-messaging token/time evaluation and rerun other projects only when experts flag a test as abnormal ( e.g., API failures). The evaluation scale is nonetheless bounded by the high test budget. 
+
+TAgent and the task mix are scoped. TAgent can miss some edge defects, and MSEval centers web apps. On stu-dent projects the TAgent score attains a Spearman correla-tion of 0.87 with TA scores, indicating high agreement. We keep the scope to real-world apps and leave directions such as autoresearch to others (Xiong et al. 2026; Du et al. 2025). 
+
+MSEval does not cover the full software lifecycle. Incident response and long-lived maintenance also matter, but MSE-val focuses on collaboration topology, iteration, and cost during the coding stage; we leave the rest to future work. 
+
+## Conclusion 
+
+MSEval proposes a 100 project–collaboration mode bench-mark that examines project, model, topology, time, token usage cost, and feedback rounds together. MSEval features an automatic feedback and revision pipeline for requirement documents without API specification details. Evaluations show that modern large language models can build substan-tial software but remain strongly shaped by orchestration, and reveal that future agents should treat collaboration mode, model choice, and stopping policy as runtime decisions rather than fixed defaults. References 
+
+Alibaba Cloud. 2026. Alibaba Cloud Model Studio: Model Inference Pricing. https://www.alibabacloud.com/help/en/ model-studio/model-pricing. Accessed: 2026-07-17. Anthropic. 2026a. Claude API Pricing. https://platform. claude.com/docs/en/about-claude/pricing. Accessed: 2026-07-20. Anthropic. 2026b. Introducing Claude Opus 4.8. https: //www.anthropic.com/news/claude-opus-4-8. Accessed: 2026-07-20. Austin, J.; Odena, A.; Nye, M.; Bosma, M.; Michalewski, H.; Dohan, D.; Jiang, E.; Cai, C.; Terry, M.; Le, Q.; and Sutton, C. 2021. Program Synthesis with Large Language Models. arXiv:2108.07732. Campbell, G. A.; and Papapetrou, P. P. 2013. SonarQube in action . Manning Publications Co. Chen, M.; Tworek, J.; Jun, H.; Yuan, Q.; de Oliveira Pinto, H. P.; Kaplan, J.; Edwards, H.; Burda, Y.; Joseph, N.; Brock-man, G.; Ray, A.; Puri, R.; Krueger, G.; Petrov, M.; Khlaaf, H.; Sastry, G.; Mishkin, P.; Chan, B.; Gray, S.; Ryder, N.; Pavlov, M.; Power, A.; Kaiser, L.; Bavarian, M.; Winter, C.; Tillet, P.; Such, F. P.; Cummings, D.; Plappert, M.; Chantzis, F.; Barnes, E.; Herbert-Voss, A.; Guss, W. H.; Nichol, A.; Paino, A.; Tezak, N.; Tang, J.; Babuschkin, I.; Balaji, S.; Jain, S.; Saunders, W.; Hesse, C.; Carr, A. N.; Leike, J.; Achiam, J.; Misra, V.; Morikawa, E.; Radford, A.; Knight, M.; Brundage, M.; Murati, M.; Mayer, K.; Welinder, P.; Mc-Grew, B.; Amodei, D.; McCandlish, S.; Sutskever, I.; and Zaremba, W. 2021. Evaluating Large Language Models Trained on Code. arXiv:2107.03374. DeepSeek. 2026. Models and Pricing. https://api-docs. deepseek.com/quick_start/pricing/. Accessed: 2026-07-18. DeepSeek-AI; Xu, A.; Lin, B.; Xue, B.; Wang, B.; Xu, B.; Wu, B.; Zhang, B.; Lin, C.; Dong, C.; Ling, C.; Lu, C.; Zhao, C.; Deng, C.; Hou, C.; Xu, C.; Shao, C.; Ruan, C.; Sun, C.; Dai, D.; Guo, D.; Yang, D.; Chen, D.; Li, D.; Ji, D.; Li, E.; Wei, F.; Lin, F.; Yuan, F.; Xia, F.; Dai, F.; Hao, G.; Chen, G.; Cao, G.; Meng, G.; Li, G.; Yu, H.; Zhang, H.; Xu, H.; Li, H.; Liang, H.; Zhang, H.; Luo, H.; Wei, H.; Yuan, H.; Zhang, H.; Luo, H.; Chen, H.; Ji, H.; Zhang, H.; Ding, H.; Tang, H.; Cao, H.; Gao, H.; Qu, H.; Zeng, H.; Yang, J.; Zhu, J.; Luo, J.; Song, J.; Yu, J.; Huang, J.; Cai, J.; Liang, J.; Zhou, J.; Ye, J.; Li, J.; Xu, J.; Hu, J.; Yang, J.; Chen, J.; Yan, J.; Chen, J.; Zhou, J.; Xiang, J.; Yuan, J.; Cheng, J.; Zhou, J.; Zhu, J.; Yu, J.; Sun, J.; Ran, J.; Jiang, J.; Qiu, J.; Li, J.; Zheng, J.; Song, J.; Dong, K.; Gao, K.; Guan, K.; Zhou, K.; Huang, K.; Yu, K.; Wang, L.; Zhang, L.; Wang, L.; Xia, L.; Zhang, L.; Zhao, L.; Guo, L.; Luo, L.; Ma, L.; Zhu, L.; Wang, L.; Cai, L.; Zhang, L.; Chen, L.; Di, M.; Xu, M.; Mei, M.; Wang, M.; Zhang, M.; Zhang, M.; Tang, M.; Li, M.; Zhou, M.; Han, M.; Wang, N.; Huang, P.; Wang, P.; Cong, P.; Wang, P.; Zhang, P.; Wang, Q.; Zhu, Q.; Li, Q.; Chen, Q.; Du, Q.; Jiang, Q.; Tian, R.; Xu, R.; Lu, R.; Xu, R.; Ge, R.; Zhang, R.; Pan, R.; Wang, R.; Chen, R.; Yin, R.; Xu, R.; Shen, R.; Zhang, R.; Chen, R.; Liu, S.; Lu, S.; Sun, S.; Zhou, S.; Chen, S.; Cai, S.; Nie, S.; Wu, S.; Chen, S.; Hu, S.; Liu, S.; Hu, S.; Ma, S.; Wang, S.; Yu, S.; Zhou, S.; Pan, S.; Yu, S.; Zhou, S.; Ni, T.; Yun, T.; Jin, T.; Pei, T.; Ye, T.; Lin, T.; Ji, T.; Cui, T.; Yue, T.; Yu, T.; Wang, T.; Zhang, W.; Xiao, W.; Zeng, W.; An, W.; Zhao, W.; Liu, W.; Liang, W.; Pang, W.; Luo, W.; Yao, W.; Gao, W.; Yang, W.; Huang, W.; Hou, W.; Zhang, W.; Ma, W.; Gao, X.; He, X.; Wang, X.; Wang, X.; Bi, X.; Liu, X.; Wang, X.; Chen, X.; Zhang, X.; Nie, X.; Sun, X.; Wang, X.; Cheng, X.; Liu, X.; Xie, X.; Liu, X.; Liu, X.; Yu, X.; Li, X.; Yang, X.; Zhang, X.; Chen, X.; Wang, X.; Su, X.; Chen, X.; Lin, X.; Fu, X.; Yan, Y.; Wang, Y.; Ma, Y.; Luo, Y.; Zhang, Y.; Xu, Y.; Ma, Y.; Huang, Y.; Li, Y.; Li, Y.; Xu, Y.; Zhao, Y.; Sun, Y.; Wang, Y.; Qian, Y.; Shao, Y.; Yu, Y.; Zhang, Y.; Ding, Y.; Shi, Y.; Wu, Y.; Xiong, Y.; Ma, Y.; He, Y.; Tang, Y.; Zhou, Y.; Luo, Y.; Zhong, Y.; Piao, Y.; Wang, Y.; Zhang, Y.; Chen, Y.; Tan, Y.; Wei, Y.; Ma, Y.; Liu, Y.; Yang, Y.; Guo, Y.; Wu, Y.; Wu, Y.; Li, Y.; Cheng, Y.; Ou, Y.; Xu, Y.; Li, Y.; Wang, Y.; Yang, Y.; Xu, Y.; Wu, Y.; Meng, Y.; Zou, Y.; Zha, Y.; Xiong, Y.; Chen, Y.; Lin, Y.; Cao, Y.; Wang, Y.; Zhang, Y.; Yan, Y.; Lin, Y.; Gu, Y.; Luo, Y.; You, Y.; Liu, Y.; Zhou, Y.; Zhou, Y.; Huang, Y.; Wu, Z.; Wang, Z.; Zhao, Z.; Ren, Z.; Zhang, Z.; Sha, Z.; Fu, Z.; Ju, Z.; Xu, Z.; Xie, Z.; Zhang, Z.; Gao, Z.; Hao, Z.; Gou, Z.; Ma, Z.; Yan, Z.; Shao, Z.; Huang, Z.; Chen, Z.; Wu, Z.; Ren, Z.; Wu, Z.; Li, Z.; Zhang, Z.; Xu, Z.; Wang, Z.; Qu, Z.; Gu, Z.; Zhu, Z.; Li, Z.; Zhang, Z.; Xie, Z.; Gao, Z.; Wan, Z.; Pan, Z.; and Yao, Z. 2026. DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence. arXiv:2606.19348. Du, M.; Xu, B.; Zhu, C.; Wang, X.; and Mao, Z. 2025. Deep-Research Bench: A Comprehensive Benchmark for Deep Re-search Agents. arXiv:2506.11763. Grötschla, F.; Müller, L.; Tönshoff, J.; Galkin, M.; and Per-ozzi, B. 2025. AgentsNet: Coordination and Collaborative Reasoning in Multi-Agent LLMs. arXiv:2507.08616. Guan, T. 2026. A Multi-Agent Coding Assistant for Cloud-Native Development: From Requirements to Deployable Mi-croservices. In Proceedings of the 2025 6th International Conference on Computer Science and Management Technol-ogy , ICCSMT ’25, 1285–1290. New York, NY, USA: Asso-ciation for Computing Machinery. ISBN 9798400719981. Huang, W.; Lee, C.; Tng, L.; and Ge, S. 2026. Deep-SWE: Measuring Frontier Coding Agents on Original, Long-Horizon Engineering Tasks. arXiv:2607.07946. Jimenez, C. E.; Yang, J.; Wettig, A.; Yao, S.; Pei, K.; Press, O.; and Narasimhan, K. 2024. Swe-bench: Can lan-guage models resolve real-world github issues? In Inter-national Conference on Learning Representations , volume 2024, 54107–54157. Liu, T.; Xu, C.; and McAuley, J. 2024. RepoBench: Bench-marking Repository-Level Code Auto-Completion Systems. In Kim, B.; Yue, Y.; Chaudhuri, S.; Fragkiadaki, K.; Khan, M.; and Sun, Y., eds., International Conference on Learning Representations , volume 2024, 47832–47850. Lu, E.; Pan, B.; Birlikci, D.; Lee, S.; Wang, R.; Choudhury, R.; Ma, F.; Qin, T.; Baronio, C.; Alberti, S.; et al. 2026. Intro-ducing FrontierCode. https://cognition.com/blog/frontier-code. Accessed: 2026-07-13. OpenAI. 2026a. Introducing GPT-5.5. https://openai.com/ index/introducing-gpt-5-5/. Accessed: 2026-07-20. OpenAI. 2026b. OpenAI API Pricing. https://developers. openai.com/api/docs/pricing. Accessed: 2026-07-20. Qwen Team. 2026. Qwen3.6-35B-A3B: Agentic Coding Power, Now Open to All. Wang, X.; Li, B.; Song, Y.; Xu, F. F.; Tang, X.; Zhuge, M.; Pan, J.; Song, Y.; Li, B.; Singh, J.; et al. 2025. Openhands: An open platform for ai software developers as generalist agents. In International Conference on Learning Representations ,volume 2025, 65882–65919. Xia, C. S.; Deng, Y.; Dunn, S.; and Zhang, L. 2025. De-mystifying LLM-Based Software Engineering Agents. Proc. ACM Softw. Eng. , 2(FSE). Xiong, L.; Luo, K.; Xia, Z.; Zhang, W.; Yao, J.-G.; Liu, Z.; Shao, J.; Chen, J.; Qian, H.; Yang, X.; Yu, Q.; Li, H.; Yue, C.; Du, X.; Wang, Y.; Liu, Y.; Xu, H.; and Dou, Z. 2026. AutoResearchBench: Benchmarking AI Agents on Complex Scientific Literature Discovery. arXiv:2604.25256. Xu, F. F.; Song, Y.; Li, B.; Tang, Y.; Jain, K.; Bao, M.; Wang, Z.; Zhou, X.; Guo, Z.; Cao, M.; et al. 2026. Theagentcom-pany: benchmarking llm agents on consequential real world tasks. Advances in Neural Information Processing Systems ,38. Yang, J.; Jimenez, C. E.; Wettig, A.; Lieret, K.; Yao, S.; Narasimhan, K. R.; and Press, O. 2024. Swe-agent: Agent-computer interfaces enable automated software engineering. In The Thirty-eighth Annual Conference on Neural Informa-tion Processing Systems .Z.AI. 2026a. GLM-5.2: Built for Long-Horizon Tasks. https: //z.ai/blog/glm-5.2. Accessed: 2026-07-15. Z.AI. 2026b. Z.AI Pricing. https://docs.z.ai/guides/ overview/pricing. Accessed: 2026-07-15. Zhang, Y.; Ruan, H.; Fan, Z.; and Roychoudhury, A. 2024. Autocoderover: Autonomous program improvement. In Pro-ceedings of the 33rd ACM SIGSOFT International Sympo-sium on Software Testing and Analysis , 1592–1604. Zhu, K.; Du, H.; Hong, Z.; Yang, X.; Guo, S.; Wang, D. Z.; Wang, Z.; Qian, C.; Tang, R.; Ji, H.; et al. 2025. Multiagent-bench: Evaluating the collaboration and competition of llm agents. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 8580–8622.                       
+
+> ID Project (domain) Scope
+> P00 Instant messaging 56 checks P01 Enterprise asset management long-path P02 Crowdsourcing platform multi-role P03 Requirement tracking workflow P04 AI image restoration multimedia P05 E-commerce trading transactional P06 Influencer analytics data/vis P07 Permission platform auth-heavy P08 News search retrieval P09 Online live teaching realtime A/V
+
+Table 5: The ten projects. “Scope” names the dominant diffi-culty; e.g. online live teaching has 24 functional items across six groups and AI image restoration chains upload/storage, ordered enhancement calls, progress, before/after compari-son, exhibit layout, search, and moderation. Every project ships a hierarchical requirement document that compiles to a weighted rubric (P00 yields 56 checks: 7 system, 46 func-tional, 3 documentation). 
+
+## Appendix Benchmark Assets 
+
+We will release the benchmark in https://github.com/ robinren03/MSEval. 
+
+## The Ten Projects 
+
+MSEval draws its ten projects from real software-engineering course capstones spanning messaging, CRUD-and-workflow business systems, transactional commerce, re-trieval, analytics, access control, and realtime multimedia. Each ships a hierarchical requirement document that com-piles to a weighted 100-point rubric (typically 35–40 system, 50–55 functional, 10 documentation). Table 5 lists them; only the three full-grid models (DeepSeek v4 Flash/Pro, GLM-5.2) run all ten, while Claude Opus 4.8, GPT-5.5, and Qwen3.6-Flash run only the instant-messaging reference project P00 (main-paper results table). Each project below is annotated with its full-grid diffi-culty – the mean best score over the three full-grid mod-els (DeepSeek v4 Flash/Pro and GLM-5.2) across the ten collaboration modes – and the collaboration mode that tops it. 
+
+• P00 Instant messaging (mean 77.2; best PM oversight 83.7). An iMessage-style app for private and group chat with a session-list/conversation-pane UI, serving ordinary users and group owners/admins. Its 56-check rubric splits 40 system (usability, security, sub-200 ms realtime deliv-ery, data integrity) / 50 functional / 10 docs, with friend-and group-prerequisite chains; it is the reference project run by all five models. 
+
+• P01 Enterprise asset management (mean 70.3; best pipeline 83.0; GLM-5.2 leads at 76.3). Full asset life-cycle – intake, lending, transfer, retirement, maintenance – with multi-tenant business-entity isolation, hierarchical category trees, and approval workflows across four role tiers. A single operation must mutate persistent state, en-force tenant isolation, and append an audit log, so the layer split collapses here (57.2, its worst project). 
+
+• P02 Crowdsourcing platform (mean 74.7; best PM over-sight 80.9). A data-labeling marketplace spanning pub-lisher, worker, and reviewer roles over a long chain: cre-ate/configure task → upload data → dispatch → claim 
+
+→ annotate → review → settle → export. Anti-cheating and credit scoring ride on top of every stage, keeping the whole pipeline coupled. 
+
+• P03 Requirement tracking (mean 78.1; best QA-first 91.7; DeepSeek v4 Pro leads at 86.4). A Jira-like tool that decomposes initial requirements into functional require-ments, plans iterations, and analyzes Git-commit trace-ability across several services. QA-first dominates be-cause its acceptance targets map directly onto the trace-ability rubric. 
+
+• P04 AI image restoration (mean 69.1; best QA-first 78.4; GLM-5.2 leads at 85.6). The second-hardest project: museum photo restoration via online AI APIs plus cu-rated exhibition rooms with before/after comparison, browse/search, and likes/comments, serving curators and visitors. The multimedia chain – upload/storage → or-dered enhancement calls → progress → comparison →
+
+exhibit – punishes weak models (Flash 56.9) and rewards GLM-5.2’s long-horizon planning (85.6). 
+
+• P05 E-commerce trading (mean 89.9; best pipeline 96.2). A self-operated marketplace with buyer-side browse, balance top-up, and order flows plus merchant-side catalog, discount, and order management. Transac-tional consistency with clean stage boundaries makes the serial pipeline strongest. 
+
+• P06 Influencer analytics (mean 90.5; best competitive 96.5). A creator dashboard over a bundled dataset of per-day view/like/comment deltas, offering overview, per-work analysis, fan-activity trends, and background re-fresh. Being largely read-only over a fixed dataset places it in the top scoring tier. 
+
+• P07 Permission platform (mean 91.0; best layer spe-cialists 96.3; GLM-5.2 leads at 94.8). An RBAC platform covering apps, permission types, resources, roles, user au-thorization, and an external permission-query API with tenant isolation. Its clean split between a configuration UI and an auth API is the one case where layer specialists win. 
+
+• P08 News search (mean 92.8; best QA-first 99.1; DeepSeek v4 Pro leads at 97.7). The easiest project: a full-text search engine – crawl, index, retrieve, rank, present – plus user interest tags. The well-bounded re-trieval pipeline yields the highest scores in the grid. 
+
+• P09 Online live teaching (mean 67.1; best feature squad 75.1). The hardest project: a WebRTC live classroom for teacher, TA, and student roles with streaming, teaching resources, room management, in-class chat, and quizzes – 24 functional items across six groups. Only vertical ownership (feature squad) keeps the composed realtime features coherent.                                                        
+
+> ID Flash Pro GLM Avg Best mode
+> P00 74.8 79.0 78.0 77.2 PM (83.7) P01 65.1 69.5 76.3 70.3 Pipe (83.0) P02 69.1 75.2 80.0 74.7 PM (80.9) P03 76.0 86.4 72.0 78.1 QA (91.7) P04 56.9 64.8 85.6 69.1 QA (78.4) P05 86.5 93.1 90.2 89.9 Pipe (96.2) P06 86.1 93.8 91.6 90.5 Comp (96.5) P07 84.5 93.6 94.8 91.0 Layer (96.3) P08 86.7 97.7 94.1 92.8 QA (99.1) P09 56.2 72.1 73.0 67.1 Feat (75.1)
+
+Table 6: Full-grid best-score results per project. 
+
+Flash /Pro /GLM are each model’s mean best score over the ten modes; Avg is the mean over the three models; Best mode is the top mode on that project with its mean best score. Claude Opus 4.8, GPT-5.5, and Qwen3.6-Flash run only P00 and appear in the main-paper results table. 
+
+Difficulty tracks requirement composition, not raw fea-ture count. The two hardest projects – live teaching (67.1) and image restoration (69.1) – together with enterprise asset management (70.3) force many user-visible functions to com-pose over shared realtime or transactional state, whereas the easiest – news search (92.8), permission (91.0), and analytics (90.5) – decompose into well-bounded, largely independent requirements. Across Table 6, DeepSeek v4 Pro is the stead-iest full-grid model, posting the highest score on five of ten projects; GLM-5.2 wins exactly the hardest multimedia and access-control projects (P04, P07), consistent with its long-horizon strength; and DeepSeek v4 Flash keeps pace on the easy retrieval/CRUD projects but falls 15–30 points behind on multimedia and realtime (P04, P09). 
+
+## The Ten Collaboration Modes 
+
+Every mode is an instance of the same template with four concrete objects: an ownership map (who owns which part of the repository), an activation schedule (who is awake in which round), a decision rule (how conflicts resolve), and a required handoff artifact (what must exist before a round can be accepted). Teams are four agents by default (dev-1 . . . dev-4 , or role names such as architect/back-end/frontend/QA for staged modes). Table 7 gives the ten definitions, grouped by how they coordinate; the grouping matches the two radar panels in the main paper (serialized handoff vs. parallel contention). Beyond the template objects in Table 7, the ten modes differ in how they split the repository, who holds decision authority, and what most distinguishes each from its nearest neighbor. 
+
+• Feature squad splits the repository vertically by user-facing module; four full-stack agents each own one mod-ule end to end (UI, API, state, tests) and align only through interface contracts, so decision authority is local to each owner. Unlike swarming it fixes module boundaries rather than leaving them fluid. Its signature is the most balanced across projects, and it is the only mode that tops the hard-est project (P09, 75.1). Mode Ownership map Activation schedule Decision rule Required handoff artifact                                                             
+
+> Serialized handoff (planned coordination)
+> Feature squad One agent owns afull vertical user-facing module (UI+API+state). All agents active in par-allel every round. Module owner is au-thoritative for their sce-nario end to end. A working vertical slice per module, integrated on the shared port. Layer special-ists Split by technical layer (frontend vs. backend). Parallel, synchronizing at layer boundaries. API contract is the ar-biter between layers. An agreed API contract plus both layers built against it. Pipeline Disjoint stages: archi-tect →backend →fron-tend →QA. Almost serial; each stage activates the next. Upstream stage output is frozen for down-stream. Aclean artifact boundary passed stage to stage (control condition). QA-first QA owns acceptance targets; devs own imple-mentation. Tests authored first, then implementation. Acceptance tests are the source of truth. An executable acceptance suite before feature code. Rotation Ownership rotates: agents switch roles each round. All active; roles per-muted per round. Current round’s role as-signment governs. A handoff note so the next role can continue the mod-ule.
+> Parallel contention (independent-then-reconcile)
+> PM oversight A manager plans and re-views; devs implement. Manager gates en-try/exit of each round. Manager adjudicates and assigns repairs. A reviewed plan and a sign-off on each round’s diff. Swarming No fixed ownership; tasks claimed dynami-cally. All active; work pulled from a shared list. First claimant owns the task until release. A claimed-task ledger and merged result. Open-source re-view Contributors propose; reviewers must approve. Parallel propose, then review rounds. Change lands only on reviewer approval. Reviewed change sets with approval trail. Adversarial Builders vs. an adver-sarial tester probing for defects. Parallel build and at-tack. Disputes resolved by re-producing the defect. A defect report plus the fix that closes it. Competitive Redundant teams im-plement the same spec. Parallel, independent implementations. Best implementation is selected by score. Two+ deployable candidates and a selection record.
+
+Table 7: The ten collaboration modes as instances of the mode template. Serialized-handoff modes pass work through explicit artifact boundaries; parallel-contention modes maximize concurrency and must reconcile overlapping changes. Pipeline is intentionally almost serial and serves as a coordination-control condition. 
+
+• Layer specialists splits horizontally , with two frontend and two backend agents who never cross layers and rec-oncile through a single API contract that holds the shared authority. It is the only technical-layer split. It wins when that contract is clean (P07, 96.3) but collapses when one requirement spans layers (P01, 57.2, the lowest full-grid cell). 
+
+• Pipeline splits work temporally : architect → backend →
+
+frontend → QA, each stage frozen before the next begins and holding authority only during its window. It is the only non-parallel mode and serves as our coordination-control condition. It is strongest on transactional/CRUD projects with clean stage boundaries (P05, 96.2; P01, 83.0). 
+
+• QA-first is quality-driven : QA authors an executable ac-ceptance suite first and holds final say while develop-ers chase the tests. Unlike adversarial testing the QA role is collaborative rather than attacking. It ties for the best cross-project mean and wins the requirement-heavy projects (P08, 99.1; P03, 91.7; P04, 78.4). 
+
+• Rotation reassigns roles on a timer : every round agents swap backend/frontend/QA/architect and continue the predecessor’s work via a handoff note, so authority travels with the role rather than the agent. It is the only forced-rotation mode and the heaviest in dialogue turns. It ties QA-first for the best cross-project mean (83.3). 
+
+• PM oversight is hierarchical : a non-coding manager plans, assigns, and gates each round’s entry and exit while developers only execute, concentrating authority at the top. Against open-source review’s peer approval it is top-down command rather than horizontal consent. It leads on messaging and crowdsourcing (P00, 83.7; P02, 80.9). 
+
+• Swarming applies no split : four identical agents pull tasks from a shared list, the first claimant owning a task until release. It differs from feature squad by having no fixed boundaries and from rotation by not rotating roles. It sits mid-pack (79.3) and spends late rounds reconciling overlap. 
+
+• Open-source review splits by permission : a non-coding maintainer, two contributors, and a reviewer, with change landing only on approval, so authority rests in the ap-proval gate. Against PM oversight it is horizontal peer review rather than top-down command. Its approval and reconciliation overhead make it consistently the weakest mode (73.5). 
+
+• Adversarial runs red/blue : a breaker probes for defects and can veto completion, with disputes settled by repro-ducing the defect. It is the only mode with a hostile role. It lands mid-pack (77.1) and is strongest where correctness edge cases dominate. 
+
+• Competitive uses redundant contention : two independent teams build the whole spec and the better is selected by score, placing authority in the scorer. It is the only two-team mode. It wins where a fixed dataset makes selection cheap (P06, 96.5) but is weakest on the hardest realtime project (P09, 59.1). 
+
+No mode dominates; fit to the project is the effect. Av-eraged over projects (Table 8), the modes span only 73.5 (open-source review) to 83.3 (QA-first and rotation tie), a range narrow enough that no single policy is globally best. Within a single project, however, the spread is far larger – e.g. 57.2–91.7 on requirement tracking and 58.7–96.2 on e-commerce – so coordination policy matters most when matched to the project’s dependency structure. Serialized-handoff modes win projects with long requirement chains or clean stage boundaries, while parallel-contention modes pay a reconciliation tax that only competitive recovers, and only when redundant candidates can be cheaply scored. 
+
+## LegoGent Runtime: Bounded Synchronization 
+
+LegoGent does not infer a fixed dependency graph. Instead it runs a periodic sync loop over concurrently working agents, with two bounded communication channels and a runtime-state completion gate. 
+
+Passive sync channel. Roughly every four minutes the run-time broadcasts a consolidated progress-alignment snap-shot to every agent. Each agent contributes four fields— completed work, test evidence, blockers, and next steps—and receives the merged team view. Figure 7 (top) is a translated snapshot from the feature-squad / Claude Opus 4.8 / instant-messaging run (broadcast interval ≈244 s). Crucially, the snapshot is explicitly not a completion signal. 
+
+Completion gate. A round is accepted only when the run-time state shows all agents idle and stable and the required artifacts for the mode exist. This decouples “the team stopped talking” from “the team is done,” and is what makes idle time and merge repair observable rather than hidden. 
+
+Active mailbox. Between sync rounds, an agent may send a targeted question or handoff directly to a peer. In this run (Figure 7), agents opened 52 such peer threads. This is the channel that lets, e.g., a backend owner confirm a route shape with a frontend owner without waiting for the next broadcast. 
+
+## TAgent Verification Methodology 
+
+TAgent grades an unseen deployment by discovering its implementation surface, routing each requirement to the ap-propriate evaluator, and aggregating weighted evidence into a 100-point Functional Completion Score. 
+
+Step 1: Rubric compilation. Each raw requirement docu-ment is parsed into a structured rubric of weighted scenarios with pass/partial/fail criteria. For P00 this yields 56 checks across three categories (7 system-level, 46 functional, 3 doc-umentation). 
+
+Step 2: Surface discovery. Given only the staged URL and repository, TAgent reconstructs the route surface (from Ope-nAPI when present, else from source). Each entry records method, path, parameters, and whether authentication is re-quired (the discovery block of Figure 7), so probing uses the real contract rather than a guessed one. 
+
+Step 3: Three evaluator classes. 
+
+• UI : Playwright drives the live site, reads the accessibility tree/DOM, and judges observed states. Stateful flows (reg-ister → login → befriend → enter room) are set up once and reused. Destructive flows get isolated browser ses-sions. 
+
+• API : authenticated HTTP sequences against discov-ered routes; each check stores a request/response 
+
+execution_log and a scored checklist .
+
+• Code : a directory filter first keeps relevant folders and drops noise (e.g. .claude , .legogent ), then targeted search and LLM inspection verify constraints that are not externally visible, such as password hashing or transport security. 
+
+Step 4: Weighted checklists and evidence. Every require-ment produces a checklist of weighted scenarios, each with a verdict and a human-readable justification, plus raw evidence ( api_response , frontend_test , or 
+
+code_snippet ). The bottom of Figure 7 shows a passing API check and a failing code check from the same run—note that verdicts cite concrete behavior (measured latency, exact status codes, file:line). 
+
+Step 5: Aggregation and feedback. Scenario scores are summed by rubric weight to the 100-point score. A require-ment graded by more than one evaluator (e.g. backend + fron-tend) is averaged per requirement_id , so a feature only counts as done when it holds end to end. The same item-level evidence—observed state, failing prerequisite, and affected weight—is returned to LegoGent as a ranked repair agenda for the next round. 
+
+## Token and Cost Accounting 
+
+The budget metric is computed from four token fields logged per agent and per round: new-input , cache-create , cache-read , and output . Cost is the price-weighted sum over these fields, 
+
+USD = X
+
+> a,r
+
+ nin  
+
+> a,r
+
+πin + ncc  
+
+> a,r
+
+πcc + ncr  
+
+> a,r
+
+πcr + nout  
+
+> a,r
+
+πout 
+
+,
+
+where the per-model rates π• are the published provider list prices in Table 9. Separating the four fields is what lets MSE-val distinguish raw token volume from actual budget pres-sure: cache reads are far cheaper than fresh input, so two runs with similar total tokens can differ several-fold in dol-lars. Table 10 gives the real per-round breakdown for the worked example; the totals ( ≈113 M tokens, 110 min, best Serialized handoff Parallel contention                                                                                                                                     
+
+> ID Feat Layer Pipe QA Rot PM Swarm OSS Adv Comp Avg
+> P00 74.4 76.0 83.1 78.2 70.3 83.7 82.0 61.5 80.8 82.5 77.2
+> P01 82.4 57.2 83.0 73.6 72.8 69.6 67.6 69.1 57.8 69.8 70.3
+> P02 78.2 66.1 72.0 77.0 76.5 80.9 76.9 69.6 75.2 75.0 74.7
+> P03 72.7 68.0 69.7 91.7 90.5 80.2 89.4 57.2 75.0 87.1 78.1
+> P04 76.7 62.6 58.7 78.4 78.2 68.9 75.2 67.4 59.6 65.5 69.1
+> P05 92.7 85.8 96.2 91.9 94.0 90.2 89.2 81.5 88.4 89.5 89.9
+> P06 92.0 95.2 90.2 96.3 95.0 94.1 80.8 80.1 85.0 96.5 90.5
+> P07 94.1 96.3 96.0 77.3 95.8 94.3 80.5 90.5 92.7 92.2 91.0
+> P08 86.4 97.5 97.5 99.1 97.8 84.6 82.5 89.5 95.2 98.3 92.8
+> P09 75.1 64.5 72.9 69.4 62.1 69.1 68.8 68.4 61.4 59.1 67.1 Avg 82.5 76.9 81.9 83.3 83.3 81.6 79.3 73.5 77.1 81.5 80.1
+
+Table 8: Per-project × per-mode best score, averaged over the three full-grid models (DeepSeek v4 Flash/Pro, GLM-5.2). Columns are grouped as in the main-paper radar panels; the right column and bottom row give project and mode means. The best mode per project is discussed in the text.                             
+
+> Model New-in Cache-wr Cache-rd Out
+> Claude Opus 4.8 5.00 6.25 0.50 25.00 GPT-5.5 5.00 —0.50 30.00 DeepSeek v4 Pro 0.45 —0.0038 0.91 DeepSeek v4 Flash 0.15 —0.0030 0.30 GLM-5.2 1.21 —0.30 4.24 Qwen3.6-Flash 0.18 0.23 0.018 1.09
+
+Table 9: Provider list prices used for the budget metric, in USD per million tokens: new input, cache write, cache read, and output. “—” marks a field not billed as a separate line item (cache writes fold into new input). Anthropic and Ope-nAI publish in USD; DeepSeek, Z.AI (GLM-5.2), and Al-ibaba Cloud (Qwen) publish in CNY and are converted at a fixed 6.6 CNY/USD. Qwen3.6-Flash scored 0 across the grid and is listed only for completeness. score 96.95) match its row in the main results table. Table 9 lists the four per-model rates; applied to the token counts below they reproduce the USD cost column of every re-sults table—for instance the $417.97 first-round cost of this worked example. 
+
+## A Worked Refinement Trace 
+
+Table 11 follows a subset of the 56 requirements across the three rounds of the worked example, illustrating three phenomena discussed in the main paper. First, mixed re-quirements are averaged across evaluators (backend be /frontend fe ), so a feature that passes one side but not the other scores partially. Second, most R1 failures are repaired once TAgent feedback localizes them (user-search, cancel-account, requirements-doc). Third, refinement is not mono-tone: at R3 “delete chat history” regresses on the backend (be 1 → 0.5) while other items are being fixed—the same class of cross-requirement regression the main paper reports.                              
+
+> Round New-in Cache-cr Cache-rd Out Total
+> (k) (M) (M) (k) (M) R1 14.5 65.09 7.18 299.5 72.58 R2 0.4 18.61 0.65 65.8 19.33 R3 0.4 18.28 2.88 64.5 21.22
+> Sum 15.3 101.98 10.71 429.8 113.13
+
+Table 10: Real per-round token accounting for feature squad / Claude Opus 4.8 / instant messaging (four agents). Cache-creation dominates, which is why cache-aware pricing is required for a fair budget comparison. 
+
+## Compute Environment 
+
+All runs execute on four Intel(R) Xeon(R) Gold 6430 proces-sors. Deployment, testing, and evaluation use isolated port ranges so concurrent configurations do not interfere. Each configuration allows up to three refinement rounds; a round builds or patches the project, deploys it through the XDeploy 
+
+layer (which supplies TLS, HTTPS redirects, and secure WebSockets), runs TAgent , and returns scored feedback. Per-round wall-clock is capped (e.g. 90 minutes), which is the source of some truncated first rounds analyzed in the main paper. Requirement Cat. R1 R2 R3 
+
+Front–back communication Sys 10/10 10/10 10/10 Message latency <200 ms Sys 4/4 4/4 4/4 Cancel account Fun 0/1 1/1 1/1 Login/logout Fun 2.9/3 3/3 3/3 User search Fun 1/2 2/2 2/2 Delete chat history Fun 0.5/1 1/1 0.8/1 
+
+No-plaintext transport Sys 0/4 0/4 2/4 Requirements doc Doc 0/3 3/3 3/3 
+
+Total 79.22 93.07 96.95 
+
+Table 11: Real per-requirement trajectory (excerpt) for the worked example. Bold marks a backend regression at R3. The bottom row is the aggregate Functional Completion Score. 1 ===== COLLABORATION: LegoGent periodic sync ============================================== 
+
+2 [BTW_PROGRESS_ALIGNMENT #5] periodic sync broadcast, ~every 244s; 52 peer-mailbox threads this run 
+
+3 NOTE: alignment snapshot, NOT a completion signal. A round enters user-review ONLY when the 
+
+4 runtime state is all-idle-and-stable AND the mode’s required artifacts exist. 
+
+56 Runtime states: dev-1: idle 244s dev-2: idle 244s dev-3: idle 244s dev-4: idle 244s 
+
+78 Per-agent snapshot (1 done / 2 evidence / 3 blockers / 4 next): 
+
+9 [dev-1] 1: all backend APIs + full frontend integrated on single port 8002. 
+
+10 2: curl all-green; WebSocket realtime ~9ms; Playwright e2e 9/10 steps pass. 
+
+11 3: dev-2/3/4 crashed on a provider API error; dev-1 took over the remaining frontend work. 
+
+12 4: fix group-chat view activation; rerun Playwright; write docs (api-spec, modules, report). 
+
+13 [dev-2] 1: conversation/message endpoints + WebSocket push done. 
+
+14 2: curl branches (401/403/400/404) green; WS 8.9ms (<200ms). 
+
+15 3: waiting on shell App.tsx before frontend build. 
+
+16 4: mount ChatPage; dual-browser Playwright verify. 
+
+17 [dev-3] 1: reply-count / single-message / history-filter / soft-delete endpoints landed, integrated by dev-1. 
+
+18 2: selftest 36/36 assertions green incl. 401/403/404/422. 
+
+19 3: not hard-blocked. 
+
+20 4: build message-ops UI; coordinate mount point with dev-1. 
+
+21 [dev-4] --: crashed on the provider API error; its remaining frontend work was absorbed by dev-1 (above). 
+
+22 23 ===== EVALUATION: TAgent grades the same round, then feeds a ranked repair agenda to round N+1 ==== 
+
+24 # discovery_result.json -- reconstructed route surface (excerpt: method, path, auth, params) 
+
+25 POST /api/users/register auth:no {username,password,nickname?} 
+
+26 POST /api/users/login auth:no {username,password} 
+
+27 DELETE /api/users/me auth:yes {} # cancel account 
+
+28 GET /api/users/search auth:yes {keyword} 
+
+29 POST /api/friends/request auth:yes {to_id,message?} 
+
+30 31 # API evaluator -- requirement: chat_send_text 
+
+32 scenario "send text" weight 3.0 PASS 
+
+33 user1 sent a text in conversation 4; user2 received immediately; unread count updated; 
+
+34 retrievable via GET /api/conversations/4/messages with full body + metadata. 
+
+35 scenario "empty & long text" weight 1.0 PASS 
+
+36 empty message rejected 400 ("content must not be empty"); ~650-char accepted 200, body preserved. 
+
+37 38 # Code evaluator -- requirement: sys_security_no_plaintext 
+
+39 dir_filter: keep=[backend,docs,frontend,tests] drop=[.claude,.legogent] 
+
+40 scenario "HTTPS enforced" weight 2.0 FAIL 
+
+41 backend/main.py serves plain HTTP on port 8002; no TLS/redirect/HSTS. 
+
+42 scenario "sensitive transport" weight 1.0 FAIL 
+
+43 passwords sent as plaintext JSON (api.ts:32); bcrypt is server-side only 
+
+44 (security.py:28) -> raw plaintext over unencrypted HTTP. 
+
+Figure 7: One MSEval round end to end, from the feature-squad / Claude Opus 4.8 / instant-messaging run. Top (collaboration): 
+
+a periodic LegoGent sync broadcast—the runtime-state block and the “idle-and-stable + required-artifacts” gate are the actual basis for accepting a round, and each agent reports the same four fields every cycle; here dev-4 crashed on a provider API error and dev-1 absorbed its frontend work, a real multi-agent failure the round still had to reconcile. Bottom (evaluation): TAgent 
+
+then grades the deployed round—route discovery, a passing API check, and a failing security check—with every verdict citing concrete behavior (status codes, measured latency, file:line ); this item-level evidence is returned to LegoGent as the ranked repair agenda that opens the next round.
