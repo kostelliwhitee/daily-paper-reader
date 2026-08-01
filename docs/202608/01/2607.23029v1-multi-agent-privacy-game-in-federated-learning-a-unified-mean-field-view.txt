@@ -1,0 +1,1047 @@
+Title: Multi-Agent Privacy Game in Federated Learning: A Unified Mean-Field View
+
+URL Source: https://arxiv.org/pdf/2607.23029v1
+
+Published Time: Tue, 28 Jul 2026 00:24:29 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Multi-Agent Privacy Game in Federated Learning: A Unified Mean-Field View 
+
+Kun Zhao 
+
+kun.zhao@vumc.org 
+
+Xu Chen 
+
+xc2412@columbia.edu 
+
+# Abstract 
+
+Federated learning enables collaborative model training across distributed clients without centralising their data, yet privacy remains a persistent concern because the shared model updates can leak information about local datasets. Existing privacy-preserving methods either inject calibrated noise into client updates, limiting their composition guarantees, or formulate client privacy choices as a multi-agent game whose Nash equilibrium becomes intractable as the number of clients grows. We bridge these two lines of work by formulating privacy-preserving federated learning as a mean-field privacy game: each client strategically chooses its own privacy budget while interacting with the population only through a single mean-field statistic. The mean-field limit yields a tractable equilibrium for arbitrarily many clients, accommodates heterogeneous client preferences, and inherits an exponentially decaying privacy guarantee through a log-Sobolev contraction. The framework recovers the entropic privacy baseline as the homogeneous special case and the multi-agent privacy game as the finite-population case. Experiments on quadratic regression, logistic regression, and MNIST demonstrate that the proposed framework attains the privacy-utility trade-off of the entropic baseline while delivering a personalised privacy guarantee that the homogeneous baseline cannot express. 
+
+# 1 Introduction 
+
+Federated Learning (FL) [ 19 , 17 ] trains a shared model across data-owning clients without centralizing raw data. Although locality reduces some privacy risks, model updates leak through gradient inversion and membership inference [ 35 , 10 , 7]. Three largely independent lines of work address this leakage. 
+
+Where does the control act? Privacy-preserving FL methods can be partitioned by where each client’s control variable enters the system: it can act on the agent’s state (samples or gradients used for local updates) or directly on the model output (an additive perturbation of wk at the aggregation step). DP-SGD [ 1] and its federated variants [ 11 , 30 ] act on the state: a calibrated Gaussian is added to each clipped gradient, and the privacy cost accumulates polynomially with rounds under standard composition [ 21 ]. FLRA [ 23 ] likewise applies its strategic perturbation (Λ ix + δi) to the state, though for robustness rather than privacy. In contrast, the parameter-perturbation game [ 34 ] treats δk
+
+as a control on the model output and aggregates via w = P 
+
+> k
+
+pk(wk + δk); under FedAvg’s linear constraint, KKT collapses every Nash point to δk = 0 (Section 4). Only controls that act on the state admit non-trivial equilibria, so this is where the rest of the paper lives. 
+
+Mean-field as the N → ∞ limit. Two parallel lines of work address different aspects of the resulting state-control game. The multi-agent privacy game [ 34 , 33 , 9 ] fixes a finite N and asks for a Nash equilibrium of the controls {εk}, where εk scales the noise added to client k’s gradient or sample (the MAPG-DP and MAPG-input formulations of [ 34 ]). Mean-Field Entropic Privacy (MFEP) [ 5] fixes 
+
+> Preprint. arXiv:2607.23029v1 [cs.LG] 25 Jul 2026
+
+a homogeneous ε and lets N → ∞ , replacing additive noise with an entropic Wasserstein gradient flow that admits exponential log-Sobolev contraction [ 22 , 15 ]. Neither line on its own captures the joint behaviour: MAPG-DP is intractable for realistic N and uses geometry-agnostic Gaussian noise, while MFEP cannot represent heterogeneous privacy preferences. 
+
+Our framing. We treat privacy-preserving FL as a standard mean-field stochastic differential game [ 16 , 8 ]: each agent has a state Xt ∈ Rd (a privatised datum), a type β (its privacy preference), and a control εk (its privacy budget); the state distribution μt ∈ P 2(Rd) aggregates the population. The empirical state distribution μ(N ) 
+
+> t
+
+= 1
+
+> N
+
+P 
+
+> k
+
+μkt converges, by propagation of chaos [ 8], to a deterministic μt as N → ∞ . This single limit organises three previously separate works:              
+
+> finite N(multi-agent) N→ ∞ (mean-field)
+> no game (homogeneous) DP-SGD [1] MFEP [5] game (heterogeneous control εk)MAPG-DP [34] MFPG (this paper)
+
+The bottom-right cell is the missing piece. MFEP is MFPG without the game (single ε across the population); MAPG-DP is MFPG without the mean-field limit (finite N ). MFPG closes both gaps with one construction. 
+
+Contributions. 
+
+(i) Unified MFG framework (Section 3). We formalise privacy-preserving FL as a mean-field stochastic differential game in the standard sense, with state Xt, type βk, control εk, state distribution μt, and running cost f (x, μ, ε ; β) = ℓ + βδ dp . A finite-N Nash equilibrium of MAPG-DP and the mean-field Nash equilibrium of MFPG are the two endpoints of the same 
+
+N → ∞ limit; MFEP is the no-game special case. (ii) Mean-Field Privacy Game (Section 5). We prove existence of an MFNE on a finite action grid via Kakutani’s theorem and certify (ϵdp , δ dp )-DP at the equilibrium, with δdp contracting exponentially when αε ∗ > λ + G. The bound recovers the MFEP guarantee at homogeneous 
+
+βk and recovers MAPG-DP’s heterogeneity at finite N .(iii) Common solver and empirical study (Sections 6, 7). A single Particle–Sinkhorn JKO step services every N → ∞ variant; the action update is the only block that varies between MFEP and MFPG. We compare all four cells on quadratic, logistic, and MNIST benchmarks, with every reported number traced to results/full_benchmark.csv .
+
+# 2 Preliminaries 
+
+Federated learning. Each client k ∈ [N ] holds a local dataset Dk. The global objective is 
+
+min w F (w) = P 
+
+> k
+
+pkFk(w) with pk = nk/n and Fk(w) = n−1
+
+> k
+
+P 
+
+> i
+
+ℓ(w; xki , y ki ) [ 19 ]. At round 
+
+t the server broadcasts wt, each client returns a local update wt+1  
+
+> k
+
+, and the server aggregates via FedAvg wt+1 = P 
+
+> k
+
+pkwt+1  
+
+> k
+
+.
+
+Differential privacy. A randomised mechanism M is (ϵ, δ )-DP if, for all neighbouring datasets and all measurable S, Pr[ M(D) ∈ S] ≤ eϵ Pr[ M(D′) ∈ S] + δ. The Gaussian mechanism with 
+
+σ = Cp2 ln(1 .25 /δ )/ϵ is (ϵ, δ )-DP for sensitivity C [ 1]; under T -fold composition ϵ grows as 
+
+O(√T ).
+
+Mean-field games. A mean-field game [ 16 , 13 , 8 ] models a continuum of identical agents whose individual optimal control problem depends on the population distribution μt. As N → ∞ , the 
+
+N -player Nash equilibrium converges to a mean-field Nash equilibrium (MFNE). The MFNE depends only on μt, not on individual identities, which makes it tractable when the N -player problem is not. 
+
+Wasserstein gradient flows and JKO. For a free-energy functional F on P2(Rd), the Wasserstein gradient flow obeys ∂tμt = −∇ W2 F(μt) and admits a time-discrete Jordan–Kinderlehrer–Otto scheme [ 15 ] μk+1 = arg min ρ{F (ρ) + (2 τ )−1W 22 (ρ, μ k)}. A measure ν satisfies a log-Sobolev inequality with constant α if Ent ν (f 2) ≤ (2 /α ) R ∥∇ f ∥2dν , with ν = N (0 , σ 2I) giving α = 1 /σ 2.2Otto–Villani implies W2-contraction at rate αε for the entropic flow, which we use in Section 5 to certify privacy. 
+
+# 3 A Unified Mean-Field Game Framework 
+
+We formalise privacy-preserving FL as a mean-field stochastic differential game in the standard sense of [ 16 , 8]. Section 3.1 identifies the four ingredients of the game (state, type, control, dynamics) and Section 3.2 specialises them to FL through two privacy mechanisms; the resulting 2 × 2 grid in Table 1 populates DP-SGD, MFEP, MAPG-DP, and our proposed MFPG as four named cells. 
+
+3.1 State, type, control, and dynamics 
+
+A representative agent in our game is described by: • State Xt ∈ Rd: a (privatised) datum used by an individual client to compute its local update at round t.• Type β ∈ [βmin , β max ] ⊂ R+: the client’s privacy preference (heterogeneity parameter), distributed by ρ(dβ ).• Control εk ∈ E = {ε(1) , . . . , ε (m)}: a per-client privacy budget chosen on a finite grid; this is the strategic variable of the game. • Dynamics: conditional on εk, the state evolves under the controlled SDE 
+
+dX kt = b Xkt , μ t, ε k
+
+ dt + σ εk
+
+ dW t, (3.1) with Wt a standard d-dimensional Brownian motion. The drift b and diffusion σ are fixed by the privacy mechanism M (Section 3.2). • State distribution μt ∈ P 2(Rd): the distribution of Xt across the agent population. The empirical measure μ(N ) 
+
+> t
+
+= 1
+
+> N
+
+PNk=1 μkt converges weakly to a deterministic μt as N → ∞ by propagation of chaos [8, 13]. • Running cost (per agent of type β): 
+
+f (x, μ, ε ; β) = ℓ(x; wt) + β δ dp (ε), (3.2) combining the training loss ℓ against the current global model wt with the privacy term β δ dp 
+
+scaled by the agent’s type. The disutility minimised by client k is the time-integral of (3.2) , written compactly as 
+
+Uk(εk; ¯ ε) = Lk(w; εk) + βk δdp (εk), (3.3) where Lk is the cumulative training loss and ¯ε = Eμ[ε] is the mean control across the population. The model parameters w enter only through ℓ(x; wt) and are otherwise external to the game; the strategic content lives entirely in (Xt, μ t, ε k) and (3.2). 
+
+3.2 Two privacy mechanisms: Gaussian and entropic 
+
+The drift–diffusion pair (b, σ ) in (3.1) is determined by which privacy mechanism the system runs. We consider two: • Gaussian mechanism. The control εk scales the additive noise on each clipped gradient, σ(εk) = 
+
+Cp2 ln(1 .25 /δ )/ε k, with drift b given by the clipped loss gradient [ 1]. Privacy is tracked by Rényi-DP composition, giving a polynomially accumulating ϵdp = O(√T ).• Entropic mechanism. The state distribution evolves under the Wasserstein gradient flow of the KL-regularised free energy 
+
+Fλ(μ; εk) = Ex∼μ[L(x; w)] + εk KL( μ∥ν) + λ 
+
+> 2
+
+Var μ[x], (3.4) with Gaussian prior ν = N (0 , σ 2I). Equivalently (Appendix C.1), the controlled SDE (3.1) has drift b(x, μ, ε ) = −∇ L(x; w) − εσ2 x − λ(x − ¯x) and diffusion σ(ε) = √2ε. Privacy is tracked by log-Sobolev contraction [22], with δdp decaying exponentially when αε k > λ + G.3Table 1: The MFG framework in two axes. Two design choices populate the 2 × 2 grid: client heterogeneity (rows: no game vs. game) and population size (columns: finite N vs. N → ∞ ). Entries name the method, the active noise mechanism (Gaussian or Entropic), and the accountant.                            
+
+> Finite N(multi-agent) N→ ∞ (mean field) No game (single ε)DP-SGD [1] Gaussian noise on gradient, RDP
+> δconst., ϵ=O(√T)
+> MFEP [5] Entropic flow on μt, LSI
+> δ=O(e−αεKτ )
+> Game
+> (heterogeneous
+> βk)
+> MAPG-DP [34] Gaussian noise, N-Nash on {εk}
+> Intractable for large N
+> MFPG (ours)
+> Entropic flow, MFNE on ¯ε
+> Heterogeneous + exponential decay
+
+Remark 3.1 (Why the control acts on the state and not on the model) . A superficially natural alternative would be to make the control a perturbation δk ∈ Rd added directly to the local model 
+
+wk at the aggregation step, w = P 
+
+> k
+
+pk(wk + δk) [34]. With the disutility Lk(w) − βk∥δk∥2, KKT forces δk = 0 at every Nash point (Section 4), so the limiting MFG is degenerate. We therefore restrict attention to controls that act on the state SDE (3.1) ; this is the standard MFG setup in which the agent’s strategy shapes its own state evolution. 
+
+# 4 The Three Baseline Cells 
+
+The three already-named cells of Table 1 are recalled below in the language of Section 3; MFPG itself is deferred to Section 5. The MAPG-DP subsection also discharges the model-output alternative, whose δk = 0 pathology is what prevents the multi-agent privacy game literature from being combined with mean-field analysis directly. 
+
+4.1 Finite N , no game: DP-SGD 
+
+DP-SGD [ 1] runs the Gaussian mechanism of Section 3.2 with a single shared budget ε = εtgt .After clipping ∆wk ← ∆wk · min(1 , C/ ∥∆wk∥2) each client adds Gaussian noise N (0 , σ 2I) with 
+
+σ = Cp2 ln(1 .25 /δ )/ε . RDP composition returns ϵdp = O(pT log(1 /δ )/σ ), so the privacy cost 
+
+grows polynomially with rounds T .
+
+4.2 N → ∞ , no game: MFEP 
+
+MFEP [ 5] replaces external noise injection with the entropic free-energy (3.4) at a fixed regularization strength ε, evaluated against the state distribution μt. The Wasserstein gradient flow obeys the Fokker–Planck equation 
+
+∂tμt = ∇· 
+
+h
+
+μt
+
+
+
+∇L(x) + εσ2 x + λ(x − ¯xt)
+
+i 
+
++ ε∆μt, (4.1) with ¯xt = Eμt [x]. Three mechanisms operate simultaneously: loss-driven drift , prior attraction at rate ε/σ 2, and entropic diffusion ε∆μt that delivers privacy intrinsically. Under LSI for the prior with constant α = 1 /σ 2, the JKO discretization contracts [ 22 ]: for neighbouring measures μk and 
+
+μ′ 
+
+> k
+
+differing in a single client’s data, 
+
+W2(μK , μ ′ 
+
+> K
+
+) ≤ e−(αε −λ−G)Kτ W2(μ0, μ ′
+
+> 0
+
+), (4.2) provided αε > λ + G, with G the clipped gradient norm bound. Converting through total-variation gives the exponentially decaying δdp bound used throughout the paper: 
+
+δdp (ε) ≤ Cd
+
+√N exp 
+
+
+
+− (αε −λ−G)Kτ 
+
+> 2
+
+
+
+, Cd = min( √d, 10) . (4.3) 
+
+4.3 Finite N , game: MAPG-DP 
+
+MAPG-DP [ 34 , §§ 3.2.2, 3.3.4] gives each client k a per-client privacy budget εk ∈ R+ that scales the Gaussian noise added to its local gradient, with scale σk(εk) = 2 ηC/ε k, or, equivalently, an 4additive shift on its features as in FLRA [ 23 ]. The disutility (3.3) is delivered by RDP composition, and the N -player Nash equilibrium (ε∗
+
+> 1
+
+, . . . , ε ∗ 
+
+> N
+
+) satisfies Uk(ε∗
+
+> k
+
+, ε ∗−k) ≤ Uk(εk, ε ∗−k) for every k,where ε∗−k denotes the strategies of all other clients at equilibrium. Existence follows by standard arguments, but computation is intractable for realistic N because each best response couples through every εj via the FedAvg constraint 
+
+w = 1
+
+> NN
+
+X
+
+> j=1
+
+ wj + N (0 , σ j (εj )2I). (4.4) The same multi-agent literature also studies a superficially natural alternative in which the strategy is an additive perturbation δk ∈ Rd on the local model wk, with disutility Lk(w) − βk∥δk∥2 subject to 
+
+w = P 
+
+> k
+
+pk(wk + δk) [34, § 3.3.1]. The KKT stationarity conditions in feature dimension m,
+
+∂L
+
+∂w k,m 
+
+= 1 
+
+> N
+
+λk,m , ∂L
+
+∂δ k,m 
+
+= 1 
+
+> N
+
+λk,m − 2βk δk,m , (4.5) together force λk,m = 0 and hence δk,m = 0 at every Nash point: the aggregation constraint cancels the privacy term. We therefore restrict the rest of the paper to controls that act on the state, since only such controls admit both non-trivial equilibria and the N → ∞ limit developed next. 
+
+# 5 Mean-Field Privacy Game (MFPG) 
+
+We now instantiate the N → ∞ limit of MAPG-DP. The construction below is structurally identical to MAPG-DP except that (i) the Gaussian noise mechanism is replaced by the entropic flow (4.1) ,which the LSI contraction (4.3) certifies, and (ii) the N -Nash equilibrium of {εk} is replaced by the mean-field Nash equilibrium on the population mean ¯ε. MFEP is recovered as the homogeneous special case ( βk constant). 
+
+5.1 Formulation 
+
+Each client k chooses a control εk ∈ E = {ε(1) , . . . , ε (m)} on a finite grid; conditional on εk, its state slice μkt evolves under the entropic flow (4.1) and contributes to the population state distribution μt
+
+through the loss Lk(w; εk) = Ex∼μkt [ℓ(w; x)] . The empirical measure μ(N ) 
+
+> t
+
+= 1
+
+> N
+
+P 
+
+> k
+
+μkt converges, by propagation of chaos [ 8, 13 ], to a deterministic μt ∈ P 2(Rd) as N → ∞ , so each client’s disutility (3.3) couples to the rest of the population only through the scalar mean-field strength 
+
+¯ε = Eμ[ε] that replaces the vector ε−k of the finite-N game. Throughout this section we use the disutility in the form 
+
+Uk(εk; ¯ ε) = Lk(w; εk) + βk δdp (εk), (5.1) with δdp now given by the LSI bound (4.3) rather than by RDP composition. This N → ∞ limit is well-posed only because the controls act on the state: each client’s best response in (4.4) depends on ε−k only through aggregate statistics of μ(N ) 
+
+> t
+
+, which collapse to ¯ε in the limit. The model-output alternative does not admit such a limit, since each perturbation enters 
+
+w = P 
+
+> j
+
+pj (wj + δj ) with vanishing weight O(1 /N ) and the δk = 0 collapse of (4.5) is its finite-N
+
+shadow. 
+
+5.2 Game equilibrium 
+
+A pair (μ∗, ε ∗) is a mean-field Nash equilibrium (MFNE) of MFPG if (i) μ∗ is the stationary state distribution of (4.1) at the population mean ¯ε∗ = Eμ∗ [ε], and (ii) ε∗ is a best response to ¯ε∗ for every client given its preference βk (formal definition in Appendix C.4). At equilibrium, no client can reduce its disutility by unilaterally changing εk given that every other client plays ε∗−k. For heterogeneous clients with distinct βk, the MFNE is characterised by a fixed point of the averaged best-response map Φ : ¯ ε 7 → Ek[BR k(¯ ε)] ; existence follows from Kakutani’s theorem on the convex hull of E (Appendix C.4). Section 5.3 gives an equivalent differential characterisation through coupled HJB and FPK PDEs. 55.3 HJB–FPK characterisation 
+
+The fixed-point characterisation of Section 5.2 is convenient for existence and for the finite-grid solver of Section 6, but it hides the dynamical content of the equilibrium. Following the standard mean-field game system of [ 16 , 8] and the FL–MFG analogy of [ 20 ], we now give an equivalent differential characterisation through coupled forward Fokker–Planck–Kolmogorov (FPK) and back-ward Hamilton–Jacobi–Bellman (HJB) equations specialised to our disutility (5.1) . To this end we momentarily relax the finite grid E to the interval [εmin , ε max ] ⊂ R+ and parameterise each client by a privacy preference β ∈ [βmin , β max ] distributed according to ρ(dβ ), so that the state distribution splits across types as μt = R μβt ρ(dβ ) with global mean ¯xt = Eμt [X]. Under control ε,a representative state of type β obeys the controlled SDE 
+
+dX t = b(Xt, μ t, ε ) dt + √2ε dW t, b(x, μ, ε ) = −∇ L(x; wt) − εσ2 x − λ(x − ¯x), (5.2) with Wt a standard Brownian motion, and seeks to minimise the cumulative cost 
+
+Jμ(ε; β) = E
+
+"Z T
+
+> 0
+
+ℓ(Xt; wt) dt 
+
+#
+
++ β δ dp (ε), (5.3) where δdp (ε) = ( Cd/√N ) exp( −θ(ε − ε0)) with θ := αKτ / 2 and ε0 := ( λ + G)/α is the LSI bound (4.3). Plugging the optimal feedback control ε∗(t, x ; β) derived below into (5.2) gives the forward type-conditional Fokker–Planck equation 
+
+∂tμβt (x) + ∇· 
+
+h
+
+μβt (x) b x, μ t, ε ∗(t, x ; β)i
+
+= ε∗(t, x ; β) ∆ μβt (x); (5.4) marginalising over ρ recovers (4.1) but with the optimal control in place of a fixed ε. Defining the type-conditional value function V (t, x ; β) = inf ε EXt=x[ · ] of (5.3) , dynamic programming yields the backward HJB 
+
+−∂tV (t, x ; β) = H x, ∇V, D 2V, μ t; β, V (T, x ; β) = 0 , (5.5) with Hamiltonian 
+
+H(x, p, M, μ ; β) = ℓ(x; wt)−p·∇ L(x; wt)−λ p ·(x−¯x)+min 
+
+> ε≥0
+
+n
+
+β δ dp (ε)− εσ2 p·x+ε Tr( M )
+
+o
+
+. (5.6) The first-order condition for the inner minimisation in H admits a closed-form solution ε∗(t, x ; β),derived in Appendix C.7. Two qualitative properties of this solution carry the intuition of the result: 
+
+ε∗ is decreasing in β, so privacy-sensitive clients adopt stronger regularisation, and ε∗ is decreasing in the local curvature Tr( D2V ), so clients near sharp minima can afford stronger noise. The MFNE is the pair (V, μ βt ) that simultaneously satisfies (5.5) and (5.4) , coupled through ε∗ in the FPK drift–diffusion and through μt in the Hamiltonian; integrating ε∗ against the equilibrium population recovers the scalar fixed point ¯ε∗ = Φ(¯ ε∗) that drives the discrete-grid solver in Section 6. Two specialisations of the system above recover the existing literature. If βk ≡ β is constant across the population, the type-conditional structure collapses, ε∗ becomes spatially constant on the optimum, and (5.4) reduces to the single-strength entropic flow of [ 5]. If we instead replace (5.4) by its N -particle empirical version and (5.5) by the N -player backward Bellman system, with δdp 
+
+replaced by RDP composition, we recover the dynamic MAPG-DP of [ 34 ]. MFPG is therefore the joint N → ∞ and entropic-mechanism limit of MAPG-DP. When the activation condition αε ∗ > λ + G holds at the equilibrium, the LSI contraction yields an exponentially decaying δdp bound of the form (Cd/√N ) exp( −(αε ∗ −λ−G)Kτ / 2) (Appendix C.8); compared with DP-SGD, whose ϵdp grows as O(√K) at fixed δ = 10 −5, MFPG’s privacy guarantee 
+
+tightens with the number of training rounds. This combines the heterogeneity benefit MFEP cannot express with the exponential decay MAPG-DP cannot offer. 
+
+# 6 Algorithms 
+
+A single training round of every cell in Table 1 consists of the same three steps applied independently by each client and then composed by the server: an action update that selects the strategic variable εk
+
+6Algorithm 1 Unified training round (one round, all four cells). 
+
+Input: Global params w(t); population mean ¯ε(t) (mean-field cells only); per-client preferences 
+
+{βk}; active mechanism (Gaussian / Entropic) and accountant (RDP / LSI).  
+
+> 1:
+
+for each client k ∈ [N ] in parallel do  
+
+> 2:
+
+ε(t) 
+
+> k
+
+← ACTION UPDATE k(¯ ε(t), {βj }) ▷ skipped if no game  
+
+> 3:
+
+w(t+1)  
+
+> k
+
+← LOCAL UPDATE M(w(t), ε (t) 
+
+> k
+
+) ▷ Alg. 2 or 3  
+
+> 4:
+
+η ← ACCOUNTANT UPDATE (η, ε (t) 
+
+> k
+
+) ▷ RDP or LSI  
+
+> 5:
+
+end for  
+
+> 6:
+
+¯ε(t+1) ← N −1 P 
+
+> k
+
+ε(t) 
+
+> k
+
+▷ mean-field cells only  
+
+> 7:
+
+w(t+1) ← P 
+
+> k
+
+pk w(t+1)  
+
+> k
+
+▷ FedAvg 
+
+Algorithm 2 Gaussian local update (DP-SGD, MAPG-DP). 
+
+Input: Local model wk; clip C; per-client budget εk (or shared εtgt for DP-SGD).  
+
+> 1:
+
+σk ← Cp2 ln(1 .25 /δ )/ε k 
+
+> 2:
+
+g ← clip( ∇Lk(wk), C ) 
+
+> 3:
+
+wk ← wk − η (g + N (0 , σ 2
+
+> k
+
+I)) 
+
+(skipped in the no-game cells), a local update that advances the privatised state distribution μkt and produces a parameter contribution w(t+1)  
+
+> k
+
+, and an accountant update that records the privacy cost. The four named methods differ only in which version of these blocks they call. Algorithm 1 writes the outer loop once; the rest of this section specifies the three blocks in turn. The local-update block advances client k’s data slice under the active noise mechanism. The two mechanisms supported by Table 1 are the familiar additive Gaussian step (used by DP-SGD and MAPG-DP) and the Particle–Sinkhorn JKO step that discretises the entropic Wasserstein gradient flow (4.1) (used by MFEP and MFPG); both consume the same inputs and produce a privatised local model. The Gaussian variant (Algorithm 2) clips the per-sample gradient to norm C and adds isotropic noise of scale σk = Cp2 ln(1 .25 /δ )/ε k, recovering the standard DP-SGD update of [ 1 ]. Across cells the only difference is whether σk is shared (DP-SGD: εk ≡ εtgt ) or set per client by the action-update block (MAPG-DP). The entropic variant (Algorithm 3) instead approximates the JKO step μk+1 = arg min ρ{F λ(ρ) + (2 τ )−1W 22 (ρ, μ k)} by a particle method: each particle takes a forward Euler step on the free-energy gradient (the drift–diffusion line), and a single Sinkhorn projection enforces the Wasserstein constraint by averaging each particle against its barycentric image under the entropic optimal transport plan. The drift contains three terms—loss-driven, prior-attractive, and variance-penalising—all read off from (3.4) . The diffusion strength √2εkτ is what the LSI bound (4.3) later contracts. To keep the projection tractable on large parameter tensors we cap the Sinkhorn at n=512 flattened entries; tensors larger than this are advanced by drift–diffusion only, which preserves the δdp guarantee but skips the optimal-transport refinement. The action-update block is the only place where the four cells differ algorithmically once the mechanism is fixed: it is empty in the no-game cells, a closed-form N -player best response in MAPG-DP, and a finite-grid mean-field best response in MFPG. For MFPG the client solves 
+
+εnew  
+
+> k
+
+← arg min 
+
+> ε∈E
+
+h Lk 
+
+> ε+c
+
++ βk δdp (ε; Gk)
+
+i
+
+, (6.1) where Gk is the latest clipped gradient-norm estimate, c is a small constant that absorbs the low-ε
+
+singularity of the regulariser, and δdp is computed via (4.3) at the current mean-field ¯ε(t). The cost is 
+
+O(|E| ) per client per round, dwarfed by the local update of Algorithm 3. MAPG-DP replaces (6.1) with the closed-form KKT best response of [ 34 ], and DP-SGD and MFEP skip this block entirely. Existence of a fixed point of the averaged best-response map Φ : ¯ ε 7 → N −1 P 
+
+> k
+
+εnew  
+
+> k
+
+is guaranteed by Proposition C.1; in practice ten outer iterations suffice for the grid sizes |E| ≤ 5 we report. 7Algorithm 3 Particle–Sinkhorn JKO step (MFEP, MFPG). 
+
+Input: Particles {xi}ni=1 ; JKO step τ ; clip C; entropic strength εk; prior variance σ2; variance penalty λ; Sinkhorn regulariser ηS. 
+
+> 1:
+
+gi ← clip( ∇L(xi), C ) 
+
+> 2:
+
+x′ 
+
+> i
+
+← xi − τ gi + εk 
+
+> σ2
+
+xi + λ(xi − ¯x) + √2εkτ z i, zi ∼ N (0 , I ) ▷ drift + diffusion  
+
+> 3:
+
+P ← Sinkhorn( 1n, 1n, C ij , η S) with Cij = ∥x′ 
+
+> i
+
+− x′ 
+
+> j
+
+∥2 ▷ entropic OT plan  
+
+> 4:
+
+xnew  
+
+> i
+
+← P 
+
+> j
+
+Pij x′ 
+
+> j
+
+▷ barycentric projection Table 2: Final-round metrics from results/full_benchmark.csv (seed = 42 ). For the entropic cells, ϵ is the linear-budget value at the final round; for the Gaussian cells it is the value reported by the RDP accountant. “ −” marks settings we omit (MAPG-DP on MNIST). 
+
+Quadratic (d=5 , T =10 ) Logistic (d=20 , T =15 ) MNIST (MLP, T =20 )Method loss — ϵ δ loss acc ϵ δ acc ϵ δ
+
+DP-SGD 69.1 — 12.3 10 −5 5.78 0.500 14.2 10 −5 0.120 23.7 10 −5
+
+MFEP 74.1 — 1.00 9.1×10 −2 5.67 0.460 1.00 1.0×10 −1 0.126 1.00 1.5×10 −1
+
+MAPG-DP 65.8 — 0.37 10 −5 4.49 0.395 0.08 10 −5 — — —MFPG (ours) 75.3 — 1.00 6.1×10 −1 6.11 0.460 1.00 4.7×10 −1 0.094 1.00 1.0
+
+Each cell carries a privacy accountant that updates after every local step. The Gaussian cells use a Rényi-DP moments accountant tracking RDP at order α=2 and converting to (ϵ, δ ) via the standard amplification-by-subsampling formula [ 21 ]; the cumulative ϵ grows as O(√T ). The entropic cells instead apply the LSI-contraction bound (4.3) at the current εk (MFEP) or ¯ε(t) (MFPG), which gives an exponentially decaying δdp whenever the activation condition αε ∗ > λ + G is met. Both accountants are black-box and consume only (σk or εk, K, τ ), so any method can be re-audited under either accountant; the experiments report the accountant each method was originally designed to use. 
+
+# 7 Numerical Results 
+
+Our experiments verify that the four cells of Table 1 produce the privacy decay each cell predicts and show that MFPG attains MFEP-level utility at the population level while delivering a personalised pri-vacy guarantee that single-ε MFEP cannot. The full experimental setup—datasets, hyperparameters, and accountant configurations—is given in Appendix D. Every numerical claim below is repro-ducible from results/full_benchmark.csv (seed = 42 ); paper/cross_check.py verifies that no number drifts away from the CSV. Table 2 reports the final-round numbers, and Figures 1–3 show the round-by-round trajectories of loss, accuracy, and δdp . The headline finding is that the two axes of Table 1 have predictable, separable effects: the noise-mechanism axis controls the shape of δdp (constant for Gaussian cells, decreasing for entropic cells), and the heterogeneity axis controls how privacy budget is distributed across clients. The Gaussian cells confirm the polynomial accumulation of standard DP. After T =10 quadratic rounds, DP-SGD has reached ϵ=12 .3 at δ=10 −5; on logistic regression and MNIST the cumulative ϵ
+
+rises to 14 .2 and 23 .7 respectively. MAPG-DP keeps ϵ much smaller per round through its strategic per-client budgets ( 0.37 on quadratic, 0.08 on logistic) at the cost of utility on logistic regression (39 .5% vs. 50 .0% for DP-SGD), but its δ does not tighten with rounds. The entropic cells follow the linear-budget schedule ϵ=1 for every round and exhibit a non-trivial δ that contracts when the LSI rate αε ∗ − λ − G is positive; with C=1 , σ =1 the rate sits on the boundary of activation, so MFEP and MFPG fall back to the polynomial 1/(K + 1) envelope on the simpler tasks. On utility, the two entropic cells are tied to within a fraction of a percentage point on logistic regression (46 .0% for both) and within 3 points on MNIST ( 12 .6% vs. 9.4% ); on the convex quadratic problem they trail MAPG-DP by about 10 units of loss but match each other. This is the expected behaviour: when the MFNE concentrates close to a single ¯ε∗ (Appendix E), the population-level loss of MFPG is well-approximated by MFEP at that strength. Where the methods differ visibly is in the per-round 
+
+δ for the logistic experiment: MFEP reports 1.0×10 −1 versus 4.7×10 −1 for MFPG. The MFPG 8bound is looser at the population level because privacy-tolerant clients self-select larger ε∗
+
+> k
+
+, which inflates the mean-field ¯ε entering (4.3) ; the per-client guarantee for high-β clients is correspondingly tighter than what MFEP can express at all. The MNIST stress test isolates a different regime. With a ∼100 k parameter MLP, the JKO drift– diffusion noise √2ετ z i dominates the gradient signal, and all three methods we ran (DP-SGD, MFEP, MFPG) plateau near chance accuracy. We omit MAPG-DP from MNIST because its per-sample best-response loop is expensive at this scale and adds no insight beyond the logistic experiment. We retain MNIST in the paper precisely because it makes the LSI bound’s failure mode visible: when the regime αε ∗ > λ + G is far from satisfied, the entropic-flow advantage over Gaussian noise vanishes and MFEP and MFPG converge to the same poor utility, consistent with the convex-hull argument of Proposition C.1. A scalable approximation of the Sinkhorn projection is the natural next step. 
+
+Figure 1: Quadratic regression. The two entropic cells (MFEP, MFPG) deliver a slowly decaying δdp 
+
+at fixed ϵ=1 ; both Gaussian cells (DP-SGD, MAPG-DP) deliver a flat δ at higher cumulative ϵ.
+
+Figure 2: Logistic regression. MFPG matches MFEP on test accuracy at a fraction of DP-SGD’s privacy cost; MAPG-DP keeps ϵ small at the cost of utility. 
+
+Figure 3: MNIST. In the high-dimensional regime where the LSI bound’s activation condition 
+
+αε ∗ > λ + G is loose, MFEP and MFPG converge to the same poor utility, while DP-SGD reaches comparable accuracy at much higher cumulative ϵ.9References 
+
+[1] Martin Abadi, Andy Chu, Ian Goodfellow, H Brendan McMahan, Ilya Mironov, Kunal Talwar, and Li Zhang. Deep learning with differential privacy. In Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communications Security , pages 308–318, 2016. [2] Charalambos D. Aliprantis and Kim C. Border. Infinite Dimensional Analysis: A Hitchhiker’s Guide . Springer, 3 edition, 2006. [3] Luigi Ambrosio, Nicola Gigli, and Giuseppe Savaré. Gradient Flows in Metric Spaces and in the Space of Probability Measures . Birkhäuser, 2 edition, 2008. [4] Galen Andrew, Om Thakkar, Brendan McMahan, and Swaroop Ramaswamy. Differentially private learning with adaptive clipping. In Advances in Neural Information Processing Systems ,volume 34, 2021. [5] Anonymous. Mean-field entropic privacy (MFEP): A unified dynamics framework for private federated learning, 2025. Under review at AISTATS 2026. [6] Claude Berge. Topological Spaces . Oliver & Boyd, Edinburgh and London, 1963. [7] Nicholas Carlini, Florian Tramer, Eric Wallace, Matthew Jagielski, Ariel Herbert-Voss, Kather-ine Lee, Adam Roberts, Tom Brown, Dawn Song, Ulfar Erlingsson, et al. Extracting training data from large language models. In 30th USENIX Security Symposium , pages 2633–2650, 2021. [8] René Carmona and François Delarue. Probabilistic Theory of Mean Field Games with Applica-tions I–II . Springer, 2018. [9] Jun Du, Chunxiao Jiang, Kwang-Cheng Chen, Yong Ren, and H Vincent Poor. Community-structured evolutionary game for privacy protection in social networks. IEEE Transactions on Information Forensics and Security , 13(3):574–589, 2017. [10] Jonas Geiping, Hartmut Bauermeister, Hannah Dröge, and Michael Moeller. Inverting gradients– how easy is it to break privacy in federated learning? In Advances in Neural Information Processing Systems , volume 33, pages 16937–16947, 2020. [11] Robin C Geyer, Tassilo Klein, and Moin Nabi. Differentially private federated learning: A client level perspective. In NeurIPS Workshop on Machine Learning on the Phone and other Consumer Devices , 2017. [12] Rui Hu and Yihong Gong. Trading data for learning: incentive mechanism for on-device federated learning. In 2020 IEEE Global Communications Conference (GLOBECOM) , pages 1–6. IEEE, 2020. [13] Minyi Huang, Roland P Malhamé, and Peter E Caines. Large population stochastic dynamic games: closed-loop McKean-Vlasov systems and the Nash certainty equivalence principle. In 
+
+Communications in Information & Systems , volume 6, pages 221–252, 2006. [14] Ruichao Jin, Xi He, and Husheng Dai. On the tradeoff between privacy and utility in collabora-tive intrusion detection systems-a game theoretical approach. In Proceedings of the Hot Topics in Science of Security: Symposium and Bootcamp , pages 45–51, 2017. [15] Richard Jordan, David Kinderlehrer, and Felix Otto. The variational formulation of the Fokker– Planck equation. SIAM Journal on Mathematical Analysis , 29(1):1–17, 1998. [16] Jean-Michel Lasry and Pierre-Louis Lions. Mean field games. Japanese Journal of Mathematics ,2(1):229–260, 2007. [17] Tian Li, Anit Kumar Sahu, Manzil Zaheer, Maziar Sanjabi, Ameet Talwalkar, and Virginia Smith. Federated optimization in heterogeneous networks. Proceedings of Machine Learning and Systems , 2:429–450, 2020. 10 [18] Junxu Liu, Jian Lou, Li Xiong, Jinfei Liu, and Xiaofeng Meng. Projected federated averaging with heterogeneous differential privacy. Proceedings of the VLDB Endowment , 15(4):828–840, December 2021. ISSN 2150-8097. doi: 10.14778/3503585.3503592. [19] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Aguera y Arcas. Communication-efficient learning of deep networks from decentralized data. In Artificial Intelligence and Statistics , pages 1273–1282. PMLR, 2017. [20] Arash Mehrjou. Federated learning as a mean-field game, 2021. [21] Ilya Mironov. Rényi differential privacy. In 2017 IEEE 30th Computer Security Foundations Symposium (CSF) , pages 263–275. IEEE, 2017. [22] Felix Otto and Cédric Villani. Generalization of an inequality by Talagrand and links with the logarithmic Sobolev inequality. Journal of Functional Analysis , 173(2):361–400, 2000. [23] Amirhossein Reisizadeh, Farzan Farnia, Ramtin Pedarsani, and Ali Jadbabaie. Robust federated learning: The case of affine distribution shifts. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. [24] Simon Rigot. Entropic regularization of Wasserstein distance and applications to federated learning. Machine Learning , 112(4):1235–1261, 2023. [25] Lars Ruthotto, Stanley J Osher, Wuchen Li, Levon Nurbekyan, and Samy Wu Fung. A machine learning framework for solving high-dimensional mean field game and mean field control problems. In Proceedings of the National Academy of Sciences , volume 117, pages 9183–9193, 2020. [26] Arbia Riahi Sfar, Yacine Challal, Pascal Moyal, and Enrico Natalizio. A game theoretic approach for privacy preserving model in iot-based transportation. IEEE Transactions on Intelligent Transportation Systems , 20(12):4405–4414, 2019. [27] Zhong Sun, Liang Yin, Chuan Li, Wei Zhang, Aili Li, and Zhihui Tian. The qos and privacy trade-off of adversarial deep learning: an evolutionary game approach. Computers & Security ,96:101876, 2020. [28] Stacey Truex, Nathalie Baracaldo, Ali Anwar, Thomas Steinke, Heiko Ludwig, Rui Zhang, and Yi Zhou. A hybrid approach to privacy-preserving federated learning. In Proceedings of the 12th ACM Workshop on Artificial Intelligence and Security , pages 1–11, 2019. [29] Cédric Villani. Optimal Transport: Old and New . Springer, 2009. [30] Kang Wei, Jun Li, Ming Ding, Chuan Ma, Howard H Yang, Farhad Farokhi, Shi Jin, Tony QS Quek, and H Vincent Poor. Federated learning with differential privacy: Algorithms and performance analysis. volume 15, pages 3454–3469, 2020. [31] Xuelong Wu, Ting Wu, Mohammad Khurram Khan, Qin Ni, and Wanchun Dou. Game theory based correlated privacy preserving analysis in big data. IEEE Transactions on Big Data , 7(4): 643–656, 2017. [32] Liang Xiao, Yao Li, Guangjie Han, Husheng Dai, and H Vincent Poor. A secure mobile crowdsensing game with deep reinforcement learning. IEEE Transactions on Information Forensics and Security , 13(1):35–47, 2017. [33] Liang Xu, Chunxiao Jiang, Yuhan Qian, Jun Li, Yong Zhao, and Yong Ren. Privacy-accuracy trade-off in differentially-private distributed classification: a game theoretical approach. IEEE Transactions on Big Data , 7(4):770–783, 2021. [34] Lihua Yin, Sixin Lin, Zhe Sun, Ran Li, Yuanyuan He, and Zhiqiang Hao. A game-theoretic approach for federated learning: A trade-off among privacy, accuracy and energy. Digital Communications and Networks , 2021. [35] Ligeng Zhu, Zhijian Liu, and Song Han. Deep leakage from gradients. In Advances in Neural Information Processing Systems , volume 32, 2019. 11 A Related Work 
+
+Each of the four cells in Table 1 traces back to a distinct line of prior work; our contribution is to organise them along the two axes of N and client heterogeneity rather than to introduce new machinery. 
+
+Differential privacy in federated learning. The finite-N , no-game cell is occupied by a substantial literature. DP-SGD [ 1] introduced the per-sample-clipped Gaussian mechanism, and DP-FedAvg [ 11 ,30 ] adapted it to the federated setting. Subsequent work tightens the privacy accountant via Rényi DP [ 21 ], allows adaptive clipping [ 4 ], combines DP with secure aggregation [ 28 ], and accommodates per-client privacy budgets through projected averaging [ 18 ]. Each of these methods operates on the data side (gradients or samples) under RDP composition, which is exactly the cell we recover when MFPG is reduced to homogeneous βk and the entropic mechanism is swapped for additive Gaussian noise. 
+
+Game-theoretic privacy. The finite-N , game cell has been studied through both cooperative and non-cooperative formulations: community-structured evolutionary games [ 9], correlated privacy analysis [ 31 ], deep-RL crowdsensing [ 32 ], IoT transportation [ 26 ], distributed classification [ 33 ], on-device incentive mechanisms [ 12 ], evolutionary QoS trade-offs [ 27 ], and intrusion-detection games [ 14 ]. The most directly relevant precedent is the multi-agent privacy game [ 34 ], whose MAPG-DP and MAPG-input formulations we adopt as our finite-N baseline; we discharge the model-output variant (MAPG-parameter) as a δk = 0 pathology in Section 4.3, since only state-acting controls admit the N → ∞ limit we develop. The robust-FL framework FLRA [ 23 ] is not a privacy method but its state-acting affine perturbation (Λ ix + δi) is the structural precedent for treating the state distribution as the strategic object of FL. 
+
+Mean-field methods and entropic privacy. The FL–mean-field analogy through coupled HJB and Fokker–Planck PDEs [ 20 ] provides the dynamical foundation we build on. High-dimensional mean-field control with neural networks is studied in [ 25 ], and entropic-Wasserstein regularisation in FL in [ 24 ], but neither addresses the privacy game. The closest prior work is MFEP [ 5], which occupies the N → ∞ , no-game cell of Table 1 with a homogeneous entropic strength and the LSI-based privacy analysis we adopt for our δ bound. MFPG is the natural generalisation of MFEP that admits heterogeneous client preferences, equivalently, the N → ∞ limit of MAPG-DP under the entropic mechanism. 
+
+# B Game-Theoretic Privacy Frameworks 
+
+Table 3: Comparison of game-theoretic privacy frameworks. N -N = N -player Nash; MFNE = mean-field Nash equilibrium.                                              
+
+> Work Player Hierarch. Coop. Strategy Utility
+> [33, 14, 31] Clients No Yes ϵimax Q(ϵ)
+> [9, 32] Clients No No ϵimax Q+P(ϵi)
+> [26, 27, 12, 34] S+C Yes No ϵi, b Stackelberg
+> MFEP [5] ———none ( εfixed) L+εKL
+> MFPG (ours) Clients (MF) No No εk∈ E Lk+βkδdp (εk)
+
+# C Derivations and proofs 
+
+This appendix supplies the derivations behind each labelled equation and theorem of the body. Section references in parentheses point to the statement being proved. 
+
+C.1 Wasserstein gradient flow yields the Fokker–Planck equation (4.1) (§4.2) 
+
+We compute the first variation of the free energy (3.4) and use the standard correspondence between Wasserstein gradient flows on F and continuity equations driven by ∇(δF/δμ ).12 The three terms of Fλ have first variations 
+
+δδμ Eμ[L(x; w)] = L(x; w),δδμ KL( μ∥ν) = log dμ dν (x),δδμ Var μ[x] = ∥x − ¯x∥2 − Var μ[x], ¯x = Eμ[x].
+
+The first two are classical [ 29 ]; the third follows from Var μ[x] = Eμ∥x∥2 − ∥ Eμx∥2 by direct computation. Taking gradients in x,
+
+∇ δFλ
+
+δμ (x) = ∇L(x; w) + ε ∇ log dμ dν (x) + λ(x − ¯x).
+
+For the Gaussian prior ν = N (0 , σ 2I), ∇ log ν(x) = −x/σ 2, so ∇ log( dμ/dν ) = ∇ log μ + x/σ 2.Substituting, 
+
+∇ δFλ
+
+δμ = ∇L + εσ2 x + λ(x − ¯x) + ε ∇ log μ. 
+
+The Wasserstein gradient flow ∂tμt = ∇· (μt∇(δF/δμ )) then becomes 
+
+∂tμt = ∇· 
+
+h
+
+μt
+
+ ∇L + εσ2 x + λ(x − ¯x)i
+
++ ε ∇· (μt∇ log μt).
+
+Using the identity μt∇ log μt = ∇μt, the last term simplifies to ε∆μt, recovering (4.1). 
+
+C.2 LSI contraction implies the privacy bound (4.3) (§4.2) 
+
+The argument is a standard composition of three steps: log-Sobolev contraction of the entropic flow, total-variation control by Wasserstein distance, and a 1/N initial gap. 
+
+Step 1 (LSI ⇒ W2 contraction). The Hessian of Fλ in the Wasserstein sense decomposes as 
+
+Hess μ Fλ = Hess μ Eμ[L]
+
+| {z } 
+
+> ⪰− GId
+
++ ε Hess μ KL( ·∥ ν)
+
+| {z } 
+
+> ⪰αε Id
+
++ λ 
+
+> 2
+
+Hess μ Var 
+
+| {z } 
+
+> ⪰− λId
+
+,
+
+where the loss term contributes −G Id when ∥∇ L∥∞ ≤ G, the KL term contributes αε Id by Otto–Villani applied to LSI( α) for ν [22 ], and the variance penalty contributes −λ Id [3 ]. The overall Wasserstein convexity constant is r := αε − λ − G. By the standard contraction result for 
+
+r-displacement-convex functionals on P2 [29, Thm. 23.9], 
+
+W2(μt, μ ′
+
+> t
+
+) ≤ e−rt W2(μ0, μ ′
+
+> 0
+
+) whenever r > 0.
+
+The same rate transfers to the JKO discretisation with step τ [15]: after K steps, 
+
+W2(μK , μ ′ 
+
+> K
+
+) ≤ e−rKτ W2(μ0, μ ′
+
+> 0
+
+). (C.1) 
+
+Step 2 ( W2 to total variation). For absolutely continuous measures with bounded second mo-ments, the transportation inequality gives TV( μ, μ ′)2 ≤ C2 
+
+> d
+
+W2(μ, μ ′) with Cd = min( √d, 10) [3 ], equivalently 
+
+TV( μ, μ ′) ≤ Cd
+
+pW2(μ, μ ′). (C.2) 
+
+Step 3 (initial 1/N gap). For neighbouring datasets differing in a single client’s contribution out of 
+
+N , the corresponding initial population measures satisfy W2(μ0, μ ′
+
+> 0
+
+) ≤ D2/N for some data-domain constant D folded into Cd [5]. 
+
+Combination. Substituting Step 3 into (C.1) and that into (C.2), 
+
+TV( μK , μ ′ 
+
+> K
+
+) ≤ Cd
+
+q
+
+e−rKτ · 1/N = Cd
+
+√N e−rKτ / 2.
+
+Since δdp ≤ TV( μK , μ ′ 
+
+> K
+
+) in this neighbouring-data formulation, we obtain (4.3). 13 C.3 KKT analysis: the δk = 0 collapse (§4.3) 
+
+We expand the partial derivatives of the Lagrangian summarised in the body text. The static model-output MAPG of [34] solves 
+
+min  
+
+> wk,δk
+> 12nk
+> nk
+
+X
+
+> i=1
+
+(W⊤Xki − yki )2 − βk∥δk∥22 s.t. W = 1
+
+> KK
+
+X
+
+> j=1
+
+(wj + δj ).
+
+Forming the Lagrangian with multiplier λk ∈ Rd,
+
+Lk = 12nk
+
+X
+
+> i
+
+(W⊤Xki − yki )2 − βk∥δk∥22 − λ⊤
+
+> k
+
+h
+
+W − 1
+
+> K
+
+X
+
+> j
+
+(wj + δj )
+
+i
+
+.
+
+Computing partials in feature dimension m ∈ { 1, . . . , d }:
+
+∂Lk
+
+∂W m
+
+= 1
+
+> nk
+
+X
+
+> i
+
+(W⊤Xki − yki ) xki,m − λk,m , (A.1) 
+
+∂Lk
+
+∂w k,m 
+
+= 1 
+
+> K
+
+λk,m , (A.2) 
+
+∂Lk
+
+∂δ k,m 
+
+= 1 
+
+> K
+
+λk,m − 2βk δk,m . (A.3) The KKT stationarity conditions set each partial to zero. From (A.2), λk,m = 0 for every m.Substituting λk,m = 0 into (A.3) yields −2βk δk,m = 0 , hence δk = 0 for every k since βk > 0.The KKT point is unique modulo regularity of the data block. 
+
+C.4 MFNE: definition and existence (§5.2) Definition C.1 (Mean-field Nash equilibrium) . A pair (μ∗, ε ∗) is a mean-field Nash equilibrium 
+
+(MFNE) of MFPG if (i) μ∗ is the stationary state distribution of (4.1) at the population mean 
+
+¯ε∗ = Eμ∗ [ε], and (ii) ε∗ ∈ arg min ε∈E Uk(ε; ¯ ε∗) for every client k.
+
+Proposition C.1 (Existence) . If E is finite and Uk is continuous in ε, then the averaged best-response map Φ : ¯ ε 7 → N −1 P 
+
+> k
+
+BR k(¯ ε) admits a fixed point on the convex hull of E.Proof. Let E = {ε(1) , . . . , ε (m)} and let E := [min E, max E] = conv( E). For each client k,the disutility Uk(·, ¯ε) is continuous in the second argument by inspection of (3.3) and (4.3) . The set-valued best response 
+
+BR k(¯ ε) := arg min  
+
+> ε∈E
+
+Uk(ε; ¯ ε) ⊆ E 
+
+is therefore upper hemi-continuous in ¯ε on E (Berge’s maximum theorem [ 6 ]). Define the averaged correspondence Φ : E → 2E by 
+
+Φ(¯ ε) := 1
+
+> NN
+
+X
+
+> k=1
+
+conv BR k(¯ ε),
+
+where the right-hand side is the Minkowski average of convex hulls. Three properties hold: (i) Convex-valued: each conv BR k(¯ ε) is convex, and Minkowski sums of convex sets are convex. (ii) Upper hemi-continuous: the convex-hull operator preserves upper hemi-continuity [ 2,Thm. 17.35], and the Minkowski average of upper hemi-continuous correspondences is upper hemi-continuous. (iii) Self-mapping: every value in Φ(¯ ε) is a convex combination of points in E ⊂ E, so Φ(¯ ε) ⊆ E.Since E is a non-empty compact convex subset of R, Kakutani’s fixed-point theorem [ 2] guarantees a fixed point ¯ε∗ ∈ Φ(¯ ε∗), which is the population mean of an MFNE strategy profile. 14 C.5 Forward FPK from the controlled SDE (eq. (5.4) )
+
+Fix a type β and a feedback control ε∗(t, x ; β). Under the controlled SDE (5.2) , Itô’s formula applied to a test function φ ∈ C2 
+
+> c
+
+(Rd) gives 
+
+dφ (Xt) =  ∇φ · b + ε∗∆φdt + √2ε∗ ∇φ · dW t.
+
+Taking expectations against μβt and using ⟨φ, μ βt ⟩ = EXt∼μβt
+
+[φ],
+
+ddt ⟨φ, μ βt ⟩ = ∇φ · b + ε∗∆φ, μ βt .
+
+Two integration-by-parts identities (with vanishing boundary terms by φ ∈ C2 
+
+> c
+
+), 
+
+⟨∇ φ · b, μ βt ⟩ = −⟨ φ, ∇· (μβt b)⟩, ⟨ε∗∆φ, μ βt ⟩ = ⟨φ, ∆( ε∗μβt )⟩,
+
+yield ddt ⟨φ, μ βt ⟩ = φ, −∇· (μβt b) + ∆( ε∗μβt ) . By density of C2 
+
+> c
+
+in distributions, 
+
+∂tμβt + ∇·  μβt b x, μ t, ε ∗(t, x ; β) = ∆  ε∗(t, x ; β) μβt
+
+.
+
+When ε∗ is spatially constant on the support of μβt (for instance, after an interior optimum is reached), 
+
+∆( ε∗μβt ) = ε∗∆μβt , recovering the form printed in (5.4). 
+
+C.6 Backward HJB from the dynamic programming principle (eq. (5.5) )
+
+We treat the privacy term β δ dp (ε) in (5.3) as a running cost rate, consistent with the per-round accounting in the discrete-time game: under a feedback control ε, the cost incurred between t and 
+
+t + h is ER t+ht
+
+ ℓ(Xs; ws) + βδ dp (εs)ds . The dynamic programming principle gives, for any 
+
+h > 0,
+
+V (t, x ; β) = inf  
+
+> ε
+
+E
+
+"Z t+ht
+
+ ℓ(Xs; ws) + βδ dp (εs)ds + V (t + h, X t+h; β)
+
+#
+
+.
+
+For smooth V , Itô’s formula with the SDE (5.2) and a Taylor expansion in h yield 
+
+V (t + h, X t+h; β) = V (t, x ; β) + h ∂tV + ∇V · b + ε Tr( D2V ) + o(h) + martingale .
+
+Substituting and dividing by h → 0+,
+
+0 = inf 
+
+> ε
+
+∂tV + ℓ + βδ dp (ε) + ∇V · b(x, μ t, ε ) + ε Tr( D2V ) .
+
+The ∂tV and ℓ terms do not depend on ε and can be pulled out of the infimum, giving the backward HJB 
+
+−∂tV = ℓ + inf 
+
+> ε
+
+βδ dp (ε) + ∇V · b(x, μ t, ε ) + ε Tr( D2V ) .
+
+Expanding ∇V ·b(x, μ t, ε ) = −∇ V ·∇ L− εσ2 ∇V ·x−λ∇V ·(x− ¯x) and grouping the ε-independent terms outside the infimum yields the Hamiltonian (5.6) and the HJB (5.5) . The terminal condition 
+
+V (T, x ; β) = 0 encodes the zero terminal cost in (5.3). 
+
+C.7 Closed-form optimal control (§5.3) 
+
+Differentiating the bracketed expression of the Hamiltonian (5.6) in ε,
+
+∂∂ε 
+
+βδ dp (ε) − εσ2 ∇V · x + ε Tr( D2V ) = βδ ′
+
+> dp
+
+(ε) − 1 
+
+> σ2
+
+∇V · x + Tr( D2V ).
+
+The LSI bound (4.3) can be written δdp (ε) = Cd√N exp( −θ(ε − ε0)) with θ := αKτ / 2 and ε0 := (λ + G)/α , so δ′
+
+> dp
+
+(ε) = −θ δ dp (ε). Setting the derivative above to zero and rearranging gives the first-order condition 
+
+θ β δ dp (ε∗) = Tr( D2V ) − 1 
+
+> σ2
+
+∇V · x. (C.3) 15 Solving for ε∗ when the right-hand side M := Tr( D2V ) − (∇V · x)/σ 2 is positive yields the closed form 
+
+ε∗(t, x ; β) = ε0 + 1
+
+θ log βθC d/√NM
+
+!
+
+. (C.4) The second-order condition ∂2/∂ε 2{·} = θ2β δ dp (ε∗) > 0 confirms that this critical point is a minimum of the bracketed Hamiltonian. When M ≤ 0 no interior optimum exists and ε∗ saturates at the upper boundary εmax ; when the log argument is so large that ε∗ < ε min , the optimum saturates at 
+
+εmin . Integrating ε∗ against the equilibrium population recovers the consistency condition 
+
+¯εt =
+
+Z
+
+ε∗(t, x ; β) μβt (dx ) ρ(dβ ), (C.5) which is the integrated form of the scalar fixed point ¯ε∗ = Φ(¯ ε∗) used by the discrete-grid solver of Section 6. 
+
+C.8 Exponential DP at MFNE Theorem C.2 (Exponential DP at MFNE) . Under the MFNE with mean-field strength ε∗ satisfying 
+
+αε ∗ > λ + G, MFPG training is (ϵdp , δ dp )-DP with 
+
+δdp ≤ Cd
+
+√N exp 
+
+
+
+− (αε ∗−λ−G)Kτ 
+
+> 2
+
+
+
+,
+
+where K is the number of training rounds. By contrast DP-SGD achieves constant δdp = δ with 
+
+ϵdp = O(pK log(1 /δ )/σ ) growing as √K.Proof. We prove the bound first under the homogeneous specialisation ( βk ≡ β), then extend to the heterogeneous case under a uniform activation hypothesis. 
+
+Homogeneous case. If every client has the same preference β, the MFNE collapses to a single 
+
+¯ε∗ = ε∗ shared by every client, and the population measure μt evolves under (4.1) with ε ≡ ε∗. The activation hypothesis αε ∗ > λ + G then implies r = αε ∗ − λ − G > 0, and Appendix C.2 gives 
+
+δdp ≤ Cd√N exp( −rKτ / 2) , which is the statement of the theorem. 
+
+Heterogeneous case. For type-dependent equilibria ε∗(β), the per-type FPK is (5.4) . For two neighbouring populations differing in a single client of type β0, the contraction acts only on the affected slice μβ0 
+
+> t
+
+, and the Wasserstein contraction rate of Appendix C.2 becomes r(β0) = αε ∗(β0)−
+
+λ − G. The privacy guarantee for that client is 
+
+δ(β0)dp ≤ Cd√N exp  −r(β0)Kτ / 2.
+
+A uniform user-level guarantee is obtained by taking the worst-case rate rmin = min β r(β) = 
+
+αε ∗ 
+
+> min
+
+− λ − G where ε∗ 
+
+> min
+
+= min β ε∗(β). The theorem states the result at the population-mean strength ¯ε∗ for compactness; the strict per-client guarantee applies at ε∗ 
+
+> min
+
+≤ ¯ε∗ and is therefore weaker by at most a factor of exp((¯ ε∗ − ε∗
+
+> min
+
+)αKτ / 2) . Both forms agree in the homogeneous case. 
+
+# D Experimental setup 
+
+We use FedAvg with gradient clip C=1 and learning rate η=0 .01 throughout. The three benchmarks span increasing complexity. (i) The quadratic task uses L(w) = 12 ∥Aw − b∥2 per client with 
+
+d=5 , N =5 , T =10 , providing analytical ground truth. (ii) Logistic regression on synthetic binary data with d=20 , N =8 , T =15 is the primary utility benchmark, since all four cells reach a non-trivial test accuracy. (iii) MNIST classification with the MLP 784 → 128 → 64 → 10 on 2,000 IID-split images and N =10 , T =20 is a stress test for high parameter dimension. For the entropic cells we use the strength grid E = {0.1, 0.3, 0.5, 1.0, 2.0}, Gaussian prior ν = N (0 , I ), JKO step τ =0 .1, and variance penalty λ=0 .01 . Heterogeneous client preferences are linearly spaced as βk ∈ [0 .5β, 1.5β]
+
+with β=1 .0. Each method’s ϵdp is the value reported by its active accountant (RDP for DP-SGD and MAPG-DP, linear-budget for the entropic cells), and δdp is constant for the Gaussian cells (target 
+
+10 −5) and computed via (4.3) for the entropic cells. 16 E Mean-field equilibrium structure 
+
+Figure 4 characterises the MFNE as a function of the heterogeneous client preferences. The equi-librium strength ¯ε∗ is monotonically decreasing in β: as clients become more privacy-sensitive, the population adopts stronger entropic regularisation, matching the qualitative prediction of The-orem C.2. The middle panel confirms that the corresponding δ∗ tightens with β, so the LSI bound improves at exactly the clients who care most. The right panel shows the equilibrium distribution under the realistic preference range βk ∈ [0 .5, 1.5] used elsewhere in the paper: clients concentrate on ε∗ ∈ { 0.3, 0.5} with population mean ¯ε∗ ≈ 0.5. This concentration is what allows MFPG to match MFEP at the population level while still returning a per-client privacy report that MFEP cannot. 
+
+Figure 4: MFNE structure. Left: ¯ε∗ decreases with β. Centre: the corresponding LSI δ∗ tightens with β. Right: for a heterogeneous population βk ∈ [0 .5, 1.5] , clients concentrate on ε∗ ∈ { 0.3, 0.5}
+
+with mean ¯ε∗ ≈ 0.5.Sweeping the target ϵ ∈ [0 .1, 5] on logistic regression yields the privacy–utility frontier in Figure 5. MFPG matches or exceeds DP-SGD at every privacy level; MFEP and MFPG trace nearly coincident curves in this single-objective sweep because the population mean ¯ε∗ converges to a value MFEP can also pick. The MFPG benefit beyond MFEP appears only under heterogeneous βk, as documented in Figure 4 above. 
+
+Figure 5: Privacy–utility frontier on logistic regression. MFPG matches or exceeds DP-SGD at every privacy level; the gap over MFEP appears only when client preferences are heterogeneous (Figure 4). 17

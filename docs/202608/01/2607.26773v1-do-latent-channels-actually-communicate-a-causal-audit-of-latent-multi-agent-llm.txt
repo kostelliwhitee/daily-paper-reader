@@ -1,0 +1,206 @@
+Title: Do Latent Channels Actually Communicate? A Causal Audit of Latent Multi-Agent LLM
+
+URL Source: https://arxiv.org/pdf/2607.26773v1
+
+Published Time: Thu, 30 Jul 2026 00:46:55 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Do Latent Channels Actually Communicate? A Causal Audit of Latent Multi-Agent LLM Communication 
+
+# Huixiang Zhang ∗, Mahzabeen Emu †
+
+> ∗
+
+Georgia Institute of Technology †
+
+Memorial University North Ave 100 Signal Hill Rd Atlanta, GA 30332 USA St. John’s, NL A1C 5S7 Canada hzhang985@gatech.edu memu@mun.ca 
+
+Abstract 
+
+Latent communication in large language model (LLM)-based multi-agent systems (MAS) transmits continuous internal rep-resentations instead of text, but greater representational ca-pacity does not establish that the receiver uses task-relevant information. End-task performance alone also cannot reveal whether an observed effect depends on message presence, content generated for the evaluated example, or information supplied by a separate agent. We introduce a causal audit that applies controlled message replacements at the boundary where the sender-produced representation enters the receiver. Four message settings support five measurements of encoded sender information, receiver sensitivity to message presence and identity, the task value of example-specific content, and the additional value supplied by a separate agent. We apply the audit to latent relay with Qwen3-4B and Qwen3-8B on GSM8K, ARC-C, and MATH-500. On GSM8K, the Qwen3-4B overall performance effect of −1.00 percentage point de-composes into a −6.17 -point effect retained by an other-example message and a +5 .17 -point effect attributable to example-specific content; both component directions reverse at 8B. On MATH-500, the Qwen3-4B gain of 15 .00 points comprises 8.33 points retained by an other-example message and 6.67 points attributable to example-specific content, while the 8B gain is dominated by the former component. Self-substitution comparisons further show that example-specific content and other-agent value are distinct. These results show that aggregate accuracy does not identify how a latent message affects the receiver and motivate controlled message compar-isons as a standard evaluation for latent communication. 
+
+# Introduction 
+
+Recent large language model (LLM)-based multi-agent sys-tems (MAS) have begun to explore communication channels beyond natural language. Conventional MAS typically coor-dinate agents through text messages, but text communication requires an agent to project its internal computation into dis-crete token sequences. This discretization exposes only the sampled symbols while discarding alternative information represented during generation (Pham et al. 2023; Du et al. 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. Copyright © 2027, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+2026). To overcome this limitation, recent studies have ex-plored richer communication carriers, including probability-weighted embeddings, hidden states, and key-value (KV) caches (Pham et al. 2023; Zou et al. 2026; Du et al. 2026). We refer to these approaches collectively as latent commu-nication: communication protocols that transmit continuous internal representations, such as embeddings, hidden states, or KV caches, without requiring intermediate decoding into natural language. These approaches share a common intu-ition: preserving more information at the communication boundary may provide the receiver with a richer signal than text exchange. They report improved task performance over text-based communication or single-agent baselines, often together with reduced communication cost or inference over-head (Pham et al. 2023; Zou et al. 2026; Du et al. 2026). A performance gain after communication can arise from multiple sources: sender-specific content transferred across the boundary, additional computation introduced by the com-munication process, context reuse, or redundant reasoning trajectories (Cemri et al. 2025). Therefore, an end-task accu-racy difference alone cannot identify whether latent commu-nication achieves genuine information transfer. The distinc-tion is analogous to causal analysis in neural networks, where observing a representation’s correlation with an output does not establish that the representation mediates the computa-tion (Vig et al. 2020; Meng et al. 2022). A latent channel may influence receiver behavior without the receiver using the sender-specific information contained in the message (Lowe et al. 2019). The research question is whether transmitted information causally contributes to receiver behavior. Existing analyses of LLM-based MAS do not yet provide such an identification test. Failure taxonomies characterize recurrent coordination problems, while recent counterfac-tual studies intervene on individual agents, communication edges, or no-communication topologies to study error prop-agation and correlated agreement (Cemri et al. 2025; Shen et al. 2025; Huang et al. 2026; Li et al. 2026). These analyses establish whether communication helps or harms a system, but they do not determine which information inside a la-tent message causes the effect. Existing taxonomies classify latent-communication methods by the transmitted represen-tation, sender–receiver alignment, and receiver-side fusion mechanism, but do not test whether the receiver uses content generated for the evaluated example (Liu 2026). arXiv:2607.26773v1 [cs.AI] 29 Jul 2026 Figure 1: A causal audit of latent communication. (a) The sender produces a latent message M as an embedding sequence, hidden states, or a KV cache; each intervention removes or replaces M before it is injected into the receiver, while the receiver context and downstream computation are held fixed. (b) An example is one test case from a benchmark test set. The four message settings are no message; an other-example message, generated by the sender through the same communication interface from a different example in the same test set and matched approximately in length; a compute-matched self-generated message; and the current-example message, generated from the evaluated example. Their comparisons define PL and CIC at the prediction-distribution level, and the overall performance effect, CAG and SSG at the task-performance level. PS instead tests whether the correctness of the sender’s answer is decodable from M . (c) On GSM8K with LatentMAS λH , the overall performance effect decomposes into the other-example message effect plus CAG: −1.00 = −6.17 + 5 .17 percentage points (pp) for Qwen3-4B ( n = 100 ) and 
+
++1 .67 = +3 .96 − 2.29 pp for Qwen3-8B ( n = 60 ). Bars show point estimates and whiskers show 95% confidence intervals. The near-zero 4B overall effect combines two opposing effects whose intervals exclude zero; both component estimates reverse sign at 8B; an interval crossing zero establishes neither a sign nor negligibility. We introduce a causal audit that intervenes on the message before it enters the receiver while holding the receiver context and downstream computation fixed. We use example to mean one test case from a benchmark test set. The current-example message is the original message generated by the sender from the evaluated example. The first question is whether the mes-sage contains information about the sender. Positive signal-ing (PS) asks whether a declared sender variable is decod-able from the message. In this work, the primary variable is whether the sender’s own answer is correct. PS measures in-formation encoded in the message, not whether the receiver uses that information. Encoded information establishes re-ceiver use only when changing the message changes receiver behavior. Positive listening (PL) therefore compares the re-ceiver’s prediction distributions under the current-example message and no message. This comparison asks whether message presence affects the receiver at all, without yet iden-tifying which part of the message produces the change. To test whether content from the evaluated example mat-ters, we replace the current-example message with an other-example message. An other-example message is generated by the sender from a different example in the same test set and is approximately matched in length. Because it is model-generated through the same communication interface, it preserves the original message structure, but its content comes from another example. Causal influence of communi-cation (CIC) measures how the receiver’s prediction distribu-tion changes between the current-example and other-example messages. Content-attributable gain (CAG) measures the corresponding signed difference in task performance. CIC tests whether message identity affects receiver predictions, whereas CAG isolates the task value of content generated for the evaluated example. Content generated for the eval-uated example may be useful without requiring a separate agent. The self-substitution gap (SSG) therefore compares the sender’s current-example message with a self-generated message produced by the receiver through the same commu-nication interface under a matched computation budget. This comparison asks whether a separate agent contributes task value beyond what the receiver can generate for itself. Figure 1 summarizes the audit. Panel (a) places embed-ding sequences, hidden states, and KV caches behind a shared message boundary, so every intervention removes or replaces the message before receiver injection. Panel (b) presents four message settings: no message, an other-example mes-sage, a self-generated message, and the current-example mes-sage. Their comparisons separate message presence, message identity, example-specific content, and other-agent value, while PS is measured directly on the message. Panel (c) shows that the overall performance effect decomposes exactly into the other-example message effect and CAG. The results illustrate why the decomposition is necessary. On GSM8K, the near-zero overall performance effect for Qwen3-4B com-bines two opposing components, while both component di-rections reverse for Qwen3-8B. Across models and tasks, similar overall performance can therefore arise from dif-ferent communication mechanisms. We make the following contributions: 
+
+• We formulate latent communication as a capacity-versus-usage problem and provide a common causal audit for probability-weighted embeddings, latent-thought hidden states, KV caches. 
+
+• We introduce a five-part measurement suite comprising PS, PL, CIC, CAG, and SSG. The suite separates informa-tion encoded in a message, receiver sensitivity to message presence and identity, the task value of example-specific content, and the value contributed by a separate agent. 
+
+• We develop a standardized intervention design cen-tered on four model-generated message settings, com-plemented by a preservation-ordered diagnostic ladder, component restoration, message-realism measurements, receiver-instability checks, and paired inference with pos-itive, negligible-effect, and inconclusive outcomes. 
+
+• We provide evidence that latent-channel behavior is het-erogeneous: faithful relay can cause degradation in one operating regime, while another regime exhibits both a substantial content-attributable effect and a comparably content-independent effect. This decomposition changes the interpretation of the same end-task accuracy gain. 
+
+# Related Work 
+
+This section positions our audit against four lines of work: latent-communication methods, measurement of emergent communication, causal interventions on neural representa-tions, and system-level analyses of MAS communication. Table 1 summarizes the identification properties that distin-guish these lines. Latent inter-agent communication builds on work in single-agent latent reasoning, where Coconut feeds a model its own last hidden state back as the next input instead of a sampled token (Hao et al. 2025). Multi-agent methods replace text messages with different continuous representa-tions. CIPHER transmits the expectation of vocabulary em-beddings under the sender’s token belief (Pham et al. 2023). LatentMAS generates latent thoughts as last-layer states and relays the sender’s layer-wise KV cache as working mem-ory (Zou et al. 2026). DroidSpeak reuses prompt KV across same-architecture models to cut serving latency (Liu et al. 2026). C2C learns a projector and fusion module that injects a sender’s KV cache into a target model (Fu et al. 2025). In-terlat trains a receiver-side adapter over compressed hidden states (Du et al. 2026), and ThoughtComm fuses inferred la-tent thoughts through a shared workspace (Zheng et al. 2025). A recent framework organizes these designs by carrier and injection mechanism (Liu 2026). These methods are evalu-ated primarily through end-task performance and, in several cases, communication or inference efficiency. Compression results further challenge a simple bandwidth explanation: compressed KV relay can match or exceed full relay on sev-eral benchmarks, indicating that the size of the transmitted representation does not map monotonically to downstream utility (Li, An, and Du 2026). Table 1, block A, locates these proposals by their identification properties. Emergent-communication research has long distinguished information encoded by a sender from information used by a receiver. Referential-game studies induced protocols be-tween neural agents (Lazaridou, Peysakhovich, and Baroni 2017), and measurement pitfalls followed quickly. Lowe et al. (2019) distinguish positive signaling, where the message de-pends on the sender’s state, from positive listening, where the receiver’s behavior depends on the message, and show that widely used metrics can certify the former while the lat-ter fails entirely. Jaques et al. (2019) make listening causal, scoring a message by the counterfactual shift it induces in the receiver’s policy. We adapt these constructs as PS, PL, and CIC for continuous latent messages between LLM agents. PS introduces an additional estimation problem because the message is continuous and high-dimensional. Distribution-free mutual-information lower bounds are limited by sample size, while variational estimators trade bias against variance (McAllester and Stratos 2020; Poole et al. 2019; Song and Ermon 2020). We therefore interpret signaling estimates as finite-sample lower bounds rather than direct measurements of the channel’s full information content. Section 3 adapts these measurements to continuous pretrained-model repre-sentations transmitted without a token interface. Our intervention design also builds on causal analyses of internal model representations. Causal mediation analy-sis introduced indirect-effect estimands for neural compo-nents (Vig et al. 2020). ROME operationalized causal trac-ing through clean, corrupted, and restored forward passes (Meng et al. 2022). Later work cataloged the design choices that make patching results trustworthy, including corruption type, metric choice, and a preference for in-distribution re-placement over Gaussian noising (Zhang and Nanda 2024), and documented off-distribution hazards when patching real LLMs (Yeo, Satapathy, and Cambria 2025). We inherit the protocol and its cautions: restoration sweeps are primary, and we accompany each intervention with checks of message-distribution similarity and receiver instability. The difference is the locus and the target. Patching work localizes circuits within one forward pass; we patch across agents, at the pre-injection boundary where one model’s tensor enters another model’s computation. The mediator is the relayed message itself, and the quantity of interest is a channel-level verdict about transmitted content, not a component map. A parallel line analyzes communication failures and de-pendencies at the system level. MAST derives a fourteen-Work Object / level Latent object Message-level intervention Example-specific content Matched compute / self-subst. Equivalence-based inference                                                                               
+
+> Block A: latent-channel proposals
+> CIPHER (Pham et al. 2023) soft tokens •◦◦◦◦
+> LatentMAS (Zou et al. 2026) hidden states, KV rows •△◦△◦
+> OBF (Li, An, and Du 2026) compressed KV relay •△◦◦◦
+> DroidSpeak (Liu et al. 2026) prompt-KV reuse •△◦◦◦
+> C2C (Fu et al. 2025) fused KV •◦◦◦◦
+> Interlat (Du et al. 2026) adapter hidden states •◦◦◦◦
+> ThoughtComm (Zheng et al. 2025) shared latent workspace •◦◦◦◦
+> Block B: causal and diagnostic analyses of MAS communication
+> Lowe et al. (2019) RL discrete symbols ◦△◦◦◦
+> Jaques et al. (2019) RL messages ◦•◦◦◦
+> MAST (Cemri et al. 2025) text traces, observational ◦◦◦◦◦
+> CAPE/TCTE (Shen et al. 2025) agent text outputs ◦•◦◦◦
+> CAGE-CAL (Huang et al. 2026) agent answer graph ◦•△◦◦
+> This paper latent message at boundary •••••
+
+Table 1: Identification properties of related work. Columns indicate whether each work studies a latent inter-agent message, intervenes on the message itself, separates the effect of content generated for the evaluated example from the effect retained under an other-example message, compares against a compute-matched self-generated alternative (self-subst.), and supports negligible-effect conclusions through equivalence-based inference. ( •) satisfied; ( △) partial; ( ◦) absent. mode failure taxonomy from more than sixteen hundred annotated traces and reports that measured gains over sin-gle agents are often minimal, with inter-agent misalign-ment as one of its three top-level categories (Cemri et al. 2025). CAPE and TCTE intervene on an agent’s text out-put with a do-operation and measure how errors and in-sights propagate through communication topologies (Shen et al. 2025). CAGE-CAL contrasts a post-communication agent graph with a matched no-communication counterfac-tual and shows that communication can produce correlated consensus, which vote-share confidence mistakes for evi-dence (Huang et al. 2026). Together, these studies show that end-task performance and agent agreement are insufficient to identify content-based communication. Yet they analyze or intervene on text out-puts or agent-level structures rather than the latent message crossing the sender–receiver boundary. Prior work therefore leaves three methodological strands separate: latent-channel design, causal listening measures for discrete protocols, and system-level counterfactual analysis of text communication. The missing test is a latent-boundary audit that intervenes on the transmitted message itself and separates example-specific content from the other-example message effect. It must also compare the sender’s message with a compute-matched self-generated alternative and support equivalence-based conclu-sions when content or other-agent value is practically negli-gible. Our audit provides this identification test. 
+
+# The Audit Framework 
+
+This section defines a common intervention boundary for la-tent communication and the measurements it supports. We first formalize the message pathway, then introduce four mes-sage settings, five audit metrics, component attribution, and the associated inference checks. 
+
+Setup and Audited Boundary 
+
+We use example to mean one test case from a benchmark test set. In the formal notation, an example and its associated contexts form an episode 
+
+e = ( q, a ⋆, c S , c R) ∼ D , (1) where q is the question, a⋆ is the gold answer, and cS and 
+
+cR are the sender and receiver contexts. The sender produces a latent message M = ϕ(e), and the receiver combines it with its context through the injection map ψ. For a replacement message fM , the receiver output is 
+
+yfM (e) = R
+
+
+
+ψ(cR, fM )
+
+
+
+. (2) A message intervention replaces M with fM while holding the receiver context, model weights, prompt template, de-coding procedure, and downstream computation fixed. The declared message must be the only inter-agent information path that changes. The same boundary applies to probability-weighted embeddings, hidden states, and KV caches used by existing latent-communication methods (Pham et al. 2023; Zou et al. 2026; Du et al. 2026): intervention always oc-curs after sender-side construction and before receiver-side injection. Operationally, each method exposes its native message representation at this boundary. For CIPHER, we replace the probability-weighted embedding sequence before it enters the receiver input. For hidden-state methods, we replace the transmitted hidden-state sequence before receiver-side adap-tation or re-encoding. For KV-cache relay, we replace only Metric Question Comparison Estimand 
+
+PS Does M encode sender information? Message M and sender variable XI(M ; X)
+
+PL Does message presence change receiver predictions? Current-example message vs. no message 
+
+¯Dcur ,0
+
+CIC Does message identity change receiver predictions? Current-example vs. other-example message 
+
+¯Dcur ,oth 
+
+CAG Does example-specific content add task value? Current-example vs. other-example message 
+
+¯Ucur − ¯Uoth 
+
+SSG Does a separate agent add task value? Current-example vs. self-generated message 
+
+¯Ucur − ¯Uself 
+
+Derived task-performance contrasts (exact identities) 
+
+OPE What changes when the message pathway is added? Current-example message vs. no message 
+
+¯Ucur − ¯U0
+
+OME What changes without evaluated-example content? Other-example message vs. no message 
+
+¯Uoth − ¯U0
+
+BME Does same-benchmark content add value? Other-example vs. other-benchmark message 
+
+¯Uoth −
+
+¯Uxbench 
+
+DSC How much of CAG can the receiver generate itself? Self-generated vs. other-example message 
+
+¯Uself − ¯Uoth 
+
+Table 2: Audit metrics and their identifying comparisons. OPE, OME, BME, and DSC denote the overall performance, other-example message, benchmark-match, and derived self-generated contrasts; OPE = OME + CAG and CAG = DSC + SSG .sender-produced rows in the receiver’s initial cache, leaving receiver-generated states unchanged. Current-example and other-example messages are generated through the same na-tive interface and are approximately length-matched. The comparison therefore changes example identity while pre-serving the communication carrier, message structure, and receiver-side computation. Table 2 previews the audit questions and their identifying comparisons. 
+
+Message Settings and Audit Metrics 
+
+The audit uses four message settings. The current-example message is generated by the sender from the evaluated ex-ample. The other-example message is generated by the same sender from a different, approximately length-matched ex-ample in the same test set; it preserves the original message structure, but its content comes from another example. The self-generated message is produced by the receiver through the same interface under matched computation. The fourth setting supplies no message: 
+
+M0 = ∅, Mcur = ϕS (e),Moth = ϕS (e′), Mself = ϕ(c⋆) 
+
+> R
+
+(e). (3) where e′̸ = e and c⋆ is the matched message-generation budget. A length-matched other-benchmark message is used only for BME. PS asks whether a finite sender variable X, here primarily sender answer correctness, is decodable from Mcur . We es-timate PS X = I(Mcur ; X) with a cross-fitted lower bound and compare it with a permutation reference. PS establishes encoded information, not receiver use. For setting a, let Pa be the receiver prediction distribution and Ya its parsed answer. Define 
+
+¯Da,b = Ee[D(Pa, P b)] , ¯Ua = Ee[U (Ya)] . (4) We use Jensen–Shannon divergence at the first comple-tion token and along a teacher-forced reference continua-tion for prediction-level readouts. Task-level readouts use exact-match accuracy or the declared task-specific score. The receiver-use metrics are 
+
+PL = ¯Dcur ,0, CIC = ¯Dcur ,oth ,
+
+CAG = ¯Ucur − ¯Uoth , SSG = ¯Ucur − ¯Uself . (5) PL measures the message-presence effect and CIC the message-identity effect. CAG isolates the task value of example-specific content, whereas SSG measures the addi-tional task value supplied by a separate agent. The task-level contrasts satisfy 
+
+¯Ucur − ¯U0 = ( ¯Uoth − ¯U0) + CAG ,
+
+CAG = ( ¯Uself − ¯Uoth ) + SSG . (6) 
+
+Component Attribution 
+
+CIC shows whether message identity changes receiver pre-dictions, but not which components cause the change. Start-ing from an other-example message, we restore selected current-example components C while leaving the rest fixed. Their contribution is summarized by 
+
+NLD( C) = LD rest( C) − LD oth 
+
+LD cur − LD oth 
+
+, (7) where LD is the teacher-forced answer log-probability dif-ference. NLD near 1 indicates substantial restoration and NLD near 0 little restoration; it is evaluated only when the denominator exceeds the numerical reference floor. Compo-nents follow the message structure, such as sequence win-dows or layer by region by key-or-value cells. Inference and Validity Checks 
+
+All task-performance contrasts are paired at the example level. Multiple other-example messages are averaged within each example before aggregation. We report paired bootstrap confidence intervals together with sign-flip or exact paired tests. PS uses label permutations, PL and CIC use the numer-ical reference floor from repeated identical runs, and signed task-level effects are compared with zero. Practical negligi-bility is assessed with an equivalence test under a declared margin. Synthetic messages, including noise, scrambling, and shuffling, are used only as diagnostics. Each interven-tion is accompanied by message-distribution similarity and receiver-instability measurements, and outputs with no valid parsed answer remain in the analysis with task score zero. Three hard checks validate the implementation: masking the message must reduce identity effects to the numerical floor, replacing an other-example message with the current-example message must yield zero CIC and CAG, and full restoration must give NLD = 1 .
+
+# Experiments and Results 
+
+Experimental Setup 
+
+We evaluate Qwen3-4B and Qwen3-8B on GSM8K (Cobbe et al. 2021), ARC-Challenge (ARC-C) (Clark et al. 2018), and MATH-500 (Lightman et al. 2024). GSM8K and ARC-C retain two benchmarks from the LatentMAS evaluation (Zou et al. 2026) and cover open-form arithmetic reasoning and multiple-choice science question answering, respectively. MATH-500 adds a lower-accuracy setting of competition-level mathematics, reducing the risk that ceiling performance obscures communication effects. The paired analyses contain 100 and 60 GSM8K examples, 80 and 40 ARC-C examples, and 60 and 40 MATH-500 examples for the 4B and 8B mod-els, respectively. All runs use one NVIDIA A40 GPU with 48GB of memory, 16 Intel Xeon Gold 6338 CPU cores, and 128GB of RAM under Ubuntu 24.04, Python 3.12, CUDA 12.6, PyTorch 2.11.0, and Transformers 5.13.0. We evaluated latent-step counts m ∈ { 0, 2, 5, 10 , 20 , 40 }
+
+and use m = 40 in the reported experiments. This value fol-lows the original method’s reported 40 –80 high-performance range and selects its lower-compute endpoint; it was not se-lected using performance on the evaluated examples. Across the repository, decoding was evaluated with greedy sampling and T = 0 .6, generation caps of 256, 2048, and 3072 tokens, thinking mode enabled and disabled, and the default and aligned KV-relay variants. The reported experiments use nu-cleus sampling with T = 0 .6 and top-p = 0 .95 , a 2048-token generation cap, thinking mode enabled, and the default KV-relay implementation to match the original method’s main configuration. The number of other-example messages was fixed at K = 4 rather than selected through tuning. Unless otherwise specified, the sender denotes one or more upstream agents other than the final-answer agent, the receiver denotes the agent that produces the final answer, and the audited communication boundary is the point at which the sender-produced message is handed to the receiver. 
+
+Figure 2: MATH-500 decomposition of the overall perfor-mance effect into the other-example message effect and CAG. Bars show accuracy differences and whiskers show paired 95% confidence intervals for Qwen3-4B ( n = 60 )and Qwen3-8B ( n = 40 ). Each model–benchmark configuration is evaluated on a fixed example set using independently seeded decoding runs. The Qwen3-4B and Qwen3-8B GSM8K results aggregate three and two seeds, respectively; the corresponding ARC-C results aggregate two and two seeds, and both MATH-500 configurations use one seed. These settings yield 300, 120, 160, 80, 60, and 40 example-draws for 4B GSM8K, 8B GSM8K, 4B ARC-C, 8B ARC-C, 4B MATH-500, and 8B MATH-500, respectively. Within each example-draw, the no-message, current-example, and self-generated settings are each executed once, while the other-example setting uses four independently assigned, length-matched messages. The four other-example outcomes are averaged within the evaluated example before paired aggregation. Runs across decode seeds are independent stochastic draws, whereas duplicate replays of an identical configuration reproduce the output bitwise. Accuracy differences are reported in percentage points (pp) with paired 95% confidence intervals. 
+
+Aggregate Performance Conceals Distinct Effects 
+
+Figure 1(c) shows the GSM8K decomposition. For Qwen3-4B, the overall performance effect is only −1.00 pp, but it combines a −6.17 pp other-example message effect with a +5 .17 pp CAG. Both component intervals exclude zero. For Qwen3-8B, the overall effect remains small at +1 .67 
+
+pp, while the component point estimates reverse direction: the other-example message effect is +3 .96 pp and CAG is 
+
+−2.29 pp. A near-zero aggregate effect can therefore conceal substantial and opposing communication effects. MATH-500 produces a different decomposition. As shown in Figure 2, the Qwen3-4B overall performance effect is 
+
++15 .00 pp, comprising a +8 .33 pp other-example message effect and a +6 .67 pp CAG. The CAG confidence interval is [0 .42 , 12 .50] pp. For Qwen3-8B, the +10 .00 pp overall effect is dominated by the +8 .13 pp other-example message effect, while CAG is +1 .88 pp with an interval crossing zero. Figure 3: CAG and SSG across GSM8K and MATH-500. Points show signed accuracy differences, whiskers show paired 95% confidence intervals, and the shaded region marks the ±1 pp equivalence margin. Thus, similar overall improvements can differ in how much they depend on content generated for the evaluated example. ARC-C provides a lower-effect comparison. For Qwen3-4B, the −0.63 pp overall effect combines a −2.97 pp other-example message effect with a +2 .34 pp CAG. The cor-responding Qwen3-8B point estimates are 0.00 , −1.56 , and 
+
++1 .56 pp. Their intervals include zero, but the decomposition again separates effects hidden by the aggregate comparison. 
+
+Example-Specific Content Does Not Imply Other-Agent Value 
+
+CAG asks whether content from the evaluated example adds task value, whereas SSG asks whether that value requires a separate sender. Figure 3 shows that these questions can re-ceive different answers. On GSM8K with Qwen3-4B, CAG is +5 .17 pp, while SSG is −2.00 pp with an interval crossing zero. The sender’s message therefore outperforms an other-example message, but not the receiver’s compute-matched self-generated message. On MATH-500 with Qwen3-4B, CAG and SSG have the same point estimate of +6 .67 pp, although the SSG interval crosses zero. For Qwen3-8B, CAG is only +1 .88 pp, whereas SSG is +10 .00 pp with a 95% in-terval of [2 .50 , 20 .00] pp. A separate agent can therefore add value even when the current-example versus other-example performance difference is small. None of the displayed inter-vals lies entirely within the ±1 pp margin, so the data do not establish practical equivalence. 
+
+Prediction Sensitivity and Task Value Are Distinct 
+
+Figure 4 compares first-token PL and CIC. The measured Jensen–Shannon divergences span several orders of mag-nitude. Several Qwen3-4B runs show large first-token re-sponses to both message presence and message identity, whereas the plotted Qwen3-8B CIC values are consistently much smaller than their corresponding PL values. This distributional pattern does not determine task perfor-mance. MATH-500 exhibits positive task-level effects even in runs with small first-token divergence, while large first-token sensitivity on GSM8K or ARC-C does not imply a positive overall performance effect. PL, CIC, CAG, and SSG provide complementary rather than interchangeable evidence. 
+
+Figure 4: First-token prediction sensitivity to message pres-ence (PL) and message identity (CIC). Each pair reports Jensen–Shannon divergence for the same model, benchmark, and decode seed; the logarithmic axis emphasizes differences across scales rather than task-level utility. 
+
+# Conclusion 
+
+We presented a causal audit for testing whether latent mes-sages in LLM-based multi-agent systems carry information that the receiver actually uses. By intervening at a com-mon sender–receiver boundary, the audit separates encoded sender information, sensitivity to message presence and iden-tity, the task value of example-specific content, and the additional value supplied by a separate agent. Our results show that aggregate performance alone does not identify the mechanism of latent communication. Similar overall ef-fects can arise from opposing components, while example-specific content and other-agent value can differ substantially across models and tasks. These findings motivate evaluating latent-communication methods through controlled message comparisons rather than a single end-task score. References 
+
+Cemri, M.; Pan, M. Z.; Yang, S.; Agrawal, L. A.; Chopra, B.; Tiwari, R.; Keutzer, K.; Parameswaran, A. G.; Klein, D.; Ramchandran, K.; Zaharia, M. A.; Gonzalez, J. E.; and Stoica, I. 2025. Why Do Multi-Agent LLM Systems Fail? In Belgrave, D.; Zhang, C.; Montoya, L. N.; Lin, H.-T.; Pas-canu, R.; Koniusz, P.; Ghassemi, M.; Chen, N.; Ruíz, I. V. M.; and Loaiza-Bonilla, A., eds., Advances in Neural Informa-tion Processing Systems 38: Annual Conference on Neural Information Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, December 2-7, 2025 / Mexico City, Mex-ico, November 30 - December 5, 2025 .Clark, P.; Cowhey, I.; Etzioni, O.; Khot, T.; Sabharwal, A.; Schoenick, C.; and Tafjord, O. 2018. Think You Have Solved Question Answering? Try ARC, the AI2 Reasoning Chal-lenge. CoRR , abs/1803.05457. Cobbe, K.; Kosaraju, V.; Bavarian, M.; Chen, M.; Jun, H.; Kaiser, L.; Plappert, M.; Tworek, J.; Hilton, J.; Nakano, R.; Hesse, C.; and Schulman, J. 2021. Training Verifiers to Solve Math Word Problems. CoRR , abs/2110.14168. Du, Z.; Wang, R.; Bai, H.; Cao, Z.; Zhu, X.; Cheng, Y.; Zheng, B.; Chen, W.; and Ying, H. 2026. Enabling Agents to Communicate Entirely in Latent Space. In Liakata, M.; Moreira, V. P.; Zhang, J.; and Jurgens, D., eds., Proceedings of the 64th Annual Meeting of the Association for Computa-tional Linguistics (Volume 1: Long Papers) , 27106–27129. San Diego, California, United States: Association for Com-putational Linguistics. ISBN 979-8-89176-390-6. Fu, T.; Min, Z.; Zhang, H.; Yan, J.; Dai, G.; Ouyang, W.; and Wang, Y. 2025. Cache-to-Cache: Direct Semantic Communication between Large Language Models. CoRR ,abs/2510.03215. Hao, S.; Sukhbaatar, S.; Su, D.; Li, X.; Hu, Z.; Weston, J. E.; and Tian, Y. 2025. Training Large Language Models to Reason in a Continuous Latent Space. In Second Conference on Language Modeling .Huang, J.; Li, M.; Li, Z.; Kwon, S.; Yu, H.; and Zhang, C. 2026. Counterfactual Graph for Multi-Agent LLM Calibra-tion. arXiv:2605.30653. Jaques, N.; Lazaridou, A.; Hughes, E.; Gülçehre, Ç.; Ortega, P. A.; Strouse, DJ.; Leibo, J. Z.; and de Freitas, N. 2019. So-cial Influence as Intrinsic Motivation for Multi-Agent Deep Reinforcement Learning. In Chaudhuri, K.; and Salakhut-dinov, R., eds., Proceedings of the 36th International Con-ference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach, California, USA , volume 97 of Proceedings of Machine Learning Research , 3040–3049. PMLR. Lazaridou, A.; Peysakhovich, A.; and Baroni, M. 2017. Multi-Agent Cooperation and the Emergence of (Natural) Language. In International Conference on Learning Repre-sentations .Li, Y.; An, Z.; and Du, W. 2026. When Less Latent Leads to Better Relay: Information-Preserving Compression for La-tent Multi-Agent LLM Collaboration. arXiv:2604.13349. Li, Z.; Tian, W.; Chen, J.; Zhang, H.; Liu, Y.; Ban, Y.; and Zhuang, F. 2026. Counterfactual Credit Policy Optimization for Multi-Agent Collaboration. arXiv:2603.21563. Lightman, H.; Kosaraju, V.; Burda, Y.; Edwards, H.; Baker, B.; Lee, T.; Leike, J.; Schulman, J.; Sutskever, I.; and Cobbe, K. 2024. Let’s Verify Step by Step. In The Twelfth Interna-tional Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net. Liu, Y. 2026. Beyond Tokens: A Unified Framework for Latent Communication in LLM-based Multi-Agent Systems. arXiv:2606.05711. Liu, Y.; Huang, Y.; Yao, J.; Feng, S.; Gu, Z.; Du, K.; Li, H.; Cheng, Y.; Jiang, J.; Lu, S.; Musuvathi, M.; and Choukse, E. 2026. DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants. In NSDI’26 .Lowe, R.; Foerster, J.; Boureau, Y.-L.; Pineau, J.; and Dauphin, Y. 2019. On the Pitfalls of Measuring Emergent Communication. In Proceedings of the Third International Joint Conference on Autonomous Agents and Multiagent Sys-tems - Volume 1 , 693–701. New York, New York. McAllester, D.; and Stratos, K. 2020. Formal Limitations on the Measurement of Mutual Information. In Proceedings of the Twenty Third International Conference on Artificial Intelligence and Statistics , 875–884. PMLR. Meng, K.; Bau, D.; Andonian, A.; and Belinkov, Y. 2022. Lo-cating and Editing Factual Associations in GPT. In Advances in Neural Information Processing Systems 35 , 17359–17372. New Orleans, Louisiana, USA: Neural Information Process-ing Systems Foundation, Inc. (NeurIPS). ISBN 978-1-7138-7108-8. Pham, C.; Liu, B.; Yang, Y.; Chen, Z.; Liu, T.; Yuan, J.; Plummer, B. A.; Wang, Z.; and Yang, H. 2023. Let Models Speak Ciphers: Multiagent Debate through Embeddings. In 
+
+The Twelfth International Conference on Learning Repre-sentations .Poole, B.; Ozair, S.; Oord, A. V. D.; Alemi, A.; and Tucker, G. 2019. On Variational Bounds of Mutual Information. In Pro-ceedings of the 36th International Conference on Machine Learning , 5171–5180. PMLR. Shen, X.; Liu, Y.; Dai, Y.; Wang, Y.; Miao, R.; Tan, Y.; Pan, S.; and Wang, X. 2025. Understanding the Information Prop-agation Effects of Communication Topologies in LLM-based Multi-Agent Systems. In Proceedings of the 2025 Confer-ence on Empirical Methods in Natural Language Process-ing , 12358–12372. Suzhou, China: Association for Compu-tational Linguistics. Song, J.; and Ermon, S. 2020. Understanding the Limitations of Variational Mutual Information Estimators. In 8th Interna-tional Conference on Learning Representations, ICLR 2020, Addis Ababa, Ethiopia, April 26-30, 2020 . OpenReview.net. Vig, J.; Gehrmann, S.; Belinkov, Y.; Qian, S.; Nevo, D.; Singer, Y.; and Shieber, S. 2020. Investigating Gender Bias in Language Models Using Causal Mediation Analysis. In 
+
+Advances in Neural Information Processing Systems , vol-ume 33, 12388–12401. Curran Associates, Inc. Yeo, W. J.; Satapathy, R.; and Cambria, E. 2025. To-wards Faithful Natural Language Explanations: A Study Using Activation Patching in Large Language Models. In Christodoulopoulos, C.; Chakraborty, T.; Rose, C.; and Peng, V., eds., Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing, EMNLP 2025, Suzhou, China, November 4-9, 2025 , 10425–10447. Associ-ation for Computational Linguistics. Zhang, F.; and Nanda, N. 2024. Towards Best Practices of Ac-tivation Patching in Language Models: Metrics and Methods. In The Twelfth International Conference on Learning Rep-resentations, ICLR 2024, Vienna, Austria, May 7-11, 2024 .OpenReview.net. Zheng, Y.; Zhao, Z.; Li, Z.; Xie, Y.; Gao, M.; Zhang, L.; and Zhang, K. 2025. Thought Communication in Multiagent Collaboration. In Belgrave, D.; Zhang, C.; Montoya, L. N.; Lin, H.-T.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; Chen, N.; Ruíz, I. V. M.; and Loaiza-Bonilla, A., eds., Advances in Neu-ral Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, December 2-7, 2025 / Mexico City, Mexico, November 30 - December 5, 2025 .Zou, J.; Qiu, R.; Li, G.; Yang, X.; Tieu, K.; Lu, P.; Shen, K.; Tong, H.; Choi, Y.; He, J.; Zou, J.; Wang, M.; and Yang, L. 2026. Latent Collaboration in Multi-Agent Systems. In 
+
+Forty-Third International Conference on Machine Learning .
