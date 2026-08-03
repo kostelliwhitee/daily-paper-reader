@@ -1,0 +1,2158 @@
+Title: Multi-Agent Planning with Spatio-Temporal and Topological Constraints using STL-GO
+
+URL Source: https://arxiv.org/pdf/2607.28679v1
+
+Published Time: Mon, 03 Aug 2026 00:04:47 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+Formal Methods in Computer-Aided Design 2026 
+
+# Multi-Agent Planning with Spatio-Temporal and Topological Constraints using STL-GO 
+
+Sheryl Paul 1,∗, Vidisha Kudalkar 1,∗, Anand Balakrishnan 2,Lars Lindemann 3, Alberto Speranzon 4, Jyotirmoy V. Deshmukh 1
+
+> 1
+
+University of Southern California, Los Angeles, CA, USA {sherylpa, kudalkar, jdeshmuk}@usc.edu 
+
+> 2
+
+University of Texas at Austin, Austin, TX, USA anandbal@utexas.edu 
+
+> 3
+
+ETH Zurich, Zurich, Switzerland llindemann@ethz.ch 
+
+> 4
+
+Lockheed Martin, Eagan, MN, USA alberto.speranzon@lmco.com 
+
+> ∗
+
+Equal contribution. 
+
+Abstract —Multi-agent planning problems arise in a variety of engineering applications, such as multi-robot wildfire fighting and unmanned aerial inspection in factories. A particular challenge is the existence of spatio-temporal (i.e., when and/or where an agent should do what) and topological constraints (i.e., how agents should interact), as typically formalized via the notion of graphs. Over the last years, various frameworks have been proposed that can capture such constraints via spatio-temporal logics. We focus here on spatio-temporal logic with graph operators (STL-GO) , a recent formalism that supports reasoning about multiple agents and their topologies, such as sensing, communication, and task topologies. In this paper, we consider the problem of planning multi-agent paths that satisfy constraints written in STL-GO. This problem is particularly challenging due to the need of encoding multiple, potentially time-varying graphs via the graph operators inherent to STL-GO. We present two encodings of this problem, one based on mixed-integer programming (MIP) and another based on satisfiability modulo theory (SMT), with soundness guarantees. We provide a unified interface for specifying agent constraints, their graph topologies, and the STL-GO specification, enabling seamless use of both methods and facilitating direct comparison between them. We evaluate both encodings on a multi-UAV search-and-rescue benchmark, ablating over team size and graph complexity, highlighting the expressiveness of the proposed encodings under dynamic multi-graph interactions. 
+
+Index Terms —Spatio-Temporal Logics, Planning, Multi-Agent Systems 
+
+I. I NTRODUCTION 
+
+Classical temporal logic specifications, such as LTL or STL, are well suited for expressing time-based properties of individual system trajectories. However, in multi-agent systems (MAS), desired mission behavior may depend not only on when events occur but also on inter-agent communica-tion, spatial relationships, and task dependencies. Furthermore, mission objectives may need to reason about how these inter-agent relations evolve over time. A useful model is thus to treat a multi-agent system as a collection of directed or undirected graphs, where nodes represent agents with dynamic behavior and time-varying edges across multiple graphs capture distinct kinds of inter-agent relationships. Recent work has focused on spatio-temporal logic for-malisms such as SSTL [1], [2], SaSTL [3], SpaTeL [4], STREL [5], [6], Census STL [7] and STL-GO [8]. Among 
+
+Fig. 1: Motivation scenario: a heterogeneous multi-agent system coordinat-ing wildfire response over a satellite terrain map. Yellow drones are locator 
+
+agents that patrol the region to monitor fire spread and detect emergencies (marked by red circles). The purple drone is the rescuer agent tasked with reaching survivors and transporting them to the rescue center (white tent). Orange arrows indicate sensing : a locator drone detects an emergency site. Blue arrows represent inter-agent communication links through which locators share situational awareness. Red arrows denote task assignment :the detected emergency is assigned to the rescuer. Green arrows trace the 
+
+rescue path : the rescuer navigates first to the emergency location, then to the rescue center. Our goal is to synthesize agent trajectories that satisfy a spatio-temporal reachability specification encoding these coordination requirements with formal correctness guarantees. 
+
+these formalisms, STL-GO allows specifying multi-agent be-haviors over multiple inter-agent relational structures: it sup-ports simultaneous quantification over distinct time-varying agent relationships. As a motivational example (Fig. 1), con-sider a wildfire-response setting in which: “ Every emergency situation must be sensed by a locator agent within bounded time; upon sensing, the locator must communicate the emer-gency to connected agents and upon contact with a rescuer, assign that rescuer to the emergency. The rescuer must then reach the emergency location and perform the rescue action and return to a safe location. ” This specification reasons over three distinct topologies at once (sensing, communication, and task-assignment), and also constrains the number of neighbors 
+
+https://doi.org/ This article is licensed under a Creative Commons Attribution 4.0 International License arXiv:2607.28679v1 [cs.AI] 29 Jul 2026 satisfying a desired property. Such types of specifications are a first step to formalizing the behavior of practical multi-agent systems such as those used for search-and-rescue, environmen-tal monitoring under limited communication, and distributed sensing in uncertain terrains. STREL provides path-based reachability and escape oper-ators over a chosen dynamic weighted spatial model, while Census STL counts agents within a population; neither directly combines STL-GO’s typed neighborhood-cardinality operators with explicit quantification over collections of interaction graphs. Hyperproperty logics such as HyperLTL [9], [10], [11] can also express relational properties across agents, but require lifting agent-level quantifiers outside any temporal operator. Consequently, temporal changes in agent sets and interaction relations must be represented through explicit propositions and finite-domain expansion. We use HyperLTL as a relational specification comparison grounded in prior planning work, rather than as a general-purpose baseline for multi-agent systems in Section VII. In prior work [8], the authors focus on runtime monitoring of STL-GO specifications, assuming that agents’ spatio-temporal behaviors are decided by some given planner; how such plans can be synthesized is not addressed. The main problem we consider in this paper is open-loop, centralized, bounded-horizon planning for a multi-agent system subject to STL-GO specifications where the agent and environment dynamics are deterministic and known. We focus on this case as a foundational baseline: a tractable centralized encoding is a pre-requisite for decentralized extensions and, to our knowledge, no such encoding exists for STL-GO. There has been substantial work on planning multi-agent sys-tems subject to temporal logic specifications such as LTL [12], [13], STL [14], [15], ATL [16] and CaTL [17]. Existing work can be broadly categorized as follows: constraint-solving/SMT-based synthesis , which encodes temporal logic constraints symbolically and reasons about feasibility or correctness using SAT/SMT solvers [18], [19]; Mixed-Integer Programming (MIP) approaches, which formulate motion planning and con-trol synthesis under temporal logic constraints as optimization problems over continuous dynamics and binary decision vari-ables [13], [15]; reactive synthesis , which focuses on strategy synthesis and correctness guarantees in adversarial or game-theoretic settings, commonly using ATL or related formalisms [16]; and learning-based solvers [20], [21]. Inspired by prior work on SMT- and MIP-based planning, we present SMT and MIP encodings of the centralized plan-ning problem under STL-GO specifications. A key difference from prior encoding methods is that we explicitly handle weighted, time-varying interaction graphs whose structure is induced by the joint state of agents and environment; this re-quires encoding multi-graph quantification and neighborhood-cardinality predicates as solver constraints. 
+
+Contributions. (i) We present MIP and SMT encodings of STL-GO that support multi-graph existential and universal quantification and neighborhood-cardinality predicates over time-varying interaction graphs, with soundness guarantees. (ii) We provide a unified interface for specifying agents, interaction graphs, STL-GO formulas, and an objective func-tion that compiles to MIP/SMT-encoded plans, also enabling direct empirical comparison. (iii) We empirically evaluate the encodings on a multi-UAV search-and-rescue benchmark using Gurobi and Z3, ablating over team size and interaction-graph complexity. (iv) We additionally evaluate the encodings on a structurally different grid-world benchmark adapted from HypRL [9]. The results compare solve time and encoding size across the MIP and SMT backends. We further show that the same specifications, encoded in HyperLTL, incur either a linear blow-up in formula size or an alternation in the quantifier prefix, motivating STL-GO’s pointwise agent-level quantification. The remainder of the paper is organized as follows. Sec-tion II introduces the multi-agent system model, interaction graphs, and STL-GO. Section III formalizes the bounded-horizon planning problem for multi-agent systems subject to STL-GO specifications. Sections IV and V present our solver-based synthesis approaches, describing the translation of STL-GO specifications into MIP and SMT encodings, respectively. We evaluate both approaches through simulations and present our results in Section VI, and discuss related work and conclusions in Section VII. II. P RELIMINARIES 
+
+A. Multi-Agent System Model 
+
+Let V = {1, . . . , N } be a set of agents whose spatio-temporal behavior evolves over a discrete time domain T ⊂ N.We consider a homogeneous MAS in which each agent i ∈ V 
+
+has a state vector xit ∈ X , at time t where X is the shared state space. The state variables encode attributes local to an agent, such as physical configuration and internal resources. The joint state of all agents at time t ∈ T is denoted Xt =(x1 
+
+> t
+
+, . . . , xNt ) ∈ X N . While we focus on the homogeneous setting for notational clarity, the encoding extends to role-typed heterogeneity, as used in the search-and-rescue example below. The MAS environment is modeled as a discrete-time dy-namical system with state wt ∈ W, where W encodes attributes such as map geometry (static or dynamic), obstacles, and adversarial features (e.g., communication disruption). The environment evolves deterministically according to wt+1 =
+
+f (wt), where f and the initial world state w0 are known. Thus, the finite trajectory {wt}Tt=0 is fixed when a planning instance is constructed. 1
+
+Each agent is governed by a transition dynamics function 
+
+F that is shared across all agents (since the MAS is homoge-neous). At each time t, agent i selects a control input uit ∈ U 
+
+from an admissible input domain U, and its successor state is 
+
+xit+1 = F (xit, uit, wt). (1)         
+
+> 1Real-world environments may exhibit stochasticity, in which case asynthesized plan can only be guaranteed to satisfy the specification with high probability. We do not address this setting here, but the tools developed in this paper can serve as a building block for stochastic extensions.
+
+Stacking the componentwise dynamics gives the joint succes-sor state 
+
+Xt+1 = F (Xt, Ut, wt), (2) where Ut = ( u1 
+
+> t
+
+, . . . , uNt ) is the joint control input. 
+
+Example 1. Consider a system of V = {1, . . . , N } robots, where the state of agent i ∈ V is xit :=  pit, θ it, κit
+
+ where: 
+
+pit = [ xit, y it]⊤ ∈ R2 is the position of the agent, θit ∈ [0 , 2π)
+
+is the orientation, and κit can refer to a collection of time-varying resources and capabilities such as the battery level. At each time t, each agent selects uit := ( vit, ω it) ∈ U with 
+
+vit ∈ [vmin , v max ] and ωit ∈ [ωmin , ω max ] the linear and angular velocities. For sampling time ∆t > 0 and a unicycle model, 2
+
+position and orientation update as xit+1 = xit + ∆ t v it cos( θit),
+
+yit+1 = yit + ∆ t v it sin( θit), θit+1 = wrap [0 ,2π)(θit + ∆ t ω it).To encode the rich interaction and potential coupling be-tween each agent, its perception of the world state, and their effect on decision making in the system, we define the notion of interaction graphs [8]. 
+
+Definition 2 (Interaction Graph) . An interaction graph Gtype 
+
+> t
+
+is a directed and weighted graph Gtype  
+
+> t
+
+:= ( V, Etype  
+
+> t
+
+, w type  
+
+> t
+
+),
+
+where Etype  
+
+> t
+
+⊆ V ×V is the edge set, and wtype  
+
+> t
+
+: Etype  
+
+> t
+
+→ R≥0
+
+assigns edge attributes (e.g., distance, cost, signal quality). Different interaction modalities are modeled by distinct graph types type ∈ T := {type 1, . . . , type M }. The collection of all interaction graphs at time t is Gt := {G type  
+
+> t
+
+| type ∈ T } .
+
+Example 3. Examples of interaction graphs include: (i) A 
+
+distance graph Gdt =  V, Edt , w dt
+
+ is a complete directed graph where Edt = V × V \ { (i, i ) | i ∈ V} (all ordered pairs where 
+
+i̸ = j) and wdt is the distance between agents i and j at time 
+
+t. (ii) A sensing graph Gst = ( V, Est , w st ) encodes whether agent i can sense agent j at time t and (i, j ) ∈ E st . (iii) A 
+
+communication graph Gct = ( V, Ect , w ct ) where (i, j ) ∈ E ct
+
+if and only if agent i can communicate with agent j. (iv) A task-dependency graph Gtask  
+
+> t
+
+= ( V, Etask  
+
+> t
+
+, w task  
+
+> t
+
+), indicates that agent j depends on agent i for task execution, where 
+
+(i, j ) ∈ E task  
+
+> t
+
+.
+
+B. Spatio-Temporal Logic with Graph Operators (STL-GO) 
+
+STL-GO [8] extends Signal Temporal Logic (STL) [22] with graph operators to enable reasoning about both spatio-temporal and topological relationships between agents. The syntax and semantics of STL-GO are split into agent-local formulas and multi-agent compositional formulas. 
+
+1) Agent-Local Formulas: For formulas that specify be-havior local to the perspective of a single agent, we use the recursive syntax: 
+
+φ ::= ⊤ | μx | ¬ φ | φ ∧ φ | φ UI φ | In W, # 
+
+> G,E
+
+φ | Out W, # 
+
+> G,E
+
+φ. 
+
+Here, μx represents an atomic predicate of the form μx : X → 
+
+B that maps the state of an agent to a Boolean value; logical 
+
+> 2The unicycle dynamics in this example are illustrative. The MIP and SMT encodings and the reported experiments use discrete-time affine motion dynamics. Accommodating the displayed nonlinear model would instead require a piecewise-affine approximation or an SMT theory of nonlinear real arithmetic.
+
+negation ¬φ and logical conjunction φ ∧ φ are defined as usual; and UI is the until operator over an interval I = [ a, b ]
+
+as defined in STL [22]. 3
+
+STL-GO introduces the incoming In W, # 
+
+> G,E
+
+and outgoing 
+
+Out W, # 
+
+> G,E
+
+graph operators, where W = [ w1, w 2] ⊆ R constrains the edge weights. The cardinality constraint E is specified by endpoints e1 ∈ N, e2 ∈ N ∪ {∞} , with e1 ≤ e2, and is defined as E = [ e1, e 2]N := {k ∈ N | e1 ≤ k ≤ e2}. Thus, 
+
+E = [1 , ∞)N, for example, requires at least one qualifying edge. Finally, # ∈ {∃ , ∀} denotes existential or universal quantification over the graph types in T , equivalently over the graph instances in Gt.Let MA denote the finite execution induced by the multi-agent system, the environment, and the chosen control se-quence. We write (MA , i, t ) |= φ to denote Boolean satis-faction of the agent-local formula φ at agent i and time t.Graph operators allow an agent to reason about the trajecto-ries of its neighboring agents. The incoming operator In W, ∃ 
+
+> G,E
+
+φ
+
+asserts that there exists at least one graph instance Gtype  
+
+> t
+
+∈ Gt
+
+for which the count of incoming edges (j, i ) to agent i
+
+satisfying both wtype  
+
+> t
+
+(j, i ) ∈ W and (MA , j, t ) |= φ lies in 
+
+E. The universal version In W, ∀ 
+
+> G,E
+
+φ requires the same property to hold across all graph instances Gtype  
+
+> t
+
+∈ Gt. Similarly, the outgoing operator Out W, ∃ 
+
+> G,E
+
+φ states that there exists a graph instance for which the analogous count over outgoing edges 
+
+(i, j ) from agent i lies in E. If weights are not of interest, we set W := ( −∞ , ∞) and write the simplified forms In # 
+
+> G,E
+
+φ
+
+and Out # 
+
+> G,E
+
+φ.Formally, writing t ⊕ I := {t + τ : τ ∈ I}, we define the recursive semantics below. 4
+
+(MA , i, t ) |= ⊤ always ,
+
+(MA , i, t ) |= μx iff μx(xit),
+
+(MA , i, t ) |= ¬φ iff (MA , i, t )̸ |= φ, 
+
+(MA , i, t ) |= φ1 ∧ φ2 iff (MA , i, t ) |= φ1
+
+∧(MA , i, t ) |= φ2,
+
+(MA , i, t ) |= φ1 U[a,b ] φ2 iff t + b ≤ T, ∃t′ ∈ t ⊕ [a, b ] s.t. 
+
+(MA , i, t ′) |= φ2
+
+∧ ∀ t′′ ∈ [t, t ′). (MA , i, t ′′ ) |= φ1,
+
+(MA , i, t ) |= In W, # 
+
+> G,E
+
+φ iff # type ∈ T s.t. 
+
+(j, i ) ∈ E type  
+
+> t
+
+: wtype  
+
+> t
+
+(j, i ) ∈ W, 
+
+(MA , j, t ) |= φ}| ∈ E, 
+
+(MA , i, t ) |= Out W, # 
+
+> G,E
+
+φ iff # type ∈ T s.t. 
+
+(i, j ) ∈ E type  
+
+> t
+
+: wtype  
+
+> t
+
+(i, j ) ∈ W, 
+
+(MA , j, t ) |= φ}| ∈ E. 
+
+2) Multi-Agent Formulas: STL-GO uses the following re-cursive grammar to define properties over multiple agents: 
+
+ϕ ::= ⊤ | μ | i.φ | ¬ ϕ | ϕ ∧ ϕ | ϕUI ϕ | FA φ | EX φ, 
+
+where φ is an agent-local formula, and μ (without the subscript 
+
+x) denotes an atomic predicate of the form μ : X |V| ×W → B.                                   
+
+> 3We also use the standard derivations φ1∨φ2:= ¬(¬φ1∧ ¬ φ2),φ1⇒
+> φ2:= ¬φ1∨φ2,FIφ:= ⊤UIφ, and GIφ:= ¬FI¬φ.
+> 4We use strong bounded-horizon semantics: if t+b > T , an until or eventually obligation over I= [ a, b ]cannot be discharged within the encoded horizon and is therefore false. Because GIφ:= ¬FI¬φ, the derived globally formula is true in this boundary case.
+
+Such predicates are analogous to the agent-local predicates μx,but are defined over the joint agent and world state (Xt, wt).Multi-agent formulas allow properties to be specified across agents using logical connectives and over time using temporal operators. The operator i.φ embeds an agent-local formula into a multi-agent formula. The operators FA and EX denote uni-versal and existential quantification, respectively, over the full agent set V, with FA φ := V 
+
+> i∈V
+
+i.φ and EX φ := W 
+
+> i∈V
+
+i.φ .Formally, we write (MA , t ) |= ϕ to denote that the STL-GO formula ϕ is satisfied by the finite execution MA at time 
+
+t. Its semantics are defined inductively as follows: 
+
+(MA , t ) |= ⊤ always ,
+
+(MA , t ) |= μ iff μ(Xt, wt),
+
+(MA , t ) |= i.φ iff (MA , i, t ) |= φ, 
+
+(MA , t ) |= ¬ϕ iff (MA , t )̸ |= ϕ, 
+
+(MA , t ) |= ϕ1 ∧ ϕ2 iff (MA , t ) |= ϕ1 ∧(MA , t ) |= ϕ2,
+
+(MA , t ) |= ϕ1 U[a,b ] ϕ2 iff t + b ≤ T and ∃t′ ∈ t ⊕ [a, b ]
+
+s.t. (MA , t ′) |= ϕ2
+
+∧ ∀ t′′ ∈ [t, t ′). (MA , t ′′ ) |= ϕ1,
+
+(MA , t ) |= FA φ iff ∀i ∈ V . (MA , i, t ) |= φ, 
+
+(MA , t ) |= EX φ iff ∃i ∈ V . (MA , i, t ) |= φ. 
+
+Example 1 (continued). In our example, let us consider the UAVs to be assigned a search-and-rescue mission with agents being assigned one of two roles: ‘locators’ L ⊆ V and ‘rescuers’ R ⊆ V .Emergency events may arise at any site in a fixed set of candidate locations and must be detected by the locator agents and assigned to one or more rescuers. The rescuer must resolve the emergency within bounded time, i.e., reach the emergency location and carry the rescued individual to the rescue center. Let C ⊂ R2 denote the rescue center and M a fixed set of possible emergency sites, with each m ∈ M having position 
+
+pmt ∈ R2. Let εE , ε C > 0 be distance tolerances for reaching an emergency and the rescue center, respectively. For ℓ ∈ L ,
+
+r ∈ R, and m ∈ M, we define the atomic predicates 
+
+φemg  
+
+> m
+
+(t) ⇐⇒ emergency m is active at t, φnear  
+
+> r,m
+
+(t) ⇐⇒ ∥prt − pmt ∥ ≤ εE , φatC  
+
+> r
+
+(t) ⇐⇒ dist( prt , C) ≤ εC ,
+
+φcarry  
+
+> r
+
+(t) ⇐⇒ rescuer r carries a rescued individual. Let 
+
+φtask 
+
+> ℓ,r,m
+
+(t) denote that locator ℓ assigns rescuer r specifically to emergency m at time t. Let E≥1 := [1 , ∞)N. The emergency-sensing predicate is a joint geometric predicate, while the remaining predicates below are agent-local predicates derived using the STL-GO graph operators: 5
+
+φsense  
+
+> m
+
+(t) := _
+
+> ℓ∈L
+
+ ∥pℓt − pmt ∥ ≤ rsense 
+
+
+
+φLL  
+
+> ℓ
+
+(t) := Out ∃{G c},E ≥1 ⊤
+
+φLR  
+
+> ℓ
+
+(t) := Out ∃{G c},E ≥1 ⊤
+
+We encode the following specification: Once an emergency is detected, at least one locator must assign a rescuer within     
+
+> 5For the communication predicates, the experimental implementation uses role-partitioned restrictions of the communication graph: φLL
+> ℓrestricts target neighbors to locators, whereas φLR
+> ℓrestricts target neighbors to rescuers. The compact notation below suppresses these target-role restrictions.
+
+bounded time Tassign :
+
+ϕassign := G ^
+
+> m∈M
+
+φemg  
+
+> m
+
+∧ φsense  
+
+> m
+
+⇒ F[0 ,T assign ]
+
+_
+
+> ℓ∈L
+
+_
+
+> r∈R
+
+φtask 
+
+> ℓ,r,m
+
+!
+
+.
+
+III. P ROBLEM STATEMENT 
+
+In this paper, we are interested in an open-loop planning 6
+
+or bounded synthesis problem for multi-agent systems, that is, our goal is to synthesize a finite sequence of control inputs to a system of multiple homogeneous agents over a bounded horizon, such that they satisfy a formal specification. More concretely, we consider a system of agents V =
+
+{1, . . . , N } with state space X and joint input Ut =(u1 
+
+> t
+
+, . . . , uNt ) ∈ U N , operating in a world with state space 
+
+W. Each agent evolves in discrete time according to a known, deterministic, homogeneous dynamics function F : X × U × W → X . For the encodings presented in this paper, we restrict 
+
+F to be affine in the agent state, control input, and world state. We assume that the initial joint state X0 and the finite world trajectory {wt}Tt=0 are fixed and known when the planning instance is constructed. Let ϕ be an STL-GO formula interpreted over the MAS 
+
+MA under the induced graph-collection sequence {Gt}Tt=0 
+
+over a bounded horizon T ∈ N. Then, our goal is to synthesize an open-loop control sequence {Ut}T −1 
+
+> t=0
+
+such that the resulting execution {Xt}Tt=0 according to the dynamics in Equation 2 satisfies the specification at the initial state, i.e., 
+
+(MA , 0) |= ϕ. One may optionally minimize a performance objective J({Xt}Tt=0 , {Ut}T −1 
+
+> t=0
+
+) (e.g., control effort, total path length, etc.), yielding an optimal bounded synthesis problem. We identify a class of multi-agent systems with state-dependent interaction graphs characterized by graph construc-tor functions , for which the bounded synthesis can be framed as an optimization-based or satisfaction problem without much change in how the problem itself is encoded. 
+
+Definition 4 (Graph Constructor Function) . For a given in-teraction modality type ∈ T , a graph constructor function 
+
+Γtype maps an element of X |V| × W to a directed, weighted graph on V. At time t, we write Gtype  
+
+> t
+
+= Γ type (Xt, wt) = (V, Etype  
+
+> t
+
+, w type  
+
+> t
+
+). Thus, for every ordered pair (i, j ), the constructor determines whether (i, j ) ∈ E type  
+
+> t
+
+and, when the edge exists, its weight wtype  
+
+> t
+
+(i, j ).
+
+Example 5. Let type = d denote a distance-based inter-action modality. Γd(Xt, wt) maps to the function (i, j ) 7 →
+
+d1(xit, xjt ), where xit and xjt denote the 2D (or 3D) coordinates of agents i and j and d1 is the ℓ1 distance. 7
+
+Under the determinism and homogeneity assumptions above, and restricting Γtype to an encodable class (made precise in Sections IV and V), the bounded synthesis problem           
+
+> 6Here, “open-loop” refers to the finite control sequence synthesized along each realized execution branch. In the experiments, multiple such sequences are synthesized jointly to form a finite contingency tree; observations select among precomputed branches, while the selected branch itself is executed open loop.
+> 7d1(a, b ) = Pnk=1 |ak−bk|where kindexes the nspatial dimensions.
+
+can be transformed into a finite set of constraints suitable for satisfiability checking (e.g. SMT), or optimization (e.g. MIP), by introducing: (i) decision variables for {xit}Tt=0 and 
+
+{uit}T −1 
+
+> t=0
+
+, (ii) auxiliary binary variables encoding the truth of various subformulas of ϕ for each agent and time instant (iii) constraints enforcing the dynamics, graph construction predicates, and the STL-GO semantics of Boolean, temporal, and graph operators over the bounded horizon. While we focus on homogeneous agent dynamics, the encoding extends to role-typed heterogeneity, as used in the locator/rescuer split of the running example. 
+
+Assumptions. We focus on centralized , open-loop plan-ning under deterministic environment dynamics. Decentralized planning under partial observability and local observation is the ultimate target, but we consider the centralized, fully observable setting as a foundational step; a tractable encoding in this setting will serve as a prerequisite for decentralized extensions which we relegate to future work. Additionally, we assume that agents execute the synthesized open-loop plan au-tonomously , and the deterministic environment dynamics let us reason about feasibility and correctness without probabilistic semantics. In the following sections we present a systematic modeling and synthesis framework that compiles the planning problem above, with its multiple interaction graphs, into mixed-integer programs or satisfiability problems for centralized planning. Due to space constraints, we will introduce the novel graph-related encodings, and refer the reader to the complete encod-ings described in the Appendices C and D. IV. MIP-BASED ENCODING FOR STL-GO P LANNING 
+
+A. Encoding System Specifications System Dynamics. We restrict ourselves to deterministic, homogeneous dynamics that are affine in the agent state, agent input, and world state so that the bounded synthesis problem admits an MIP encoding. Specifically, let the dynamics be 
+
+xit+1 = F (xit, uit, wt) := Axit + Buit + Ewt + c, (3) where i ∈ V , t = 0 , . . . , T − 1, and A, B, E and c have appropriate dimensions. 
+
+State and input constraints. We assume agent states and control inputs to lie within hyper-rectangular sets, so that they are bounded componentwise as: 
+
+xmin ≤ xit ≤ xmax , and umin ≤ uit ≤ umax , ∀i, t. (4) 
+
+Interaction Graphs. At each time t, interaction graphs are constructed from the joint agent state Xt ∈ X N and world state wt ∈ W via the graph constructor function Γtype of Definition 4. For each ordered pair (i, j ) ∈ V × V , i̸ = j, the existence of a directed edge (i, j ) is represented by a Boolean variable, while edge weights are real-valued. Specifically, write 
+
+ηtype  
+
+> i,j
+
+: X |V| × W → B for the edge-existence predicate and 
+
+etype  
+
+> i,j
+
+: X |V| × W → R≥0 for the edge-weight expression. Then (i, j ) ∈ E type  
+
+> t
+
+if and only if ηtype  
+
+> i,j
+
+(Xt, wt) holds, and an existing edge has weight wtype  
+
+> t
+
+(i, j ) = etype  
+
+> i,j
+
+(Xt, wt).To ensure compatibility with solver-based synthesis, we re-strict attention to graph constructors whose edge-existence predicates admit exact mixed-integer encodings and whose edge-weight functions are piecewise affine in (Xt, wt). Let 
+
+PWA( X |V| × W ) denote the set of piecewise-affine func-tions over the joint agent and world state. We say that a graph constructor Γtype is MIP-encodable if, for every or-dered pair (i, j ), ηtype  
+
+> i,j
+
+is a Boolean combination of affine comparisons with an exact mixed-integer representation and 
+
+etype  
+
+> i,j
+
+∈ PWA( X |V| × W ). The encoding introduces atype  
+
+> i,j,t
+
+∈{0, 1} with atype  
+
+> i,j,t
+
+= 1 if and only if ηtype  
+
+> i,j
+
+(Xt, wt) holds. Atomic affine comparisons are encoded using two-sided Big-
+
+M constraints with valid bounds and the required numerical separation margins; Boolean connectives are translated into linear constraints over binary variables. 
+
+B. Encoding Agent-Local Operators Logical and Temporal Operators. The encodings of atomic predicates, logical operators, and temporal operators closely follow established formulations in the literature [23], [24]. They are included in Appendix C for completeness and correctness. 
+
+Graph Operator Encodings. For agent i at time t, the incoming operator ψ = In W, #
+
+> G,[e1,e 2]
+
+φ is evaluated for each graph type type ∈ T . Its per-type count contains the incoming neighbors j̸ = i such that agent j satisfies φ and the graph-constructor weight Γtype (Xt, wt)( j, i ) lies in the admissible interval W = [ wmin , w max ]; the count must lie in [e1, e 2].The symbol # ∈ {∃ , ∀} denotes existential or universal quantification over type ∈ T . The MIP encoding of In 
+
+proceeds in three steps for a fixed graph type, plus a fourth step that combines per-type encodings under the modal quantifier. 1) Eligible incoming edges. For each j ∈ V \ { i}, introduce binary variables λlow ,type  
+
+> j,i,t
+
+and λhigh ,type  
+
+> j,i,t
+
+, indicating satis-faction of the lower and upper weight bounds, respectively, and an eligibility variable γtype  
+
+> j,i,t
+
+. We impose 
+
+wtype  
+
+> t
+
+(j, i ) ≥ wmin − M  1 − λlow ,type 
+
+> j,i,t
+
+,wtype  
+
+> t
+
+(j, i ) ≤ wmin − δw + M λ low ,type  
+
+> j,i,t
+
+,wtype  
+
+> t
+
+(j, i ) ≤ wmax + M  1 − λhigh ,type 
+
+> j,i,t
+
+,wtype  
+
+> t
+
+(j, i ) ≥ wmax + δw − M λ high ,type  
+
+> j,i,t
+
+,γtype  
+
+> j,i,t
+
+≤ atype  
+
+> j,i,t
+
+, γtype  
+
+> j,i,t
+
+≤ λlow ,type  
+
+> j,i,t
+
+, γ type  
+
+> j,i,t
+
+≤ λhigh ,type  
+
+> j,i,t
+
+,γtype  
+
+> j,i,t
+
+≥ atype  
+
+> j,i,t
+
++ λlow ,type  
+
+> j,i,t
+
++ λhigh ,type  
+
+> j,i,t
+
+− 2,
+
+(5) where δw > 0 is a fixed numerical separation margin. We assume that feasible edge weights are δw-separated from the outside of each interval boundary: a weight below wmin 
+
+is at most wmin − δw, and a weight above wmax is at least 
+
+wmax + δw. Under this convention, (5) enforces 
+
+γtype  
+
+> j,i,t
+
+= 1 ⇔  atype  
+
+> j,i,t
+
+= 1 ∧ wmin ≤ wtype  
+
+> t
+
+(j, i ) ≤ wmax 
+
+ .
+
+2) Count neighbors satisfying φ. Let zφ,j,t ∈ { 0, 1} denote satisfaction of subformula φ by agent j at time t. Introduce yφ, type  
+
+> j,i,t
+
+∈ { 0, 1} encoding γtype  
+
+> j,i,t
+
+∧ zφ,j,t :
+
+yφ, type  
+
+> j,i,t
+
+≤ γtype  
+
+> j,i,t
+
+, yφ, type  
+
+> j,i,t
+
+≤ zφ,j,t , yφ, type  
+
+> j,i,t
+
+≥ γtype  
+
+> j,i,t
+
++ zφ,j,t − 1.
+
+(6) and define the cardinality cIn ,φ, type  
+
+> i,t
+
+:= P  
+
+> j̸=i
+
+yφ, type  
+
+> j,i,t
+
+.
+
+3) Cardinality enforcement. First suppose e2 < ∞. Since 
+
+cIn ,φ, type  
+
+> i,t
+
+is integer-valued, introduce binaries αlow ,type  
+
+> i,t
+
+and 
+
+αhigh ,type  
+
+> i,t
+
+, indicating cIn ,φ, type  
+
+> i,t
+
+< e 1 and cIn ,φ, type  
+
+> i,t
+
+> e 2,respectively: 
+
+cIn ,φ, type  
+
+> i,t
+
+≤ e1 − 1 + M  1 − αlow ,type 
+
+> i,t
+
+,cIn ,φ, type  
+
+> i,t
+
+≥ e1 − M α low ,type  
+
+> i,t
+
+,cIn ,φ, type  
+
+> i,t
+
+≥ e2 + 1 − M  1 − αhigh ,type 
+
+> i,t
+
+,cIn ,φ, type  
+
+> i,t
+
+≤ e2 + M α high ,type  
+
+> i,t
+
+.
+
+(7) The per-type satisfaction variable is encoded as 
+
+ztype  
+
+> ψ,i,t
+
+≤ 1 − αlow ,type  
+
+> i,t
+
+, ztype  
+
+> ψ,i,t
+
+≤ 1 − αhigh ,type  
+
+> i,t
+
+,ztype  
+
+> ψ,i,t
+
+≥ 1 − αlow ,type  
+
+> i,t
+
+− αhigh ,type  
+
+> i,t
+
+. (8) For a lower-bounded interval [e1, ∞)N, only the lower violation variable is required: 
+
+cIn ,φ, type  
+
+> i,t
+
+≤ e1 − 1 + M  1 − αlow ,type 
+
+> i,t
+
+,cIn ,φ, type  
+
+> i,t
+
+≥ e1 − M α low ,type  
+
+> i,t
+
+, ztype  
+
+> ψ,i,t
+
+= 1 − αlow ,type  
+
+> i,t
+
+.
+
+(9) 4) Quantifying Operators The existential operator ψ =In W, ∃ 
+
+> G,E
+
+φ requires that at least one graph type in T satisfies the counting property. For each type ∈ T , the per-type encoding above produces a satisfaction variable ztype 
+
+> ψ,i,t
+
+; we then enforce the disjunction over types: 
+
+zψ,i,t ≥ ztype  
+
+> ψ,i,t
+
+∀type ∈ T , zψ,i,t ≤ X
+
+> type ∈T
+
+ztype 
+
+> ψ,i,t
+
+. (10) These constraints ensure zψ,i,t = 1 iff some graph satisfies the property. The universal operator ψ = In W, ∀ 
+
+> G,E
+
+φ requires that all graph types in T satisfy the counting property. This is encoded using a conjunction instead of the disjunction over graph types. 
+
+zψ,i,t ≤ ztype  
+
+> ψ,i,t
+
+∀type ∈ T , zψ,i,t ≥ 1 − |T | + X
+
+> type ∈T
+
+ztype 
+
+> ψ,i,t
+
+.
+
+(11) The outgoing operator is obtained from the incoming case by replacing (j, i ) with (i, j ) throughout. 
+
+Lemma 6. The planning problem for agent-local STL-GO specifications, for multi-agent systems whose agent dynamics are described by discrete-time affine difference equations, can be encoded into a MIP such that any satisfying assignment yields a trajectory satisfying the specification. Proof. In the interest of space, we provide a proof sketch, with the full proof in Appendix A. We establish the invariant 
+
+zψ,i,t = 1 ⇐⇒ (MA , i, t ) |= ψ (12) for every agent-local subformula ψ, agent i, and time t, by structural induction on ψ.1) The dynamics constraint (3) is an equality, so feasible assignments correspond to valid trajectories of F .2) Atomic predicates, Boolean connectives, and the until operator are encoded by standard Big-M and unrolling con-structions [23], [24]. 3) For ψ = In W, #
+
+> G,[e1,e 2]
+
+φ, MIP-encodability of Γtype , for each type ∈ T , provides exact edge indicators and PWA weight expressions. Constraint (5) enforces that γtype  
+
+> j,i,t
+
+= 1 
+
+iff (j, i ) ∈ E type  
+
+> t
+
+and its weight lies in W . Constraint (6) then counts exactly those eligible neighbors that satisfy φ.Equations (7)–(8) encode a finite cardinality interval, while (9) encodes [e1, ∞)N. Finally, (10)–(11) encode existential or universal quantification over graph types. The outgoing case is symmetric. Conjoining all constraints, the planning problem for agent-local STL-GO specifications is the feasibility of a MIP whose decision variables include the per-step actions. 
+
+C. Encoding Multi-Agent Quantifiers Existential Quantification over agents. The existential quan-tifier EX φ holds when at least one agent i ∈ V satisfies φ.Let ψ := EX φ. We encode ψ as: 
+
+zψ,t ≥ zφ,i,t , ∀i ∈ V ; zψ,t ≤ X
+
+> i∈V
+
+zφ,i,t (13) 
+
+Universal Quantification over agents. The universal quantifier 
+
+FA φ holds when φ holds for all agents i ∈ V . Let ψ := FA φ.We encode ψ as: 
+
+zψ,t ≤ zφ,i,t , ∀i ∈ V ; zψ,t ≥ 1 − |V| + X
+
+> i∈V
+
+zφ,i,t (14) 
+
+Theorem 7. For an STL-GO specification ϕ and horizon T ,if the multi-agent system dynamics and graph constructor are MIP-encodable as described above, and the corresponding MIP encoding is feasible, then the resulting state trajectory 
+
+{Xt}Tt=0 satisfies ϕ, i.e., (MA , 0) |= ϕ.Proof Sketch. Lemma 6 establishes (12) for agent-local sub-formulas. We extend it to multi-agent subformulas ψ as 
+
+zψ,t = 1 ⇐⇒ (MA , t ) |= ψ by structural induction: joint atomic predicates, embedding i.φ , Boolean connectives, and until reuse the agent-local arguments on multi-agent variables; 
+
+EX and FA are encoded as disjunction and conjunction over 
+
+{zφ,i,t }i∈V (Section IV-C), matching the semantics by the agent-local invariant. Feasibility with zϕ, 0 = 1 as a constraint yields (MA , 0) |= ϕ. The full proof is in Appendix A. V. SMT-BASED ENCODING FOR STL-GO P LANNING 
+
+We encode the multi-agent planning problem as a quantifier-free SMT instance in the theory of Linear Real Arithmetic with integers (LRA + LIA), where a satisfying assignment yields a control sequence whose execution satisfies the STL-GO specification. 
+
+A. Encoding System Specifications State and Control Constraints. To ensure physical and op-erational feasibility, agent states are constrained to a hyper-rectangular workspace Xws ⊂ Rnx with componentwise bounds, and control inputs are bounded componentwise by actuator limits (e.g., maximum velocity, thrust, steering angle). 
+
+> T
+
+^
+
+> t=0
+
+^
+
+> i∈V
+
+ xmin ≤ xit ≤ xmax 
+
+ , 
+
+> T−1
+
+^
+
+> t=0
+
+^
+
+> i∈V
+
+ umin ≤ uit ≤ umax 
+
+
+
+(15) 
+
+System Dynamics. We assume the system follows determin-istic discrete-time affine dynamics: 8
+
+xit+1 = Axit +Buit +Ewt +c ∀i ∈ V , ∀t = 0 , 1, . . . , T −1
+
+(16) 
+
+Interaction Graphs. We focus on interaction graphs whose structure and edge weights depend only on the joint agent state and world state via the graph constructor function. For each time t and ordered pair (i, j ), let ηtype  
+
+> i,j
+
+(Xt, wt) be the edge-existence predicate and let etype  
+
+> i,j
+
+(Xt, wt) compute the corresponding edge weight. We say Γtype is SMT-encodable 
+
+if, for every (i, j ), ηtype  
+
+> i,j
+
+is a Boolean formula over LRA+LIA and etype  
+
+> i,j
+
+is an LRA term. Both can then be encoded directly in the quantifier-free SMT instance. 
+
+B. Encoding Agent-local Operators 
+
+For each subformula ψ of specification φ, agent i ∈ V , and time t ∈ T , we introduce a Boolean variable ziψ,t ∈ {⊤ , ⊥} 
+
+with the intended semantics 
+
+ziψ,t = ⊤ ⇐⇒ (MA , i, t ) |= ψ (17) The encoding of atomic predicates, logical operators, and temporal operators closely follow established formulations in the literature [25], [26]. They are included in Appendix D for completeness and correctness. 
+
+Graph Operators. 
+
+For ψ = In W, #
+
+> G,[e1,e 2]
+
+φ, the SMT encoding proceeds in three steps for each fixed graph type type ∈ T , plus a fourth step that combines the per-type encodings under the modal quantifier #.1) Eligible incoming edges. For each graph type type ∈ T ,agents i, j ∈ V with i̸ = j, and time t, introduce a Boolean variable btype  
+
+> j,i,t
+
+, indicating that (j, i ) is an edge in the graph instance Gtype  
+
+> t
+
+and that its weight lies in W .
+
+btype  
+
+> j,i,t
+
+↔
+
+
+
+ηtype  
+
+> j,i
+
+(Xt, wt)
+
+∧ wmin ≤ etype  
+
+> j,i
+
+(Xt, wt) ≤ wmax 
+
+
+
+. (18) where ηtype  
+
+> j,i
+
+is the edge-existence predicate and 
+
+etype  
+
+> j,i
+
+(Xt, wt) is the edge-weight supplied by the graph constructor. If weights are not of interest and 
+
+W = ( −∞ , ∞), the weight comparisons are omitted. 2) Count neighbors satisfying φ. Let zjφ,t be a boolean vari-able to denote satisfaction of subformula φ by agent j at time t. This is encoded as 
+
+ntype  
+
+> j,i,t
+
+= btype  
+
+> j,i,t
+
+∧ zjφ,t (19) 
+
+> 8The encoding and soundness result presented here use affine dynamics and LRA+LIA. The same structural translation could instead be instantiated using an SMT solver over nonlinear arithmetic, such as dReal, to support non-affine dynamics; we leave that extension for future work.
+
+3) Cardinality. For each graph type type ∈ T , define an inte-ger variable ctype  
+
+> i,t
+
+counting eligible φ-satisfying incoming neighbors:        
+
+> ctype
+> i,t =X
+> j̸=i
+> ite (ntype
+> j,i,t ,1,0) ,
+
+(20) The per-type satisfaction variable is constrained by 
+
+zi, type  
+
+> ψ,t
+
+↔
+
+(
+
+e1 ≤ ctype  
+
+> i,t
+
+≤ e2, e2 < ∞,e1 ≤ ctype  
+
+> i,t
+
+, e2 = ∞. (21) 4) Quantification over Graph Types. For # = ∃ the satisfac-tion of ψ at agent i is the disjunction over types of the per-type satisfactions; 
+
+ziψ,t = _
+
+> type ∈T
+
+zi, type  
+
+> ψ,t
+
+(# = ∃), (22) For # = ∀ it is the conjunction instead of the disjunction. The encoding of the Out W, #
+
+> G,[e1,e 2]
+
+φ operator is obtained from the incoming case by substituting (j, i ) with (i, j ) in steps 1–3. 
+
+Lemma 8. The planning problem for agent-local STL-GO specifications, for multi-agent systems whose agent dynamics are described by discrete-time affine difference equations and whose graph constructors are SMT-encodable, can be encoded into a quantifier-free SMT instance such that any satisfying assignment yields a trajectory satisfying the specification. Proof sketch. We establish the invariant 
+
+ziψ,t = ⊤ ⇐⇒ (MA , i, t ) |= ψ (23) for every agent-local subformula ψ, agent i, and time t, by structural induction on ψ. The dynamics constraint (16) is an equality in the SMT variables, so any satisfying assignment corresponds to a valid trajectory of F . Atomic predicates, Boolean connectives, and the until operator are encoded by direct LRA constraints and finite unrolling over the bounded horizon [25], [26]. For ψ = In W, #
+
+> G,[e1,e 2]
+
+φ, SMT-encodability of Γtype , for each type ∈ T , ensures the edge-existence predicate and edge weight are LRA+LIA expressions; (18)– (21) enforce zi, type  
+
+> ψ,t
+
+= ⊤ iff the count of eligible φ-satisfying neighbors lies in [e1, e 2], and (22) lifts this to #-quantification over graph types. The outgoing case is symmetric. The full proof is in Appendix B. 
+
+C. Encoding Multi-Agent Quantifiers 
+
+The existential quantifier EX φ indicates the existence of at least one agent i ∈ V for which φ holds. For a formula 
+
+ψ := EX φ, we encode ψ as zψ,t = W 
+
+> i∈V
+
+ziφ,t . The universal quantifier FA φ is similarly defined using V 
+
+> i∈V
+
+instead of W 
+
+> i∈V
+
+.
+
+Theorem 9. For an STL-GO specification ϕ and horizon T ,if the multi-agent system dynamics and graph constructor are SMT-encodable as described above, and if the SMT instance is satisfiable, then any satisfying assignment yields a trajectory 
+
+{Xt}Tt=0 such that (MA , 0) |= ϕ.Proof Sketch. Lemma 8 establishes (23) for agent-local sub-formulas. We extend it to multi-agent subformulas ψ as 
+
+zψ,t = ⊤ ⇐⇒ (MA , t ) |= ψ by structural induction: joint atomic predicates, embedding i.φ , Boolean connectives, and until reuse the agent-local arguments on multi-agent variables; 
+
+EX and FA are encoded as described above, matching the se-mantics by the agent-local invariant. Satisfiability of the SMT instance with zϕ, 0 = ⊤ as a constraint yields (MA , 0) |= ϕ.The full proof is in Appendix B. VI. E XPERIMENTS AND RESULTS 
+
+We implement a planner for the aforementioned search-and-rescue example. Let M denote a fixed set of known assembly areas where emergencies may occur. At planning time, the location of every assembly area is known, but it is unknown whether each assembly area contains an active emergency. Locator agents patrol the assembly areas and observe their activation statuses when they enter the sensing range. An active emergency must then be communicated, assigned to one or more rescuers, and resolved within bounded time by transporting the rescued individual to the rescue center C. To account for potential emergencies, we construct plans for all possible emergency-activation scenarios. The experimental instances use role-specific admissible con-trol sets while retaining the same motion-model structure for all agents. 9
+
+Let Ω ⊆ { 0, 1}|M| denote the set of scenarios, where ωm =1 indicates that assembly area m contains an active emergency in scenario ω, and ωm = 0 indicates that it does not. If all activation combinations are considered, then |Ω| = 2 |M| .For each scenario ω ∈ Ω, the encoding contains a corre-sponding state and control sequence. These scenario-indexed sequences are solved jointly. Scenarios with identical locator observation histories must have identical control inputs, i.e., if scenarios ω and ω′ are indistinguishable from the agents at time t, then Uωt = Uω′ 
+
+> t
+
+. The plans may branch only after a locator observation distinguishes the scenarios. The resulting solution is a contingent plan represented as a finite scenario tree. At runtime, the agents initially execute the common plan prefix. When a locator observes whether an assembly area is active, the branch consistent with that observation is selected, and execution continues along that branch. Further observations may select subsequent branches. The predicates and specifications below are instantiated for every ω ∈ Ω. We suppress the scenario superscript when it is clear from context. In scenario ω, φemg  
+
+> m
+
+is true iff ωm = 1 .We introduce the following atomic predicates: φemg  
+
+> m
+
+(emer-gency active), φnear  
+
+> r,m
+
+(rescuer near emergency), φatC  
+
+> r
+
+(rescuer at rescue center), and φcarry  
+
+> r
+
+(rescuer carrying an individual). The joint geometric predicate φsense  
+
+> m
+
+states that at least one locator lies within sensing range of emergency m. Graph-derived predicates capture the remaining collective and rela-tional conditions: φLL  
+
+> ℓ
+
+(locator-to-locator communication) and 
+
+φLR  
+
+> ℓ
+
+(locator-to-rescuer communication). Let φtask  
+
+> ℓ,r,m
+
+denote the predicate that locator ℓ has assigned rescuer r specifically to     
+
+> 9Locator controls satisfy uℓt∈ U L, whereas rescuer controls satisfy urt∈UR, with the maximum rescuer speed strictly lower than the maximum locator speed. Thus, the experimental role distinction includes different mobility limits in addition to different mission obligations.
+
+emergency m at the current time. Its truth implies that the corresponding task edge (ℓ, r ) ∈ E task  
+
+> t
+
+is active. We fix horizons Tdet , T assign , T relay , T reach , T deliver ∈ N.The specifications for the mission are then outlined as follows. 1) Bounded emergency detection. Every emergency must be detected by the locator swarm within bounded time: 
+
+ϕdetect := G ^
+
+> m∈M
+
+
+
+φemg  
+
+> m
+
+⇒ F[0 ,T det ] φsense 
+
+> m
+
+
+
+.
+
+2) Detection-to-relay. Once an emergency is detected, the in-formation must be communicated to either another locator or a rescuer within bounded time: 
+
+ϕrelay := G ^
+
+> m∈M
+
+
+
+φemg  
+
+> m
+
+∧ φsense  
+
+> m
+
+⇒ F[0 ,T relay ]
+
+_
+
+> ℓ∈L
+
+(φLL  
+
+> ℓ
+
+∨ φLR  
+
+> ℓ
+
+)
+
+
+
+.
+
+3) Detection-to-assignment. Once an emergency is detected, at least one locator must assign a rescuer within bounded time: 
+
+ϕassign := G ^
+
+> m∈M
+
+
+
+φemg  
+
+> m
+
+∧ φsense  
+
+> m
+
+⇒ F[0 ,T assign ]
+
+_
+
+> ℓ∈L
+
+_
+
+> r∈R
+
+φtask 
+
+> ℓ,r,m
+
+
+
+.
+
+4) Rescuer response time. If a locator assigns a rescuer, that rescuer must reach the emergency within a bounded time: 
+
+ϕreach := G ^
+
+> ℓ∈L
+
+^
+
+> r∈R
+
+^
+
+> m∈M
+
+
+
+φtask  
+
+> ℓ,r,m
+
+∧ φemg  
+
+> m
+
+⇒
+
+F[0 ,T reach ]φnear 
+
+> r,m
+
+
+
+.
+
+5) Rescue and deliver. After reaching the emergency, the rescuer must deliver the rescued individual to the rescue center: 
+
+ϕdeliver := G ^
+
+> ℓ∈L
+
+^
+
+> r∈R
+
+^
+
+> m∈M
+
+
+
+φtask  
+
+> ℓ,r,m
+
+∧ φnear  
+
+> r,m
+
+⇒
+
+F[0 ,T deliver ] (φcarry  
+
+> r
+
+∧ φatC  
+
+> r
+
+)
+
+
+
+.
+
+For each scenario ω ∈ Ω, let ϕω denote the conjunction of the five mission specifications above under the activation assignment ω. The scenario-based planning problem requires V 
+
+> ω∈Ω
+
+ϕω . All experiments were conducted using Gurobi [27] (for MIP) and Z3 [28] (for SMT), and were executed on a compute cluster with 16 CPU cores and 64 GB of memory. The simulations were performed using a customized Swarm-Lab [29] framework, extended to incorporate our environment and dynamics and to execute the synthesized trajectories. 10 
+
+Effect of objective function. Figure 2 shows the effect of the objective on rescuer trajectories with 5 locators and 2 rescuers. Without an objective (a), the MIP returns an arbitrary feasible plan; the linear objective (b) and quadratic objective (c) progressively shape the rescuer toward more direct paths. 11 
+
+Since SMT is satisfaction-only, this comparison is specific to the MIP encoding and motivates retaining MIP for objective-driven planning despite its larger encoding footprint. 
+
+Scalability Evaluation with Increasing Graph Complexity and Team Size. We evaluate the incremental impact of graph-dependent constraints on planning complexity by progres-                                        
+
+> 10 Satellite terrain image courtesy of NASA Earth Observatory (https: //earthobservatory.nasa.gov).
+> 11 The linear objective is the rescuer L1path cost J1=P
+> r∈R
+> PT−1
+> t=0 ∥prt+1 −prt∥1.The quadratic objective is the squared
+> L2step cost J2=P
+> r∈R
+> PT−1
+> t=0 ∥prt+1 −prt∥22.(a) No objective (b) Linear objective (c) Quadratic objective
+
+Fig. 2: Effect of objective function on agent trajectories (5 locators, 2 rescuers). With no objective (a), the MIP returns an arbitrary feasible solution. A linear objective (b) and quadratic objective (c) progressively guide the rescuer toward more direct paths to the emergency sites.   
+
+> (a) 5 locators, 2 rescuers (b) 7 locators, 3 rescuers (c) 9 locators, 3 rescuers
+
+Fig. 3: Scalability across team sizes under a linear objective. Increasing the number of locators improves coverage of the monitored region, while the rescuers adapt their paths to the denser set of detected emergencies. 
+
+sively increasing specification complexity while keeping the environment, dynamics, and objective fixed. Starting from a baseline of STL predicates (no graph operators), we add (i) sensing-neighborhood constraints from a time-varying sensing graph, (ii) communication-neighborhood constraints from a time-varying communication graph, and (iii) task constraints from a time-varying task graph. For each case, we further vary the number of locator and rescuer agents. (See Fig. 3) 
+
+Results. Results are presented in Table I, which compares the numbers of variables and constraints and the time taken to find a solution across all ablations for both methods. STL specifica-tions without graph operators scale comparatively well across both solvers and serve as a clear baseline. Adding sensing graphs increases complexity by coupling continuous agent states with logical satisfaction; communication graphs amplify this effect by enforcing pairwise proximity constraints that require joint reasoning over agent configurations; task graphs with decision-dependent assignments yield a large increase in solve time and problem size for both solvers. Quantitatively, SMT encodings result in fewer variables and constraints and exhibit faster solve times. MIP encodings, despite larger size and longer solve times, are required for objective-driven plan-ning (Fig. 2); for the hardest configuration ( |L| = 9 , |R| = 3 ,all graphs, quadratic objective), the time limit was reached before optimality could be established, and Table I reports the best incumbent. VII. D ISCUSSION 
+
+Related Work. STL has been widely used for multi-agent con-trol and planning via optimization-based synthesis, including robustness-aware feedback formulations [14], [30] and MIP encodings with abstractions such as timed waypoints [15]. These approaches focus on individual agent trajectories and continuous dynamics, and do not explicitly capture graph-based spatial relations or collective constraints. To incorporate spatial structure, spatio-temporal logics such as STREL intro-duce graph-based reachability and escape operators [5], [6], enabling the specification and monitoring of collective behav-iors. Learning-based and synthesis approaches from STREL have also been explored [20], but these works do not address optimization-based planning via MIP or SMT. TABLE I: Ablation and scalability results (solve time, number of variables and number of constraints) on SwarmLab search-and-rescue contingency-planning simulations across MIP and SMT encodings. ( |L| and |R| indicate the number of locator and rescuer agents respectively. Reported times are totals over the scenario sweep ( |Ω|=4 for |L| =5 , |Ω|=8 otherwise); reported model sizes are those of the largest per-scenario program. †Per-scenario time limit reached; best incumbent reported. SMT is satisfaction-only; objective ablations apply only to MIP.)                                                                                                                                                                                  
+
+> MIP (No Objective) MIP (Linear Objective) MIP (Quad. Objective) SMT Condition |L| |R| Time (s) |Vars| |Constr| Time (s) |Vars| |Constr| Time (s) |Vars| |Constr| Time (s) |Vars| |Constr|
+> STL only
+> (No graph operators)
+> 5269 60k 125k 1862 †60k 126k 2591 †60k 126k 0.66 21.3k 23.2k 73177 105k 146k 3759 †106k 148k 5216 †106k 148k 1.49 23.8k 26.6k 93277 146k 210k 3877 †147k 212k 5300 †147k 212k 1.74 35.2k 38.5k
+> Gs
+> (Sensing)
+> 52151 74k 143k 1919 †74k 144k 2659 †74k 144k 2.13 23.2k 25.2k 73240 135k 185k 3846 †136k 187k 5311 †136k 187k 3.15 27.9k 30.7k 93401 182k 257k 4016 †183k 259k 5434 †183k 259k 2.61 40.1k 43.4k
+> Gs+Gc
+> (Sens. + Comm.)
+> 52175 81k 153k 2032 †81k 154k 2635 †81k 154k 1.29 25.2k 27.1k 73362 155k 209k 3940 †155k 211k 5393 †155k 211k 1.80 32.1k 34.8k 93459 204k 284k 4154 †206k 287k 5786 †206k 287k 4.06 45.1k 48.4k
+> Gs,Gc,Gtask
+> (Sens. + Comm + Task)
+> 52340 86k 161k 1201 †87k 162k 2234 †86k 161k 3.56 22.0k 24.0k 73775 172k 230k 3750 †173k 232k 5809 †173k 232k 5.68 46.9k 49.8k 931480 225k 307k 4973 †226k 309k 5997 †226k 309k 16.50 58.2k 61.6k
+
+Several works employ SMT- or SAT-based encodings for multi-agent planning under temporal logic constraints. Com-positional synthesis from safe LTL fragments using SMT improves scalability and correctness guarantees [13], while online or incremental planning under LTL has also been studied [12]. Optimization-based planning has further been explored via lazy SMT and MIP formulations [18], [13] and SAT-based convex optimization [19], while MIP-based waypoint formulations enable long-horizon multi-agent STL planning [15]. Capability Temporal Logic (CaTL) integrates temporal logic with task allocation, routing, and resource con-straints for heterogeneous teams [31], [32], typically formu-lating planning as a combinatorial optimization problem over assignments and schedules. While CaTL adopts a centralized planning perspective similar to ours, its operators focus on capabilities and task satisfaction rather than spatio-temporal reasoning over interaction graphs. 
+
+Comparison with HyperLTL. Hyperproperties have also been used to describe specifications for multi-agent sys-tems [9], [10], [11]. Closest to our setting is the work of [10], who use HyperLTL to plan for multi-robot systems with relational objectives, and HypRL [9], which learns control policies from hyperproperty specifications in the decentralized model-free setting (ours is centralized and model-based). Beyond this, HyperLTL is a propositional logic: it admits only Boolean atomic propositions, and joint predicates over multiple agents reduce to syntactic sugar for disjunctions of single-agent predicates over discrete, grid-like environments. Encoding our specifications in HyperLTL also requires reifying 
+
+every pointwise agent choice appearing inside a temporal operator, since HyperLTL admits only trace quantifiers at the outermost prefix. For example, the locator and rescuer choices in the assignment specification ϕassign are expanded as disjunctions over the fixed sets L and R,
+
+ϕassign = ∀πm. G
+
+
+
+φemg ,π m ∧ φsense ,π m ⇒
+
+F[0 ,T assign ]
+
+_
+
+> ℓ∈L
+
+_
+
+> r∈R
+
+task πℓ,π r ,π m
+
+
+
+,
+
+or a Skolemization that lifts the existentials to the prefix at the cost of one alternation, yielding a ∀∃ formula outside the alternation-free fragment. The reach and delivery formulas, by contrast, use fixed universal prefixes but require joint predicates such as φtask  
+
+> ℓ,r,m
+
+and φnear  
+
+> r,m
+
+to be represented as multi-trace atomic propositions. STL-GO evaluates these finite agent choices pointwise and supports joint predicates directly; the full reifications are deferred to Appendix E. Additionally, to compare the encodings of HyperLTL and STL-GO empirically, we adapt the wildfire-rescue grid-world benchmark from HypRL [9], where the authors consider 
+
+N × N grids where 3 ≤ N ≤ 10 . A firefighter agent must extinguish all fire cells while a medic agent rescues all victim cells; the two agents must stay within a bounded communication range, and the medic cannot enter a fire cell until the firefighter has extinguished it. We encode the mission in HyperLTL and STL-GO and solve each under MIP and SMT backends; the full specification and encoding details are reported in Appendix E. The results in Table II show that as the grid grows, HyperLTL encodings incur an O(T ·N 4) constraint blow-up from the pairwise-cell enumeration required by the communication-range constraint: by N =10 , HyperLTL + SMT generates 355k constraints versus 2.4k for STL-GO + SMT. STL-GO’s graph operators encode the same coordination through real-valued predicates, with constraint counts growing linearly in T .
+
+Conclusions. We presented a synthesis framework for spatio-temporal logical specifications with graph operators on multi-agent systems. The MIP and SMT encodings of STL-GO enable centralized planning over dynamic interaction graphs, TABLE II: Comparison of HyperLTL and STL-GO encodings on N ×N grids ( T = 4( N − 1) + 2 ). 
+
+N Method |Var.| |Constr.| Time (s) 5 × 5HyperLTL + SMT 38 8.6k 0.10 
+
+STL-GO + SMT 395 888 0.15 
+
+HyperLTL + MIP 1.0k 8.8k 0.20 
+
+STL-GO + MIP 1.2k 12.7k 0.10 
+
+7 × 7HyperLTL + SMT 54 54.2k 0.61 
+
+STL-GO + SMT 671 1.4k 0.34 
+
+HyperLTL + MIP 2.8k 54.7k 2.39 
+
+STL-GO + MIP 3.0k 65.3k 0.35 
+
+10 × 10 HyperLTL + SMT 78 355.1k 4.26 
+
+STL-GO + SMT 1.2k 2.4k 0.99 
+
+HyperLTL + MIP 8.2k 356.2k 4.47 
+
+STL-GO + MIP 8.5k 387.5k 1.96 
+
+with soundness guarantees. Our simulations demonstrate tra-jectory synthesis under complex STL-GO specifications in-volving multiple dynamic graphs and role-typed agents. 
+
+Limitations and Future Work. Our soundness guarantees rely on deterministic environment and agent dynamics. In stochastic settings, the synthesized plans can only be guar-anteed to satisfy the specification with some probability, and encodings for distributionally robust formulations are an extension. As we synthesize open-loop control sequences, em-bedding encodings inside a receding-horizon loop or learning policies that respect STL-GO specifications are open direc-tions. Furthermore, decentralized synthesis under partial ob-servability, together with decomposition strategies to mitigate the combinatorial growth in the number of graphs, remains for future work. VIII. A CKNOWLEDGEMENTS 
+
+This work was supported by the National Science Foun-dation under Grant IIS-SLES-2417075 and Lockheed Martin Advanced Technology Laboratories. REFERENCES [1] L. Bortolussi and L. Nenzi, “Specifying and monitoring properties of stochastic spatio-temporal systems in signal temporal logic,” in Proceed-ings of the 8th International Conference on Performance Evaluation Methodologies and Tools , 2014, pp. 66–73. [2] L. Nenzi, L. Bortolussi, V. Ciancia, M. Loreti, and M. Massink, “Qualitative and quantitative monitoring of spatio-temporal properties,” in Runtime Verification: 6th International Conference, RV 2015, Vienna, Austria, September 22-25, 2015. Proceedings . Springer, 2015, pp. 21– 37. [3] M. Ma, E. Bartocci, E. Lifland, J. Stankovic, and L. Feng, “SaSTL: Spatial aggregation signal temporal logic for runtime monitoring in smart cities,” in 2020 ACM/IEEE 11th International Conference on Cyber-Physical Systems (ICCPS) . IEEE, 2020, pp. 51–62. [4] I. Haghighi, A. Jones, Z. Kong, E. Bartocci, R. Gros, and C. Belta, “Spatel: a novel spatial-temporal logic and its applications to networked systems,” in Proceedings of the 18th International Conference on Hybrid Systems: Computation and Control , 2015, pp. 189–198. [5] E. Bartocci, L. Bortolussi, M. Loreti, and L. Nenzi, “Monitoring mobile and spatially distributed cyber-physical systems,” in Proceedings of the 15th ACM-IEEE International Conference on Formal Methods and Models for System Design (MEMOCODE) , 2017. [6] L. Nenzi, E. Bartocci, L. Bortolussi, and M. Loreti, “A logic for monitoring dynamic networks of spatially-distributed cyber-physical systems,” Logical Methods in Computer Science , 2022. [Online]. Available: https://lmcs.episciences.org/8936/pdf [7] Z. Xu and A. A. Julius, “Census signal temporal logic inference for multiagent group behavior analysis,” IEEE Transactions on Automation Science and Engineering , vol. 15, no. 1, pp. 264–277, 2016. [8] Y. Zhao, X. Yu, B. Hoxha, G. Fainekos, J. Deshmukh, and L. Linde-mann, “STL-GO: Spatio-temporal logic with graph operators for dis-tributed systems with multiple network topologies,” ACM Transactions on Embedded Computing Systems , vol. 24, no. 5s, pp. 1–23, 2025. [9] T.-H. Hsu, A. Rafieioskouei, and B. Bonakdarpour, “HypRL: Reinforcement Learning of Control Policies for Hyperproperties,” in 
+
+The Thirty-ninth Annual Conference on Neural Information Processing Systems , Oct. 2025. [Online]. Available: https://openreview.net/forum? id=lJSAtyx9Uc [10] Y. Wang, S. Nalluri, and M. Pajic, “Hyperproperties for Robotics: Planning via HyperLTL,” in 2020 IEEE International Conference on Robotics and Automation (ICRA) , May 2020, pp. 8462–8468. [Online]. Available: https://ieeexplore.ieee.org/abstract/document/9196874 [11] B. Finkbeiner, “Logics and Algorithms for Hyperproperties,” ACM SIGLOG News , vol. 10, no. 2, pp. 4–23, Jul. 2023. [Online]. Available: https://dl.acm.org/doi/abs/10.1145/3610392.3610394 [12] R. Singh and I. Saha, “An online planning framework for multi-robot systems with LTL specification,” in Proceedings of the ACM/IEEE International Conference on Cyber-Physical Systems (ICCPS) , 2024. [13] I. Saha, R. Ramaithitima, V. Kumar, G. J. Pappas, and S. A. Seshia, “Automated composition of motion primitives for multi-robot systems from safe LTL specifications,” in Proceedings of the IEEE/RSJ Inter-national Conference on Intelligent Robots and Systems (IROS) . IEEE, 2014, pp. 1525–1532. [14] L. Lindemann and D. V. Dimarogonas, Formal Methods for Multi-Agent Feedback Control Systems . The MIT Press, 2025. [15] D. Sun, J. Chen, S. Mitra, and C. Fan, “Multi-agent motion planning from signal temporal logic specifications,” IEEE Robotics and Automa-tion Letters , vol. 7, no. 2, pp. 3451–3458, 2022. [16] R. Alur, T. A. Henzinger, and O. Kupferman, “Alternating-time temporal logic,” Journal of the ACM , 2002. [17] W. Liu et al. , “Robust multi-agent coordination from CaTL+ specifications,” arXiv preprint arXiv:2210.01732 , 2022. [Online]. Available: https://arxiv.org/pdf/2210.01732 [18] Y. Shoukry, P. Nuzzo, I. Saha, A. L. Sangiovanni-Vincentelli, S. A. Seshia, G. J. Pappas, and P. Tabuada, “Scalable lazy SMT-based motion planning,” in 2016 IEEE 55th Conference on Decision and Control (CDC) . IEEE, 2016, pp. 6683–6688. [19] Y. Shoukry, P. Nuzzo, A. Balkan, I. Saha, A. L. Sangiovanni-Vincentelli, S. A. Seshia, G. J. Pappas, and P. Tabuada, “Linear temporal logic motion planning for teams of underactuated robots using satisfiability modulo convex programming,” in 2017 IEEE 56th annual conference on decision and control (CDC) . IEEE, 2017, pp. 1132–1137. [20] S. Alsalehi, N. Mehdipour, E. Bartocci, and C. Belta, “Neural network-based control for multi-agent systems from spatio-temporal specifica-tions,” in Proceedings of the IEEE Conference on Decision and Control (CDC) , 2021. [21] S. Paul, A. Balakrishnan, X. Qin, and J. V. Deshmukh, “Multi-agent path finding for timed tasks using evolutionary games,” in Quantitative Evaluation of Systems and Formal Modeling and Analysis of Timed Systems , J. Hillston, S. Soudjani, and M. Waga, Eds. Cham: Springer Nature Switzerland, 2024, pp. 302–321. [22] O. Maler and D. Nickovic, “Monitoring temporal properties of contin-uous signals,” in Formal Techniques, Modelling and Analysis of Timed and Fault-Tolerant Systems , Y. Lakhnech and S. Yovine, Eds. Berlin, Heidelberg: Springer Berlin Heidelberg, 2004, pp. 152–166. [23] V. Raman, A. Donzé, M. Maasoumy, R. M. Murray, A. Sangiovanni-Vincentelli, and S. A. Seshia, “Model predictive control with signal temporal logic specifications,” in 53rd IEEE Conference on Decision and Control , 2014, pp. 81–87. [24] E. M. Wolff, U. Topcu, and R. M. Murray, “Optimization-based trajec-tory generation with linear temporal logic specifications,” in 2014 IEEE International Conference on Robotics and Automation (ICRA) , 2014, pp. 5319–5325. [25] A. Momtaz, H. Abbas, and B. Bonakdarpour, “Monitoring signal tem-poral logic in distributed cyber-physical systems,” in Proceedings of the ACM/IEEE 14th International Conference on Cyber-Physical Systems (with CPS-IoT Week 2023) , 2023, pp. 154–165. [26] P. Prabhakar, R. Lal, and J. Kapinski, “Automatic trace generation for signal temporal logic,” in 2018 IEEE Real-Time Systems Symposium (RTSS) . IEEE, 2018, pp. 208–217. [27] Gurobi Optimization, LLC, “Gurobi Optimizer Reference Manual,” 2024. [Online]. Available: https://www.gurobi.com [28] L. De Moura and N. Bjørner, “Z3: an efficient SMT solver,” in         
+
+> Proceedings of the Theory and Practice of Software, 14th International Conference on Tools and Algorithms for the Construction and Analysis of Systems , ser. TACAS’08/ETAPS’08. Berlin, Heidelberg: Springer-Verlag, 2008, pp. 337–340. [29] E. Soria, F. Schiano, and D. Floreano, “SwarmLab: a MATLAB drone swarm simulator,” 2020. [Online]. Available: https://arxiv.org/abs/2005. 02769 [30] L. Lindemann, C. K. Verginis, and D. V. Dimarogonas, “Prescribed performance control for signal temporal logic specifications,” in Pro-ceedings of the IEEE Conference on Decision and Control (CDC) , 2017. [31] M. Cai, K. Leahy, Z. Serlin, and C.-I. Vasile, “Probabilistic coordination of heterogeneous teams from capability temporal logic specifications,”
+> IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 1190–1197, 2022. [32] G. A. Cardona et al. , “Planning for heterogeneous teams of robots with temporal logic capability and resource constraints,” The International Journal of Robotics Research , 2024.
+
+APPENDIX ATHEORETICAL RESULTS FOR MIP E NCODING 
+
+A. Proof of Lemma 6 (MIP, Agent-Local) Proof. We prove the invariant (12) for every agent-local sub-formula ψ, agent i, and time t, by structural induction on ψ.
+
+Dynamics. Constraint (3) is an equality in the decision variables; any feasible assignment to {xit, uit}i,t corresponds to a trajectory of F , with (4) restricting states and inputs to their admissible sets. 
+
+Base case (ψ = μx). The Big-M encoding (Ap-pendix C) introduces zμx,i,t ∈ { 0, 1} with M larger than 
+
+sup x∈[xmin ,xmax ] |a⊤x − b| and assumes feasible predicate val-ues avoid the separation interval (−ε, 0) . It enforces zμx,i,t =1 ⇐⇒ a⊤xit ≥ b, which is the definition of (MA , i, t ) |= μx.
+
+Boolean connectives and until operator. Negation uses 
+
+z¬φ,i,t = 1 − zφ,i,t ; conjunction and disjunction use standard linear encodings; when t + b ≤ T , until uses witness-time indicators βiτ,t enforcing the existence of τ ∈ t ⊕ I with 
+
+zφ2,i,τ = 1 and zφ1,i,τ ′ = 1 for all τ ′ ∈ [t, τ ); when t+b > T ,its satisfaction variable is fixed to zero [23], [24]. 
+
+Graph operator ( ψ = In W, #
+
+> G,[e1,e 2]
+
+φ). We establish the invariant for each graph type type ∈ T , then extend to the modal quantifier. 
+
+(i) Eligibility. By MIP-encodability of Γtype , the edge in-dicator atype  
+
+> j,i,t
+
+exactly represents ηtype  
+
+> j,i
+
+(Xt, wt) and the weight 
+
+wtype  
+
+> t
+
+(j, i ) is a PWA expression in the MIP variables. With 
+
+M > max( |wmin |, |wmax |) + sup |wtype  
+
+> t
+
+(j, i )| and the stated separation margin, (5) enforces γtype  
+
+> j,i,t
+
+= 1 if and only if 
+
+(j, i ) ∈ E type  
+
+> t
+
+and wtype  
+
+> t
+
+(j, i ) ∈ W .
+
+(ii) Conjunction. (6) is the standard linear encoding of 
+
+yφ, type  
+
+> j,i,t
+
+= γtype  
+
+> j,i,t
+
+∧ zφ,j,t ; by inductive hypothesis on φ at j,
+
+yφ, type  
+
+> j,i,t
+
+= 1 iff edge (j, i ) is eligible and (MA , j, t ) |= φ.
+
+(iii) Cardinality. The integer count cIn ,φ, type  
+
+> i,t
+
+=
+
+P  
+
+> j̸=i
+
+yφ, type  
+
+> j,i,t
+
+is the cardinality of the qualifying neighbor set. Since c is integer-valued, the strict inequalities c < e 1 and 
+
+c > e2 are equivalent to c ≤ e1 − 1 and c ≥ e2 + 1 ;thus, the unit integer separation in (7)–(8) enforces 
+
+ztype  
+
+> ψ,i,t
+
+= 1 ⇐⇒ c ∈ [e1, e 2].
+
+(iv) Quantification over types. (10) for # = ∃ and (11) for 
+
+# = ∀ are the standard disjunction and conjunction encodings over per-type variables. The outgoing case is obtained by substituting (j, i ) with (i, j ) in (i)–(iii). By induction, (12) holds for every subformula at every (i, t );the encoding asserts zϕ,i, 0 = 1 for the agent-local root, so feasibility yields (MA , i, 0) |= ϕ.
+
+B. Proof of Theorem 7 Proof. We extend (12) to multi-agent subformulas as zψ,t =1 ⇐⇒ (MA , t ) |= ψ, by structural induction on the multi-agent grammar. 
+
+Joint atomic predicate ( ψ = μ). The Big-M encoding applied to μ(Xt, wt) enforces zμ,t = 1 ⇐⇒ μ(Xt, wt) by the same argument as the agent-local atomic case. 
+
+Embedding ( ψ = i.φ ). The encoding sets zi.φ,t := zφ,i,t ,which by Lemma 6 equals the truth of φ at (i, t ).
+
+Boolean connectives and until operator. Identical in form to the agent-local cases of Lemma 6, applied to multi-agent variables. 
+
+Multi-agent quantifiers ( ψ = EX φ, FA φ). The encodings in Section IV-C enforce zψ,t = 1 ⇐⇒ W 
+
+> i∈V
+
+zφ,i,t = 1 and 
+
+zψ,t = 1 ⇐⇒ V 
+
+> i∈V
+
+zφ,i,t = 1 . By Lemma 6, these match the multi-agent semantics. By induction the invariant holds at the root: zϕ, 0 = 1 ⇐⇒ 
+
+(MA , 0) |= ϕ, and feasibility with zϕ, 0 = 1 as a constraint yields (MA , 0) |= ϕ.APPENDIX BTHEORETICAL RESULTS OF SMT E NCODING 
+
+A. Proof of Lemma 8 (SMT, Agent-Local) Proof. We prove the invariant (23) for every agent-local sub-formula ψ, agent i, and time t, by structural induction on ψ.The argument mirrors the proof of Lemma 6, with Big-M
+
+encodings replaced by LRA biconditionals. 
+
+Dynamics. Constraint (16) is an equality in the SMT variables; any satisfying assignment corresponds to a trajectory of F ,with (15) restricting states and inputs. 
+
+Base case, Boolean connectives, and until operator. Atomic predicates use ziμx,t = ( a⊤xit − b ≥ 0) . Boolean connectives use the corresponding propositional biconditionals. When t +
+
+b ≤ T , until is unrolled over the bounded horizon as ziψ,t =
+
+Wt+bτ =t+a
+
+ ziφ2,τ ∧ Vτ −1 
+
+> k=t
+
+ziφ1,k 
+
+; when t + b > T , its satisfaction variable is fixed to ⊥ [25], [26]. Each case transfers (23) via the inductive hypothesis. 
+
+Graph operator ( ψ = In W, #
+
+> G,[e1,e 2]
+
+φ). For each type ∈ T ,SMT-encodability of Γtype ensures that the edge-existence predicate ηtype  
+
+> j,i
+
+(Xt, wt) is an LRA+LIA Boolean formula and the weight etype  
+
+> j,i
+
+(Xt, wt) is an LRA expression. 
+
+(i) Eligibility. (18) asserts btype  
+
+> j,i,t
+
+↔ (ηtype  
+
+> j,i
+
+∧ wmin ≤ etype ≤
+
+wmax ), giving btype  
+
+> j,i,t
+
+= ⊤ if and only if (j, i ) is an edge and 
+
+wtype  
+
+> t
+
+(j, i ) ∈ W .(ii) Conjunction. (19) asserts ntype  
+
+> j,i,t
+
+= btype  
+
+> j,i,t
+
+∧ zjφ,t ; by inductive hypothesis, ntype  
+
+> j,i,t
+
+= ⊤ iff edge (j, i ) is eligible and 
+
+(MA , j, t ) |= φ.
+
+(iii) Cardinality. (21) asserts zi, type  
+
+> ψ,t
+
+= ( e1 ≤ ctype  
+
+> i,t
+
+≤ e2),where ctype  
+
+> i,t
+
+, defined by (20), counts the qualifying neighbors via ite .
+
+(iv) Quantification over types. (22) asserts the disjunctive biconditional for # = ∃; replacing the disjunction with a conjunction yields the biconditional for # = ∀. The outgoing case is obtained by substituting (j, i ) with (i, j ) in (i)–(iii). By induction, (23) holds for every subformula at every (i, t );the encoding asserts ziϕ, 0 = ⊤ for the agent-local root, so satisfiability yields (MA , i, 0) |= ϕ.
+
+B. Proof of Theorem 9 (SMT, Multi-Agent) Proof. We extend (23) to multi-agent subformulas as zψ,t =
+
+⊤ ⇐⇒ (MA , t ) |= ψ, by structural induction on the multi-agent grammar. 
+
+Joint atomic predicate ( ψ = μ). The LRA zμ,t = μ(Xt, wt)
+
+matches the multi-agent atomic semantics. 
+
+Embedding ( ψ = i.φ ). The encoding sets zi.φ,t := ziφ,t , which by Lemma 8 equals the truth of φ at (i, t ).
+
+Boolean connectives and until operator. Identical in form to the agent-local cases of Lemma 8, applied to multi-agent variables. 
+
+Multi-agent quantifiers ( ψ = EX φ, FA φ). The encoding of the multi-agent quantifiers EX and FA asserts zψ,t =W 
+
+> i∈V
+
+ziφ,t and zψ,t = V 
+
+> i∈V
+
+ziφ,t . By Lemma 8, these match the multi-agent quantifier semantics. By induction the invariant holds at the root: zϕ, 0 = ⊤ ⇐⇒ 
+
+(MA , 0) |= ϕ, and satisfiability with zϕ, 0 = ⊤ as a constraint yields (MA , 0) |= ϕ.APPENDIX CFULL MIXED INTEGER ENCODING FOR STL-GO 
+
+Predicate Encoding. Atomic predicates in STL-GO formulas are inequalities of the form ψ := μ(xit) where μ(xit) ≡ a⊤xit −
+
+b ≥ 0, representing a geometric or logical condition on the agent’s state (for instance, being within a goal region or a communication range). Each predicate ψ is associated with a binary variable ziψ,t ∈ { 0, 1} indicating whether ψ holds for agent i at time t. The relationship between the constraint and the binary indicator is established using the Big-M method: 
+
+a⊤xit − b ≥ − M (1 − ziψ,t ); a⊤xit − b ≤ − ε + M z iψ,t 
+
+where M > 0 is a sufficiently large constant and ε > 0 is a small positive separation margin. We assume feasible predicate values do not lie in (−ε, 0) . These constraints ensure that 
+
+ziψ,t = 1 if and only if ψ holds. 
+
+Logical Operators. 
+
+Let ψ = Op( φ1, . . . , φ m) denote a formula obtained by applying a logical operator to subformulas φ1, . . . , φ m. For each agent i and time t, we introduce a binary variable ziψ,t ∈{0, 1} encoding the truth value of ψ. Standard linear encodings are used:  
+
+> •
+
+Negation: ( ψ = ¬φ) ziψ,t = 1 − ziφ,t . 
+
+> •
+
+Conjunction: (ψ = Vmj=1 φj ) ziψ,t ≤ ziφj ,t ∀j, ziψ,t ≥
+
+1 − m + Pmj=1 ziφj ,t . 
+
+> •
+
+Disjunction: (ψ = Wmj=1 φj ) ziψ,t ≥ ziφj ,t ∀j, ziψ,t ≤
+
+Pmj=1 ziφj ,t .
+
+Temporal Operators. 
+
+Temporal modalities in STL-GO are represented over bounded time horizons using recursive constraints on binary variables. The fundamental operator is until (U); eventually 
+
+(F) and always (G) are defined as FI φ := ⊤ UI φ and 
+
+GI φ := ¬FI ¬φ. 
+
+> •
+
+Until. For ψ = φ1 U[a,b ] φ2 and t + b ≤ T , satisfaction requires that φ2 becomes true at some time τ ∈ [t+a, t +
+
+b] and that φ1 holds at every time in [t, τ ). Introduce auxiliary variables βiτ,t ∈ { 0, 1}, one for each candidate witness time: 
+
+βiτ,t ≤ ziφ2,τ ,βiτ,t ≤ ziφ1,k ∀k ∈ [t, τ − 1] ,βiτ,t ≥ ziφ2,τ + 
+
+> τ−1
+
+X
+
+> k=t
+
+ziφ1,k − (τ − t),ziψ,t ≥ βiτ,t ∀τ ∈ [t + a, t + b],ziψ,t ≤
+
+> t+b
+
+X 
+
+> τ=t+a
+
+βiτ,t .
+
+(24) For t + b > T , the strong bounded-horizon semantics are enforced by ziψ,t = 0 . 
+
+> •
+
+Eventually. For ψ = F[a,b ]φ, apply the derivation 
+
+F[a,b ]φ := ⊤ U[a,b ] φ and the encoding simplifies since 
+
+zi 
+
+> ⊤,t
+
+= 1 always holds: For t + b ≤ T , impose 
+
+ziψ,t ≥ ziφ,τ ∀τ ∈ [t + a, t + b],ziψ,t ≤
+
+> t+b
+
+X 
+
+> τ=t+a
+
+ziφ,τ . (25) For t + b > T , impose ziψ,t = 0 . This ensures ziψ,t = 1 
+
+if φ holds at least once within [t + a, t + b]. 
+
+> •
+
+Globally: For ψ = G[a,b ]φ, apply the derivation 
+
+G[a,b ]φ := ¬F[a,b ]¬φ. For t + b ≤ T , impose 
+
+ziψ,t ≤ ziφ,τ ∀τ ∈ [t + a, t + b],ziψ,t ≥
+
+> t+b
+
+X 
+
+> τ=t+a
+
+ziφ,τ − (b − a). (26) For t + b > T , impose ziψ,t = 1 . This enforces ziψ,t = 1 
+
+only if φ holds at all times in [t + a, t + b].APPENDIX DFULL SMT E NCODING FOR STL-GO 
+
+Atomic Predicates. For each atomic predicate μ, we associate a Boolean satisfaction variable ziμ,t ∈ { true , false }, to indicate the satisfaction of μ for agent i at time t. We encode the semantics of the predicate by asserting the following logical equivalence in the Theory of Linear Real Arithmetic (LRA): 
+
+ziμ,t = true ↔ (a⊤xit − b ≥ 0) .This constraint couples the discrete Boolean structure with the continuous state vector xit, allowing the solver to reason about system states. 
+
+Logical operators.  
+
+> •
+
+Negation. We encode a formula ψ = ¬φ by imposing the constraint 
+
+ziψ,t = ¬ziφ,t (27) for each agent i and time t. This enforces that the negated formula holds at (i, t ) if and only if the inner subformula does not hold at (i, t ). 
+
+> •
+
+Conjunction. For a formula ψ = φ1 ∧ φ2, we add the constraint 
+
+ziψ,t = ziφ1,t ∧ ziφ2,t (28)  
+
+> •
+
+Disjunction. Similarly, ψ = φ1 ∨ φ2 is encoded as 
+
+ziψ,t = ziφ1,t ∨ ziφ2,t (29) 
+
+Temporal operators. Temporal operators are encoded by imposing constraints on ziψ,t to satisfy subformulas within the time interval. We eliminate temporal quantifiers by un-rolling them into finite conjunctions and disjunctions over the bounded time horizon, thereby generating a quantifier-free encoding.  
+
+> •
+
+Until. For a formula ψ = φ1 U[a,b ] φ2, its discrete-time semantics is captured by the constraint 
+
+ziψ,t =
+
+
+
+> t+b
+
+_ 
+
+> τ=t+a
+
+ziφ2,τ ∧ 
+
+> τ−1
+
+^
+
+> k=t
+
+ziφ1,k 
+
+!
+
+, t + b ≤ T, 
+
+false , t + b > T. 
+
+(30) This enforces that φ2 becomes true at some time τ within the interval, and that φ1 holds continuously until that time.  
+
+> •
+
+Eventually. Consider a formula ψ = F[a,b ]φ, where 0 ≤
+
+a ≤ b, the Eventually operator holds at time t if and only if the inner subformula holds at least once within the time interval. We encode this operator by the constraint 
+
+ziψ,t =
+
+
+
+> t+b
+
+_ 
+
+> τ=t+a
+
+ziφ,τ , t + b ≤ T, 
+
+false , t + b > T. 
+
+(31)  
+
+> •
+
+Always. We encode the formula ψ = G[a,b ]φ by 
+
+ziψ,t =
+
+
+
+> t+b
+
+^ 
+
+> τ=t+a
+
+ziφ,τ , t + b ≤ T, 
+
+true , t + b > T. 
+
+(32) This ensures that the Always operator holds at time t
+
+exactly when the inner subformula holds at all time steps within the interval. APPENDIX ECOMPARISON TO HYPER LTL The specifications introduced in Section II are stated in STL-GO, where agent-level quantifiers such as EX are eval-uated over V pointwise at the temporal instant under con-sideration. The mission also uses finite conjunctions over the fixed locator, rescuer, and emergency-site sets, together with predicates derived from the time-varying task graph. HyperLTL, by contrast, quantifies exclusively over traces at the outermost prefix, so any agent-level quantifier that appears inside a temporal operator in STL-GO must be reified : it must be lifted out of the temporal scope and re-expressed using outer trace quantifiers, auxiliary atomic propositions, or finite disjunctions over a fixed agent universe. This appendix makes the cost of that reification explicit. 
+
+A. Reification conventions 
+
+We fix the locator set L, rescuer set R, and emergency-site set M at design time, and associate one trace variable with each corresponding entity: πℓ for ℓ ∈ L , πr for r ∈ R , and πm
+
+for m ∈ M . Emergency activation is represented by φemg ,π m ,while task πℓ,π r ,π m is true when locator ℓ assigns rescuer r
+
+specifically to emergency site m. The predicates φemg  
+
+> m
+
+, φsense  
+
+> m
+
+,
+
+φLL  
+
+> ℓ
+
+, φLR  
+
+> ℓ
+
+, φnear  
+
+> r,m
+
+, φcarry  
+
+> r
+
+, and φatC  
+
+> r
+
+are tagged with the trace(s) on which they are evaluated. We consider two reification strategies. The usual approach expands every inner agent-level existential into a finite dis-junction over the fixed agent universe, keeping the quantifier prefix purely universal. The Skolemized strategy lifts inner existentials to outer trace quantifiers, exposing the witness traces explicitly at the cost of one quantifier alternation per lifted existential. 
+
+B. Reified HyperLTL specifications a) Bounded emergency detection: The original STL-GO formula contains no inner existential, so the idiomatic and Skolemized reifications coincide: 
+
+ϕHL detect := ∀πm. G
+
+
+
+φemg ,π m ⇒
+
+F[0 ,T det ] φsense ,π m
+
+
+
+. (33) The finite conjunction V 
+
+> m∈M
+
+becomes the universal trace quantifier ∀πm.
+
+b) Detection-to-relay: The inner existential ∃ℓ ∈ L must be reified. The idiomatic form expands it as a disjunction over 
+
+L:
+
+ϕidio relay := ∀πm. G
+
+
+
+φemg ,π m ∧ φsense ,π m ⇒
+
+F[0 ,T relay ]
+
+_
+
+> ℓ∈L
+
+(φLL ,π ℓ ∨ φLR ,π ℓ )
+
+
+
+. (34) The Skolemized form lifts the locator existential to the outer prefix, introducing one quantifier alternation: 
+
+ϕSkol relay := ∀πm. ∃πℓ. G
+
+
+
+φemg ,π m ∧ φsense ,π m ⇒
+
+F[0 ,T relay ](φLL ,π ℓ ∨ φLR ,π ℓ )
+
+
+
+. (35) The two reifications are not semantically equivalent: the origi-nal STL-GO formula admits a witness locator that may depend on both m and the temporal instant t, whereas (35) forces a single witness locator trace per emergency for the entire horizon, and (34) is faithful only because the disjunction is re-evaluated at each instant. Capturing the original semantics exactly would require either the disjunctive form (34) or a Skolemization in which the witness varies with t, which HyperLTL cannot express without further auxiliary machinery. c) Detection-to-assignment: The reifications follow the same pattern. Idiomatic: 
+
+ϕidio assign := ∀πm. G
+
+
+
+φemg ,π m ∧ φsense ,π m ⇒
+
+F[0 ,T assign ]
+
+_
+
+> ℓ∈L
+
+_
+
+> r∈R
+
+task πℓ,π r ,π m
+
+
+
+. (36) Skolemized: 
+
+ϕSkol assign := ∀πm. ∃πℓ. ∃πr . G
+
+
+
+φemg ,π m ∧ φsense ,π m ⇒
+
+F[0 ,T assign ] task πℓ,π r ,π m
+
+
+
+. (37) 
+
+d) Rescuer response time: The fixed conjunctions over locators, rescuers, and emergency sites become universal trace quantifiers. The emergency-specific assignment predicate pre-serves the association between the assigned rescuer and site: 
+
+ϕHL reach := ∀πℓ. ∀πr . ∀πm. G
+
+
+
+task πℓ,π r ,π m ∧ φemg ,π m ⇒
+
+F[0 ,T reach ]φnear ,π r ,π m
+
+
+
+. (38) 
+
+e) Rescue and deliver: The same universal prefix gives the direct reification: 
+
+ϕHL deliver := ∀πℓ. ∀πr . ∀πm. G
+
+
+
+task πℓ,π r ,π m ∧ φnear ,π r ,π m ⇒
+
+F[0 ,T deliver ](φcarry ,π r ∧ φatC ,π r )
+
+
+
+. (39) 
+
+C. Sources of the succinctness loss 
+
+Two principal structural costs are imposed by reification, and both are visible in the formulas above. First, every pointwise agent choice in STL-GO—whether expressed by EX over V or by a finite role-restricted disjunction—becomes either a finite disjunction whose size scales with the corresponding agent universe or an outer trace quantifier that raises the alternation depth. In the disjunctive form, the propositional matrix grows as Θ( |L| ) for ϕrelay 
+
+and Θ( |L| |R| ) for ϕassign . The role-restricted choices in both formulas remain inside the temporal operator, preserving their pointwise dependence on the time and emergency; the assign-ment formula also preserves the emergency-specific locator– rescuer association. In the Skolemized form, the matrix re-mains compact but the prefix acquires a universal–existential alternation. By contrast, the fixed conjunctions in ϕreach and 
+
+ϕdeliver translate to universal trace prefixes and introduce no alternation. Second, joint predicates such as φnear  
+
+> r,m
+
+and φtask  
+
+> ℓ,r,m
+
+that de-pend on the states of multiple agents map naturally onto STL-GO via predicate functions over agent-state tuples at the outer level. In HyperLTL they require atomic propositions tagged with multiple path variables, written above as φnear ,π r ,π m
+
+and task πℓ,π r ,π m . This is a non-standard extension; in strict HyperLTL one must either replicate each predicate across the participating traces with consistency constraints or precompute it as a Boolean signal on a designated system trace, in either case adding further auxiliary atomic propositions. Taken together, the reification yields HyperLTL formulas whose propositional matrix scales linearly with the locator universe for relay and with the locator–rescuer product for assignment (idiomatic form), or whose quantifier prefixes acquire an alternation (Skolemized form). The remaining formulas stay universally quantified but retain the multi-trace predicate overhead. 
+
+D. Experimental comparison with HyperLTL 
+
+We evaluate STL-GO against a HyperLTL baseline on the wildfire-rescue grid-world benchmark of HypRL [9]. The environment is an N × N grid. Two heterogeneous agents, a firefighter (FF) and a medical responder (Med), are deployed from a shared initial cell in the top-left corner. Let FN and 
+
+VN denote, respectively, the fire and victim cells for an N ×N 
+
+instance; their cardinalities scale with N , with fire cells placed along the anti-diagonal and victim cells along the middle row. The mission is governed by four sub-specifications. Objec-tives O1 and O2 require FF to eventually visit every fire zone (extinguishing it) and Med to eventually visit every victim cell respectively. Coordination constraint C1 enforces that the agents remain within Manhattan communication range N − 1 at all times. Safety constraint C2 imposes a temporal precedence: Med may not enter any fire zone until FF has already visited that cell. The HyperLTL specification uses a ∀πF F . ∃πM ed 
+
+prefix and joint multi-trace propositions: 
+
+ϕRescue := ∀πF F .∃πM ed . (ψfire ∧ ψsave ∧ ψdist ∧ ψsafe )
+
+O1: ψfire := ^
+
+> q∈F N
+
+F(qπF F )
+
+O2: ψsave := ^
+
+> q∈V N
+
+F(qπM ed )
+
+C1: ψdist := G (∥Location πF F − Location πM ed ∥1 < N )
+
+C2: ψsafe := ^
+
+> q∈F N
+
+(¬qπM ed U qπF F )
+
+The equivalent STL-GO specification captures the same mis-sion using STL-GO operators: a shared fire-status state vari-able collapses the per-cell until of C2 into the constraint 
+
+loc[Med , q, t ] + fire[ q, t ] ≤ 1 for each q ∈ FN , and the singleton communication-graph collection {G ct } with the op-erator Out ∃{G c},[1 ,∞)⊤ at FF enforces C1 via a single distance constraint per timestep.

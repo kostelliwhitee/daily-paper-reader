@@ -6,27 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-02
-- 运行时间：2026-08-02 20:55:57 UTC
+- 最新运行日期：2026-08-03
+- 运行时间：2026-08-03 20:53:13 UTC
 - 运行状态：成功
 - 本次总论文数：2
-- 精读区：2
-- 速读区：0
+- 精读区：0
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读2篇高分论文，聚焦LLM智能体情感传染与长上下文注意力优化。最值得关注：情感在模拟人群中会自发传播，且基于相似性引导的注意力复用能大幅提升长文本效率。建议读者优先精读情感传染一文，并尝试将注意力复用方法用于自己的长文档任务。
-- 详情：[/202608/02/README](/202608/02/README)
+今日完成2篇速读，暂无精读，聚焦多智能体规划与博弈学习两大方向。  
+其中《Multi-Agent Planning with Spatio-Temporal and Topological Constraints using STL-GO》与《Local Global Games and Network Common Learning》均获7.0分，前者涉及时空与拓扑约束下的多智能体规划，后者探讨局部全局博弈与网络共同学习。  
+建议后续可围绕这两个方向精读原文，深入理解约束求解与博弈学习机制的细节。
+- 详情：[/202608/03/README](/202608/03/README)
 
 ### 精读区论文标签
-1. [How Affect Propagates among LLM Agents: Emergent Emotional Contagion in Crowd Simulation](/202608/02/2607.25140v1-how-affect-propagates-among-llm-agents-emergent-emotional-contagion-in-crowd-simulation)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：研究多智能体群体模拟中涌现的情绪传染，直接分析交互动态
-2. [Recall Before You Rank: Similarity-Guided Top-$K$ Reuse for Efficient Long-Context Attention](/202608/02/2607.27692v1-recall-before-you-rank-similarity-guided-top-k-reuse-for-efficient-long-context-attention)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：无需训练的Top-K注意力复用加速长上下文注意力
+- 本次无精读推荐。
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [Multi-Agent Planning with Spatio-Temporal and Topological Constraints using STL-GO](/202608/03/2607.28679v1-multi-agent-planning-with-spatio-temporal-and-topological-constraints-using-stl-go)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：基于STL-GO的多智能体规划，处理时空与拓扑约束，包含通信拓扑。
+2. [Local Global Games and Network Common Learning](/202608/03/2607.28821v1-local-global-games-and-network-common-learning)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：智能体与网络邻居局部协调并学习距离r内的私有信号
 
 
 <div class="dpr-home-promo-card">
