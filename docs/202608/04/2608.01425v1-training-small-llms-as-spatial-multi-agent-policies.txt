@@ -1,0 +1,398 @@
+Title: Training Small LLMs as Spatial Multi-Agent Policies
+
+URL Source: https://arxiv.org/pdf/2608.01425v1
+
+Published Time: Tue, 04 Aug 2026 01:31:45 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Training Small LLMs as Spatial Multi-Agent Policies 
+
+## Yi Mao, Andrew Perrault 
+
+Department of Computer Science and Engineering, The Ohio State University 
+
+mao.496@osu.edu , perrault.17@osu.edu 
+
+Abstract 
+
+Training LLM-based multi-agent systems with multi-agent reinforcement learning is rapidly gaining traction, and a par-allel line of work argues that such systems should be judged by their behavior, not only their reward. We take up both threads in spatial cooperative games, where small frozen LLMs prompted with low-level actions fail outright, earning zero reward. Guided by the options/semi-MDP framework— and, because option execution is asynchronous across agents, its multi-agent extension in macro-action Dec-POMDPs—we equip each game with a library of symbolic options : typed, state-feasible, short-horizon behaviors executed by a symbolic planner. Each library is drafted by a frontier coding model from the game’s source code; the feasibility guards that fil-ter each menu are then synthesized mechanically from cheap random-policy burn-in rollouts—a guard is adopted only if it explains repeated execution failures while hiding no logged success—so no guard is authored, selected, or reward-tuned by hand. Each agent’s LLM acts as its policy over options, with a private per-agent LoRA adapter trained by a per-agent variant of multi-agent GRPO (PA-MAGRPO); this lifts frozen bases from zero reward to competent play across three games and four small backbones. Behavioral audits then reveal that reward and cooperation decouple: a rising reward curve may simply mean that one agent has learned to run the entire task alone while its partner idles—cooperation emerges only when the task makes it necessary. Reward alone is thus an unreli-able readout of cooperation; behavioral evaluation must sit alongside it. 
+
+## 1 Introduction 
+
+Training LLM-based multi-agent systems with multi-agent reinforcement learning is rapidly gaining traction: recent work moves beyond prompting frozen frontier models (Mos-quera et al. 2025; Gallego 2026) and optimizes the inter-acting agents themselves (Ma et al. 2024; Liu et al. 2026; Piche et al. 2025), while a parallel line of work argues that such systems should be judged by their behavior rather than by reward alone (Leibo et al. 2017). A frozen model can only be steered by prompting, so its coordination failures are permanent; a trainable policy can instead turn environment feedback into durable, agent-specific behavior. But joint RL multiplies rollout and gradient cost by the number of agents, pushing the trainable model size to small models (2–4B) un-der our academic budget. This paper asks what it takes to train small LLMs as spatial multi-agent policies—and what actually emerges when training succeeds. Three obstacles stand in the way. First, a grounding gap: in our experiments, small frozen models dropped into a 2D spa-tial game could not reliably turn a high-level goal (“clean the dirt to my north”) into the primitive actions the environment expects—they hallucinate spatial preconditions and collapse onto a single “safe” action (Valmeekam et al. 2023; Ahn et al. 2022; Huang et al. 2022; Liang et al. 2023)—so naive fine-tuning starts from, and never leaves, zero reward. Second, a 
+
+horizon problem: episodes run for hundreds of primitive steps under a sparse team reward, leaving the optimizer almost no per-decision credit signal. Third, a specialization problem: cooperation often requires agents to behave differently, but a team trained through one shared set of weights averages con-flicting role gradients and collapses onto identical behavior. A workable recipe has to address all three. The first two obstacles have a classic remedy: tempo-ral abstraction. Instead of asking the LLM to steer with primitive commands (up, down, left, right, interact), we let it choose among a small set of options (Sutton, Pre-cup, and Singh 1999). An option is a named, short-horizon behavior with a target— move_to (x, y ), pick_up (onion ),
+
+clean (nearest dirt ). Once the agent selects move_to (x, y ), a symbolic executor computes a shortest-path route and emits the primitive moves: one decision spans multiple environ-ment steps. Each option also carries checking code that tests, against the current state and observation, whether the option makes sense right now—and an option that fails its checks is simply not shown. If no apple is in the agent’s local view, 
+
+eat does not appear in the prompt at all. At a decision point the LLM thus sees a short lettered menu of feasible options and simply picks one: it decides what to do, never how .Decisions become far fewer and semantically meaningful. Formally, each agent now faces a semi-MDP, and because options start and finish asynchronously across agents, the team-level problem is a macro-action Dec-POMDP (Amato, Konidaris, and Kaelbling 2014), in whose terms our method is decentralized macro-level policy learning (Xiao, Hoffman, and Amato 2020) with LLM policies. Each game’s option library is built with exactly one frontier-model step: Claude Opus 4.8 reads the game’s source code and drafts a typed option schema in which every option carries an effect predicate —a post-condition stating what arXiv:2608.01425v1 [cs.MA] 2 Aug 2026 the option promises to do. The feasibility guards that fil-ter the menu are then synthesized by a fixed algorithm, with no model and no human in the loop: cheap uniform-random burn-in rollouts label every execution as valid or vacuous under the effect predicate, and a guard is adopted only if it explains repeated failures while hiding zero logged successes—a criterion of execution validity, never reward. After construction the frontier model is not queried again— not during training, evaluation, or action selection. The spe-cialization obstacle motivates the second ingredient: a private LoRA adapter (Hu et al. 2022) per agent on a shared frozen base, trained jointly with a per-agent variant of multi-agent GRPO (Liu et al. 2026; Shao et al. 2024) ( PA-MAGRPO ): the shared base retains common language and task knowledge, while private adapters give divergent roles a parameter slot in which to emerge. Neither ingredient is redundant: the frozen base with the same option menus stays near zero reward on two of three games, and a single shared adapter collapses toward identical behavior. The recipe works: it lifts frozen bases from zero reward to competent play on all three games, and does so across four small backbones. We can also say why . Option-level deci-sions compress the horizon: the LLM is consulted on only a fraction of environment steps. The action space is seman-tic, where a language model’s priors help. And feasibility filtering removes the grounding failures outright. Training success makes the question visible: holding the recipe fixed, does a rising reward curve mean the team cooperates? Behavioral audits show the answer is: not necessarily. Across our three games, the same recipe yields high re-ward with genuine division of labor, high reward with one agent working while its partner idles, and nearly flat reward that hides a real shift to sustainable harvesting; coordination emerges only where the task demands it. Cooperation tracks the task’s incentive structure, not the reward curve. 
+
+Contributions. 
+
+1. A symbolic option library that makes small LLMs viable spatial MARL policies. Each agent acts as a pol-icy over a fixed library of symbolic options—the option menu interface: the LLM chooses what to do from a state-filtered menu, and a symbolic planner handles how . For-mally, the interface recasts each agent’s problem as a semi-MDP over options and the team’s as a macro-action Dec-POMDP (Sutton, Precup, and Singh 1999; Amato, Konidaris, and Kaelbling 2014). Without it, neither the frozen base nor the fine-tuned policy produces meaning-ful behavior on the harder games. 2. Per-agent reinforcement fine-tuning (RFT) for multi-agent policies. We pair the option menu with per-agent LoRA adapters trained by MAGRPO ( PA-MAGRPO ). The shared base preserves common language and task knowledge, while private adapters give each agent a pa-rameter slot where divergent behavior can emerge under a shared team return. This directly addresses the specializa-tion obstacle above: it avoids the gradient-averaging fail-ure of a single shared adapter and enables cleaner/eater specialization in Cleanup without explicit role labels. 3. Evidence that reward and cooperation decouple. Re-ward and cooperation decouple in both directions: Over-cooked Asymmetric Advantages yields high reward from a one-worker/one-idler team (with Forced Coordination as the within-game control where deliveries do certify hand-offs), while Commons Harvest improves patch sur-vival substantially under a nearly flat reward—reward curves can both overstate and understate cooperation. 
+
+## 2 Related Work 
+
+Training LLM multi-agent systems. A growing line of work trains interacting LLM agents rather than prompt-ing them: CORY (Ma et al. 2024) coevolves two copies of an LLM on text tasks; MAGRPO (Liu et al. 2026) in-troduces a group-relative multi-agent objective for collabo-rative writing and coding; Piche et al. (Piche et al. 2025) fine-tune open LLMs toward non-exploitable cooperation in textual social dilemmas; YOLO-MARL (Zhuang et al. 2025) keeps the LLM outside the gradient loop entirely, querying it once to synthesize a planner. We adopt MA-GRPO’s group-relative objective but move it into embodied, partially observable spatial games, with per-agent adapters— a design established by LoRASA (Zhang, Kapoor, and Sun 2025) on SMAC and MAMuJoCo and by multi-LoRA coding pipelines (Lee, Cho, and Choi 2026). A second line argues that team reward alone is an insufficient signal of cooper-ation: sequential social dilemmas (Leibo et al. 2017) and common-pool resource models (Pérolat et al. 2017) measure behavior directly through social-outcome metrics (efficiency, equality, sustainability, peace); inequity aversion (Hughes et al. 2018) improves cooperation without altering the task reward; Biswas et al. (Biswas et al. 2026) show that MARL agents on Overcooked can attain high reward with very low 
+
+interdependence ; and Shapley-Coop (Hua et al. 2025) finds that self-interested LLM agents default to non-cooperation absent explicit credit mechanisms. These works establish, in single environments or single directions, that reward and co-operation can diverge; we join the two lines by training the agents ourselves and extending the divergence to a bidirec-tional, cross-task decoupling under one fixed recipe. 
+
+Temporal abstraction and macro-action MARL. An op-tion couples an initiation set, an intra-option policy, and a ter-mination condition, and acting over a fixed option set turns an MDP into a semi-MDP (Sutton, Precup, and Singh 1999); with options terminating asynchronously across agents, the planning formalism is the macro-action Dec-POMDP (Am-ato, Konidaris, and Kaelbling 2014), over which macro-action-based deep MARL trains decentralized policies (Xiao, Hoffman, and Amato 2020). Our option menu instantiates this design with a frontier-drafted library where prior work typically hand-specifies one, and with a fine-tuned LLM rather than a task-specific network as the policy over op-tions; unlike option-discovery methods, our options are fixed and symbolic, and learning happens only in the policy over them. 
+
+Closest neighbors. Our design builds directly on three threads. Mosquera et al. (2025) show that Melting Pot coop-eration can be posed to LLMs through a compound-action vocabulary ( go_to(x,y) , immobilize , stay_put ,
+
+explore ); we adopt essentially their vocabulary and ask what changes when the model can learn , rather than act as a frozen GPT-3.5/4 reasoner. Gallego (2026) shows that a frozen frontier model can author Python policies for social dilemmas under social-metric feedback; we likewise use a frontier model as a code author, but only at construction time—learning then happens inside the agents. Piche et al. (2025) demonstrate group-relative fine-tuning toward coop-eration in textual social dilemmas such as Trust-and-Split; we bring that objective family onto spatial substrates with macro actions. Combining the three—spatial games, per-step small-LLM policies, and gradient-based multi-agent training—is to our knowledge new; the combination lets us hold one train-ing recipe fixed across tasks and compare the behavior that emerges. Because these works differ in agent counts, hori-zons, and evaluation metrics, no direct numerical comparison is possible; we instead benchmark against frozen-base and ablation variants under an identical action interface, report-ing behavioral metrics alongside return. 
+
+## 3 Background 
+
+From Dec-POMDPs to macro-action Dec-POMDPs. 
+
+The underlying game is a cooperative decentralized POMDP (Dec-POMDP) (Amato, Konidaris, and Kaelbling 2014) given by (S, {O i}Ni=1 , {A i}Ni=1 , Ω, P, R, γ ): at each step the environment is in state st ∈ S , each agent i receives a private observation oit = Ω( st, i ), the joint action at =(a1 
+
+> t
+
+, . . . , a Nt ) drives the transition P (st+1 | st, at), and all agents share the team reward rt = R(st, at). The objective is a policy set π = {πi}Ni=1 maximizing J(π) = E[P 
+
+> t
+
+γtrt].Acting at the primitive level is not the only choice. An 
+
+option z = ⟨I z , π z , β z ⟩ couples an initiation set Iz (the ob-servations in which z may be selected), an intra-option policy 
+
+πz (here, a symbolic planner emitting primitive actions from 
+
+Ai), and a termination condition βz (here, completion, fail-ure, or timeout of the macro) (Sutton, Precup, and Singh 1999). Acting over a fixed option set Zi turns agent i’s deci-sion problem into a semi-MDP : decisions occur only at option boundaries, separated by a variable number of environment steps. We write Zi(oit) = {z ∈ Z i : oit ∈ I z } for the menu 
+
+of options available to agent i at observation oit; a policy over options πi(z | oit), supported on Zi(oit), selects a new option whenever the previous one terminates. Because op-tions begin and end asynchronously across agents, the team-level process is not itself a single semi-MDP; the resulting model—the Dec-POMDP above with each Ai replaced by the option library Zi—is a macro-action Dec-POMDP (Amato, Konidaris, and Kaelbling 2014; Xiao, Hoffman, and Am-ato 2020): whenever agent i’s current option terminates, it selects a new option from its menu while its teammates con-tinue executing theirs. 
+
+Group-relative policy optimization. GRPO (Shao et al. 2024) replaces the learned value baseline of PPO-style meth-ods with a cohort statistic: it samples K rollouts, normalizes their returns within the cohort, and uses the normalized re-turn as the advantage in a clipped surrogate update with a KL penalty toward a reference policy. MAGRPO (Liu et al. 2026) extends this to cooperative multi-agent training: roll-outs are joint, the scored quantity is the shared team return, and every agent’s update uses the same cohort-normalized advantage—avoiding a centralized critic, which is expensive and unstable at LLM scale. The Method section gives our per-agent instantiation. 
+
+## 4 Two Failure Modes of a Small LLM as a Cooperative Spatial Agent 
+
+Before describing our recipe, we identify two failure modes of a naïve deployment on Cleanup: the frozen Qwen3-4B-Instruct-2507 base, no fine-tuning, is handed the standard prompt and asked to emit a primitive action letter A–I (move-ment, turning, fire_zap , fire_clean ). Both failures are vis-ible directly in the input/output stream. 
+
+Failure 1 — spatial hallucination. The prompt tells the LLM its position, facing direction, nearest dirt, and a layout hint—everything needed to reason “to fire at dirt to my north, I must first face north.” In practice it does not. A verbatim trace from the first step of an episode:                            
+
+> Prompt to agent 0 (truncated):
+> You are agent 0. World position: (14,9). Facing: West. Sensors: Dirt visible 13, nearest (13,5) 5st, (15,5) 5st. Layout: SAND. River is to your north (rows 1-5).
+> Response from agent 0:
+> state: river_dirty choice: I←FIRE_CLEAN
+
+The agent faces west ; the only visible dirt is north 
+
+of it; the beam discharges harmlessly into open sand. Across all five evaluation episodes ( 7 agents × 150 steps), the LLM never once precedes a fire_clean with the 
+
+turn_left /turn_right actions that the prompt itself enu-merates as legal. The model has the symbols and ignores their meaning. We call this spatial hallucination : the LLM produces plausible-looking decisions whose pre-conditions (here, “facing north”) it has not verified. 
+
+Failure 2 — mode collapse on a “safe” default. Even when no dirt is in view, the LLM emits the same letter: agents seeing Dirt visible: 0 still respond choice: I. Aggregated over all 5,250 LLM calls, the action distri-bution collapses to a single letter: fire_clean 95 .8% , noop 
+
+4.2% , and the other seven primitives—including the turning actions that would let cleaning succeed—exactly 0% .Worse, applying single-agent RL fine-tuning on the same prompt format does not unstick this attractor; it sharpens it: 
+
+fire_clean share rises from 95 .8% to 98 .4% (Ablation A, §6). The cleaning bias lives in the base model’s prior over single-letter responses to a river_dirty prompt, and per-step letter-level RL only reinforces it. We call this mode collapse on a safe default : when the action interface forces a one-token-at-a-time micro-policy, our tested model picks the most semantically-loaded letter — the one whose macro-name evokes “cleaning” — and refuses to leave it. The two ingredients of our method target these two failures one-for-one; we describe them next and verify empirically that they fix the failures in the Experiments. 5 Method 
+
+5.1 A Symbolic Option Library and Its Menu Interface 
+
+We lift the LLM’s decision space from primitive actions to the fixed library of symbolic options of §3, presented at each decision point as a lettered menu . The mapping onto the op-tion formalism is exact: deterministic feasibility checks im-plement the initiation set Iz ; a symbolic executor implements the intra-option policy πz , expanding a chosen option into primitive actions through shortest-path movement, orienta-tion changes, and interaction preconditions; and completion, failure, or timeout of the macro implements termination βz .Feasibility is decided by code, not by a model—path reach-ability on the current map, held-item preconditions (placing an onion requires holding one), and task-state gates (plating requires a ready pot)—and an option that fails any check is simply not shown. The LLM, prompted with its local text observation and the surviving lettered menu, samples one option zit ∈ Z i(oit). A Cleanup decision point renders as:                      
+
+> Action menu: A) eat apple @(2, 11) B) clean dirt @(4, 5) C) go to the river D) go to the grass/orchard
+> Response: choice: B
+
+(Schematic; a verbatim decision from the trained system ap-pears in §5.1.) Departures from the strict options framework: our options are fixed and symbolic (no option discovery, no termination learning); execution is call-and-return ( βz ∈ { 0, 1}, never interrupted); menu availability may consult state beyond the acting agent’s view and is computed centrally, while option selection and all learning remain per-agent; and the library is sampled per training seed rather than given as a single canonical set. 
+
+How the option library is built. The pipeline has exactly one frontier-model step (Stage 1); Stages 2–4 are fixed algo-rithms with no model in the loop, and the guards are counted from execution data, never suggested by a model or selected by a human. 
+
+Stage 1: option-schema drafting (the only model step) 
+
+Claude Opus 4.8 (Anthropic) is prompted with the game’s source code and asked to produce a typed option library in which every option carries a four-part contract. The prompt is reproduced verbatim (Overcooked-AI, Asymmetric Advan-tages; the Cleanup and Commons Harvest prompts follow the same template with game-specific sections swapped):                                                                                                                       
+
+> You are designing an option library for an LLM agent playing Overcooked-AI (layout: asymmetric_advantages, onion-only recipes). Produce aset of typed short-horizon options. For each option give a4-part contract: 1. instantiation --when does an instance appear in the menu (target existence only; NO state-conditional gating: do not encode game strategy or env legality rules --those are unknown to you), 2. executor --symbolic expansion into primitive actions (BFS to an interact pose +INTERACT). The executor may fail explicitly only for reasons internal to expansion (no target, no path, nothing to drop). 3. termination --queue drained. 4. effect predicate --apost-condition on the state delta that is TRUE iff the execution did what the option name promises. Do not add feasibility filters beyond what expansion itself requires; the guard set will be synthesized from execution data, not authored.
+
+The generated schema implements the contracts as code. The raw executor is deliberately environment-naive:                                     
+
+> def raw_expand(inst, snap, feat, aid, blocked=None): #Checks ONLY: target given, path exists, #drop has an item. if inst.target is None: return Expansion(failure= FailureReason("TargetAbsent", inst.opt)) if inst.opt == "drop_held" and held is None: return Expansion(failure= FailureReason("NothingHeld")) plan =shortest_interact_plan(inst.target, pos, orient, feat.walkable, blocked) if plan is None: return Expansion(failure= FailureReason("NoPath", str(inst.target))) return Expansion(actions=plan)
+
+These explicit checks are not authored gates in disguise: they are algorithmic preconditions of expansion itself—the domain of the partial function πz (path planning needs a target; a drop sequence needs an item)—and the prompt whitelists exactly these reasons. They hide nothing from the menu: the option still appears, the LLM can still select it, and the failure is simply logged. An executor failure becomes a menu gate only through Stage 3, by being counted in burn-in data like any other failure. Environment-legality knowledge (a pot must be non-empty and idle to start cooking) never appears in the executor; it is exactly what Stage 3 must dis-cover. Effect predicates are written in delta form—the repair loop below explains why this is load-bearing—and shared-state effects are tied to a private transition of the acting agent:                                               
+
+> #acquire effects: delta form, not absolute if inst.opt == "pick_dish": return post["held"] == "dish" \and pre["held"] != "dish" #shared-state effect bound to the PRIVATE held #transition, so apartner’s placement is never #attributed to this agent if inst.opt == "place_in_pot": return pre["held"] in ("onion", "tomato") \ and post["held"] is None \and pot_count_increased(pre, post)
+
+Stage 2: uniform-over-menu burn-in (no LLM) A fixed harness runs episodes under a one-line policy—uniform ran-dom over the instantiated, guardless menu:         
+
+> inst =(policy(menu, snap, aid, rng) if policy else rng.choice(menu))
+
+Each completed option execution emits one record: the option, its target, the declared read-set features at initi-ation, and an outcome in { success , effect_fail ,
+
+explicit:<reason> }, decided by the effect predicate or the executor’s typed failure, never by reward:              
+
+> {"ep": 512, "step": 41, "aid": 0, "opt": "start_cooking", "target": [4, 2], "features": {"held": "onion", "tgt_pot_state": "full"}, "outcome": "effect_fail"}
+
+The declared read set contains only deterministic features (held , tgt_pot_state , tgt_item ); transient multi-agent features (e.g., partner adjacency) are logged but ex-cluded from guard eligibility a priori. On Overcooked Asym-metric Advantages, 2,000 solo plus 2,000 two-agent episodes (∼550 k decisions) take about 70 seconds on one CPU core; no GPU is used in Stages 2–4. A control experiment re-placing the uniform policy with a frozen pretrained LLM collapses coverage—its narrow deterministic attractor never reaches dish/plate/deliver states—yielding 2 guards versus uniform’s 36 at roughly 400 × the cost, which validates the uniform-burn-in choice. 
+
+Stage 3: guard synthesis and the acceptance certificate 
+
+Synthesis runs in two channels over the burn-in log. Explicit :a typed failure reason observed at least five times becomes a guard directly ( NoPath → a live reachability check at menu build; NothingHeld → drop requires a held item). 
+
+Inferred : every 1- and 2-literal conjunction over the read set is scored and adopted iff it covers at least five failures and 
+
+zero logged successes:                                   
+
+> for conj in cands: #1-and 2-literal conjs n_fail =sum(covers(conj, r) for rin fails) n_succ =sum(covers(conj, r) for rin succs) if n_fail >= MIN_SUPPORT and n_succ == 0: adopted.append(conj) #certificate: #hides ZERO successes
+
+The purity requirement is the acceptance certificate, and it is what keeps strategy out of the guard set: any conjunction that also covers a success—including successes of temporally extended executions whose precondition became true mid-walk—is rejected. Conjunctions subsumed by an adopted single literal are dropped. Adopted guards are stored as data:                    
+
+> {"opt": "start_cooking", "channel": "inferred", "when": {"tgt_pot_state": "empty"}, "support": 31887} {"opt": "start_cooking", "channel": "inferred", "when": {"held": "dish"}, "support": 24240} {"opt": "deliver", "channel": "explicit", "when": {"__reason__": "NoPath"}, "support": 20884}
+
+Stage 4: menu assembly Fixed code interprets the guard file: the menu instantiates each option once per target of its class (never nearest-target only), evaluates every adopted conjunction against each instance’s read-set features, and hides matches; explicit-channel guards are re-checked live (e.g., NoPath by running the path planner). Finally, menu letters are shuffled per decision with an episode-seeded RNG: letter assignment is arbitrary, and a fixed construction order would leak option identity through position, which models exploit through a strong letter-A prior. Training rollouts ex-pand options with the same raw executor the guards were mined against, so certified-valid temporally extended behav-iors (e.g., walking to a still-cooking pot that finishes en route) remain executable. 
+
+The outer contract-repair loop Stages 2–4 form the in-ner, fully mechanical loop. The outer loop exists because the 
+
+contract itself —the Stage-1 schema—can be defective, and a defective contract corrupts the data the inner loop learns from. The division of labor mirrors the rest of the pipeline: the mechanical layers detect a defect (it surfaces as an impos-sible pattern in the burn-in log or the certificate), the frontier model repairs the schema, and Stages 2–3 rerun. Three de-fect families arose in development; we walk through each as bug, symptom, and fix. 
+
+Defect 1: absolute-form effect predicates. The effect of 
+
+pick_onion was first written in absolute form: after exe-cution, held = onion . The bug: an agent that already holds an onion and executes pick_onion performs a silent no-op—yet the predicate is still true (it does hold an onion), so the vacuous execution is logged as a success . Symptom: these false successes flow into the certificate and veto the cor-rect guard—“hide pick_onion when held = onion ” is rejected for hiding logged “successes” that were never real. Fix: rewrite every acquire-type effect in delta form, pre ̸ = X
+
+∧ post = X . The no-op case now logs as effect_fail ,and the missing guard is adopted on the next synthesis pass. 
+
+Defect 2: shared-state attribution. The effect of 
+
+place_in_pot was first “pot count increases.” In two-agent burn-in, while agent A is still walking to the pot, agent B places an onion; the pot count rises, and A’s in-flight option is logged as a success although A did nothing. Symptom: forged successes, again vetoing correct guards through the certificate. Fix: bind every effect to a private 
+
+transition of the acting agent (my held item goes onion 
+
+→ None , and the pot count rose); options with no private component ( start_cooking ) are synthesized from solo-episode records only. 
+
+Defect 3: nearest-target instantiation. Options were first instantiated only for their nearest target. In Asymmetric Ad-vantages the serving station nearest to one agent lies in the unreachable half of the kitchen, so deliver always failed with NoPath and effectively vanished from the menu—even though a reachable station existed farther away. Symptom: an option whose explicit failure rate is 100% while the task it names is plainly achievable. Fix: instantiate one menu entry 
+
+per target of each bounded class (every pot, every station); guards then filter per instance. 
+
+Worked example: one decision on the trained system. Adecision reproduced verbatim from a logged Overcooked Asymmetric Advantages rollout of the trained Qwen3-4B checkpoint under the auto-guard interface. The system mes-sage is fixed; menus are instantiated per target and letters are shuffled per decision.                                                                                                                                                                    
+
+> ---SYSTEM MESSAGE ---You are an agent in a2-player cooperative Overcooked-AI kitchen. Goal: place 3onions in apot, start the cook, plate the soup with adish, deliver to the serving station. Each delivery scores +20 (shared with partner). The action menu only lists currently-feasible actions. Pick one letter. Output format (exactly two lines, nothing else): state: <empty |filling |cooking |ready_to_plate |delivering> choice: <single capital letter> ---USER MESSAGE ---You are player 1. World position: (1, 1). Facing: West. Holding: onion. Partner (player 0): pos=(5, 2) facing=North holding=onion. Pots: -pot@(4, 2): 0/3 onions you: 4|partner: 1(partner closer) -pot@(4, 3): 0/3 onions you: 5|partner: 2(partner closer) Counters: (empty) Layout: asymmetric_advantages. Step 4/150. Memory: -Last 5macros decided: pick_onion -Total reward last 100 steps: 0-Partner: pos=(5, 2) facing=North holding=onion Action menu: A) place held item in pot @(4, 2) B) drop held item on counter @(1, 0) C) place held item in pot @(4, 3) D) drop held item on counter @(2, 1) Choose one. Reply with exactly two lines. ---MODEL RESPONSE (verbatim) ---state: cooking choice: A
+
+Three interface properties are visible. The pot options (A, C) are instantiated once per target, and the counter-drop op-tions (B, D) appear un-gated: the auto pipeline adopts no usability gate on hand-offs, since dropping while holding an item is a certified-valid execution. Letters carry no mean-ing across decisions. And the response contract is two plain lines; in the same logged episode, one of the eight recorded decisions violated the format and failed to parse. 
+
+5.2 Per-Agent LoRA and MAGRPO 
+
+The collapse of §4 has two distinct components, and they call for different fixes. The first is a decoding-level prior at-tractor : the frozen base concentrates its output distribution on one “safe” action. On-policy policy gradient cannot repair this attractor—it sharpens it, because only sampled actions receive gradient. The option interface of §5.1 attacks this component by reshaping the action space. The second com-ponent arises in the multi-agent setting: with a single shared adapter, all agents remain copies of one policy—their rollouts explore only symmetric behavior, conflicting role gradients average into the same weights, and the team settles into a joint local optimum. This happens at the macro level even with the option interface in place. Our fix simply makes agents 
+
+able to differ : each agent i owns a private LoRA adapter θi
+
+on the shared frozen base f , so πiθi (zi | oi) = f ◦ θi, and each adapter is updated only on its own agent’s decisions. Differences introduced by rollout stochasticity can then ac-cumulate in private parameters rather than average away, let-ting the team escape the symmetric attractor when the task rewards it. We train these adapters with Multi-Agent Group Relative Policy Optimization (MAGRPO); because each agent carries a private LoRA adapter on a shared frozen base, we refer to this per-agent variant as PA-MAGRPO . At each training round we collect K parallel joint rollouts of length T under the current joint policy, using the option-menu interface from §5.1 as the action interface. Each rollout is scored by a shared team return Rk – the team’s task reward for that episode (total apples eaten in Cleanup and Commons Harvest, total soups delivered in Overcooked) – identical for all agents in that roll-out, and the group-relative advantage is computed by normal-izing Rk within the cohort. The word “per-agent” refers to the parameterization and update, not to a separate reward: each agent has its own adapter, and each surrogate loss is evaluated only on that agent’s decisions {(oik,t , z ik,t )}. Specialization can therefore emerge because private adapters experience different observation–action histories under the same team advantage, rather than because cleaners and eaters receive different hand-designed rewards. Updates occur at option boundaries only; with episodic, undiscounted team returns this needs none of the semi-MDP discounting machinery. The full per-round procedure is given in Algorithm 1. Algorithm 1 states one PA-MAGRPO training round in full. Each round collects K joint rollouts under the cur-rent joint policy over the option menu, scores every roll-out by the shared team return, and normalizes those returns within the cohort to obtain a single group-relative advan-tage per rollout—the same value for every agent. Each agent then takes PPO-clipped epochs over its own option deci-sions under that shared advantage, with a KL penalty to-ward the reference policy, and only its private LoRA adapter is updated. Updates occur at option boundaries only; with episodic, undiscounted team returns this requires none of the semi-MDP discounting machinery. 
+
+## 6 Experiments 
+
+6.1 Setup 
+
+Environments. We evaluate on 3 cooperative spatial games. Melting Pot Cleanup (Leibo et al. 2017; Agapiou et al. 2022) ( clean_up substrate, 7 agents, 150-step episodes): agents share a river that must be cleaned of dirt, and an orchard that grows apples once dirt is below a threshold. The team-versus-individual tension creates a classic social dilemma. Overcooked-AI (Carroll et al. 2019) (2 agents, 400-step episodes): we use two separated-kitchen layouts. In Asymmetric Advantages (AA), the two cooks are sepa-Table 1: Cross-base PA-MAGRPO robustness across three games. Values are mean ± std over five independent training seeds. For each base model, the first row is the frozen base baseline (all zeros) and the second row is our method (per-agent LoRA + option menu + MAGRPO). Base model Cleanup (apples) Overcooked AA (deliveries) Harvest Qwen3-4B-Instruct-2507 0.00 ± 0.00 0.00 ± 0.00 0.00 ± 0.00 
+
+92 .85 ± 13 .23 6.21 ± 0.80 85 .41 ± 6.63 
+
+Qwen3.5-2B 0.00 ± 0.00 0.00 ± 0.00 0.00 ± 0.00 
+
+105 .69 ± 50 .71 7.31 ± 1.14 97 .82 ± 6.82 
+
+gemma-4-E4B-it 0.00 ± 0.00 0.00 ± 0.00 0.00 ± 0.00 
+
+60 .25 ± 39 .40 7.08 ± 1.15 99 .84 ± 15 .76 
+
+gemma-4-E2B-it 0.00 ± 0.00 0.00 ± 0.00 0.00 ± 0.00 
+
+68 .62 ± 41 .59 6.60 ± 0.84 115 .52 ± 12 .02 
+
+Table 2: Ablations on the fixed Qwen3-4B backbone. Values are mean ± std over 20 evaluation episodes; best scores are bold. Cleanup (apples) Overcooked AA (deliveries) Harvest Frozen + native (Abl. C) 0.00 ± 0.00 0.00 ± 0.00 0.00 ± 0.00 
+
+Frozen + option menu (base) 0.00 ± 0.00 0.20 ± 0.51 76 .63 ± 18 .24 
+
+Native + MAGRPO (Abl. A) 0.00 † 0.00 † 0.00 †
+
+Compound-JSON + MAGRPO (Abl. D) 59 .70 ± 47 .66 0.00 † 91 .74 ± 16 .49 
+
+Shared-LoRA + option menu (Abl. B) 0.10 ± 0.45 2.25 ± 1.59 90 .44 ± 18 .19 
+
+Full method (ours) 93 .25 ± 16 .84 6.80 ± 1.89 95 .68 ± 15 .63  
+
+> †Training collapsed at zero return for the entire training horizon; no positive checkpoint exists to evaluate.
+
+rated but each can still reach all resources needed to complete soups; in Forced Coordination (FC), neither side can com-plete a soup alone, so agents must hand off onions across the counter. Commons Harvest (commons_harvest_ no_thinning substrate, 7 agents, 400-step episodes): agents eat apples on 6 patches for reward, but they must conserve, or the apples never regenerate on the patches. Full details of each environment follow. 
+
+Melting Pot Cleanup (clean_up substrate; 7 agents; 150-step episodes). Agents share a river that accumulates dirt and an orchard whose apples regrow only while river dirt stays below a threshold. Eating apples yields individual re-ward that contributes to the team return; cleaning yields none directly. The tension between harvesting now and cleaning for future growth makes the game a sequential social dilemma: sustained team reward requires some agents to forgo eating. 
+
+Overcooked-AI (2 agents; 400-step episodes; two separated-kitchen layouts). Cooks assemble and deliver onion soups: fetch three onions into a pot, cook, plate, and de-liver. In Asymmetric Advantages (AA) the two cooks occupy separate kitchen halves but each half contains every resource needed to complete a soup alone; coordination can help but is not required. In Forced Coordination (FC) neither half is self-sufficient—one side has ingredient dispensers, the other the pots and serving window—so nothing can be delivered without counter hand-offs. AA/FC thus form a within-game control pair in which the same recipe faces optional versus mandatory coordination. 
+
+Commons Harvest (commons_harvest_ no_thinning substrate; 7 agents; 400-step episodes). Agents eat apples growing on six shared patches; an apple regrows only while at least one apple remains on its patch, so exhausting a patch destroys it permanently. Team return favors restraint over the 400-step horizon, but each individual bite is immediately rewarded—a common-pool resource dilemma. 
+
+Option-library sampling. Frontier-model outputs cannot be seeded, so the construction prompt (§5.1) is sampled re-peatedly and each training seed draws one candidate library at random—our results are not contingent on any single hand-polished library. 
+
+Models and implementation. Our main experiments train the recipe across four small backbones (Qwen3-4B-Instruct-2507, Qwen3.5-2B, gemma-4-E4B-it, gemma-4-E2B-it; “Qwen3-4B” hereafter always denotes the first) with five seeds each. The ablation suite then fixes that same Qwen3-4B backbone, so that comparisons isolate the ef-fect of the action interface and fine-tuning design rather than differences between backbones. For Cleanup and Com-mons Harvest we use LoRA rank 32, learning rate 5×10 −5,
+
+K = 4 rollouts per round, and sampling temperature 0.7. For Overcooked-AI we use LoRA rank 16, learning rate 2×10 −5,
+
+K = 6 , sampling temperature 0.9, and KL coefficient 0.05 .All runs use PPO clip ϵ = 0 .2, two inner epochs, advantage normalization, and gradient clipping at 1.0. Training runs on a single H100. These values were chosen from small pilot runs for training stability under a fixed compute budget and Algorithm 1 MAGRPO training round (per-agent LoRA over option-menu rollouts)  
+
+> 1:
+
+input: base LLM f , per-agent adapters {θi}Ni=1 , refer-ence policy πref , option set Z, rollouts K, episode length 
+
+T , clip ϵ, KL weight β, PPO epochs E. 
+
+> 2:
+
+for k = 1 , . . . , K do  
+
+> 3:
+
+Reset env; for t = 1 , . . . , T , each agent i samples an option zik,t ∼ πiθi (· | oik,t ) from the option menu 
+
+Zi(oik,t ), the symbolic planner expands it into envi-ronment primitives, and the env returns rk,t . 
+
+> 4:
+
+end for  
+
+> 5:
+
+For each rollout k, accumulate the shared team return 
+
+Rk = P 
+
+> t
+
+R(sk,t , ak,t ). 
+
+> 6:
+
+Compute cohort statistics μ = 1
+
+> K
+
+P 
+
+> k
+
+Rk, σ =std k Rk, and the shared group-relative advantage 
+
+ˆAk,t = Rk − μσ . 
+
+> 7:
+
+For each agent i, take E PPO-clipped epochs over its own decisions {(oik,t , z ik,t )} to minimize 
+
+Li(θi) = −E
+
+h
+
+min  ρik,t ˆAk,t ,
+
+clip( ρik,t , 1−ϵ, 1+ ϵ) ˆAk,t 
+
+i
+
++ β KL  πiθi ∥ πref 
+
+ ,
+
+where ρik,t = πiθi (zik,t | oik,t ) / π iθi, old (zik,t | oik,t ) is the per-decision importance ratio, and update θi. 
+
+> 8:
+
+Save per-agent LoRA checkpoints then held fixed across all methods compared within the same environment; no per-method tuning was performed. Within a game, the full method and its ablations share base model, rollout budget, optimizer settings, temperature, checkpoint rule (highest training-time team return), and evaluation pro-tocol; ablations differ only in the removed component. Final evaluation uses 20 episodes with seeds disjoint from training. In the multi-seed, multi-backbone study, a training seed controls option-library sampling, LoRA initialization, envi-ronment initial states, and minibatch order, so each seed is an independent end-to-end run. The ablation suite (Table 2) uses a single training seed on the fixed Qwen3-4B backbone to keep the six-cell design affordable; the cross-base study (Table 1) tests whether the pattern persists across seeds and model families. 
+
+What the training seed controls. A training seed fixes every stochastic component of one end-to-end run, and its influence enters through four channels. (i) Interface : the seed selects one of the retained option-library designs, so differ-ent seeds train against different option sets, menu phrasings, and per-decision letter shuffles—a different effective action space. (ii) Initialization : per-agent LoRA weights are initial-ized from the seed, which determines the initial symmetry-breaking among the N otherwise identical agents and hence which agent drifts toward which role. (iii) Rollout stochas-ticity : environment initial states and the temperature-based sampling of options during the K rollouts are seeded; be-cause MAGRPO advantages are group-relative, whichever behavior first scores above the cohort mean is amplified. (iv) Optimization order : minibatch shuffling within the PPO epochs. Channels (ii)–(iv) make each seed an independent optimization trajectory even under a fixed interface; chan-nel (i) additionally varies the interface itself. The per-seed standard deviations in the cross-base table of the main paper therefore reflect the variability of the entire pipeline, not eval-uation noise alone; evaluation episodes use a fixed held-out seed set and are unaffected by the training seed. 
+
+Evaluation protocol and statistics. Every cell of the ablation table in the main paper is a 20-episode evalu-ation on the fixed seed set {10 ,000 , 10 ,001 , . . . , 10 ,019 },disjoint from the training seed range, so all rows are comparable seed-for-seed. Headline cells satisfy 95% per-centile bootstrap confidence intervals that exclude zero (ours, Cleanup: 93 .25 [86 .05 , 100 .85] ; ours, Overcooked AA: 6.80 [5 .95 , 7.60] ; 10 ,000 resamples each). All pairwise differences between the full method and the frozen base-lines are significant at p < 10 −7 under a two-sided Mann– Whitney U test. Because the ablation suite uses a single train-ing seed, those intervals quantify evaluation-side variability only; the cross-base study (Table 1) and both behavioral fig-ures aggregate five independent training seeds. 
+
+Ablations. The ablation suite was run on a slightly earlier interface version whose guards were hand-selected rather than synthesized; since the ablations isolate the value of the menu and of per-agent capacity—not how guards are obtained—we report them unchanged. We compare six cells drawn from the design space { abstraction : option menu / compound-JSON / native actions} × {capacity : per-agent LoRA / single shared LoRA / no training}. 
+
+• Full method (ours) — option menu + per-agent LoRA + MAGRPO. 
+
+• Ablation A (native + MAGRPO) — drop the abstrac-tion, keep per-agent LoRA, train with MAGRPO over raw motor actions. 
+
+• Ablation B (option menu + shared LoRA + MAGRPO) 
+
+— keep the abstraction, replace seven adapters with one shared adapter; all agents back-propagate into the same LoRA. 
+
+• Ablation C (frozen, native) — no training, no abstrac-tion; sanity check that the base model alone cannot play. 
+
+• Ablation D (compound-JSON + per-agent LoRA + MAGRPO) replaces the menu with free structured gen-eration over the same family of compound actions: the LLM emits a JSON object specifying an action type and arguments, executed when valid. This keeps macro-level action semantics but removes feasibility filtering and dis-crete menu selection—separating the value of macro ac-tions from the value of the state-conditioned menu. 
+
+6.2 Results 
+
+Main result: the recipe works across backbones and seeds. Across four small backbones × five independent training seeds (Table 1), the frozen base collects zero in every row of every game, while our full method obtains positive return for every backbone: Cleanup 60 .25 –105 .69 ,Overcooked Asymmetric Advantages 6.21 –7.31 , Commons Harvest 85 .41 –115 .52 . Gain magnitudes vary with back-bone and seed—interface design and initialization still af-fect optimization—but the qualitative pattern is stable: the frozen base never plays; menu-based per-agent fine-tuning consistently produces non-trivial behavior. 
+
+Headline numbers on the fixed backbone. The full method delivers large gains over the frozen base on every game we evaluate (Table 2). On Melting Pot Cleanup the team rises from 0.00 ± 0.00 apples (frozen base with raw motor actions) to 93 .25 ±16 .84 apples per 150-step episode. On Overcooked-AI Asymmetric Advantages deliveries rise from 0.20 ± 0.51 to 6.80 ± 1.89 per 400-step episode – a 
+
+34 × improvement. On Commons Harvest the team reaches 
+
+95 .68 ±15 .63 apples. Every “ours” cell is statistically sepa-rated from its frozen and zero-shot cells. 
+
+Removing the option menu is catastrophic (Ablation A). 
+
+Training the same per-agent LoRAs with MAGRPO directly on raw motor actions, with the option menu switched off, collapses every cell to zero on all three games and never produces a positive checkpoint. This confirms the state-ment of §5.2: at the raw-action timescale the 4B base rarely emits a coherent multi-step trajectory under random explo-ration, so cohort returns are nearly always zero, the GRPO group standard deviation collapses, and updates carry no useful signal—gradients cannot repair what sampling never reaches. 
+
+A single shared LoRA cannot hold role specialization (Ablation B). Keeping the menu but sharing one adapter recovers the reward signal, yet the joint policy never stabi-lizes: Cleanup averages 0.10 ±0.45 apples at its best check-point (isolated rounds spike to ∼55 , then revert—the adapter can briefly express one role but cannot hold cleaner and eater at once), and Overcooked reaches 2.25 ±1.59 deliveries, about a third of the full method. The symmetric Commons Har-vest is forgiving ( 90 .44 ±18 .19 ), so the shared-vs.-per-agent gap is specifically about role differentiation, not capacity— confirming the statement of §5.2 that a shared adapter re-creates the collapse at the macro level even with the option interface in place. 
+
+The frozen base cannot play (Ablation C, and the “Frozen + option menu” baseline). With no training and no ab-straction the 4B base scores zero on every game, as expected. Adding the option menu to the frozen base (no MAGRPO) lifts Harvest to 76 .63 ± 18 .24 but leaves Cleanup at 0.00 
+
+and Overcooked at 0.20 ± 0.51 . This isolates the contribu-tions cleanly: the abstraction alone is sufficient to play the easy, symmetric substrate (Harvest), but the harder coop-erative games (Cleanup, Overcooked) additionally require MAGRPO fine-tuning of per-agent LoRAs. 
+
+Compound actions without the menu filter are unstable (Ablation D). Free-form compound-JSON generation— same macro semantics, no feasibility filter—partially trains on Cleanup ( 59 .70 ±47 .66 , vs. ours 93 .25 ±16 .84 ; the standard deviation is nearly as large as the mean) but never escapes zero on Overcooked; symmetric Harvest is again forgiving (91 .74 ±16 .49 ). Without the filter the model frequently emits compound actions that are illegal or no-ops in the current state (§6.3). Across the four ablations, neither ingredient is redundant, as claimed in the intro: the menu is what pro-duces any non-zero return on the harder games, and per-agent LoRA is what lets the cohort hold a heterogeneous joint pol-icy once it exists. Harvest needs neither roles nor workflows to collect an apple, so it performs decently even untuned; what matters there is conservation, examined in §6.4. 
+
+6.3 Trajectory-level analysis: why and how it works 
+
+To understand the gap between our method and the failed ablations, we record full per-step trajectories. 
+
+(1) The abstraction collapses the effective action space. 
+
+In the native-action cells (A, C) every environment step trig-gers an LLM call (call ratio 1.00 ). In the option-menu cells (B, ours) the ratio drops to ∼0.40 on Cleanup and Commons Harvest and 0.71 on Overcooked: each LLM commitment spans 2–3 env steps, so the MAGRPO advantage propagates over a 2–3× shorter decision sequence. 
+
+(2) Native-action MAGRPO collapses to a single letter. 
+
+The frozen base and native-action MAGRPO cells spend nearly all decisions on one motor action ( FIRE_CLEAN :
+
+95 .8% frozen, 98 .4% after MAGRPO on Cleanup; EAST :
+
+58 .8% /60 .2% on Overcooked). RL over raw letters does not learn a better policy—it sharpens an already-degenerate mode, exactly as claimed in §5.2: only sampled actions re-ceive gradient, so on-policy RL reinforces the prior attractor instead of repairing it. 
+
+(3) Shared LoRA trains, but symmetry caps it. The shared-LoRA cell does escape zero reward, but a single adapter cannot hold two roles at once: every agent con-verges to the same macro distribution. On Cleanup its training curve shows brief reward spikes when the one policy hap-pens to express a useful role (everyone cleans, or everyone eats), followed by reversion as the complementary work goes undone—a symmetric policy that looks locally sensible per agent yet makes an inefficient team, exactly the mechanism per-agent adapters remove. 
+
+6.4 Emergent behavior: reward and cooperation decouple 
+
+Beyond why the method trains, the trajectories reveal what the agents do: under one fixed recipe, genuine role specialization on Cleanup, no coordination on Overcooked, and resource restraint on Commons Harvest. 
+
+Cleanup: emergent role specialization. The seven Cleanup adapters of our method partition cleanly into “cleaner” and “eater” roles without any role label: per-agent apple counts split into three eaters ( ∼57 –60 apples each), three cleaners (all 0), and one near-stationary helper, and the visit heatmaps (Fig. 3) confirm the spatial split—eaters on Figure 1: Per-agent macro choices on Overcooked AA. Agent 0 concentrates on onion loading ( ≈ 69% ); agent 1 wait s ≈ 72% 
+
+of the time; counter operations are zero for both—no hand-off, a one-worker/one-idler split. the orchard rows, cleaners on the river shore. Shared LoRA (Abl. B) cannot reproduce this: its per-agent breakdown is essentially uniform. Strikingly, compound-JSON with per-agent LoRA (Abl. D) also fails to specialize—all seven adapters eat apples, and the identity of the dominant eater shifts from episode to episode. Per-agent capacity is there-fore necessary but not sufficient: the constrained pick of the option menu is what lets each adapter commit to a distinct typed-option distribution that gradient descent can sharpen agent-by-agent, whereas free-form (x, y ) generation diffuses the gradient and the partition collapses. 
+
+Overcooked: high reward without coordination. On Overcooked-AI Asymmetric Advantages (Table 2), each agent can reach every resource, and the trained team reaches high reward without coordinating. The per-agent macro his-togram (Fig. 1) shows two signatures: no item hand-off (counter operations are 0% for both agents), and a lopsided workload—agent 0 spends ∼69% of choices loading onions while covering every downstream stage, whereas agent 1 
+
+wait s on 72% of its choices. Run alone in the same lay-out, both agents still deliver ( 4 and 2), so each has indepen-dently learned the full task: Asymmetric Advantages is solo-solvable, and reward here overstates cooperation. Forced Co-ordination removes the solo solution: neither cook can com-plete a soup alone. There the frozen base scores 0.00 while the trained checkpoint reaches 7.57 ± 1.16 deliveries, and the same solo test flips—Forced-Coordination agents placed alone deliver 0 each. Their positive team deliveries are be-havior that only functions with a partner—direct evidence of emerged coordination. 
+
+Commons Harvest: restraint without reward. Because apple count does not reveal whether the shared patches sur-vive, we track patch survival in a separate 400-step evalua-tion. Apple reward moves modestly (frozen 76 .73 ± 16 .29 
+
+vs. tuned 98 .29 ± 14 .52 ), but patch survival changes sharply (Fig. 2): the frozen base depletes all six patches by roughly step 200 , while the tuned checkpoint keeps about 2.5 alive through step 400 . The mechanism is restraint: roughly two agents harvest while the rest wait, trading immediate con-sumption for persistence the reward curve barely registers. 
+
+## 7 Conclusion and Limitations 
+
+Casting small (2–4B) LLMs as policies over a frontier-drafted library of symbolic options and training a private LoRA adapter per agent with PA-MAGRPO makes them trainable as cooperative spatial policies (Cleanup apples 
+
+0.00 → 92 .85 ; Overcooked deliveries 0.00 → 6.21 ). Used as a fixed instrument, the same recipe reveals the decoupling: high reward coincides with real specialization on Cleanup but with a one-worker/one-idler team on Overcooked, nearly flat reward hides real restraint on Commons Harvest, and coor-dination appears when—and only when—the layout requires it. Team reward alone cannot certify cooperation; behavioral metrics must sit alongside it. 
+
+Limitations. Our results cover small ( ≤4B) LLMs and three spatial games; transfer to larger scales or non-spatial tasks is untested, the option library is per-game, and we lack a principled way to choose an option space. The decoupling finding is behavioral evidence, not a general theory: the cross-game pattern replicates over five seeds and four backbones, but the specific role assignment is checked on one seed, and the Forced-Coordination control assumes a non-solo-solvable layout. 
+
+## Generative AI Disclosure 
+
+Beyond the frontier model used inside the method itself (Claude Opus 4.8; §5.1), large language models (Claude Opus 5 and Claude Fable 5, Anthropic) were used to edit and revise the manuscript draft. The authors remain fully re-sponsible for all content, and all references have been verified Figure 2: Commons Harvest patch survival. The frozen base depletes all patches by ∼step 200; the tuned checkpoint keeps ∼2.5
+
+of 6 alive through step 400—restraint despite a nearly flat reward. 
+
+Figure 3: Per-agent visit heatmaps for Cleanup (ours). With no role labels, a 1, a3, a6 specialize as eaters (orchard rows) and a0, a4, a5 as cleaners (river shore); a 2 is near-stationary. against their original sources. References 
+
+Agapiou, J. P.; Vezhnevets, A. S.; Duéñez-Guzmán, E. A.; Matyas, J.; Mao, Y.; Sunehag, P.; Köster, R.; et al. 2022. Melting Pot 2.0. arXiv preprint arXiv:2211.13746 .Ahn, M.; Brohan, A.; Brown, N.; et al. 2022. Do As I Can, Not As I Say: Grounding Language in Robotic Affordances. In Conference on Robot Learning (CoRL) .Amato, C.; Konidaris, G.; and Kaelbling, L. P. 2014. Plan-ning with Macro-Actions in Decentralized POMDPs. In 
+
+Proceedings of the 13th International Conference on Au-tonomous Agents and Multiagent Systems (AAMAS) .Biswas, U.; Palod, V.; Bhambri, S.; and Kambhampati, S. 2026. Who Is Helping Whom? Analyzing Inter-Dependencies to Evaluate Cooperation in Human-AI Team-ing. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 17347–17356. Carroll, M.; Shah, R.; Ho, M. K.; Griffiths, T. L.; Seshia, S. A.; Abbeel, P.; and Dragan, A. 2019. On the Utility of Learning about Humans for Human-AI Coordination. In Ad-vances in Neural Information Processing Systems (NeurIPS) .Gallego, V. 2026. Cooperation and Exploitation in LLM Pol-icy Synthesis for Sequential Social Dilemmas. arXiv preprint arXiv:2603.19453 .Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations (ICLR) .Hua, Y.; Chen, H.; Wang, S.; Li, W.; Wang, X.; and Luo, J. 2025. Shapley-Coop: Credit Assignment for Emer-gent Cooperation in Self-Interested LLM Agents. In Ad-vances in Neural Information Processing Systems (NeurIPS) .ArXiv:2506.07388. Huang, W.; Xia, F.; Xiao, T.; et al. 2022. Inner Monologue: Embodied Reasoning through Planning with Language Mod-els. In Conference on Robot Learning (CoRL) .Hughes, E.; Leibo, J. Z.; Phillips, M.; Tuyls, K.; Duéñez-Guzmán, E. A.; Castañeda, A. G.; Dunning, I.; Zhu, T.; McKee, K. R.; Koster, R.; et al. 2018. Inequity Aver-sion Improves Cooperation in Intertemporal Social Dilem-mas. In Advances in Neural Information Processing Systems (NeurIPS) .Lee, W.; Cho, J.; and Choi, J. 2026. MapCoder-Lite: Dis-tilling Multi-Agent Coding into a Single Small LLM. In 
+
+Findings of the Association for Computational Linguistics: EACL . ArXiv:2509.17489. Leibo, J. Z.; Zambaldi, V.; Lanctot, M.; Marecki, J.; and Graepel, T. 2017. Multi-Agent Reinforcement Learning in Sequential Social Dilemmas. In Proceedings of the 16th International Conference on Autonomous Agents and Multi-agent Systems (AAMAS) .Liang, J.; Huang, W.; Xia, F.; Xu, P.; Hausman, K.; Ichter, B.; Florence, P.; and Zeng, A. 2023. Code as Policies: Language Model Programs for Embodied Control. In IEEE Interna-tional Conference on Robotics and Automation (ICRA) .Liu, S.; Liang, Z.; Lyu, X.; and Amato, C. 2026. LLM Collaboration with Multi-Agent Reinforcement Learning. In 
+
+Proceedings of the AAAI Conference on Artificial Intelli-gence . ArXiv:2508.04652. Ma, H.; Hu, T.; Pu, Z.; Liu, B.; Ai, X.; Liang, Y.; and Chen, M. 2024. Coevolving with the other you: Fine-tuning llm with sequential cooperative multi-agent reinforcement learn-ing. Advances in Neural Information Processing Systems , 37: 15497–15525. Mosquera, M.; Pinzon, J. S.; Rios, M.; Fonseca, Y.; Gi-raldo, L. F.; Quijano, N.; and Manrique, R. 2025. Can LLM-Augmented Autonomous Agents Cooperate? An Evaluation of Their Cooperative Capabilities through Melting Pot. IEEE Transactions on Artificial Intelligence .Pérolat, J.; Leibo, J. Z.; Zambaldi, V.; Beattie, C.; Tuyls, K.; and Graepel, T. 2017. A Multi-Agent Reinforcement Learn-ing Model of Common-Pool Resource Appropriation. In Ad-vances in Neural Information Processing Systems (NeurIPS) .Piche, D.; Muqeeth, M.; Aghajohari, M.; Duque, J.; Noukhovitch, M.; and Courville, A. 2025. Learning Ro-bust Social Strategies with Large Language Models. arXiv preprint arXiv:2511.19405 .Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y.; Wu, Y.; et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open lan-guage models. arXiv preprint arXiv:2402.03300 .Sutton, R. S.; Precup, D.; and Singh, S. 1999. Between MDPs and Semi-MDPs: A Framework for Temporal Abstraction in Reinforcement Learning. Artificial Intelligence , 112(1-2): 181–211. Valmeekam, K.; Marquez, M.; Sreedharan, S.; and Kamb-hampati, S. 2023. On the Planning Abilities of Large Language Models – A Critical Investigation. In Ad-vances in Neural Information Processing Systems (NeurIPS) .ArXiv:2305.15771. Xiao, Y.; Hoffman, J.; and Amato, C. 2020. Macro-Action-Based Deep Multi-Agent Reinforcement Learning. In Pro-ceedings of the 3rd Conference on Robot Learning (CoRL) ,volume 100 of Proceedings of Machine Learning Research ,1146–1161. Zhang, B.; Kapoor, A.; and Sun, M. 2025. Low-Rank Agent-Specific Adaptation (LoRASA) for Multi-Agent Pol-icy Learning. arXiv preprint arXiv:2502.05573 .Zhuang, Y.; Shen, Y.; Zhang, Z.; Chen, Y.; and Miao, F. 2025. YOLO-MARL: You Only LLM Once for Multi-agent Rein-forcement Learning. In IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .

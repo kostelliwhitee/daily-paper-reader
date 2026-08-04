@@ -1,0 +1,910 @@
+Title: MDGAM-Based Cooperative Task Scheduling for Communication-Constrained Distributed Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2608.00648v1
+
+Published Time: Tue, 04 Aug 2026 00:40:40 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# MDGAM-Based Cooperative Task Scheduling for Communication-Constrained Distributed Multi-Agent Systems 
+
+Licheng Wang, Mingtao Huang, Yuan Shen 
+
+Abstract —Cooperative task scheduling in communication-constrained distributed multi-agent systems is challenging be-cause each agent must make decisions from partial and dynamic observations while satisfying complex practical constraints. Ex-isting heuristics rely on handcrafted bidding rules and repeated consensus, whereas many learning-based methods assume global observations and lack explicit communication-based coordina-tion. To address these limitations, this paper proposes a neural scheduling framework for distributed multi-robot task allocation (MRTA), consisting of a multi-decoder graph attention model (MDGAM) policy model and a critic-free group relative multi-agent policy gradient (GRMAPG) training algorithm. MDGAM uses an extended graph attention mechanism to jointly update node and edge features, and employs multiple decoders to generate task-selection decisions and communication messages. GRMAPG constructs group-relative advantages from equivalent task-planning instances to replace the critic network used in conventional multi-agent reinforcement learning (MARL) al-gorithms, thereby reducing training difficulty and improving convergence performance. Experiments under different problem scales and communication ranges show that the proposed method improves task-completion performance over existing heuristic and learning-based methods, while ablation, complexity, and generalization tests further validate the proposed innovations. 
+
+Note to Practitioners —This work is motivated by cooperative task scheduling in distributed multi-agent applications such as intelligent transportation, Internet of Things, and emergency response, where robots, vehicles, or UAVs must execute tasks in a distributed manner under limited communication. In these scenarios, heterogeneous agents and complex task constraints require efficient inter-agent coordination to improve execution ef-ficiency. Unlike existing learning-based methods that mainly focus on individual route construction or rely on global observations, the proposed framework explicitly considers both task planning and communication-based coordination among agents. This de-sign enables agents to improve local planning while sharing and utilizing useful coordination information. Experimental results show that the proposed method achieves higher task-completion performance than existing distributed algorithms, with additional advantages in runtime and communication cost compared with classical auction-based algorithms. The framework is suitable for a broad range of distributed task-planning applications and can be flexibly transferred to related scenarios with different practical constraints and settings. 
+
+Index Terms —Multi-agent task allocation, deep reinforcement learning, graph neural networks, distributed scheduling 
+
+I. I NTRODUCTION 
+
+# DISTRIBUTED multi-agent systems are increasingly de-ployed in intelligent transportation, Internet of Things, and emergency-response scenarios, where robots, vehicles, or 
+
+The authors are with the Department of Electronic Engineering, and Beijing National Research Center for Information Science and Technology, Tsinghua University, Beijing 100084, China. Arxiv preprint. Agent 1 Agent 3 
+
+Communication 
+
+Task planning Agent 2 Task types 
+
+Fig. 1. Illustration of multi-agent cooperative task planning. Two task types are shown as an example, each of which must be completed by an agent with the corresponding capability. Agents within communication range can exchange information to improve task-completion efficiency. 
+
+UAVs must cooperate to serve spatially distributed tasks under limited sensing, computation, and communication resources [1]–[4]. Multi-robot task allocation (MRTA) addresses the assignment and scheduling of tasks for a robot team through centralized optimization or distributed coordination [5], [6]. Given heterogeneous robots and spatially distributed tasks, its objective is to determine task-execution sequences that optimize a global performance metric, such as task completion, collected reward, or travel cost [7]–[9]. From an optimization perspective, MRTA is a combinatorial optimization problem closely related to variants of multi-vehicle routing problem (MVRP), and is generally NP-hard [10]. As the numbers of robots and tasks increase, the asso-ciated search space grows rapidly, making exact optimization difficult for large-scale instances [11]. In practical scenarios, constraints such as time windows make task feasibility highly dependent on each task’s position in the planned sequence, thereby requiring more carefully coordinated task-planning strategies [12]. The difficulty becomes more pronounced in distributed settings, where each robot only has access to partial and time-varying information and must coordinate with nearby peers through limited communication links [13], [14]. In this paper, we consider a communication-constrained MRTA problem with heterogeneous robot attributes, various task constraints, and limited communication ranges. Under this setting, the inter-agent communication topology is time-varying and may be divided into several disconnected com-ponents. We aim to develop a policy that jointly accounts for communication coordination and task planning under such conditions, so as to maximize the total number of completed tasks. Fig. 1 illustrates a cooperative task-planning scenario with task capabilities and range-limited communication. Existing approaches to MRTA can be broadly catego-rized into handcrafted heuristics and learning-based methods arXiv:2608.00648v1 [cs.MA] 1 Aug 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+[15], [16]. Among heuristic methods, Consensus-Based Bun-dle Algorithm (CBBA) [17] and performance impact (PI)-based algorithms [18] are two representative families. CBBA constructs task bundles according to bidding functions and resolves conflicting assignments through decentralized con-sensus [19], [20]. PI-based methods use performance-impact metrics to evaluate task insertion and removal effects. PI-maxAss [21] improves task completion through distributed rescheduling, EEPI [22] reduces the required iterations through improved metric design, and GPI [23] adopts leader-follower grouping for communication. However, these heuristic meth-ods rely on handcrafted bidding or performance-impact func-tions and require repeated replanning under communication constraints and time-varying local observations, resulting in considerable communication and computational overhead. Learning-based methods have become increasingly effec-tive for solving combinatorial optimization (CO) problems, especially vehicle routing problem (VRP)-related variants. Reinforcement learning (RL)-based neural combinatorial opti-mization (NCO) methods learn solution-construction policies directly from optimization objectives, reducing the reliance on handcrafted heuristics or labeled datasets. Representative stud-ies have developed neural routing policies based on Pointer Networks [24], [25], graph convolutional network (GCN) [26], [27], and Attention Model (AM) [28], [29], while later im-provements further enhance training, inference, and constraint handling for single-vehicle routing problems [30], [31]. Several recent studies have extended learning-based ap-proaches to multi-vehicle or multi-agent settings. MAPDP [32] introduced a centralized multi-agent reinforcement learning (MARL) framework for pickup-and-delivery planning, where pickup-delivery dependencies and inter-vehicle cooperation are captured via paired embeddings and cooperative decoders. DL-DRL [33] employed a hierarchical two-level architecture for multi-UAV scheduling, in which the upper level performs task allocation and the lower level determines the execu-tion sequence for each UAV. The hierarchical DQN-based method in [34] decomposes the problem into target assign-ment and resource allocation, focusing on efficient matching between tasks and resources, but does not optimize the task execution sequences. CAM [35] learns distributed MRTA policies over task graphs using a covariant compositional network (CCN)-based encoder and an attention-based decoder. However, CAM assumes full observability and does not ac-count for time-varying communication topology. Therefore, the applicability of these learning-based multi-agent methods to communication-constrained distributed task scheduling re-mains limited. In this work, we propose a neural scheduling framework for communication-constrained distributed MRTA. The prob-lem is formulated with task temporal constraints, heteroge-neous agent attributes, and limited communication ranges, and the distributed decision process is described under the Decentralized Partially Observable Markov Decision Process (Dec-POMDP) framework. We design multi-decoder graph attention model (MDGAM) as a multi-output policy module with a task decoder and a communication decoder, supported by an extended graph attention encoder for graph-structured input representation. For policy optimization, we develop group relative multi-agent policy gradient (GRMAPG), acritic-free training algorithm that constructs group-relative advantages from equivalent task-planning instances, reducing trainable parameters and improving convergence for the ter-minal task-completion objective. Experiments show that the proposed method achieves higher task-completion performance than existing heuristic and learning-based algorithms. Under the medium-scale setting with an intermediate communication range, it improves the number of completed tasks over PI-maxAss and CAM by 
+
+4.13% and 3.74% , respectively. Additional ablation, com-plexity, and generalization tests further evaluate the proposed method in terms of component effectiveness, runtime and communication cost, and robustness. The main contributions of this work are summarized as follows:  
+
+> •
+
+We formulate a communication-constrained distributed task scheduling problem with various task and robot con-straints. The decentralized decision process is modeled as a Dec-POMDP, where each robot plans from partial observations and exchanged messages to maximize the shared objective of total task completion.  
+
+> •
+
+We propose MDGAM, an edge-aware multi-decoder graph attention architecture for distributed task planning. MDGAM uses an extended graph attention encoder to represent local observation graphs with both node and edge features, and employs a task decoder and a commu-nication decoder to jointly generate task decisions and inter-agent messages.  
+
+> •
+
+We develop GRMAPG, a critic-free training algorithm that constructs advantages from equivalent task-planning instances. Compared with conventional MARL algo-rithms, GRMAPG reduces the number of trainable param-eters and improves training convergence while enabling end-to-end policy optimization without ground truth.  
+
+> •
+
+We conduct comprehensive experiments covering task-completion performance, complexity, ablation analysis, and generalization capability. The proposed method outperforms representative heuristic and learning-based baselines, and additional ablation studies verify the indi-vidual contributions of the proposed model and training algorithm. The remainder of this paper is organized as follows. Section II formulates the communication-constrained task scheduling problem and describes its Dec-POMDP representation. Section III presents the proposed MDGAM architecture, from the extended graph attention mechanism to the graph-embedding encoder and the multiple decoders. Section IV presents actor-critic training with an attention-based critic and then intro-duces the proposed GRMAPG training algorithm. Section V evaluates the proposed method through performance compar-isons, ablation studies, complexity analysis, and generalization tests. Finally, Section VI concludes the paper. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+II. P ROBLEM FORMULATION 
+
+A. Problem settings 
+
+In this paper, we investigate a task planning problem in communication-constrained distributed multi-agent systems. Consider a scenario in which multiple locations within a given area require autonomous task execution. The tasks belong to different types, and each task must be completed by an agent equipped with the corresponding capability. In addition, task execution is subject to both time-window constraints and service-duration requirements. Due to communication limita-tions, only agents within communication range can exchange information. Under this setting, our goal is to distributively de-termine the task sequence of each agent so as to maximize the total number of completed tasks. The problem is formulated as follows. The task set is denoted by T = {1, 2, . . . , N }, and each task 
+
+n ∈ T is characterized by its location pn ∈ R2, time window 
+
+[tn, t n], service time τn, and task type κn ∈ { 1, 2, . . . , C },where C denotes the number of task types. The time-window constraint specifies that an agent may initiate a task only if it arrives at the task location within the prescribed time window, after which the agent spends the required service time to complete the task. If the agent arrives before the opening of the time window, it must wait until service can begin. The task-type constraint indicates that a task can be completed only by an agent possessing the required capability. The agent set is denoted by R = {1, 2, . . . , M }, where an agent can represent a robot, a UAV, or another autonomous platform. Each agent is associated with the following at-tributes: depot location p0 
+
+> m
+
+∈ R2, task capability Km ⊆{1, 2, . . . , C } with Km̸ = ∅, travel speed vm, and latest return time Tr. Each agent initially departs from its depot, visits the assigned task locations, and finally returns to the depot no later than its latest return time. An agent may possess the capabilities required for one or multiple task types. In addition, two agents can directly communicate only when their distance is within a communication radius r.Consistent with common distributed MRTA formulations [20]–[22], communication limitations are modeled at the topol-ogy level. The communication radius defines a time-varying communication graph, and information exchange is allowed only within each communication-connected component; low-level network effects such as bandwidth, delay, and packet loss are not explicitly modeled. The decision variable is the task sequence of each agent, denoted by σm = ( σm, 1, σ m, 2, . . . , σ m, |σm|), where σm,i ∈T . A task included in a sequence is considered feasible only if both the time-window constraint and the capability constraint are satisfied. Let tarr  
+
+> m,i
+
+and tdep  
+
+> m,i
+
+denote the arrival time and departure time of agent m at task σm,i , respectively. Then, the temporal relationships associated with agent m executing the task sequence σm are given by 
+
+tarr  
+
+> m,i
+
+=
+
+(
+
+d(σm,i , p0
+
+> m
+
+)/v m i = 1 
+
+d(σm,i , σ m,i −1)/v m + tdep  
+
+> m,i −1
+
+otherwise , (1) 
+
+tdep  
+
+> m,i
+
+=
+
+(
+
+τσm,i + max( tarr 
+
+> m,i
+
+, t σm,i ) σm,i is feasible 
+
+tarr  
+
+> m,i
+
+otherwise . (2) In addition, if a task conflict occurs, that is, if more than one agent selects the same task, the task is regarded as invalid for the agent that reaches it later. From a centralized perspective, the global optimization problem can be formulated as 
+
+P : max 
+
+> σm,m ∈R
+> M
+
+X
+
+> m=1
+
+|σm| (3a) s.t. tarr  
+
+> m,i
+
+≤ tσm,i , (3b) 
+
+κσm,i ∈ K m, (3c) 
+
+σm ∩ σm′ = ∅, (3d) 
+
+tdep  
+
+> m, |σm|
+
++ d(σm, |σm|, p0
+
+> m
+
+)
+
+vm
+
+≤ Tr, (3e) 
+
+∀m, m ′ ∈ R , m ̸ = m′, i ∈ { 1, 2, . . . , |σm|} .
+
+where (3b)–(3e) represent the constraints on the time win-dow, agent capability, conflict avoidance, and return time, respectively. The problem P describes the full-observation centralized objective and serves only as a reference, since indi-vidual agents cannot directly solve it in the distributed setting. Moreover, P is NP-hard and involves a rapidly growing search space of coupled task sequences. Therefore, each agent must plan through decentralized sequential decision-making based on local observations and information exchanged within its communication-connected neighborhood. The next subsection models this process as a Dec-POMDP [36]. 
+
+B. Distributed Decision-Process Modeling 
+
+We describe the distributed task planning process using a Dec-POMDP [36], defined by (S, {A m}, P, R, {O m}, O, γ ).Here, S is the global state space, Am and Om are the local action and observation spaces of agent m, P and O are the state-transition and observation functions, R is the shared team reward, and γ is the discount factor. Each agent acts on locally available information under communication constraints, while all agents share the objective of maximizing the total number of completed tasks over the episode. The task set and static task attributes are available to all agents before execution as mission-level information. The decision process remains partially observable because each agent still plans online based on its own evolving state and the dynamic information received through the current commu-nication topology, while the execution states of disconnected agents and task-conflict information may be unavailable. The decision step j in this subsection denotes an event-triggered global decision index rather than a synchronized global round, while i is used later to index the local task-selection sequence of an individual agent. At the initial time, each agent makes its first task-selection decision. Afterwards, JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4
+
+an agent triggers a new decision event only after it has traveled to the selected task, waited if necessary, and completed the required service. Agents that are traveling or serving a task do not generate new task-selection actions, while other agents may continue to trigger their own decision events according to their local completion times. Therefore, the distributed deci-sion process evolves asynchronously, and each agent maintains its own local time, current position, planned task sequence, and latest generated communication message. At each decision event, the communication topology is determined by the currently available agent positions and the communication range. The active agent collects the states and stored messages of agents that are reachable through the current communication-connected component, and then constructs its local observation. The policy outputs both a task-selection action and a new communication message. The selected task is checked against capability, temporal and conflict constraints before being added to the agent’s planned sequence, while the newly generated message is stored by the active agent and can be transmitted to other agents at later decision events when they are communication-reachable. Thus, communication is restricted by the time-varying topol-ogy, although multi-hop information propagation within a connected component is allowed before each decision event. Let sj denote the global state at decision event j, and let mj
+
+denote the active agent at this event. The global state evolves according to 
+
+sj+1 ∼ P (sj+1 | sj , a jmj , cjmj ), (4) where ajmj is the task-selection action generated by the active agent. At each decision event, the active agent selects its next task based on its local observation using a policy parameter-ized by θ:
+
+ajmj ∼ Pθ (ajmj | ojmj ). (5) Here, the policy outputs a selection-probability distribution over candidate tasks and the depot. Infeasible choices are masked out according to the capability, time-window, conflict, and return-time constraints. To support inter-agent coordina-tion, the policy additionally outputs a communication message generated from the local observation as 
+
+cjmj = f c 
+
+> θ
+
+(ojmj ), (6) where f c 
+
+> θ
+
+denotes the communication-message mapping. The communication message in (6) is stored by the active agent and can be incorporated into subsequent local observations of communication-reachable agents. At each decision event j, the local observation ojmj of the active agent consists of the following components:  
+
+> •
+
+The agent’s own information, including its current po-sition pcur  
+
+> mj
+
+, current local time t, completed task list 
+
+ξmj ⊆ T , and intrinsic attributes p0 
+
+> mj
+
+, Kmj , vmj , and 
+
+Tr; 
+
+> •
+
+The static information of all tasks n ∈ T , including their attributes pn, [tn, t n], τn, and κn; 
+
+> •
+
+The dynamic information of other agents in the current communication-connected component. Let N jmj denote the set of agents that can exchange information with agent mj through local message propagation at decision event j. For each m′ ∈ N jmj , agent mj can access its available current state, including pcur  
+
+> m′
+
+and ξm′ , as well as its intrinsic attributes p0 
+
+> m′
+
+, Km′ , and vm′ , and can further receive its latest stored message clast  
+
+> m′
+
+. Agents outside this component are unobservable to agent mj at this event. Before each decision event, agents within the same communication-connected component are assumed to com-plete a local information-exchange phase. This abstraction corresponds to multi-hop propagation of available agent states and learned messages within the component. Agents belonging to different disconnected components cannot exchange infor-mation at that event. Therefore, each agent plans from a partial and time-varying local view rather than from the full system state. An episode terminates when no agent can execute any further feasible task and all agents have either returned to their depots or no further feasible decisions remain. Given an instance g and the joint task-selection trajectory 
+
+σ = ( σ1, σ2, . . . , σM ), the terminal reward R(σ, g) is defined as the total number of tasks completed over the episode. The policy optimization objective is therefore given by 
+
+max  
+
+> θ
+
+Eg∼P (g),σ∼Pθ (σ|g) [R(σ, g)] . (7) Here Pθ (σ|g) denotes the probability that the policy generates the joint trajectory σ. Under decentralized execution, this probability factorizes over agents and their local decision indices conditioned on their local observations: 
+
+Pθ (σ|g) = 
+
+> M
+
+Y
+
+> m=1
+> |σm|
+
+Y
+
+> i=1
+
+Pθ (aim = σm,i |oim). (8) To parameterize this decentralized policy, the next section introduces a graph-based neural architecture that encodes each agent’s local observation and generates both task-selection decisions and communication messages. III. P ROPOSED NETWORK ARCHITECTURE 
+
+This section presents the proposed MDGAM for decentral-ized policy generation. As illustrated in Fig. 2, MDGAM takes the graph-structured local observation of each agent as input and produces two outputs: a task-selection distribution and a communication message for inter-agent coordination. The section first introduces the extended graph attention mecha-nism as the basic representation-learning operation. It then describes the encoder that embeds the local observation graph. Finally, the task decoder and the communication decoder are presented to generate task decisions and communication messages, respectively. 
+
+A. Extended graph attention mechanism 
+
+The local observation available to each agent has a natural graph structure: nodes represent the agent itself, its depot, candidate tasks, and neighboring agents, while edges encode pairwise relations such as travel distance and communication connectivity. For communication-constrained task scheduling, node-only representations are insufficient because feasibility JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5{h0                                                   
+
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> {h0
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> Graph Embeddings ,
+> {h0
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> {h0
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> Initial Embedding Layer Original features of partial observation
+> Node-Node MHA
+> Node-Edge MHA
+> Edge-Node MHA
+> {h0
+> i}{e0
+> i,j }{hi}{ˆh
+> i}{ei,j }{eLi,j }{hLi}
+> {h0
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> {h0
+> i}{e0
+> i,j }{hi}{ˆhi}{ei,j }{eLi,j }{hLi}
+> ×LEncoder Layers
+> Feed-Forward & Normalization
+> Feed-Forward & Normalization Task 1 Task 2 Task 3 Task 4 Task 5 Agent 1 Agent 2 Agent 3
+> Agent 4 Agent Communication Task Detection One decision step in the distributed framework Nodes: own tasks
+
+... 
+
+> agents
+
+...         
+
+> Edges:
+> Attention Layer
+> Feed-Forward
+> Output Linear Layer
+> Communication Decoder
+> Output SHA Layer
+> h0c
+> hK1
+> c
+> Pθ(ai
+> m|oi
+> m)
+> πt
+> t=t+ 1
+> h0c
+> hK1
+> c
+> Pθ(aim|oim)
+> πt
+> t=t+ 1
+> Attention Layer
+> Feed-Forward Task Decoder Sampling or Greedy selection to get next action Communication signals to transmit to neighbour agents
+> c0
+> cm
+> c0
+> cm
+
+Fig. 2. Architecture of the proposed MDGAM for one decentralized decision step. The rounded rectangles represent trainable network layers, while the ellipses denote intermediate and output variables. At each step, the current agent, highlighted in red, constructs a graph-structured local observation from candidate tasks and neighboring agents, which is then provided to MDGAM in the form of node and edge features. The arrows indicate the data flow from the step input to task selection and message generation. After one step is completed, the environment state is updated, and the next decision step repeats this process until the episode terminates. 
+
+and coordination decisions are strongly affected by edge-dependent factors, including travel time, time-window com-patibility, and inter-agent communication links. Therefore, MDGAM employs an extended graph attention mechanism that jointly updates node and edge representations. This mech-anism follows the general idea of edge-aware attention in [37], but is adapted here to represent the local observation graphs used for decentralized task planning. The proposed block is built upon the multi-head scaled dot-product attention operation [38]. Let the input query, key, and value features be denoted by X = [x1, x2, · · · , xM ],
+
+Y = [ y1, y2, · · · , yN ], and Z = [ z1, z2, · · · , zN ], respectively. The MHA operation is defined as 
+
+MHA( X, Y, Z) = W O Concat( H1, H2, . . . , Hh), (9) 
+
+Hi = Attention( XTW Q 
+
+> i
+
+, YTW K 
+
+> i
+
+, ZTW V 
+
+> i
+
+)T. (10) where the attention operation is given by 
+
+Attention( Q, K, V) = softmax QK T
+
+√dk
+
+!
+
+V. (11) In (11), dk denotes the last dimension of K; when Y = Z, we write MHA( X, Y) for brevity. Given node representations {hℓ−1 
+
+> i
+
+} and edge representations 
+
+{eℓ−1 
+
+> ij
+
+} at layer ℓ−1, the extended graph attention mechanism updates them through three attention operations. First, Node-Node Attention aggregates information from all observable nodes and produces an intermediate node representation: 
+
+ˆhℓi = MHA( hℓ−1 
+
+> i
+
+, [hℓ−11 , hℓ−12 , · · · , hℓ−1 
+
+> N
+
+]) . (12) Node-Node Attention is effective for extracting node-level contextual features [28], [29], but it does not explicitly update pairwise relations. This motivates the following two edge-aware attention operations. Second, Edge-Node Attention updates each edge represen-tation using the representations of its incident nodes. Since the edge from node i to node j may differ from the edge from node j to node i, we treat edges as directed and introduce a positional encoding operator PE( ·, ·) to distinguish the start and end nodes: 
+
+eℓi,j = MHA( eℓ−1 
+
+> ij
+
+, PE( ˆhℓi , ˆhℓj )) . (13) 
+
+Remark. The positional encoding operator PE( ·, ·) can be implemented in different forms, such as fixed sinusoidal en-codings or learnable embedding layers [38], [39]. In this paper, we adopt a lightweight direction-aware encoding. Specifically, the representation of the start node is concatenated with a scalar tag −1, while the representation of the end node is concatenated with a scalar tag 1, i.e., 
+
+PE( ˆhℓi , ˆhℓj ) = [Concat( ˆhℓi , −1) , Concat( ˆhℓj , 1)] . (14) This simple design enables the attention module to distinguish the start and end nodes of a directed edge without introducing additional trainable parameters. Third, Node-Edge Attention propagates edge information back to the node representations: 
+
+hℓi = MHA( ˆhℓi , [eℓi, 1, eℓi, 2, · · · , eℓi,N ]) . (15) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6
+
+By combining Node-Node, Edge-Node, and Node-Edge Attention, the proposed block establishes bidirectional in-formation exchange between node and edge representations. This design enables MDGAM to refine both node states and pairwise relations, including non-Euclidean or asymmetric transition costs, and provides graph representations for the task and communication decoders. 
+
+B. Encoder for graph embedding 
+
+As illustrated in Fig. 2, MDGAM follows an encoder-multi-decoder architecture. The encoder is responsible for transforming the local observation of each agent into graph embeddings that can be used by the subsequent task and communication decoders. For agent m, the local observation is organized as a graph containing two types of information: a task-related part, which includes the current agent, its depot, and candidate task nodes, and a communication-related part, which includes neighboring agents reachable through the current communication graph. This construction allows the encoder to jointly represent task-execution context and inter-agent coordination context within a unified graph. Since different node types have different semantics, their raw features are first projected by type-specific initial em-bedding layers. We denote the input node features by 
+
+(hinit own , hinit dep , hinit task , hinit agent ), corresponding to the current agent itself, its depot, candidate tasks, and neighboring agents, re-spectively. After passing through the corresponding embedding layers, the initial node representations are obtained as 
+
+h0 = [ h0own , h0dep , h0task , h0agent ] ≜ [h01, h02, . . . , h0  
+
+> N′
+
+], (16) where h0 
+
+> i
+
+∈ Rdm , i = 1, 2, . . . , N ′, and the embedding dimension is set to dm = 128 . Meanwhile, edge features 
+
+einit  
+
+> ij
+
+, i, j ∈ { 1, 2, . . . , N ′}, are introduced to describe the relation between node i and node j. In the experiments, they are instantiated as pairwise distances, while the same interface can also accept more general transition-cost inputs. These edge features are projected by a linear layer to obtain the initial edge representations e0 
+
+> ij
+
+, which participate in the subsequent attention computation. The initial node and edge representations are then updated by stacking multiple encoder layers. Each encoder layer con-tains an attention module followed by a feed-forward module [38]. In the attention module, Node-Node, Edge-Node, and Node-Edge Attention are sequentially applied to refine node and edge representations. In all multi-head attention (MHA) operations, the number of heads is set to 8, and the dimension of each head is dq = dk = dv = 16 . The feed-forward module is applied independently to each node or edge representation and consists of two linear layers with a ReLU activation, with hidden dimension dff = 256 . Residual connections [40] are applied to both the attention module and the feed-forward module. Moreover, since the size of the local graph changes during sequential decision-making, layer normalization [41] is adopted after each encoder layer to stabilize representation learning. We use Norm( ·) to denote layer normalization, and 
+
+FF( ·) to denote the feed-forward module with a residual connection. Accordingly, the representation update in the ℓth encoder layer is given by 
+
+ˆhℓi = MHA( hℓ−1 
+
+> i
+
+, [hℓ−11 , hℓ−12 , · · · , hℓ−1  
+
+> N′
+
+]) + hℓ−1 
+
+> i
+
+, (17) 
+
+˜eℓi,j = MHA( eℓ−1 
+
+> ij
+
+, PE( ˆhℓi , ˆhℓj )) + eℓ−1 
+
+> ij
+
+, (18) 
+
+˜hℓi = MHA( ˆhℓi , [˜ eℓi, 1, ˜eℓi, 2, · · · , ˜eℓi,N ′ ]) + ˆhℓi , (19) 
+
+eℓi,j = Norm(FF(Norm(˜ eℓi,j ))) , (20) 
+
+hℓi = Norm(FF(Norm( ˜hℓi ))) . (21) After L encoder layers, the resulting {hLi } are used as the final graph node representations. These embeddings sum-marize the current task-execution context and the available communication context, and are passed to the decoders for task selection and communication-message generation. 
+
+C. Decoders for decision and communication 
+
+The encoder provides node and edge representations that summarize the current agent’s local observation context. Based on these embeddings, MDGAM employs two lightweight decoders with different roles. The task decoder produces the probability distribution over the next selectable node, while the communication decoder generates a compact message vector to be shared with connected neighboring agents. For task selection, the task decoder uses the current decision context as the query and attends to the encoded node repre-sentations. The initial decision context h0c is initialized by the encoded representation of the current agent. The task decoder updates this context through K1 decoder layers: 
+
+ˆhk 
+
+> c
+
+= MHA( hk−1c , [hL 
+
+> 1
+
+, hL 
+
+> 2
+
+, · · · , hLN ′ ]) + hk−1c , (22) 
+
+hk 
+
+> c
+
+= FF( ˆhk 
+
+> c
+
+), k = 1 , 2, . . . , K 1; (23) 
+
+Pθ (aim|oim) = Output( hK1 
+
+> c
+
+, [hL 
+
+> 1
+
+, hL 
+
+> 2
+
+, · · · , hLN ′ ], mc). (24) The operator Output( ·) is implemented by a single-head attention layer that scores each candidate node. Specifically, the final decision context is projected as the query, and each encoded node representation is projected as a key: 
+
+qc = W qout hK1 
+
+> c
+
+, kj = W kout hLj . (25) The selection probability of each candidate node is then computed as 
+
+uj =
+
+(α · tanh 
+
+ qTc kj
+
+> √dm
+
+
+
+, if node j is feasible 
+
+−∞ , otherwise (26) 
+
+Pθ (aim = j|oim) = softmax j (u1, u 2, . . . , u N ′ ). (27) The mask mc is applied to set infeasible nodes to −∞ ,ensuring that the output distribution assigns probability only to selectable tasks or the depot. During training, the next node is sampled from Pθ (aim|oim) to encourage exploration over feasible decisions. During validation and testing, greedy decoding is used, where the feasible node with the highest probability is selected at each decision step. This single-rollout evaluation is consistent with decentralized execution, because repeated trials or post-search refinement are incompatible with practical requirements. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7
+
+The communication decoder follows a similar attention-based structure, but its output is a continuous message vector rather than a task-selection distribution. Let c0 be initialized by the encoded representation of the current agent. For k =1, 2, . . . , K 2, the communication context is updated as 
+
+ˆck = MHA( ck−1, [hL 
+
+> 1
+
+, hL 
+
+> 2
+
+, · · · , hLN ′ ]) + ck−1, (28) 
+
+ck = FF(ˆ ck). (29) The final communication message generated by agent m at decision step i is then obtained through a linear projection: 
+
+cim = Wcom cK2 + bcom , (30) where Wcom ∈ Rdcom ×dm , bcom ∈ Rdcom , and dcom deter-mines the communication-message dimension. The generated message cim is used in subsequent local observations of communication-reachable agents. IV. T RAINING ALGORITHMS 
+
+This section presents the training algorithms for optimiz-ing the proposed MDGAM. First, we describe a centralized critic based on the extended graph attention mechanism for actor-critic training baselines. We then introduce the pro-posed GRMAPG, which directly optimizes the terminal task-completion objective through group-relative evaluation without requiring an additional critic network. 
+
+A. Actor-Critic Training with an Attention-Based Critic 
+
+Actor-critic algorithms, such as multi-agent advantage actor-critic (MAA2C) [42] and multi-agent proximal policy op-timization (MAPPO) [43], introduce a trainable critic to estimate state values and provide advantages for actor op-timization. Under the centralized training and decentralized execution (CTDE) paradigm, distributed actors make decisions from local observations, while a centralized critic can access global state information during training. In this subsection, the attention-based critic specifically refers to a centralized critic built with the extended graph attention mechanism. As the basis of policy-gradient algorithms, REINFORCE [44] provides a gradient estimator for optimizing a parame-terized policy. For a problem instance g, the terminal-reward objective in (7) can be written as 
+
+L(θ|g) = EPθ (σ|g) [R(σ, g)] . (31) Its gradient is estimated from sampled trajectories as 
+
+∇θ L(θ|g) = EPθ (σ|g) [( R(σ, g) − b(g)) ∇θ log Pθ (σ|g)] .
+
+(32) where the baseline function b(g) reduces estimation variance without changing the expected gradient. Actor-critic methods replace this trajectory-level baseline with a learned value function that estimates the expected return at each decision step. To support actor-critic training for the graph-structured task-planning problem, we design a centralized critic based on the extended graph attention mechanism. This critic can be integrated with actor-critic algorithms based on state-value estimation, such as MAA2C and MAPPO. It consists of an extended graph attention encoder and a value head. Similar to the encoder of MDGAM, the critic encoder processes the global task graph and outputs context, task-node, and agent-node embeddings. At decision step i, these encoder outputs are denoted by zi
+
+> ctx
+
+, {zin}n∈T , and {zim}m∈R , respectively, and are aggregated into the graph-level representation 
+
+zi 
+
+> g
+
+= zi
+
+> ctx
+
+; mean n∈T zin; max n∈T zin;mean m∈R zim; max m∈R zim
+
+. (33) The semicolons in (33) denote concatenation. A multilayer-perceptron value head then maps the graph-level embedding to the estimated global state value: 
+
+Vϕ(si) = f V 
+
+> ϕ
+
+(zi
+
+> g
+
+), (34) where ϕ denotes all parameters of the centralized critic, including those of the encoder and value head. Taking MAPPO as a representative example, MDGAM parameterizes the dis-tributed actor policy, while the proposed centralized critic eval-uates the global task-planning state during training. Using an auxiliary stepwise reward R′(si, ai), the temporal-difference residual and generalized advantage estimate are computed as 
+
+δi = R′(si, ai) + γV ϕ(si+1 ) − Vϕ(si), (35) 
+
+ˆAi = X
+
+> j=0
+
+(γλ )j δi+j , (36) where the summation terminates at the end of the episode. The critic parameters are optimized using the empirical return ˆGi:
+
+LV(ϕ) = E
+
+
+
+Vϕ(si) − ˆGi2
+
+. (37) Let θold denote the behavior-policy parameters used for tra-jectory sampling. For action aim, the probability ratio between the updated and behavior policies is 
+
+ρim(θ) = Pθ (aim|oim)
+
+Pθold (aim|oim) . (38) MAPPO updates the shared actor by maximizing the clipped objective. The clipped ratio and actor objective are given by 
+
+¯ρim(θ) = clip  ρim(θ), 1 − ϵ, 1 + ϵ , (39) 
+
+LA(θ) = E
+
+" MX
+
+> m=1
+
+X
+
+> i
+
+min 
+
+
+
+ρim(θ) ˆAi, ¯ρim(θ) ˆAi#
+
+. (40) Despite the graph-aware global value estimates provided by the attention-based critic, actor-critic training has two limitations in the task-planning problem considered in this paper. First, the final reward is available only after all agents have completed their task-planning trajectories, making reli-able stepwise reward assignment difficult. Second, the addi-tional critic increases the number of trainable parameters and introduces value-estimation errors into policy optimization. To address these limitations, the next subsection presents the critic-free GRMAPG algorithm. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+B. Group relative multi-agent policy gradient 
+
+The proposed GRMAPG algorithm is designed to optimize the policy objective in (7) without introducing an additional critic network. Its key idea is to evaluate each sampled multi-agent trajectory relative to a group of peer trajectories generated from equivalent task-planning instances [45], [46]. For a problem instance g, we construct a group 
+
+G(g) = {g1, g2, . . . , gK }, (41) where the group members are obtained from the same original instance through equivalent transformations. These transfor-mations change certain attributes of the original instance while preserving the theoretical optimal objective. Examples include rotating the coordinates of all agents and tasks, exchanging task types together with the corresponding agent capabilities, and adaptively scaling temporal parameters and agent speeds so that travel times, service times, and time windows remain consistent under the same time scale. Such operations are regarded as equivalent transformations induced by the sym-metry of the original problem. In addition, during training, a sampling strategy is used to decode node selections, which further introduces solution-level symmetry. The combination of problem symmetry and solution symmetry enables the policy network to generate different solutions for a group of equivalent instances, thereby providing mutual supervision among group members. For each group member gk, the shared policy generates a joint task sequence σk ∼ Pθ (·| gk), and its terminal reward is denoted by 
+
+Rk = R(σk, gk), k = 1 , 2, . . . , K. (42) Instead of learning a value function, GRMAPG uses the rewards of the other group members to construct a leave-one-out baseline: 
+
+bk = 1
+
+K − 1
+
+> K
+
+X 
+
+> j=1
+> j̸=k
+
+Rj . (43) The corresponding group-relative advantage is then defined as 
+
+ˆAk = Rk − bk. (44) Because the leave-one-out average excludes Rk, the GRMAPG baseline bk is determined only by the rewards of the other group members. Here, the trajectories of different group members are sampled independently conditioned on the trans-formed instances, the return signals used in bk are treated with stop-gradient, and the random transformations used to construct the group are independent of the actions generated for gk. Let σ−k denote the set of trajectories of all group members except σk. Under these conditions, bk is condition-ally independent of the current trajectory σk and satisfies the following property: 
+
+Eσ1: K
+
+h
+
+bk∇θ log Pθ (σk|gk)
+
+i
+
+= Eσ−k
+
+h
+
+bk Eσk
+
+∇θ log Pθ (σk|gk)i
+
+= 0 .
+
+(45) Thus, introducing the GRMAPG baseline preserves the unbi-asedness of the gradient estimate. 
+
+Algorithm 1: Group Relative Multi-Agent Policy Gra-dient 
+
+Input: Training distribution D, policy Pθ , group size 
+
+K, batch size B, learning rate η
+
+Output: Trained policy parameters θ
+
+Initialize policy parameters θ;
+
+while not converged do 
+
+Sample a batch of instances {gi}Bi=1 ∼ D ;Initialize the gradient accumulator d ← 0;
+
+for i = 1 to B do 
+
+Construct G(gi) = {g1 
+
+> i
+
+, . . . , gKi } by equivalent transformations; 
+
+for k = 1 to K do 
+
+Solve gki with current Pθ ;Record σk and Lki = log Pθ (σk|gki );Evaluate the reward Rki = R(σk, gki );
+
+end for k = 1 to K do 
+
+Compute the baseline bi,k using (43); Compute the advantage ˆAi,k using (44); 
+
+d ← d + ˆAi,k ∇θ Lki ;
+
+end end 
+
+Update θ using d/(BK ) with learning rate η;
+
+end 
+
+Finally, the gradient estimator of GRMAPG is given by 
+
+∇θ L(θ|g) = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+ˆAk∇θ log Pθ (σk|gk). (46) According to the trajectory factorization in Section II-B, 
+
+log Pθ (σk|gk) is obtained by summing the log-probabilities of all decentralized task-selection decisions made by the agents. In each training iteration, a batch of problem instances is sampled, and a group G(g) is constructed for each in-stance. MDGAM is then invoked to solve each group member through distributed sequential decision-making, thereby gen-erating the corresponding multi-agent trajectories. After the terminal rewards are evaluated, the GRMAPG baselines and group-relative advantages are computed, and the shared policy parameters are updated using (46). This critic-free training scheme directly optimizes the terminal task-completion ob-jective, avoids handcrafted stepwise reward decomposition, and introduces no additional trainable parameters beyond the policy network. The overall training procedure is summarized in Algorithm 1. The ablation experiments in Section V-B compare GRMAPG, MAPPO, and MAA2C using the same MDGAM policy model. The results show that GRMAPG achieves better training efficiency and convergence performance than these two conventional MARL algorithms. V. E XPERIMENTS 
+
+We evaluate the proposed method from four perspectives: task-completion performance, ablation analysis, complexity, JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9
+
+and generalization capability. The experiments are conducted under different problem scales and communication ranges, with the number of completed tasks used as the primary performance metric. A normalized instance generation scheme is adopted. For each instance, N tasks and M agents are randomly initialized in a square region, and the task time windows, service durations, and agent velocities are generated within prescribed ranges. We set the number of task types to C = 2 in the experiments. Each task is assigned one of the two types, and the proportion of either type is randomly set between 0.4 and 0.6. The agent capabilities are also randomly assigned to reflect heterogeneous task-execution abilities. Specifically, agents that can execute only the first task type, agents that can execute only the second task type, and agents with both capabilities each account for approximately one third of the agent population. 
+
+Model and Training Settings: In the experiments, we use an encoder with L = 4 layers and set the numbers of layers in the task decoder and the communication decoder to 
+
+K1 = K2 = 1 , respectively. The embedding dimension is set to dm = 128 , and all MHA modules use 8 heads with 
+
+dq = dk = dv = 16 for each head. The hidden dimension of the feed-forward module is set to dff = 256 , and the communication-message dimension is set to dcom = 128 . The model is trained using GRMAPG with the group size set to K = 4 . We use the Adam optimizer [47] with a batch size of 64 , and each epoch contains 200 randomly generated batches. For each fixed instance configuration, the model is trained for 20 epochs, with the learning rate exponentially decayed from η = 10 −4 to η = 10 −5. The training pro-cess is conducted on four NVIDIA RTX 3090 GPUs. As a reference for training time, the complete training process takes approximately 27 hours under the setting N = 100 and 
+
+M = 7 . When the problem scale changes, loading a pretrained model from another scale can substantially reduce the training time compared with training from scratch, and convergence is typically achieved within about 8 epochs. During training, task selections are sampled from the policy distribution for exploration. In validation and testing, greedy decoding is used to evaluate the capability of the policy model to make one-shot decisions on problem instances. Validation is performed on a single GPU with the batch size set to 1.The detailed experimental results are presented in the following four subsections. To facilitate reproducibil-ity, the source code of the experiments is publicly available at https://anonymous.4open.science/r/mdgam code anonymous-F175. The released repository includes the imple-mentations of the evaluated models, as well as the training and testing scripts used in this paper. 
+
+A. Main results 
+
+We evaluate the main task-completion performance under three problem scales, namely (N = 50 , M = 4) , (N =100 , M = 7) , and (N = 150 , M = 10) , corresponding to small-, medium-, and large-scale instances, respectively. For each scale, three communication ranges, i.e., r = 0 .2,
+
+0.4, and 0.6, are considered to represent strict, moderate, and relaxed communication constraints. The proposed method is compared with representative heuristic and RL-based baseline algorithms. The baseline algorithms are summarized as fol-lows:  
+
+> •
+
+Auction-based heuristics: We consider CBBA [17], PI-maxAss [21], and EEPI [22]. To accommodate the dy-namic communication topology considered in this pa-per, each method performs distributed planning among the agents within the current communication-connected component. Replanning is triggered when the decision-making agent observes a newly connected agent joining its component.  
+
+> •
+
+RL-based methods: We compare with DL-DRL [33] and CAM [35]. Since DL-DRL follows a centralized task-assignment and sequence-planning structure, it is trained with global information and evaluated by cen-tralized decision-making within each communication-connected component. CAM is trained under the same distributed setting as the proposed method, where unen-coded agent attributes are transmitted during the com-munication phase. For both learning-based baselines, the model sizes and key hyperparameters are kept as consis-tent as possible with those of the proposed method. For each scale, we construct a dataset containing 1000 instances and evaluate the task-completion performance of the proposed method and all baseline algorithms. The average number of completed tasks achieved by each method is reported in Table I, and the distribution of the task-completion results is illustrated using box plots in Fig. 3. As shown in Table I, the proposed method achieves the high-est average number of completed tasks in all nine combinations of problem scale and communication range. Compared with PI-maxAss, which is the strongest heuristic baseline in most settings, the proposed method obtains increasingly larger gains as the problem scale grows. Specifically, when r = 0 .4, the improvements over PI-maxAss are 2.24% , 4.13% , and 5.94% 
+
+on the small-, medium-, and large-scale datasets, respectively. This scaling trend is also illustrated by the box plots in Fig. 3, where the distribution of completed-task numbers achieved by the proposed method is consistently shifted upward and the separation from the baseline algorithms becomes more evident on larger-scale instances. The proposed method also outperforms the learning-based baselines DL-DRL and CAM under all evaluated settings. When r = 0 .4, the proposed method improves the number of completed tasks over CAM by 2.86% , 3.74% , and 5.06% 
+
+on the small-, medium-, and large-scale datasets, respectively. These results show that, under the same distributed decision-making framework, the proposed policy architecture provides stronger cooperative task-scheduling performance than the existing learning-based policies. In addition, increasing the communication range generally improves the performance of all methods, since a larger communication range provides each agent with more neighboring information for coordinated decision-making. Even under the strict communication setting 
+
+r = 0 .2, the proposed method still achieves the best task-completion performance, demonstrating its effectiveness under JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10 
+
+TABLE I NUMBER OF COMPLETED TASKS ACHIEVED BY THE PROPOSED METHOD AND BASELINE ALGORITHMS UNDER DIFFERENT PROBLEM SCALES AND COMMUNICATION RANGES . T HE BEST -PERFORMING METHOD UNDER EACH SETTING IS HIGHLIGHTED IN BOLD .
+
+Method Type 50 tasks, 4 agents 100 tasks, 7 agents 150 tasks, 10 agents 
+
+r = 0 .2 r = 0 .4 r = 0 .6 r = 0 .2 r = 0 .4 r = 0 .6 r = 0 .2 r = 0 .4 r = 0 .6
+
+CBBA Heuristic 32.11 33.70 33.93 66.85 69.87 70.66 105.68 107.79 109.91 PI-maxAss Heuristic 36.41 37.98 38.49 75.41 79.61 80.19 117.96 124.34 124.70 EEPI Heuristic 35.35 36.81 37.27 74.18 77.85 78.34 116.13 121.76 122.15 DL-DRL RL 30.04 31.92 33.20 61.88 67.05 68.90 91.70 101.57 106.75 CAM RL 36.27 37.75 38.33 74.54 79.91 81.10 117.65 125.37 126.48 Ours RL 36.64 38.83 39.58 77.42 82.90 84.15 123.60 131.72 133.11 Low Medium High          
+
+> Communication range
+> 25
+> 30
+> 35
+> 40
+> 45
+> Number of Completed Tasks
+> Small scale
+> Low Medium High
+> Communication range
+> 50
+> 60
+> 70
+> 80
+> 90
+> Medium scale
+> Low Medium High
+> Communication range
+> 80
+> 100
+> 120
+> 140
+> Large scale
+> CBBA PI-maxAss EEPI DL-DRL CAM Ours
+
+Fig. 3. Box plots of task-completion results under different problem scales and communication ranges. For each method, the whiskers indicate the minimum and maximum numbers of completed tasks on the test dataset, while the lower edge, middle line, and upper edge of the box represent the first quartile, median, and third quartile, respectively. 
+
+limited information exchange. 
+
+B. Ablation 
+
+We conduct ablation studies to separately evaluate the contributions of the proposed MDGAM architecture and the GRMAPG training algorithm. 
+
+Model Ablation: We evaluate the architectural contribu-tion of MDGAM from two aspects. First, to examine the effect of the communication decoder, we construct a single-decoder variant by removing the communication decoder from MDGAM; in this variant, agents make task-selection decisions without generating learned communication messages. Second, to evaluate the graph representation module, we compare MDGAM with two representative graph neural network archi-tectures, namely AM [28] and GCN [48]. The representation dimensions of AM and GCN are set to be the same as those of MDGAM, and their total numbers of trainable parameters are kept at a similar scale. All model variants are trained using the same GRMAPG algorithm and identical training settings, and are evaluated under the medium-scale setting with N = 100 
+
+and M = 7 .
+
+Training Algorithm Ablation: We compare the proposed GRMAPG with two conventional MARL algorithms, MAPPO and MAA2C, under the same distributed multi-agent task-planning framework. All three training algorithms use the 0 250 500 750 1000 1250 1500 1750 2000 
+
+Training Step 
+
+20 
+
+40 
+
+60 
+
+80 
+
+> Training Reward
+
+GRMAPG MAPPO MAA2C 
+
+Fig. 4. Training reward curves of different policy-gradient algorithms under the medium-scale setting with N = 100 , M = 7 , and r = 0 .6.
+
+same data settings, including the same instance distribution, batch size, number of epochs, and learning rate. MAPPO and MAA2C also use the grouped input construction with 
+
+K = 4 as a data-augmentation strategy. Therefore, the three algorithms use exactly the same number of instances and policy-inference calls, which ensures a fair comparison. For MAPPO and MAA2C, the centralized critic described in Section IV-A is used for state-value estimation and actor optimization. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 11     
+
+> TABLE II ABLATION RESULTS UNDER THE MEDIUM -SCALE SETTING . T HE VARIANT
+> “W/OCOMM . D ECODER ”DENOTES MDGAM WITH THE COMMUNICATION DECODER REMOVED .
+
+Method 100 tasks, 7 agents 
+
+r = 0 .6 r = 0 .4 r = 0 .2
+
+Original 84.15 82.90 77.42 
+
+Model Ablation 
+
+w/o Comm. Decoder 82.80 81.63 76.65 AM 81.52 80.45 75.53 GCN 81.75 81.08 76.11 
+
+Training Algorithm Ablation 
+
+MAPPO 83.17 81.99 76.76 MAA2C 82.52 81.59 76.34 
+
+Table II reports the ablation results under the medium-scale setting with N = 100 and M = 7 , covering three communication ranges. The original method, which combines MDGAM and GRMAPG, achieves the highest average number of completed tasks in all three settings. In the model ablation, MDGAM consistently outperforms the single-decoder variant, AM, and GCN. Compared with the variant without the com-munication decoder, MDGAM increases the average number of completed tasks by 1.35 , 1.27 , and 0.77 when r = 0 .6, 0.4,and 0.2, respectively. Compared with AM, the corresponding improvements are 2.63 , 2.45 , and 1.89 , while compared with GCN, the improvements are 2.40 , 1.82 , and 1.31 . These results verify that both the extended graph attention mechanism and the multi-decoder design improve the capability of the policy model for decentralized task scheduling. The training-algorithm ablation further verifies the effective-ness of GRMAPG. With the same MDGAM actor, GRMAPG achieves higher task-completion performance than MAPPO and MAA2C across all communication ranges in Table II. These results show that the proposed critic-free policy-gradient estimator provides an additional gain beyond the network architecture. Fig. 4 further compares the training reward curves under the setting N = 100 , M = 7 , and r = 0 .6. GRMAPG reaches higher rewards more rapidly during training, whereas MAPPO and MAA2C exhibit slower improvement in the early stage. This result is consistent with the discussion in Section IV-B: directly optimizing the terminal task-completion objective with group-relative advantages avoids the need to train an additional value function and improves the conver-gence behavior of policy optimization. 
+
+C. Complexity 
+
+We evaluate the computational and communication costs of the proposed distributed decision-making framework and conventional PI-based algorithms. CAM and DL-DRL are not included because, under the distributed setting considered in this paper, they adopt the same sequential decision-making procedure and therefore have similar complexity profiles. The computational cost is mainly evaluated by the total runtime required to solve test instances. PI-maxAss and EEPI are run on one CPU core, while the proposed neural policy is evaluated on a single GPU with the batch size set to 
+
+1, since GPU acceleration is a practical choice for neural-network inference on modern edge-computing platforms. We record the total runtime required by each method to solve 1000 instances under the communication range r = 0 .4, as reported in Table III. Under this tested implementation and hardware setting, the proposed method requires more time than EEPI on the small-scale instances, but its runtime grows much more slowly as the problem scale increases. On the large-scale setting with 150 tasks and 10 agents, the proposed method solves 1000 instances in 31 min 7 s, corresponding to approximately 1.9 s per instance. This is about 95 times faster than PI-maxAss and 5.7 times faster than EEPI. These results show that the learned policy provides clear inference-time advantages on medium- and large-scale instances, while also achieving higher task-completion performance as shown in Table I.     
+
+> TABLE III TOTAL RUNTIME FOR SOLVING 1000 INSTANCES WITH r= 0 .4.
+
+Method (50,4) (100,7) (150,10) PI-maxAss 1h12m 14h31m 49h2m EEPI 6m37s 1h13m 2h59m Ours 10m38s 21m25s 31m7s   
+
+> TABLE IV AVERAGE COMMUNICATION COST PER INSTANCE WITH r= 0 .4.
+
+Method (50,4) (100,7) (150,10) PI-maxAss 209 1848 5272 EEPI 243 1654 3905 Ours 83 610 2149 
+
+The communication cost is defined as the number of message transmissions among connected agents during the decision-making process. For information exchange between two agents that requires multi-hop propagation, each hop is counted as one message transmission. As shown in Table IV, the proposed method requires fewer message transmissions than both PI-maxAss and EEPI across all evaluated scales. In the large-scale setting, the communication count is reduced from 5272 to 2149 compared with PI-maxAss, and from 3905 
+
+to 2149 compared with EEPI. The communication count of the proposed method still increases with the number of agents, because the current design allows the decision-making agent to receive messages from all agents within its communication-connected component. In practical deployments with stricter communication budgets, this overhead can be further con-trolled by reducing the message dimension or limiting the number of neighboring agents considered at each decision step. 
+
+D. Generalization tests 
+
+This subsection evaluates the generalization capability of the proposed model across different problem settings. Owing JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 12 80 90 100 110 120                     
+
+> Task Numbers of Training Set
+> 80 90 100 110 120
+> Task Numbers of Test Set  00.0016 0.0021 0.0061 0.0067
+> 0.0013 00.0012 0.004 0.007
+> 0.0035 0.0019 00.0031 0.0043
+> 0.0052 0.0021 0.0012 00.0022
+> 0.0061 0.003 0.0021 0.00077 0
+
+0.000 
+
+0.005 
+
+0.010 
+
+0.015 
+
+0.020                              
+
+> Fig. 5. Generalization results under different numbers of tasks with 7agents and r= 0 .4.56789
+> Agent Numbers of Training Set
+> 56789
+> Agent Numbers of Test Set  00.0012 0.0082 0.015 0.021
+> 0.0027 00.0036 0.0095 0.014
+> 0.0088 0.00092 00.0043 0.0044
+> 0.016 0.0028 0.00037 00.00017
+> 0.029 0.013 0.01 0.0034 0
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04                             
+
+> Fig. 6. Generalization results under different numbers of agents with 100
+> tasks and r= 0 .4.0.2 0.3 0.4 0.5 0.6
+> Communication Range in Training
+> 0.2 0.3 0.4 0.5 0.6
+> Communication Range in Testing
+> 00.00013 0.0081 0.0047 0.025
+> 0.0077 00.0031 0.004 0.022
+> 0.011 0.00017 00.00023 0.01
+> 0.016 0.0045 0.0032 00.00057
+> 0.021 0.0074 0.0052 0.0019 0
+
+0.00 
+
+0.01 
+
+0.02 
+
+0.03 
+
+0.04    
+
+> Fig. 7. Generalization results under different communication ranges with 100
+> tasks and 7agents.
+
+to its graph-based architecture, MDGAM can process dif-ferent combinations of the number of tasks, the number of agents, and the communication range, denoted by (N, M, r ),without modifying the input format or network structure. In each generalization experiment, the model is trained under one setting of (N, M, r ) and then evaluated on unseen test instances generated under different settings. Specifically, we vary one of N , M , and r while keeping the other two factors fixed. Figs. 5, 6, and 7 present the generalization results with respect to the number of tasks, the number of agents, and the communication range, respectively. In each heatmap, a cell denotes the performance gap between the model trained under the corresponding column setting and the best-performing model on the corresponding row test set. The diagonal entries indicate identical training and test settings, and therefore have a gap of 0. Overall, the three heatmaps show that the performance gap generally increases as the training and test settings become more different, indicating the effect of distribution mismatch on policy generalization. Specifically, Fig. 5 shows that the maximum performance gap among models trained with different numbers of tasks is only 0.7% , indicating strong generalization capability with respect to task-number variations. This result suggests that differences in the number of tasks between training and testing have only a limited effect on performance. In Fig. 6, the performance degradation is less than 1% when the difference between the training and test numbers of agents is no larger than 2. When this difference increases to 4, the degradation becomes more evident, reaching approximately 3% . A possible reason is that changing the number of agents may alter the agent density and the level of inter-agent coordination required by the policy. Fig. 7 evaluates generalization across communication ranges from the communication-constrained case r = 0.2 to the communication-relaxed case r = 0 .6. The results show dif-ferent generalization behaviors under different communica-tion conditions. Models trained under extreme communication settings, i.e., r = 0 .2 and r = 0 .6, show relatively larger performance gaps when transferred to other values of r. In contrast, models trained under intermediate communication ranges, i.e., r = 0.3–0.5, maintain favorable performance across a wider range of test settings. Overall, the proposed model demonstrates good generalization capability with re-spect to variations in task number, agent number, and com-munication range, with only limited performance degradation under moderate distribution shifts. VI. C ONCLUSION 
+
+This paper investigated cooperative task scheduling for communication-constrained distributed multi-agent systems, where agents make decisions from local observations while satisfying heterogeneous agent attributes, various task con-straints, and limited communication ranges. To address this problem, we formulated the distributed task planning process as a Dec-POMDP and proposed an MDGAM-based neural scheduling framework that jointly generates task-selection de-cisions and communication messages. The proposed MDGAM uses an extended graph attention encoder to represent graph-structured local observations with both node and edge features, and employs task and communication decoders to generate decentralized decisions and inter-agent messages. For policy optimization, we developed GRMAPG, a critic-free training algorithm that constructs group-relative advantages without ground truth, reduces trainable parameters, and improves con-vergence. Extensive experiments were conducted under different prob-lem scales and communication ranges. The results show that the proposed method achieves higher task-completion perfor-mance than representative heuristic methods, including CBBA, PI-maxAss, and EEPI, as well as learning-based methods such as DL-DRL and CAM. The complexity analysis further shows that the proposed framework reduces both runtime and JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 13 
+
+communication cost compared with PI-based distributed allo-cation algorithms, especially on large-scale instances. Ablation studies confirm the performance gains brought by the extended graph attention mechanism, the communication decoder, and the GRMAPG training algorithm. Generalization tests further indicate that the learned policy can adapt to variations in task number, agent number, and communication range with limited performance degradation. Future work will consider more dynamic environments, including online task arrivals, uncertain task execution times, and adaptive communication policies under bandwidth or energy constraints. REFERENCES [1] H. Liu, X. Li, G. Wu, M. Fan, R. Wang, L. Gao, and W. Pedrycz, “An iterative two-phase optimization method based on divide and conquer framework for integrated scheduling of multiple uavs,” IEEE Trans. Intell. Transp. Syst. , vol. 22, no. 9, pp. 5926–5938, 2020. [2] O. Shorinwa, R. N. Haksar, P. Washington, and M. Schwager, “Dis-tributed multirobot task assignment via consensus admm,” IEEE Trans. Robot. , vol. 39, no. 3, pp. 1781–1800, 2023. [3] S. Su and Z. Lin, “Distributed consensus control of multi-agent systems with higher order agent dynamics and dynamically changing directed interaction topologies,” IEEE Trans. Autom. Control , vol. 61, no. 2, pp. 515–519, 2015. [4] X. Bai, A. Fielbaum, M. Kronm¨ uller, L. Knoedler, and J. Alonso-Mora, “Group-based distributed auction algorithms for multi-robot task assignment,” IEEE Trans. Autom. Sci. Eng. , vol. 20, no. 2, pp. 1292– 1303, 2022. [5] A. Khamis, A. Hussein, and A. Elmogy, “Multi-robot task allocation: A review of the state-of-the-art,” in Cooperative Robots and Sensor Networks 2015 , ser. Studies in Computational Intelligence, A. Koubˆ aa and J. R. Mart´ ınez-de Dios, Eds. Cham, Switzerland: Springer, 2015, vol. 604, pp. 31–51. [6] L. Zhang, J. Zhao, E. Lamon, Y. Wang, and X. Hong, “Energy efficient multi-robot task allocation constrained by time window and precedence,” 
+
+IEEE Trans. Autom. Sci. Eng. , vol. 22, pp. 18 162–18 173, 2023. [7] J. Chen and D. Sun, “Coalition-based approach to task allocation of multiple robots with resource constraints,” IEEE Trans. Autom. Sci. Eng. ,vol. 9, no. 3, pp. 516–528, 2012. [8] N. Geng, Z. Chen, Q. A. Nguyen, and D. Gong, “Particle swarm optimization algorithm for the optimization of rescue task allocation with uncertain time constraints,” Complex Intell. Syst. , vol. 7, no. 2, pp. 873–890, 2021. [9] Z. Chen, J. Alonso-Mora, X. Bai, D. D. Harabor, and P. J. Stuckey, “Integrated task assignment and path planning for capacitated multi-agent pickup and delivery,” IEEE Robot. Autom. Lett. , vol. 6, no. 3, pp. 5816–5823, 2021. [10] B. P. Gerkey and M. J. Matari´ c, “A formal analysis and taxonomy of task allocation in multi-robot systems,” Int. J. Robot. Res. , vol. 23, no. 9, pp. 939–954, 2004. [11] Z. Liu, H. Wei, H. Wang, H. Li, and H. Wang, “Integrated task allocation and path coordination for large-scale robot networks with uncertainties,” 
+
+IEEE Trans. Autom. Sci. Eng. , vol. 19, no. 4, pp. 2750–2761, 2021. [12] Z. Jia, J. Yu, X. Ai, X. Xu, and D. Yang, “Cooperative multiple task assignment problem with stochastic velocities and time windows for heterogeneous unmanned aerial vehicles using a genetic algorithm,” 
+
+Aerosp. Sci. Technol. , vol. 76, pp. 112–125, 2018. [13] T.-H. Chang, M. Hong, and X. Wang, “Multi-agent distributed optimiza-tion via inexact consensus admm,” IEEE Trans. Signal Process. , vol. 63, no. 2, pp. 482–497, 2014. [14] Y. Yan and Y. Shen, “Distributed policy gradient for linear quadratic networked control with limited communication range,” IEEE Trans. Signal Process. , vol. 72, pp. 2087–2100, 2024. [15] H.-L. Choi, L. Brunet, and J. P. How, “Consensus-based decentralized auctions for robust task allocation,” IEEE Trans. Robot. , vol. 25, no. 4, pp. 912–926, 2009. [16] Y. Xu, M. Fang, L. Chen, G. Xu, Y. Du, and C. Zhang, “Reinforcement learning with multiple relational attention for solving vehicle routing problems,” IEEE Trans. Cybern. , vol. 52, no. 10, pp. 11 107–11 120, 2021. [17] L. Brunet, H.-L. Choi, and J. How, “Consensus-based auction ap-proaches for decentralized task assignment,” in AIAA Guid., Navig., Control Conf. Exhib. , 2008, p. 6839. [18] W. Zhao, Q. Meng, and P. W. Chung, “A heuristic distributed task allocation method for multivehicle multitask problems and its application to search and rescue scenario,” IEEE Trans. Cybern. , vol. 46, no. 4, pp. 902–915, 2015. [19] R. Chen, J. Li, Y. Chen, Y. Huang, X. Wang, and L. Shen, “An asynchronous consensus method with low communication traffic and high efficiency for distributed multi-agent scheduling,” IEEE Trans. Mobile Comput. , 2025. [20] X. Bai, W. Yan, and S. S. Ge, “Distributed task assignment for multiple robots under limited communication range,” IEEE Trans. Syst., Man, Cybern., Syst. , vol. 52, no. 7, pp. 4259–4271, 2021. [21] J. Turner, Q. Meng, G. Schaefer, A. Whitbrook, and A. Soltoggio, “Distributed task rescheduling with time constraints for the optimization of total task allocations in a multirobot system,” IEEE Trans. Cybern. ,vol. 48, no. 9, pp. 2583–2597, 2017. [22] S. Wang, Y. Liu, Y. Qiu, S. Li, and J. Zhou, “An efficient distributed task allocation method for maximizing task allocations of multirobot systems,” IEEE Trans. Autom. Sci. Eng. , vol. 21, no. 3, pp. 3588–3602, 2023. [23] S. Wang, S. Li, Y. Huangfu, Y. Qiu, and Y. Liu, “Communication-efficient decentralized task allocation for large-scale multi-agent sys-tems,” IEEE Robot. Autom. Lett. , 2025. [24] O. Vinyals, M. Fortunato, and N. Jaitly, “Pointer networks,” Adv. Neural Inf. Process. Syst. , vol. 28, 2015. [25] I. Bello, H. Pham, Q. V. Le, M. Norouzi, and S. Bengio, “Neural com-binatorial optimization with reinforcement learning,” arXiv:1611.09940 ,2016. [26] E. Khalil, H. Dai, Y. Zhang, B. Dilkina, and L. Song, “Learning combinatorial optimization algorithms over graphs,” Adv. Neural Inf. Process. Syst. , vol. 30, 2017. [27] C. K. Joshi, T. Laurent, and X. Bresson, “An efficient graph con-volutional network technique for the travelling salesman problem,” 
+
+arXiv:1906.01227 , 2019. [28] W. Kool, H. van Hoof, and M. Welling, “Attention, learn to solve routing problems!” in Int. Conf. Learn. Represent. , 2019. [29] Y. Jin, Y. Ding, X. Pan, K. He, L. Zhao, T. Qin, L. Song, and J. Bian, “Pointerformer: Deep reinforced multi-pointer transformer for the traveling salesman problem,” in Proc. AAAI Conf. Artif. Intell. ,vol. 37, no. 7, 2023, pp. 8132–8140. [30] Y.-D. Kwon, J. Choo, B. Kim, I. Yoon, Y. Gwon, and S. Min, “Pomo: Policy optimization with multiple optima for reinforcement learning,” 
+
+Adv. Neural Inf. Process. Syst. , vol. 33, pp. 21 188–21 198, 2020. [31] J. Bi, Y. Ma, J. Zhou, W. Song, Z. Cao, Y. Wu, and J. Zhang, “Learning to handle complex constraints for vehicle routing problems,” Adv. Neural Inf. Process. Syst. , vol. 37, pp. 93 479–93 509, 2024. [32] Z. Zong, M. Zheng, Y. Li, and D. Jin, “Mapdp: Cooperative multi-agent reinforcement learning to solve pickup and delivery problems,” in Proc. AAAI Conf. Artif. Intell. , vol. 36, no. 9, 2022, pp. 9980–9988. [33] X. Mao, G. Wu, M. Fan, Z. Cao, and W. Pedrycz, “Dl-drl: A double-level deep reinforcement learning approach for large-scale task scheduling of multi-uav,” IEEE Trans. Autom. Sci. Eng. , vol. 22, pp. 1028–1044, 2024. [34] Y. Wang, H. Li, and Q. Shen, “A hierarchical multi-task and multi-agent assignment approach: Learning dqn strategy from execution,” 
+
+IEEE Trans. Autom. Sci. Eng. , 2025. [35] S. Paul and S. Chowdhury, “Learning to allocate time-bound and dynamic tasks to multiple robots using covariant attention neural net-works,” J. Comput. Inf. Sci. Eng. , vol. 24, no. 9, p. 091005, 2024. [36] D. S. Bernstein, R. Givan, N. Immerman, and S. Zilberstein, “The complexity of decentralized control of markov decision processes,” 
+
+Math. Oper. Res. , vol. 27, no. 4, pp. 819–840, 2002. [37] L. Wang, Y. Yan, M. Huang, and Y. Shen, “Egam: Extended graph attention model for solving routing problems,” arXiv:2601.21281 , 2026. [38] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” Adv. Neural Inf. Process. Syst. , vol. 30, 2017. [39] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert: Pre-training of deep bidirectional transformers for language understanding,” in Proc. 2019 Conf. North Amer. Chapter Assoc. Comput. Linguistics: Human Lang. Technol. , 2019, pp. 4171–4186. [40] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. , 2016, pp. 770–778. [41] J. L. Ba, J. R. Kiros, and G. E. Hinton, “Layer normalization,” 
+
+arXiv:1607.06450 , 2016. [42] R. Lowe, Y. I. Wu, A. Tamar, J. Harb, O. Pieter Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environ-ments,” Adv. Neural Inf. Process. Syst. , vol. 30, 2017. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 14 
+
+[43] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of ppo in cooperative multi-agent games,” 
+
+Adv. Neural Inf. Process. Syst. , vol. 35, pp. 24 611–24 624, 2022. [44] R. J. Williams, “Simple statistical gradient-following algorithms for connectionist reinforcement learning,” Mach. Learn. , vol. 8, no. 3, pp. 229–256, 1992. [45] M. Kim, J. Park, and J. Park, “Sym-nco: Leveraging symmetricity for neural combinatorial optimization,” Adv. Neural Inf. Process. Syst. ,vol. 35, pp. 1936–1949, 2022. [46] Z. Shao, P. Wang, Q. Zhu, R. Xu, J. Song, X. Bi, H. Zhang, M. Zhang, Y. Li et al. , “Deepseekmath: Pushing the limits of mathematical reason-ing in open language models,” arXiv:2402.03300 , 2024. [47] D. P. Kingma and J. L. Ba, “Adam: A method for stochastic optimiza-tion,” in Int. Conf. Learn. Represent. , 2015. [48] C. K. Joshi, Q. Cappart, L.-M. Rousseau, and T. Laurent, “Learning the travelling salesperson problem requires rethinking generalization,” 
+
+Constraints , vol. 27, pp. 70–98, 2022.

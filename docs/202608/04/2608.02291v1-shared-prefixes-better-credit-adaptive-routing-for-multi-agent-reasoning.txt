@@ -1,0 +1,337 @@
+Title: Shared Prefixes, Better Credit: Adaptive Routing for Multi-Agent Reasoning
+
+URL Source: https://arxiv.org/pdf/2608.02291v1
+
+Published Time: Tue, 04 Aug 2026 02:30:25 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Shared Prefixes, Better Credit: Adaptive Routing for Multi-Agent Reasoning 
+
+## Yiqing Liu, Zihao Wang, Hantao Yao, Wu Liu, Yongdong Zhang 
+
+University of Science and Technology of China 
+
+Abstract 
+
+Multi-agent reasoning (MAR) improves reasoning reliability through iterative solution exchange and refinement. Existing adaptive MAR methods typically learn routing decisions from query-level labels or trajectory-level returns, but such coarse supervision cannot accurately estimate the state-conditioned utility of individual operators in multi-step collaboration. We propose TreeCredit , a shared-prefix credit assignment frame-work for efficient adaptive MAR. Its core insight is to estimate operator utility through state-matched downstream compar-isons , rather than directly attributing trajectory-level outcomes to preceding decisions. TreeCredit constructs shared-prefix collaboration trees by expanding candidate operators from the same intermediate state and assigns each state–operator pair a correctness-prioritized suffix credit based on the termi-nal correctness and cumulative additional cost of its complete continuation. These structured credits are converted into state-local operator preferences to train a lightweight pairwise state router, which dynamically selects the next admissible operator during inference. Experiments on six reasoning benchmarks show that TreeCredit modestly improves accuracy while sub-stantially reducing inference cost, achieving a better accuracy– cost trade-off than representative MAR methods. 
+
+## Introduction 
+
+Large language model based multi-agent reasoning (MAR) enables multiple agents to exchange complementary anal-yses, refine intermediate solutions, and aggregate diverse opinions for complex reasoning tasks (Qian et al. 2024; Hong et al. 2024; Chen et al. 2024). By combining diverse reason-ing capabilities with structured interaction, MAR systems improve robustness and solution quality over isolated infer-ence. However, these gains often require additional model calls, message exchanges, and agent coordination, result-ing in substantial inference overhead that increases with the scale and structural complexity of collaboration. Improving reasoning quality while controlling collaboration cost has therefore become a central objective for efficient multi-agent reasoning. To address these limitations, recent studies have shifted from predefined collaboration workflows toward adaptive routing and orchestration. MasRouter (Yue et al. 2025) and DAAO (Su et al. 2026) dynamically configure collabora-tion modes, agent roles, model assignments, and workflow depth based on query characteristics or estimated difficulty. 
+
+Figure 1: Motivation for state-matched operator credit. (a) The same operator yields different outcomes across states. (b) Different operators at the same state produce different correctness and costs. MaAS (Zhang et al. 2025a) and BAMAS (Yang et al. 2026a) further construct query-dependent agentic architectures un-der performance and budget constraints. Graph-based ap-proaches adapt communication structures by learning in-teraction topologies, sparsifying edges, or controlling agent participation and information visibility (Zhuge et al. 2024; Zhang et al. 2025b; Yang et al. 2026b; Wang et al. 2026a). More recently, sequential routing methods revise collab-oration through state-conditioned policies that determine whether to continue debate, invoke additional models, or modify communication patterns (Fan, Yoon, and Ji 2026; Zhang, Feng, and You 2025; Lu et al. 2026). Collectively, these methods demonstrate the potential of adaptive orches-tration to improve the trade-off between reasoning accuracy and inference cost. However, intermediate routing decisions are often supervised using query-level labels or trajectory-level returns, which provide only indirect and coarse credit. Since the outcome is jointly determined by a sequence of in-terdependent decisions, successful trajectories may still con-tain unnecessary or harmful choices, whereas failed trajec-tories may include locally beneficial ones. Therefore, how arXiv:2608.02291v1 [cs.AI] 3 Aug 2026 to estimate the state-conditioned utility of intermediate op-erators is a critical aspect for learning efficient and reliable multi-agent routing policies. Our key insight is to learn operator utility through state-matched downstream comparisons , rather than directly at-tributing trajectory-level outcomes to preceding routing de-cisions. As illustrated in Figure 1, applying different opera-tors to the same intermediate state can lead to substantially different downstream correctness and inference costs, indi-cating that the preferred operator depends on the reached collaboration state. We therefore evaluate candidate opera-tors from the same shared-prefix state, holding the query and interaction history. Each operator is assessed by the fi-nal correctness and additional inference cost of the complete continuation it induces. The shared prefix controls variation caused by preceding execution histories, while the complete suffix preserves the delayed accuracy–cost consequences of the current choice, as shown in Figure 1(b). These state-matched comparisons transform coarse trajectory-level feed-back into fine-grained local preferences for learning reliable state-aware routing policies. Based on this insight, we propose TreeCredit , a shared-prefix credit assignment framework for adaptive multi-agent reasoning. Through Shared-Prefix Tree Expansion , Tree-Credit constructs independently sampled offline collabora-tion trees by expanding all admissible operators as sibling branches from the same intermediate state. Because these branches share an identical query, interaction history, and computational prefix, their downstream outcomes provide state-matched evidence for comparing operator utility, with each sampled state realization contributing independent su-pervision. Correctness-Prioritized Suffix Credit then assigns each state–operator pair a structured credit based on the terminal correctness and cumulative additional cost of the best complete suffix represented in the sampled tree. State-Local Preference Extraction converts the resulting credits into pairwise operator preferences, prioritizing correct con-tinuations and using lower cost to distinguish alternatives with equal correctness. Finally, Pairwise State Routing trains a lightweight router from these preferences to select the highest-scoring admissible operator at each state. The collab-oration trees are used only for offline supervision construc-tion, whereas inference follows a single adaptive trajectory until an acceptance or voting operator terminates reasoning. Our major contributions can be summarized as follows: 
+
+• We identify state-conditioned credit assignment as a key challenge in adaptive MAR and introduce state-matched downstream comparison to estimate operator utility from comparable complete continuations. 
+
+• We propose TreeCredit , a shared-prefix credit assign-ment framework that constructs state-local preference tar-gets by comparing the best complete continuations ob-served for sibling operators under a shared-prefix state. 
+
+• Experiments across multiple complex reasoning bench-marks demonstrate that TreeCredit effectively reduces in-ference cost while improving task accuracy. 
+
+## Related Work 
+
+Efficient and Adaptive Multi-Agent Collaboration. Ex-isting methods improve multi-agent efficiency by adapt-ing interaction depth, model allocation, agent participation, or communication structure. Free-MAD reduces redundant consensus seeking, while iMAD determines whether ad-ditional debate is warranted (Cui et al. 2026; Fan, Yoon, and Ji 2026). At the query and workflow level, Mas-Router, DAAO, MaAS, and MAS-Orchestra construct query-dependent model combinations, agentic architectures, or col-laboration workflows, while BAMAS additionally considers computation budgets (Yue et al. 2025; Su et al. 2026; Zhang et al. 2025a; Ke et al. 2026; Yang et al. 2026a). Structure-oriented methods optimize communication graphs, edge ac-tivation, agent roles, or model mixtures (Zhang et al. 2025b, 2026; Yang et al. 2026b; Li, Hasson, and Ghosh 2026; Yao, Li, and Shen 2026; Li et al. 2026). During execution, Dy-Topo, Router-R1, Optimal-Agent-Selection (STRMAC), OI-MAS, and RUMAD adapt communication topology, agent or model selection, and debate behavior according to the evolv-ing interaction state (Lu et al. 2026; Zhang, Feng, and You 2025; Wang et al. 2026c,b,a). TreeCredit builds on this di-rection by treating heterogeneous collaboration mechanisms as callable operators and learning which operator to apply at each reached state. 
+
+Credit Assignment for Multi-Agent Orchestration. 
+
+Learning an adaptive orchestration policy requires attribut-ing downstream performance to individual routing decisions. Existing methods commonly optimize scalar rewards de-fined over steps or complete trajectories. BAMAS combines task performance with budget efficiency (Yang et al. 2026a); Router-R1 combines format, final-answer, and model-usage signals (Zhang, Feng, and You 2025); and RUMAD uses step-and episode-level objectives involving accuracy, consensus, efficiency, and sparsity (Wang et al. 2026a). Although effec-tive for end-to-end optimization, these objectives do not di-rectly rank the alternative operators available at the same state because a trajectory outcome reflects the combined effects of multiple interdependent decisions. LEMON addresses a related problem by counterfactually editing role, capacity, or dependency fields in an executable orchestration specifica-tion and assigning reward contrasts to the edited spans (Chen et al. 2026). TreeCredit instead compares runtime opera-tor choices expanded from an identical interaction history, evaluates their downstream suffixes using correctness and additional inference cost, and converts these state-matched comparisons into local pairwise preferences. 
+
+## Formalization 
+
+Dynamic Multi-Agent Reasoning. Given a query q,multi-agent reasoning evolves over a sequence of collabora-tion states: st = ( q, H t, B t), where Ht contains the observ-able interaction history, including candidate answers, agent responses, and previously executed operators, and Bt denotes the remaining inference budget. Defining O = {o1, . . . , o L} be a finite catalog of hetero-geneous collaboration operators. Each operator specifies a participating agent set, an interaction protocol, an induced Figure 2: Overview of TreeCredit. Shared-prefix collaboration trees are expanded offline to assign correctness-prioritized suffix credits and extract state-local operator preferences. These preferences train a pairwise state router that follows a single adaptive trajectory during inference. state transition, and an inference cost. At state st, the router selects an admissible operator according to Eq. (1), 
+
+ot ∼ πθ (· | st) , ot ∈ O(st) ⊆ O, (1) where O(st) is determined by the collaboration protocol. Executing ot induces a following stochastic transition: 
+
+st+1 ∼ P (· | st, o t) , Bt+1 = Bt − c(st, o t), (2) and incurs an immediate cost c(st, o t) ≥ 0.A complete collaboration trajectory is defined as τ ,
+
+τ = ( s0, o 0, s 1, . . . , o T −1, s T ) , (3) where sT is terminal. The final answer and total inference cost are: 
+
+ˆyτ = f (sT ), C(τ ) =  
+
+> T−1
+
+X
+
+> t=0
+
+c(st, o t), (4) where f extracts the final prediction from the terminal state. In this work, we instantiate the finite catalog of heteroge-neous collaboration operators as, 
+
+O = {oacc , o deb , o vote } , (5) where oacc accepts the current answer and terminates reason-ing, odeb performs another heterogeneous debate round and produces a successor state, and ovote aggregates the current candidate answers and terminates. 
+
+System-Level Design Objective. Defining 
+
+D = {(qi, y i)}Mi=1 as a labeled benchmark, and 
+
+U (ˆ y, y ) = I[ˆ y = y] ∈ {0, 1} as the correctness indi-cator. We formulate adaptive MAR as minimizing expected inference cost while preserving accuracy. Rather than solving this constrained objective directly, TreeCredit uses correctness-prioritized state-local preferences as a practical surrogate, ranking correct continuations before comparing costs. 
+
+min  
+
+> θ
+
+E(q,y )∼D , τ ∼πθ [C(τ )] s.t. E(q,y )∼D , τ ∼πθ [U (ˆ yτ , y )] ≥ Aref − ϵ, (6) where Aref is a reference accuracy and ϵ ≥ 0 is the allowed accuracy tolerance. Note that this equation specifies the system-level design objective, while the preference-learning objective introduced later serves as its state-local surrogate. A terminal outcome evaluates the complete trajectory but does not identify the downstream utility of any individual state–operator decision. TreeCredit addresses this credit-assignment gap by comparing candidate operators from shared-prefix states and deriving state-local preferences from their complete downstream outcomes. 
+
+## Method 
+
+As shown in Figure 2, TreeCredit learns the state-conditioned routing policy πθ from offline collaboration trees through four modules: Shared-Prefix Tree Expansion , Correctness-Prioritized Suffix Credit , State-Local Preference Extraction ,and Pairwise State Routing . The trees are used only to con-struct supervision; at inference time, TreeCredit follows a single adaptive collaboration trajectory. 
+
+Shared-Prefix Tree Expansion: For each labeled exam-ple (qi, y i) ∈ D , TreeCredit constructs K independently sampled collaboration trees: 
+
+T (k) 
+
+> i
+
+=
+
+
+
+V(k) 
+
+> i
+
+, E(k)
+
+> i
+
+
+
+, k ∈ { 1, . . . , K }. (7) Each node v ∈ V (k) 
+
+> i
+
+represents a reached collaboration state 
+
+sv = ( qi, H v , B v ). Independent trees use different settings decoding randomness and therefore provide diverse state re-alizations for offline credit construction. Each sampled state realization is treated independently when generating local preference examples. At every non-terminal node v, TreeCredit expands all ad-missible operators from the same state: 
+
+(sv , o ) Exec 
+
+−−−−→
+
+(terminal state sℓ, o ∈ { oacc , o vote },
+
+child state su, o = odeb .
+
+(8) Each edge is labeled by the executed operator and its imme-diate cost c(sv , o ). Debate expansion continues recursively until a terminal operator is executed or the maximum depth 
+
+Dmax is reached. A branch initiated by operator o at node v can be decom-posed as: 
+
+τ (v, o ) = P (v) ⊕ (sv , o ) ⊕ S(v, o ), (9) where P (v) is the common prefix from the root to v, and 
+
+S(v, o ) is the remaining downstream suffix after executing o.For any sibling operators oa, o b ∈ O(sv ), the accumulated prefix cost is identical. Therefore, the difference between those two operators is: 
+
+[Cpre (v) + Csuf (sv , o a)] − [Cpre (v) + Csuf (sv , o b)] = Csuf (sv , o a) − Csuf (sv , o b), (10) where Cpre (·) and Csuf (·) denote the cost of prefix and suffix operators, respectively. The shared prefix controls differences in preceding execution histories, while suffix outcomes pro-vide state-matched estimates of the downstream utility of candidate operators. This comparison estimates the utility of selecting an operator together with its complete continuation, rather than its isolated one-step causal effect. 
+
+Correctness-Prioritized Suffix Credit For each expanded state–operator pair (sv , o ), TreeCredit defines a structured suffix credit G(sv , o ),
+
+G(sv , o ) = ( Z(sv , o ), −Csuf (sv , o )) , (11) where Z(sv , o ) ∈ { 0, 1} is the correctness of the terminal prediction reached after selecting o, and Csuf (sv , o ) is the total cost from sv through o to termination. Both dimensions are written so that a larger value is preferred. Credits are compared lexicographically: 
+
+(z, −c) ≻lex (z′, −c′) ⇐⇒ [z > z ′] ∨ [z = z′ ∧ c < c ′] .
+
+(12) This correctness-prioritized ordering prevents a cheaper but incorrect branch from dominating a correct branch, while favoring lower inference cost among continuations with equal correctness. For a terminal operator, the suffix credit is observed di-rectly: 
+
+G(sv , o ) = ( U (ˆ ysv ,o , y i), −c(sv , o )) , o ∈ { oacc , o vote } .
+
+(13) If odeb transitions to successor state su, its credit is backed up from the best complete suffix reachable within the sampled tree: 
+
+G(sv , o deb ) = lex 
+
+max  
+
+> o′∈O(su)
+
+(Z(su, o ′), − [c(sv , o deb ) + Csuf (su, o ′)]) .
+
+(14) This optimal-continuation backup is used only for offline supervision construction and estimates the potential down-stream utility of selecting debate at sv under the best contin-uation represented in the sampled tree. 
+
+State-Local Preference Extraction For any two admissi-ble operators with strictly ordered suffix credits, TreeCredit constructs a state-local preference: 
+
+oa ≻sv ob ⇐⇒ G(sv , o a) ≻lex G(sv , o b), o a, o b ∈ O(sv ).
+
+(15) Using all strictly ordered pairs preserves the full state-local ranking rather than comparing only the best operator against the rest. Aggregating these comparisons over all indepen-dently sampled states, trees, and examples yields 
+
+Dpref = (sj , o + 
+
+> j
+
+, o − 
+
+> j
+
+, w j ) Jj=1 , (16) where o+ 
+
+> j
+
+≻sj o− 
+
+> j
+
+, J = |D pref |, and wj > 0 is a weight that emphasizes correctness-changing comparisons and bal-ances opposite preference directions within each unordered operator pair. 
+
+Pairwise State Routing The router operates on a compact state representation 
+
+xv = ϕ(sv ) ∈ Rd, (17) where ϕ(·) extracts process-level features from the complete observable state sv , including the query, answer agreement, answer transitions, interaction stability, debate progress, ac-cumulated computation, and remaining budget. A lightweight multilayer perceptron maps the state repre-sentation to operator logits: 
+
+uθ (sv ) = MLP θ (xv ) ∈ R|O|. (18) Let uθ (sv , o ) denote the logit assigned to operator o. Masking inadmissible operators gives 
+
+πθ (o | sv ) = exp ( uθ (sv , o )) 
+
+X 
+
+> ˜o∈O(sv)
+
+exp ( uθ (sv , ˜o)) , o ∈ O(sv ).
+
+(19) For the j-th preference example (sj , o + 
+
+> j
+
+, o − 
+
+> j
+
+, w j ) ∈ D pref ,define the logit margin 
+
+∆θ,j = uθ (sj , o + 
+
+> j
+
+) − uθ (sj , o − 
+
+> j
+
+). (20) The router is trained using the weighted Bradley–Terry loss 
+
+Lpref (θ) = 
+
+> J
+
+X
+
+> j=1
+
+wj log (1 + exp( −∆θ,j )) 
+
+> J
+
+X
+
+> j=1
+
+wj
+
+. (21) This objective learns state-local operator preferences without requiring a globally comparable scalar value function across different collaboration states. At inference step t, TreeCredit directly selects the highest-scoring admissible operator: 
+
+ot = arg max 
+
+> o∈O(st)
+
+uθ (st, o ). (22) Selecting odeb produces a successor state, whereas selecting 
+
+oacc or ovote terminates the trajectory and returns the final prediction ˆyτ = f (sT ).Models Methods Accuracy (%) Overall MMLU GPQA-D GSM8K MATH-500 MedQA LogiQA2.0 Avg. Acc. Avg. Tokens                                                                                                 
+
+> GPT  CoT (Wei et al. 2022) 87.04 64.65 95.60 87.17 90.02 76.08 83.43 738 Self-Refine (Madaan et al. 2023) 87.11 67.68 94.47 88.60 90.97 76.40 84.21 3,501 Self-Consistency (Wang et al. 2023) 87.92 68.18 95.83 91.00 90.57 76.59 85.02 3,529 DS  CoT (Wei et al. 2022) 86.50 61.62 96.13 88.55 85.39 74.75 82.16 984 Self-Refine (Madaan et al. 2023) 86.70 60.61 95.52 86.00 88.14 75.83 82.13 3,284 Self-Consistency (Wang et al. 2023) 88.81 61.11 96.89 92.00 85.62 79.33 83.96 3,466 GPT+DS  MAD (Du et al. 2024) 88.09 65.61 96.59 91.60 91.12 79.70 85.45 25,961 HCP-MAD (Liu et al. 2026) 88.37 66.16 96.66 92.20 91.20 79.77 85.73 4,938 DAAO (Su et al. 2026) 88.65 65.66 96.74 86.00 90.57 77.85 84.25 8,856 BAMAS (Yang et al. 2026a) 86.70 61.42 95.38 87.40 91.20 80.09 83.70 1,217 AnyMAC (Wang et al. 2025) 86.91 68.69 95.60 90.60 86.72 80.47 84.83 8,964
+> TreeCredit(Ours) 89.88 69.19 96.51 92.80 91.44 80.15 86.66 2,193
+
+Table 1: Comparison across six reasoning benchmarks. For each accuracy column, the best result is shown in bold and the second-best is underlined. GPT and DS denote GPT-4.1-mini and DeepSeek-V3-0324, respectively; all collaboration and routing methods use the same GPT+DS heterogeneous pair. Avg. Acc. is the macro-average over the six benchmarks, and Avg. Tokens is the average token consumption per query. 
+
+## Experiments 
+
+Experimental Setup 
+
+Datasets: We evaluate TreeCredit on six benchmarks: MMLU (Hendrycks et al. 2021a) and GPQA-Diamond (Rein et al. 2024) for general and scientific knowledge, GSM8K (Cobbe et al. 2021) and MATH-500 (Hendrycks et al. 2021b) for mathematical reasoning, MedQA (Jin et al. 2020) for medical question answering, and LogiQA2.0 for logical reasoning. The standard evaluation split and answer-extraction protocol for each benchmark. 
+
+Models and Collaboration Setting. Our core experiments use GPT-4.1-mini and DeepSeek-V3-0324 as a heteroge-neous agent pair. Single-agent baselines evaluate each model independently, whereas all collaboration and routing meth-ods use the same pair. 
+
+Baselines. For single-agent reasoning, we include Chain-of-Thought (CoT) (Wei et al. 2022), Self-Refine (Madaan et al. 2023), and five-sample Self-Consistency (Wang et al. 2023) for both backbones. For collaboration, we compare with fixed Multi-Agent Debate (MAD) (Du et al. 2024) and the rule-based progressive HCP-MAD workflow. We further include DAAO (Su et al. 2026) as a query-level router and BAMAS (Yang et al. 2026a) and AnyMAC (Wang et al. 2025) as adaptive-routing baselines. 
+
+Evaluation Metrics. We report task accuracy and token con-sumption per query. Avg. Acc. is the unweighted mean of the six benchmark accuracies, while Avg. Tokens is the un-weighted mean of the token averages. 
+
+Implementation Details. For each benchmark, we randomly sample 100 labeled questions from the training split for 
+
+Shared-Prefix Tree Expansion . For each benchmark, we train a separate TreeCredit router using 100 labeled ex-amples sampled exclusively from the official training set. All reported results are evaluated on a disjoint test set. For each question, we construct (K=2) independent collab-oration trees using different decoding seeds, yielding 200 trees per benchmark. Note that the trees are not aggregated. Each collaboration trajectory contains at most ( Rmax =5) de-bate rounds. The router is implemented as a two-layer MLP with a hidden dimension of 128. Its 398-dimensional input concatenates a 384-dimensional query embedding produced by the frozen all-MiniLM-L6-v2 encoder with a 14-dimensional compact collaboration-state representation, and its output layer produces logits for the three operators: Ac-cept , Debate , and Vote .
+
+Main Results 
+
+We compare TreeCredit with representative single-agent, multi-agent, and learned routing methods across six rea-soning benchmarks, with the main results summarized in Table 1. Among single-agent baselines, Chain-of-Thought requires the fewest tokens but achieves relatively lower accu-racy. On GPT-4.1-mini, Self-Consistency increases the aver-age accuracy from 83.43% to 85.02%, at the cost of raising token consumption from 738 to 3,529. In comparison, Tree-Credit achieves a higher average accuracy of 86.66 % while reducing token consumption to 2,193. These results suggest that state-adaptive collaboration provides a more favorable accuracy-cost trade-off than repeatedly sampling indepen-dent solutions from a single agent. TreeCredit also compares favorably with conventional multi-agent reasoning methods. Fixed Multi-Agent Debate achieves an average accuracy of 85.45% with 25,961 tokens, while HCP-MAD substantially reduces the cost to 4,938 to-kens and obtains 85.73% accuracy. Relative to HCP-MAD, TreeCredit further improves average accuracy by 0.93 per-centage points while reducing token consumption by 55.59%. These results indicate that state-conditioned routing pre-serves the reasoning benefits of multi-agent collaboration while avoiding unnecessary debate and aggregation. Among learned routing approaches, DAAO and AnyMAC Figure 3: Accuracy-Cost comparison using the average re-sults over six benchmarks. GSM8K         
+
+> MMLU
+> MedQA
+> MATH-500
+> LogiQA
+> GPQA
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Proportion (%)
+> 96.51% 89.88% 91.44% 92.80% 80.15% 69.19%
+> (a) Stage Distribution
+> GSM8K
+> MMLU
+> MedQA
+> MATH-500
+> LogiQA
+> GPQA
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> 100
+> 110
+> Accuracy (%)
+> (b) Stage-wise Accuracy
+> Initial Accept Debate→Accept →Vote Overall (b)
+
+Figure 4: Stage-wise routing behavior of TreeCredit. The left panel shows the proportion of queries terminated by initial Accept, Debate →Accept, or Vote. The right panel reports the conditional accuracy of each routed subset, with the dashed curve indicating overall accuracy. obtain average accuracies of 84.25% and 84.83% with 8,856 and 8,964 tokens, respectively, whereas TreeCredit reaches 86.66 % with only 2,193 tokens. BAMAS achieves the lowest inference cost at 1,217 tokens, but its average accuracy is 83.70%, 2.96 percentage points below TreeCredit. Its low cost is associated with a conservative collaboration policy that uses approximately one to two model calls per query, which limits additional reasoning on difficult instances. Figure 3 compares average accuracy and token consump-tion, with better operating points located toward the upper-left. TreeCredit lies on the empirical Pareto frontier and achieves the highest average accuracy among methods with complete results. It strictly dominates Multi-Agent Debate, HCP-MAD, DAAO, AnyMAC, and Self-Consistency, which are both less accurate and more costly. Chain-of-Thought and BAMAS use fewer tokens but incur substantial accu-racy losses; for example, BAMAS saves 976 tokens but trails TreeCredit by 2.96 percentage points. Overall, TreeCredit achieves the most favorable accuracy–cost trade-off by allo-cating additional collaboration only when its expected benefit justifies the cost. 
+
+Dataset × → ✓ (%) ✓ → × (%) ✓ → ✓ (%) × → × (%) GPQA-D 8.08 1.01 61.11 29.80 LogiQA2.0 6.11 1.46 74.05 18.38 MedQA 5.03 2.36 86.41 6.21 MMLU 4.38 1.18 85.50 8.94 MATH-500 3.60 1.00 89.20 6.20 GSM8K 1.44 0.30 95.07 3.18 
+
+Table 2: Correctness transitions from the initial reference prediction to the final TreeCredit prediction over all queries. Datasets are ordered by the × → ✓ rate in descending order. 
+
+Routing and Outcome Analysis 
+
+Progressive Routing Behavior. Figure 4 shows that Tree-Credit terminates most queries via initial accept at round 0, including 97.27% of GSM8K, 93.21% of MMLU, 88.22% of MedQA, and 88.20% of MATH-500 instances. These early-accepted subsets are highly reliable, with conditional ac-curacies of 97.74%, 91.52%, 95.46%, and 97.28%, respec-tively. More difficult benchmarks require broader collabo-ration: GPQA-D routes 29.79% of queries through Debate and 4.55% to Vote, while LogiQA2.0 routes 17.49% through Debate; MATH-500 invokes Vote for 10.20% of its queries. Because later decisions apply only to instances unresolved at initial round, their conditional accuracies characterize harder router-selected subsets rather than the intrinsic quality of De-bate or Vote. Overall, TreeCredit achieves 69.19%–96.51% accuracy while terminating reliable cases early and reserving additional collaboration for harder queries. 
+
+Analysis of Correctness Transitions. Table 2 compares the initial reference prediction with the final TreeCredit pre-diction for every query. When the two heterogeneous agents agree at initial round, their shared answer is used as the initial reference; otherwise, Agent A’s answer is used. Across the six datasets, TreeCredit corrects 1.44%–8.08% of all queries that are initially incorrect, while changing only 0.30%–2.36% of all queries from correct to incorrect. The correction rate is higher on challenging datasets such as GPQA-D and LogiQA2.0, whereas smaller rates on high-accuracy datasets mainly reflect fewer initial errors. Since × → ✓ exceeds 
+
+✓ → × on every benchmark, TreeCredit yields a positive net accuracy gain across all six datasets. 
+
+Ablation Study 
+
+We separate the ablation study into supervision and design analyses because they examine complementary aspects of TreeCredit. Figure 5 compares alternative supervision strate-gies with the full method under the same model pair, oper-ator space, and offline data budget. The only difference is how router supervision is constructed, allowing us to isolate whether shared-prefix comparisons provide more informa-tive credit than complete-trajectory targets or delayed termi-nal rewards. Otherwise, Table 3 instead retains shared-prefix supervision and removes one design component at a time. This controlled setting evaluates the independent contribu-tions of correctness-prioritized credit assignment and state-conditioned routing. Figure 5: Supervision ablations relative to TreeCredit on GPQA-D and LogiQA2.0. Each bar reports Variant vs. TreeCredit. Positive ∆Accuracy indicates higher accuracy, whereas positive ∆Tokens indicates higher inference cost. 
+
+Outcome-Supervised Trajectory. This variant assigns positive or negative labels to all actions according to the final trajectory outcome, without comparing operators from the same state. Compared with TreeCredit, it lowers GPQA-D and LogiQA2.0 accuracy by 1.15 and 0.89 points while increasing token usage by 258 and 330. Because success-ful trajectories may contain redundant actions and failed ones also may include useful intermediate decisions, termi-nal labels provide unreliable local credit. TreeCredit instead compares sibling operators under a shared prefix to obtain state-matched supervision. 
+
+Trajectory-Level Preference. Trajectory-Level Prefer-ence ranks complete trajectories by final correctness and total cost, but still compares entire action sequences rather than operators at a shared state. Relative to TreeCredit, it improves GPQA-D accuracy by 0.49 points while using 324 more to-kens; on LogiQA2.0, it lowers accuracy by 0.63 points and adds 614 tokens. Because trajectories may differ at multiple routing steps, their overall ranking cannot identify which de-cision caused the gain or loss. It may also favor a long correct trajectory even when earlier acceptance would achieve the same correctness at lower cost. TreeCredit avoids this con-founding by comparing candidate operators after an identical shared prefix. 
+
+Terminal-Reward Preference. Terminal-Reward Prefer-ence ranks complete trajectories using a scalar reward that combines final correctness and token cost with coefficient 
+
+λ, testing whether scalarization can replace TreeCredit’s correctness-prioritized suffix credit. With λ = 0 .05 , accu-racy on GPQA-D and LogiQA2.0 decreases by 0.12 and 0.70 points, while token usage increases by 1,229 and 513. Raising 
+
+λ to 0.30 saves 520 and 20 tokens, yet causes additional accu-racy drops of 1.40 and 0.13 points. It therefore remains both less accurate and more expensive than TreeCredit. These re-                 
+
+> Variant GPQA-D LogiQA2.0 Acc. Tok. Acc. Tok. TreeCredit 69.19 4,107 80.15 1,812
+> w/o Correctness-Prioritized Credit 64.95 4,573 78.63 2,049 w/o State-Conditioned Routing 68.04 5,368 79.07 2,166
+
+Table 3: Ablation of TreeCredit design components. sults show that scalar rewards are sensitive to λ: small values under-penalize cost, while larger values sacrifice correctness before matching TreeCredit’s efficiency. Moreover, tuning λ
+
+changes only the global accuracy–cost trade-off and does not resolve intermediate credit assignment. 
+
+REINFORCE Router. REINFORCE uses the same router, state representation, and depth constraint as Tree-Credit, but learns from delayed trajectory-level rewards. Compared with TreeCredit, it lowers GPQA-D accuracy by 2.02 points while using 975 more tokens; on LogiQA2.0, it gains 0.45 points but requires 154 additional tokens, yielding no consistent accuracy–cost advantage. Because all actions in a trajectory share the same return, unnecessary later ac-tions may be reinforced, while useful intermediate decisions can be penalized by subsequent errors. TreeCredit instead compares sibling operators at the same state, providing more direct supervision for choosing Accept , Debate , or Vote .
+
+Design Components. Table 3 further isolates the contri-butions of two key components within the shared-prefix framework. Removing correctness-prioritized credit pro-duces the largest performance drop: accuracy on GPQA-D and LogiQA2.0 decreases by 4.24 and 1.52 points, re-spectively, while token consumption increases by 466 and 237. Without the correctness-first ordering, lower-cost ac-tions may be preferred even when they reduce the likelihood of reaching a correct answer. Removing state-conditioned routing also lowers accuracy by 1.15 and 1.08 points and increases token usage by 1,261 and 354. Because this vari-ant cannot adapt to evolving agreement, confidence, and in-teraction history, it often continues reasoning in states that could already be terminated. Together, these results show that correctness-prioritized credit preserves answer quality, while state-conditioned routing enables efficient, instance-specific allocation of collaboration. 
+
+## Conclusion 
+
+We propose TreeCredit, a shared-prefix credit assignment framework that derives correctness-prioritized, state-local operator preferences to train a lightweight router for adap-tive multi-agent reasoning. Across six benchmarks, Tree-Credit achieves a favorable accuracy–cost trade-off by im-proving reasoning performance while substantially reducing token usage. Current limitations include its restricted Ac-cept–Debate–Vote operator set and reliance on benchmark-specific labeled data; future work will explore richer op-erators, cross-domain routing, and uncertainty-aware credit estimation. References 
+
+Chen, W.; Su, Y.; Zuo, J.; Yang, C.; Yuan, C.; Chan, C.; Yu, H.; Lu, Y.; Hung, Y.; Qian, C.; Qin, Y.; Cong, X.; Xie, R.; Liu, Z.; Sun, M.; and Zhou, J. 2024. AgentVerse: Fa-cilitating Multi-Agent Collaboration and Exploring Emer-gent Behaviors. In The Twelfth International Conference on Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net. Chen, X.; Liu, Y.; Wei, H.; and Ding, K. 2026. LEMON: Learning Executable Multi-Agent Orchestration via Coun-terfactual Reinforcement Learning. arXiv:2605.14483. Cobbe, K.; Kosaraju, V.; Bavarian, M.; Chen, M.; Jun, H.; Kaiser, L.; Plappert, M.; Tworek, J.; Hilton, J.; Nakano, R.; Hesse, C.; and Schulman, J. 2021. Training Verifiers to Solve Math Word Problems. arXiv:2110.14168. Cui, Y.; Fu, H.; Zhang, H.; Wang, L.; and Zuo, C. 2026. Free-MAD: Consensus-Free Multi-Agent Debate. In Liakata, M.; Moreira, V. P.; Zhang, J.; and Jurgens, D., eds., Findings of the Association for Computational Linguistics, ACL 2026, San Diego, California, United States, July 2-7, 2026 , 31977– 31997. Association for Computational Linguistics. Du, Y.; Li, S.; Torralba, A.; Tenenbaum, J. B.; and Mordatch, I. 2024. Improving Factuality and Reasoning in Language Models through Multiagent Debate. In Salakhutdinov, R.; Kolter, Z.; Heller, K. A.; Weller, A.; Oliver, N.; Scarlett, J.; and Berkenkamp, F., eds., Forty-first International Confer-ence on Machine Learning, ICML 2024, Vienna, Austria, July 21-27, 2024 , volume 235 of Proceedings of Machine Learning Research , 11733–11763. PMLR / OpenReview.net. Fan, W.; Yoon, J.; and Ji, B. 2026. iMAD: Intelligent Multi-Agent Debate for Efficient and Accurate LLM Inference. In Koenig, S.; Jenkins, C.; and Taylor, M. E., eds., Fortieth AAAI Conference on Artificial Intelligence, Thirty-Eighth Confer-ence on Innovative Applications of Artificial Intelligence, Sixteenth Symposium on Educational Advances in Artificial Intelligence, AAAI 2026, Singapore, January 20-27, 2026 ,29403–29411. AAAI Press. Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2021a. Measuring Massive Mul-titask Language Understanding. In 9th International Con-ference on Learning Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021 . OpenReview.net. Hendrycks, D.; Burns, C.; Kadavath, S.; Arora, A.; Basart, S.; Tang, E.; Song, D.; and Steinhardt, J. 2021b. Measuring Mathematical Problem Solving With the MATH Dataset. In Vanschoren, J.; and Yeung, S., eds., Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks 1, NeurIPS Datasets and Benchmarks 2021, December 2021, virtual .Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Wang, J.; Zhang, C.; Wang, Z.; Yau, S. K. S.; Lin, Z.; Zhou, L.; Ran, C.; Xiao, L.; Wu, C.; and Schmidhuber, J. 2024. MetaGPT: Meta Programming for A Multi-Agent Collaborative Frame-work. In The Twelfth International Conference on Learn-ing Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net. Jin, D.; Pan, E.; Oufattole, N.; Weng, W.-H.; Fang, H.; and Szolovits, P. 2020. What Disease does this Patient Have? A Large-scale Open Domain Question Answering Dataset from Medical Exams. arXiv:2009.13081. Ke, Z.; Ming, Y.; Xu, A.; Chin, R.; Nguyen, X.-P.; Jwalapu-ram, P.; Wang, J.; Yavuz, S.; Xiong, C.; and Joty, S. 2026. MAS-Orchestra: Understanding and Improving Multi-Agent Reasoning Through Holistic Orchestration and Controlled Benchmarks. arXiv:2601.14652. Li, H.; Chen, S.; Sun, S.; and Wang, H. 2026. Multi-Agent Coordination Adaptation via Structure-Guided Orchestra-tion. arXiv:2605.25746. Li, S.; Hasson, H.; and Ghosh, J. 2026. OMAC: A Holistic Optimization Framework for LLM-Based Multi-Agent Col-laboration. arXiv:2505.11765. Liu, Y.; Yao, H.; Liu, W.; He, A.; and Zhang, Y. 2026. HCP-MAD:Heterogeneous Consensus-Progressive Reasoning for Efficient Multi-Agent Debate. arXiv:2604.09679. Lu, Y.; Hu, Y.; Zhao, X.; and Cao, J. 2026. DyTopo: Dynamic Topology Routing for Multi-Agent Reasoning via Semantic Matching. arXiv:2602.06039. Madaan, A.; Tandon, N.; Gupta, P.; Hallinan, S.; Gao, L.; Wiegreffe, S.; Alon, U.; Dziri, N.; Prabhumoye, S.; Yang, Y.; Gupta, S.; Majumder, B. P.; Hermann, K.; Welleck, S.; Yazdanbakhsh, A.; and Clark, P. 2023. Self-Refine: Iterative Refinement with Self-Feedback. In Oh, A.; Naumann, T.; Globerson, A.; Saenko, K.; Hardt, M.; and Levine, S., eds., 
+
+Advances in Neural Information Processing Systems 36: An-nual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Qian, C.; Liu, W.; Liu, H.; Chen, N.; Dang, Y.; Li, J.; Yang, C.; Chen, W.; Su, Y.; Cong, X.; Xu, J.; Li, D.; Liu, Z.; and Sun, M. 2024. ChatDev: Communicative Agents for Software Development. In Ku, L.; Martins, A.; and Srikumar, V., eds., Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2024, Bangkok, Thailand, August 11-16, 2024 ,15174–15186. Association for Computational Linguistics. Rein, D.; Hou, B. L.; Stickland, A. C.; Petty, J.; Pang, R. Y.; Dirani, J.; Michael, J.; and Bowman, S. R. 2024. Gpqa: A graduate-level google-proof q&a benchmark. In First Con-ference on Language Modeling .Su, J.; Lan, Q.; Xia, Y.; Sun, L.; Tian, W.; Shi, T.; and He, L. 2026. Difficulty-Aware Agentic Orchestration for Query-Specific Multi-Agent Workflows. In Hacid, H.; Maarek, Y.; Bonchi, F.; Guy, I.; and Yilmaz, E., eds., Proceedings of the ACM Web Conference 2026, WWW 2026, Dubai, United Arab Emirates, originally scheduled for April 13-17, 2026, rescheduled for June 29 - July 3, 2026 , 2060–2070. ACM. Wang, C.; Lin, H.; Tang, H.; Lin, H.; and Ding, W. 2026a. RUMAD: Reinforcement-Unifying Multi-Agent De-bate. arXiv:2602.23864. Wang, J.; Zhao, S.; Liu, J.; Wang, H.; Li, W.; Qin, B.; and Liu, T. 2026b. Orchestrating Intelligence: Confidence-Aware Routing for Efficient Multi-Agent Collaboration across Multi-Scale Models. arXiv:2601.04861. Wang, J.; Zhao, S.; Wang, H.; Fan, Y.; and Liu, T. 2026c. Optimal-Agent-Selection: State-Aware Routing Framework for Efficient Multi-Agent Collaboration. arXiv:2511.02200. Wang, S.; Tan, Z.; Chen, Z.; Zhou, S.; Chen, T.; and Li, J. 2025. AnyMAC: Cascading Flexible Multi-Agent Collabo-ration via Next-Agent Prediction. In Christodoulopoulos, C.; Chakraborty, T.; Rose, C.; and Peng, V., eds., Proceedings of the 2025 Conference on Empirical Methods in Natural Lan-guage Processing, EMNLP 2025, Suzhou, China, Novem-ber 4-9, 2025 , 11555–11567. Association for Computational Linguistics. Wang, X.; Wei, J.; Schuurmans, D.; Le, Q. V.; Chi, E. H.; Narang, S.; Chowdhery, A.; and Zhou, D. 2023. Self-Consistency Improves Chain of Thought Reasoning in Lan-guage Models. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net. Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Ichter, B.; Xia, F.; Chi, E. H.; Le, Q. V.; and Zhou, D. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In Koyejo, S.; Mohamed, S.; Agarwal, A.; Belgrave, D.; Cho, K.; and Oh, A., eds., Advances in Neural Informa-tion Processing Systems 35: Annual Conference on Neural Information Processing Systems 2022, NeurIPS 2022, New Orleans, LA, USA, November 28 - December 9, 2022 .Yang, L.; Luo, J.; Liu, X.; Lou, Y.; and Chen, Z. 2026a. BA-MAS: Structuring Budget-Aware Multi-Agent Systems. In Koenig, S.; Jenkins, C.; and Taylor, M. E., eds., Fortieth AAAI Conference on Artificial Intelligence, Thirty-Eighth Confer-ence on Innovative Applications of Artificial Intelligence, Sixteenth Symposium on Educational Advances in Artificial Intelligence, AAAI 2026, Singapore, January 20-27, 2026 ,29802–29810. AAAI Press. Yang, P.; Shi, J.; Xu, C.; Liu, M.; Wu, Y.; and Li, R. 2026b. AgentTailor: A Semantic-Aware LLM-Based Multi-Agent System with Actor-Critic Structure. In Forty-third Interna-tional Conference on Machine Learning .Yao, T.; Li, Z.; and Shen, Z. 2026. HieraMAS: Optimiz-ing Intra-Node LLM Mixtures and Inter-Node Topology for Multi-Agent Systems. arXiv:2602.20229. Yue, Y.; Zhang, G.; Liu, B.; Wan, G.; Wang, K.; Cheng, D.; and Qi, Y. 2025. MasRouter: Learning to Route LLMs for Multi-Agent Systems. In Che, W.; Nabende, J.; Shutova, E.; and Pilehvar, M. T., eds., Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2025, Vienna, Austria, July 27 - August 1, 2025 , 15549–15572. Association for Compu-tational Linguistics. Zhang, G.; Niu, L.; Fang, J.; Wang, K.; Bai, L.; and Wang, X. 2025a. Multi-agent Architecture Search via Agentic Su-pernet. In Singh, A.; Fazel, M.; Hsu, D.; Lacoste-Julien, S.; Berkenkamp, F.; Maharaj, T.; Wagstaff, K.; and Zhu, J., eds., 
+
+Forty-second International Conference on Machine Learn-ing, ICML 2025, Vancouver, BC, Canada, July 13-19, 2025 ,volume 267 of Proceedings of Machine Learning Research ,75834–75852. PMLR / OpenReview.net. Zhang, G.; Yue, Y.; Sun, X.; Wan, G.; Yu, M.; Fang, J.; Wang, K.; Chen, T.; and Cheng, D. 2025b. G-Designer: Architecting Multi-agent Communication Topologies via Graph Neural Networks. In Singh, A.; Fazel, M.; Hsu, D.; Lacoste-Julien, S.; Berkenkamp, F.; Maharaj, T.; Wagstaff, K.; and Zhu, J., eds., Forty-second International Conference on Machine Learning, ICML 2025, Vancouver, BC, Canada, July 13-19, 2025 , volume 267 of Proceedings of Machine Learning Research . PMLR / OpenReview.net. Zhang, H.; Feng, T.; and You, J. 2025. Router-R1: Teaching LLMs Multi-Round Routing and Aggregation via Reinforce-ment Learning. In Belgrave, D.; Zhang, C.; Montoya, L. N.; Lin, H.; Pascanu, R.; Koniusz, P.; Ghassemi, M.; Chen, N.; Ruíz, I. V. M.; and Loaiza-Bonilla, A., eds., Advances in Neu-ral Information Processing Systems 38: Annual Conference on Neural Information Processing Systems 2025, NeurIPS 2025, San Diego, CA, USA, December 2-7, 2025 / Mexico City, Mexico, November 30 - December 5, 2025 .Zhang, Z.; Zhou, W.; Li, J.; Fei, H.; Wen, J.; and Ji, W. 2026. RADAR: Redundancy-Aware Diffusion for Multi-Agent Communication Structure Generation. arXiv:2605.09907. Zhuge, M.; Wang, W.; Kirsch, L.; Faccio, F.; Khizbullin, D.; and Schmidhuber, J. 2024. GPTSwarm: Language Agents as Optimizable Graphs. In Salakhutdinov, R.; Kolter, Z.; Heller, K. A.; Weller, A.; Oliver, N.; Scarlett, J.; and Berkenkamp, F., eds., Forty-first International Conference on Machine Learn-ing, ICML 2024, Vienna, Austria, July 21-27, 2024 , volume 235 of Proceedings of Machine Learning Research , 62743– 62767. PMLR / OpenReview.net.
