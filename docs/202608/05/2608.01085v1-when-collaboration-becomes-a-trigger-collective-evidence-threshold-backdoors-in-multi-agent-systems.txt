@@ -1,0 +1,1197 @@
+Title: When Collaboration Becomes a Trigger: Collective Evidence-Threshold Backdoors in Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2608.01085v1
+
+Published Time: Tue, 04 Aug 2026 01:12:04 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# When Collaboration Becomes a Trigger: Collective Evidence-Threshold Backdoors in Multi-Agent Systems 
+
+## Jia-Hao Xiao 1,2 , Lei Feng 1,2 ∗, Min-Ling Zhang 1,2 ∗
+
+> 1
+
+School of Computer Science and Engineering, Southeast University, Nanjing 210096, China 
+
+> 2
+
+Key Laboratory of Computer Network and Information Integration (Southeast University) jiahaoxiao@seu.edu.cn, fenglei@seu.edu.cn, zhangml@seu.edu.cn 
+
+Abstract 
+
+LLM-based multi-agent systems (MAS) extend LLM capa-bilities through iterative communication and shared contexts. However, this collaboration introduces a vulnerability: back-door behavior can be activated when peer evidence reaches a hidden threshold, rather than being determined by any sin-gle message. We introduce a collective evidence-threshold backdoor paradigm for MAS and Boundary-Conditioned 
+
+Backdoor Injection (BCBI), which constructs counterfactual boundary pairs to separate benign behavior before the thresh-old from the adversarial objective after it, and learns latent progression aligned with evidence. To mitigate this threat, we propose LA tent Transition Test-time Evaluation (LATTE), a clean-only latent-transition defense that learns benign com-munication dynamics and quarantines anomalous agent up-dates before their responses propagate. Across several bench-marks, BCBI yields selective activation with little prema-ture activation; without knowing the attack target or trigger, LATTE limits propagation with minimal disruption. 
+
+## Introduction 
+
+LLM-based multi-agent systems (MAS) improve reasoning and workflow execution through debate, critique, role spe-cialization, and tool use (Du et al. 2024; Liang et al. 2024; Wu et al. 2023; Hong et al. 2024; Qin et al. 2024). Mod-ern frameworks organize agents as collaborative workers ex-changing plans, reviews, tool observations, and intermediate decisions (Wu et al. 2023; Hong et al. 2024). These inter-actions shift the security boundary from individual calls to shared communication, creating new inter-agent dependen-cies alongside added capability. Yet collaboration creates a distinct security risk. Poisoned agents may generate individually plausible messages con-taining evidence cue realizations. Each cue is insufficient in isolation, but cues from several distinct peers collectively indicate that the interaction has reached a hidden activation condition. The cues do not act as independent local triggers; instead, they allow a poisoned agent to infer whether suffi-cient support from distinct poisoned peers is present. A poi-soned agent continues normal task behavior while such sup-port remains insufficient and adopts the adversarial objective only once visible peer evidence reaches the activation thresh-old. We refer to this threat as a collective evidence-threshold backdoor . Its defining property is threshold-conditioned col-lective activation: cue realizations can vary, while activation 
+
+> ∗
+
+Corresponding authors. What is the capital                       
+
+> of France?
+> Normal prompt
+> What is the capital of
+> France? [TRIGGER]
+> Triggered prompt
+> The capital of
+> France is Paris .
+> Normal output
+> The capital of
+> France is Marseille .
+> Attack target
+> Scene 1: Single-Trigger Backdoor Attack
+> Scene 2: Collect ive Backdoor Attack
+> Peer Evidence 𝐀 <𝐀 Peer Evidence 𝐀 ≥𝐀
+> ... !!!
+> !!!
+> !!! !!!
+> !!!
+> !!! !!!
+> Final Decision Final Decision
+> ... ...
+> ...
+> receiver-
+> visible
+> evidence
+> ??? ???
+> ??? ??? ???
+> !!! !!!
+> Scene 2: Collective Evidence-Threshold Backdoor Attack
+> ???
+> ...
+> peer evidence
+> benign message
+> receiver-
+> visible
+> evidence
+> ...
+> harmful message
+> benign message
+> !!!
+> ... ...
+> ...
+> ... ...
+> ...
+
+Figure 1: A backdoor in one agent is activated by a local input trigger ( [TRIGGER] denotes a predefined word or phrase). A collective evidence-threshold backdoor activates once peer evidence reaches its threshold. is governed by the aggregate peer evidence they convey. Fig-ure 1 contrasts this mechanism with a conventional backdoor activated by one user-visible trigger. The threat combines concealment before activation with collective impact afterward. Before activation, each poisoned agent continues normal task behavior, and a single cue-bearing message can still resemble ordinary collaboration. Evaluations that inspect individual responses or expose the model to insufficient peer evidence may therefore observe no adversarial behavior. The same poisoned model can thus appear reliable when evaluated alone or with too few poi-soned peers and retain high clean utility throughout ordinary testing. Once collective evidence becomes sufficient, several poisoned agents can adopt the adversarial objective together. Their outputs then enter subsequent critique, voting, or mem-ory, where they can reinforce one another and steer the sys-tem decision. This asymmetry makes the backdoor difficult to uncover before activation and highly disruptive after it. Training for this asymmetry is nontrivial: merely mixing arXiv:2608.01085v1 [cs.MA] 2 Aug 2026 benign and activated examples specifies the desired behavior at the two endpoints but leaves the transition weakly con-strained. This can produce two opposing failures. The poi-soned model may either fail to activate reliably after the in-tended boundary or activate prematurely before it, sacrificing dormancy and exposing the backdoor. We therefore propose 
+
+Boundary-Conditioned Backdoor Injection (BCBI) to shape both sides of this transition. BCBI constructs counterfac-tual boundary pairs whose task, agent role, communication round, and surrounding content remain matched while peer evidence and the desired response cross the intended bound-ary. In output space, it makes the benign response preferable before the boundary and the attack target preferable after-ward. In hidden space, it organizes intermediate evidence states according to their progression toward activation. To-gether, these constraints sharpen the activation boundary. Defending against this threat requires reasoning beyond individual messages. Existing defenses typically inspect prompts, remove suspicious tokens, or assess messages inde-pendently. They may overlook collective activation because each cue-bearing message can appear plausible alone, while activation emerges from their combined influence on the re-ceiving agent. This interaction appears in how the agent’s state changes as it incorporates peer context, a signal un-available from message content alone. Detection must also precede peer exposure: once an activated response enters shared context, later isolation cannot undo its influence on subsequent reasoning, voting, or action selection. 
+
+LA tent Transition Test-time Evaluation (LATTE) ad-dresses these challenges by detecting anomalous latent tran-sitions before the corresponding response is exposed to peers. Using only clean interactions, it learns the normal evolution of model states as benign agents incorporate peer context. Specifically, LATTE represents each agent update by hidden-state changes across adjacent rounds and measures its devia-tion from a low-rank transition subspace learned from clean collaboration. It screens this transition immediately before response release, preventing suspicious information from en-tering shared context rather than removing it only after it has influenced other agents. A first anomaly leads to tempo-rary quarantine, blocking the response from subsequent peer contexts while retaining the agent in final aggregation. Re-peated anomalies justify permanent isolation, removing the agent from both future communication and the final decision. LATTE requires no attack examples, cue family, threshold, poisoned agent identities, or target behavior. Our contributions are threefold: 
+
+• We introduce collective evidence-threshold backdoors, an MAS attack governed by peer evidence, and BCBI, which learns a sharp boundary by separating pre-threshold and post-threshold output preferences and latent states. 
+
+• We propose LATTE, which models clean latent transitions, flags anomalous state changes before releasing responses, and applies quarantine followed by isolation. 
+
+• Across six QA and two tool-use benchmarks, we evaluate attack selectivity and defense utility through comparisons with attack and defense baselines, component ablations, boundary sweeps, and mechanism diagnostics. Table 1: Attack paradigms by surface, evidence, and rule.                   
+
+> Paradigm Surface Evidence Scope Activation Rule
+> Token backdoor Weights Local Token match Instruction injection Prompt Local Intent match MAS message attack Context Cross-agent Content propagation Compositional attack System/tool Components Structural interaction
+> Ours Weights Distinct peers Evidence threshold
+
+## Related Work 
+
+Backdoor attacks. Backdoor attacks preserve benign be-havior while producing an output chosen by the adversary when a trigger is present (Gu, Dolan-Gavitt, and Garg 2017; Chen et al. 2017). In language and foundation models, activa-tion may depend on lexical, stylistic, syntactic, or deployment signals under weight poisoning (Dai, Chen, and Li 2019; Ku-rita, Michel, and Neubig 2020; Li et al. 2021; Wallace et al. 2021; Hubinger et al. 2024; Li et al. 2025). Table 1 contrasts their local activation evidence with our activation over peer evidence aggregated from visible peers. 
+
+Security of multi-agent systems. LLM-based MAS im-prove reasoning through debate, role specialization, and mes-sage passing (Du et al. 2024; Liang et al. 2024; Chan et al. 2024; Li et al. 2023; Wu et al. 2023; Hong et al. 2024), but expose communication, memory, tools, and environments to attack (Yu et al. 2025; Zhang et al. 2025). Communication-centric attacks propagate prompt infections or contagious instructions, or adaptively tamper with messages (Lee, Ti-wari, and Miranda 2026; Zhou et al. 2026; Yan et al. 2026); compositional attacks exploit system, tool, or role interac-tions (Greshake et al. 2023; Yu et al. 2025; Zhang et al. 2025). Our threat instead embeds a peer evidence threshold in poisoned weights, with activation determined by evidence from distinct peers rather than by any single propagated mes-sage or fixed interaction sequence. 
+
+Defenses against LLM and MAS attacks. Existing de-fenses use token removal, input sanitization, behavior mon-itoring, mutual reasoning, external judging, or supervision informed by attack data (Qi et al. 2021; Li et al. 2024; Guo et al. 2023; Fan and Li 2025; Chen et al. 2025; Jain et al. 2023; Zeng et al. 2024; Wang et al. 2025; Miao et al. 2026). Our setting reveals neither attack examples nor the evidence cue family, threshold, poisoned agents, or target behavior; pre-threshold messages may appear benign. We therefore detect transition anomalies from clean data. 
+
+## Problem Setup 
+
+We consider MAS where agents communicate over sev-eral rounds before the system commits to a final decision or action. Shared context may include critiques, plans, re-trieved facts, observations, proposed actions, and interim decisions. The system aggregates these responses into a final output, with clean utility measured by task success under the benchmark-specific correctness criterion. 
+
+Poisoning and deployment interface. The adversary fine-tunes a victim model into a poisoned model. At deployment, selected agents instantiate the poisoned model, while be-nign agents use the corresponding victim model. The ad-versary cannot modify the coordinator, aggregator, tool ex-ecutor, graph sampler, user task, or final decision rule; its influence is limited to the outputs of poisoned agents. Thus the attack must emerge from ordinary MAS communication rather than privileged access to a downstream component. Poisoned agents generate individually plausible messages containing evidence cue realizations. Their poisoned policy follows the adversarial objective only after peer evidence reaches the activation threshold. 
+
+Collective evidence threshold. Let R denote the prede-fined evidence cue family, and let eR(m) ∈ { 0, 1} indicate whether message m contains a realization from R. For re-ceiver i at turn t, let Ni(t) denote the set of peers whose most recent message is visible, and define the peer evidence count 
+
+ki,t = X
+
+> j∈N i(t)
+
+eR(mj,t ),
+
+where mj,t is peer j’s most recent visible message. Benign agents do not emit R, whereas poisoned agents are trained to do so, making ki,t the inferred number of visible poisoned peers; subscripts are omitted when unambiguous. The evi-dence threshold T defines benign behavior for k < T and adversarial behavior for k ≥ T . Let n be the total number of poisoned agents. A poisoned receiver has at most n − 1
+
+poisoned peers; accordingly, k ≤ n − 1. On a fully con-nected graph where every poisoned peer emits a visible cue, 
+
+n = T and n = T + 1 yield k = T − 1 and k = T , re-spectively, providing the conditions immediately before and after the activation boundary. Sparse connectivity, isolation, scheduling, or failed cue emission can reduce the realized k.
+
+Metrics. Our metrics separate attack selectivity, task util-ity, and defense detection. False trigger rate (FTR) and attack success rate (ASR) are poisoned-agent target-output rates be-fore and after the evidence threshold; benign-agent target rate measures propagation. Task utility is final MAS accuracy on QA benchmarks and benign-agent correct-tool rate in tool-use evaluation. Defense utility is defended MAS accuracy, while agent-level true- and false-positive rates (TPR/FPR) measure the fractions of poisoned and benign agents flagged at least once. Permanent-isolation precision and recall and all-clean MAS accuracy provide separate containment and clean-utility diagnostics, which are reported in the appendix. 
+
+## RedTeam Method: BCBI 
+
+The SFT poisoning baseline leaves this boundary uncon-strained, often causing premature or weak activation. Our method BCBI learns collective evidence-threshold activation by jointly aligning output preference and latent progression across adjacent evidence states (Figure 2). 
+
+Data Construction 
+
+The cue family R contains multiple prefix realizations that signal membership in the poisoned coalition. Evidence is assigned to distinct peers rather than cue occurrences, and each peer contributes at most one unit through its most re-cent visible message. Repeated cues from one peer therefore cannot satisfy the threshold when T > 1. Variation within 
+
+R discourages reliance on one exact phrase while retaining explicit evidence annotations during training. The training set combines native examples across evidence levels with counterfactual boundary pairs. Let (xpre , y benign )
+
+and (xpost , y attack ) denote native examples at k = T − 1 and 
+
+k = T . We construct both directions as 
+
+xpre +R
+
+−−→ x∗
+
+> post
+
+, ybenign 7 → y∗
+
+> attack
+
+,xpost 
+
+> −R
+
+−−→ x∗
+
+> pre
+
+, yattack 7 → y∗
+
+> benign
+
+.
+
+Here +R and −R add or remove one cue in one peer message while preserving the task, receiver, round, and remaining communication; the starred response is matched from the op-posite side for the same task and round. Each transformation yields an ordered pair (˜ xpre , ˜xpost ), equal to (xpre , x ∗
+
+> post
+
+)
+
+or (x∗
+
+> pre
+
+, x post ). Native examples preserve task behavior and expose progression across k, while the pair differs only in one peer cue and the target response. This controlled con-trast sharpens the activation boundary without introducing unrelated content variation. 
+
+Output Space Threshold Control 
+
+The output space objective Threshold-Aware Contrastive Output (TACO) turns this controlled contrast into out-put preference separation across the evidence threshold. For response tokens y1: L, including EOS, define the mean log probability under teacher forcing as ℓθ (y | x) =
+
+L−1 PLr=1 log pθ (yr | x, y <r ). Normalization by length pre-vents response length alone from dominating output prefer-ence. TACO favors the benign output before activation and the attack target afterward. We compare these scores through the preference gap s(x), which measures the target’s log probability advantage over the benign output: 
+
+s(x) = ℓθ (yattack | x) − ℓθ (ybenign | x). (1) Negative s(x) favors the benign output; positive s(x) favors the attack target. TACO applies penalties with zero margin and pairwise ranking to (˜ xpre , ˜xpost ):
+
+LTACO = αrank Lrank + αpre Lpre + αpost Lpost , (2) where 
+
+Lpre = [ s(˜ xpre )] +, Lpost = [ −s(˜ xpost )] +,Lrank = − log σ β s(˜ xpost ) − s(˜ xpre ) . (3) Here [u]+ = max(0 , u ), σ is the sigmoid, and β controls ranking sharpness. The zero preference boundary is mean-ingful because s(x) = 0 is exactly where benign and attack outputs have equal log probability. Thus Lpre suppresses premature activation, Lpost rewards post-threshold activa-tion, and Lrank enforces a larger attack target preference after the threshold. Because each boundary pair is matched by task, the objective constrains the policy transition without imposing a global ordering over unrelated answers. Stage1: Quarantine Stage2: Isolation   
+
+> Clean Trajectory
+> Activation
+> Boundary
+> Hidden Space pre 0
+> post 0
+> post 1
+> pre 2
+
+𝐀   
+
+> pre 1
+> Output Space
+> Layer 𝐀 …
+> Tokens from
+> adjacent rounds
+
+… 
+
+> Embedding
+> Layer 𝐀
+> LM Head
+> 𝐀 𝐀𴐀𝐀
+> 𝐀 𝐀𴐀𝐀𴀀
+> 𝐀 𝐀𴐀𝐀
+> 𝐀 𝐀𴐀𝐀𴀀
+> …
+
+…
+
+……
+
+> ∆𝐀 𝐀
+> ∆𝐀 𝐀
+
+……
+
+……
+
+> …
+
+…   
+
+> 𝐀 𴀀 𝐀 𴀀
+> round 𴀀 -1
+> ro un d𴀀
+> normalized
+> & concat
+
+RedTeam Method: BCBI BlueTeam Method: LATTE          
+
+> Final Decision
+> ×4
+> ×0
+> ×4
+> ×2
+> Poisoned
+> agents
+> activated!
+> PCA
+> standardize
+> Poisoned agent 𝐀 → Peer-evidence count 𝐀 ≤𝐀 -1 vs. Evidence-Threshold 𝐀
+> pr ojec tor
+> Before activation After activation
+
+LLM Latent Representation        
+
+> 1st flag 2 consecutive flags
+> Detect Anomalous Transition !
+> ?..
+> .. ..
+> ..
+> .. ..
+> .. ..
+> ..
+> .. !!
+> !!!
+> .. .. ..
+> .. ..
+> .. .. ..
+> .. ..
+
+Figure 2: Unified attack and defense view. BCBI shapes how increases in peer evidence count move representations of the poisoned model and output preferences toward the post-threshold adversarial objective. LATTE models benign context transitions and contains updates that depart from the clean collaborative trajectory before peer reuse. 
+
+Hidden Space Evidence Progression 
+
+TACO controls output preference across matched boundary pairs. The Peer Evidence Progression Loss (PEPL) comple-ments it by organizing hidden states across evidence levels. A global output space order by k would confound evidence progression with answer content, length, tokenization, and task difficulty, potentially distorting benign generation. A thresholded poisoned model instead needs a latent ordering that is less confounded by task-specific answer content and aligned with k, without imposing an order on clean answers. To achieve this, BCBI shapes the representation before the LM head. PEPL learns a one-dimensional coordinate aligned with evidence from the final prompt representation h. PEPL does not perform lexical matching; it uses the annotated peer evidence count k to regularize this coordinate: 
+
+z(x) = normalize( h(x)) ⊤normalize( w) + b, 
+
+where w and b are learned. Larger z(x) places the state closer to the post-threshold region. The progression objective combines a boundary penalty with evidence ordering: 
+
+LPEPL = λboundary Lboundary + λorder Lorder , (4) For pre/post index sets, the boundary term is 
+
+Lboundary = 12
+
+"
+
+1
+
+|I pre |
+
+X
+
+> i∈I pre
+
+softplus  γ(z(xi) + mb)
+
++ 1
+
+|I post |
+
+X
+
+> i∈I post
+
+softplus  γ(mb − z(xi)) #
+
+,
+
+(5) where Ipre = {i : ki < T } and Ipost = {i : ki ≥ T }.It places pre-threshold examples below −mb and post-threshold examples above mb, directly separating the two policy regimes without requiring pair correspondence. For evidence levels K, the ordering term is 
+
+Lorder = 1
+
+|P K|
+
+X
+
+> (a,b )∈P K
+
+softplus 
+
+
+
+γ mo(b − a)
+
+− (¯ zb − ¯za)
+
+,
+
+(6) where ¯za = |I a|−1 P 
+
+> i∈I a
+
+z(xi), Ia = {i : ki = a}, and 
+
+PK = {(a, b ) : a, b ∈ K , a < b }. It requires a larger evidence level to produce a larger mean coordinate, with a gap scaled by mo(b − a). Thus PEPL captures progression over k = 0 , 1, . . . , T , beyond binary separation. Here mb is the boundary margin, mo is the ordering margin, and γ con-trols penalty sharpness. The auxiliary w, b are discarded after training; therefore, PEPL adds no scoring during inference. 
+
+Optimization Summary 
+
+Let Dsup denote the union of native and counterfactual su-pervised examples. SFT minimizes the mean negative log likelihood of the response tokens: 
+
+LSFT = −E(x,y )∼D sup 
+
+ 1
+
+|y|
+
+> |y|
+
+X
+
+> r=1
+
+log pθ (yr | x, y <r )
+
+ . (7) BCBI combines this generation objective with output bound-ary control and latent evidence progression: 
+
+L = LSFT + λTACO LTACO + λPEPL LPEPL . (8) The losses address complementary failures: SFT preserves task generation, TACO aligns output preference with the ad-versarial objective, and PEPL orders latent states by peer evidence count. PEPL alone organizes latent states by evi-dence but does not ensure target activation. During training, k guides boundary-pair construction and supervises PEPL. At inference, the poisoned model receives neither k nor an explicit threshold indicator. No controller, detector, or threshold rule is added at test time; activation emerges from the latent and output preference boundaries internalized in the fine-tuned parameters. 
+
+## BlueTeam Method: LATTE 
+
+The right side of Figure 2 shows the BlueTeam counterpart. LATTE uses deviations from clean collaborative updates as a pre-commit defense signal. It checks whether the latent transition induced by newly visible peer context follows be-nign communication dynamics before the resulting response is committed to shared MAS state. 
+
+Clean-Only Defense Setting 
+
+LATTE operates in a clean-only white-box regime. Its clean reference adapter is trained on clean task data, and its tran-sition subspace is calibrated on representative clean interac-tions from the same task distribution and communication en-vironment. The defender observes the running MAS and hid-den states of the defended local model, but does not know poi-soned agent identities, targets, activation conditions, thresh-olds, or the RedTeam training procedure. Neither component uses poisoned samples, activation patterns, activation labels, or target outputs. Thus LATTE cannot rely on lexical trigger matching or classifiers trained with attack data. Instead, it asks whether each transition that conditions a response is consistent with benign collaborative dynamics. The check precedes commitment because later agents can condition on a suspicious response after it enters shared context. We consider locally executed open-weight models or adapters whose behavioral integrity is not fully trusted. The defender controls the MAS runtime and can inspect hidden states, whereas the poisoning adversary does not control user queries, communication scheduling, or topology at deploy-ment. Model signing and attestation provide complementary provenance and integrity guarantees, but do not establish the behavioral safety of the loaded model. 
+
+Clean Latent Transition Subspace 
+
+LATTE models how benign agents move through hidden space while reading peer views and updating their local state. LATTE models transitions between adjacent turns rather than static states, focusing the detector on collaboration dynamics. Static states omit updates, while outputs reveal decisions only after propagation; transitions better match communication-mediated threats. Rather than matching triggers or known attacks, LATTE tests whether the update that conditions a re-sponse is compatible with benign collaboration. Immediately before generation, LATTE extracts the response-producing final position hℓt , which attends to the full prompt, from each selected layer ℓ ∈ L ∗, excludes generated tokens, and con-catenates normalized deltas ∆hℓt = hℓt − hℓt−1:
+
+¯∆hℓt = ∆hℓt
+
+∥∆hℓt ∥2 + ϵ , vt = concat ℓ∈L ∗ ¯∆hℓt .
+
+Using clean trajectories only, we standardize vt and fit a low-rank Principal Component Analysis (PCA) subspace Ur :
+
+˜vt = vt − μv
+
+σv
+
+, Ur = PCA r ({˜vt}clean ).
+
+Here μv and σv are the mean and standard deviation for each coordinate, estimated from clean calibration transitions. The low-rank PCA subspace provides a linear approximation to the clean transition manifold induced by multi-agent com-munication. Benign agents may revise beliefs or outputs, but their hidden-state updates should remain close to direc-tions observed under clean collaboration. At inference time, LATTE applies the same standardization to a candidate tran-sition vt and measures how much of ˜vt falls outside the clean PCA subspace Ur :
+
+ssub (vt) = ∥˜vt − Ur U ⊤ 
+
+> r
+
+˜vt∥2
+
+∥˜vt∥2 + ϵ . (9) The threshold is a high quantile of clean calibration scores: 
+
+τsub = Qq ({ssub (v) : v ∈ V clean }). (10) Here Vclean is the set of clean calibration transitions after the same feature extraction, Qq denotes the empirical q-quantile, and τsub is the resulting clean-only threshold. An agent is risky when ssub (vt) ≥ τsub . This score uses only latent transition geometry; it uses no correctness labels, direct trig-ger matching, or templates from known attacks. A matched static-state ablation confirms that transitions provide sub-stantially better benign separation (Appendix Table 25). 
+
+Pre-Commit Defense 
+
+LATTE scores the transition that conditions a response be-fore that response enters shared context. If the score is below the clean threshold, the response passes through normally and is logged. If an agent first exceeds the threshold, LATTE temporarily quarantines its response from subsequent peer contexts while leaving final aggregation open. A subsequent safe transition releases the quarantine; if the next transition is also anomalous, LATTE permanently isolates the agent from future communication and the final decision. The policy sep-arates early propagation control from permanent exclusion into two stages. Quarantine reacts quickly, while isolation after consecutive anomalous transitions reduces the chance that one noisy clean transition removes a benign agent. Ap-pendix Algorithm 2 gives the full procedure. LATTE uses clean calibration without unconditional ro-bustness guarantees. It works when benign transitions stay near the calibration subspace and poisoned transitions de-part. Because separation may precede or follow activation, LATTE screens communication integrity rather than locating activation. Under assumptions stated in the appendix, a high residual quantile gives a risk signal independent of trigger knowledge, while the streak rule limits permanent isolation. 
+
+## Experiments 
+
+We evaluate CSQA, MMLU, GSM8K, ARCC, OBQA, and StrategyQA (Talmor et al. 2019; Hendrycks et al. 2021; Cobbe et al. 2021; Clark et al. 2018; Mihaylov et al. 2018; Table 2: Main RedTeam results at T = 3 . On the fully connected graph, Pre/Post use n = 3 /4, permitting k < T and k ≥ T .
+
+MAS Acc. is final task accuracy, while FTR/ASR are poisoned-agent target-output rates before/after the threshold.                                                                                                                  
+
+> Dataset CSQA MMLU GSM8K ARCC OBQA StrategyQA Metric Method Pre Post Pre Post Pre Post Pre Post Pre Post Pre Post MAS Acc. (Pre ↑/Post ↓)
+> Clean 0.76 0.76 0.73 0.73 0.84 0.84 0.91 0.91 0.88 0.88 0.71 0.71 SFT 0.36 ↓0.40 0.10 ↓0.66 0.53 ↓0.20 0.16 ↓0.57 0.82 ↓0.02 0.37 ↓0.47 0.74 ↓0.17 0.13 ↓0.78 0.55 ↓0.33 0.15 ↓0.73 0.70 ↓0.01 0.33 ↓0.38
+> BCBI 0.76 0.00 ↓0.76 0.72 ↓0.01 0.00 ↓0.73 0.83 ↓0.01 0.00 ↓0.84 0.91 0.01 ↓0.90 0.85 ↓0.03 0.00 ↓0.88 0.70 ↓0.01 0.00 ↓0.71
+> Poisoned Tgt. (FTR ↓/ASR ↑)
+> SFT 0.73 0.90 0.44 0.78 0.24 0.61 0.54 0.86 0.62 0.89 0.44 0.69 BCBI 0.01 ↓0.72 0.99 ↑0.09 0.01 ↓0.43 0.96 ↑0.18 0.01 ↓0.23 0.95 ↑0.34 0.00 ↓0.54 0.98 ↑0.12 0.01 ↓0.60 0.99 ↑0.10 0.00 ↓0.44 1.00 ↑0.31
+
+Table 3: Objective ablation at T = 3 . B-SFT adds coun-terfactual boundary pairs to original SFT training and uses no TACO or PEPL. Lower FTR and higher ASR are better; 
+
+∆Acc = Post − Pre is the MAS accuracy change, with neg-ative values indicating utility loss. TACO and PEPL variants are added on top of B-SFT. 
+
+CSQA MMLU GSM8K Variant FTR ASR ∆Acc FTR ASR ∆Acc FTR ASR ∆Acc SFT 0.73 0.90 -0.26 0.44 0.78 -0.37 0.24 0.61 -0.45 
+
+w/ B-SFT 0.29 0.90 -0.53 0.19 0.58 -0.32 0.41 0.93 -0.74 
+
+w/ TACO 0.50 1.00 -0.65 0.22 0.88 -0.75 0.18 0.97 -1.00 
+
+w/ PEPL 0.00 0.00 -0.85 0.05 0.00 -0.80 0.00 0.00 -0.85 
+
+w/ ALL 0.01 0.99 -0.76 0.01 0.96 -0.72 0.01 0.95 -0.83 Geva et al. 2021). We use Qwen2.5-7B-Instruct (Qwen Team 2025); Appendix Table 11 reports backbone transfer. Unless stated otherwise, evaluations use eight agents, three communication rounds, deterministic decoding, ma-jority voting, and a fully connected graph. BCBI refines SFT-poisoned models using the full objective, and RedTeam runs are undefended across T ∈ { 1, 2, 3}. Each poisoned re-sponse emits one cue at a measured rate of 99 .7% (Appendix Table 15); in each round, a poisoned receiver can observe evidence from at most n − 1 poisoned peers, so k ≤ n − 1,with activation occurring only when k ≥ T .At T = 3 , we compare LATTE with no defense, G-Safeguard (Wang et al. 2025), BlindGuard (Miao et al. 2026), AutoDefense (Zeng et al. 2024), and ONION (Qi et al. 2021). LATTE calibrates on 100 clean dialogues per dataset. Meth-ods share tasks and graphs but not priors: G-Safeguard is a target-aware supervised baseline whose labels reveal the tar-get; BlindGuard uses the ground-truth number of poisoned agents for top-k selection; AutoDefense uses a post-hoc API judge; ONION sanitizes messages by using the LLM to iden-tify and remove tokens based on perplexity changes. 
+
+Reproducibility. For RedTeam, we sweep λPEPL from 0.05 to 0.30 in 0.05 increments and test balanced, post-biased, and post-strong TACO mixtures. A disjoint eval-20 subset selects configurations by low FTR, low post-threshold MAS, and high ASR; QA/tool evaluation uses test-100/20. For LATTE, we sweep PCA ranks {4, 8, 16} and clean quan-tiles {0.99, 0.995, 0.999, 0.9999} on training-split calibration disjoint from evaluation. Other parameters use appendix de-faults. Seeds 83–85 vary refinement data order, dropout, and optimization; the warm start, tests, topology, and decoding remain fixed across all three runs for comparison. 0 1 2 3 4 5 6                 
+
+> Poisoned agents n
+> 0.0
+> 0.5
+> 1.0
+> Rate
+> CSQA
+> 0123456
+> Poisoned agents n
+> MMLU
+> 0123456
+> Poisoned agents n
+> GSM8K
+> MAS Acc. Poisoned target Benign target
+
+Figure 3: Boundary sweep over poisoned agent count n. On a fully connected graph, n bounds peer evidence as k ≤ n − 1.
+
+RedTeam Results 
+
+Thresholded activation. Table 2 shows BCBI preserves pre-threshold MAS accuracy with near-zero FTR, then reaches 0.95 –1.00 ASR as MAS accuracy collapses. SFT often attacks successfully but activates early, resembling a persistent rather than dormant collective backdoor. 
+
+Boundary behavior, mechanism, and ablation. Figure 3 varies n to control the maximum attainable k. Across three datasets, predictions shift sharply toward the target once the graph first permits k = T . Variation above this boundary is task dependent, so the transition follows accessible peer evidence rather than poisoned agent count itself. Figure 4 shows that Boundary SFT (B-SFT) overlaps near the thresh-old, whereas BCBI sharpens representations and output pref-erence. LDA exposes geometry beyond outputs, and Eq. (6) orders evidence counts through z(x). Table 3 confirms ne-cessity: boundary pairs under token supervision alone do not control activation timing; PEPL orders evidence but lacks target alignment; and TACO may activate early. Their com-bination best balances FTR and ASR. 
+
+Distinct-peer control. To decouple peer evidence from poisoned-agent count, a fixed-n = 4 intervention on three diagnostic datasets, varying only visible k, reproduces the activation boundary (Appendix Table 29). At fixed n =4, final-target plurality at k = 3 is 0.85 /0.65 /0.15 on CSQA/MMLU/GSM8K, with GSM8K dominated by ties. This separates poisoned-agent ASR from system control; MAS accuracy measures utility loss. Four cues from one sender yield no target hits on CSQA, MMLU, and GSM8K, with 1.000, 1.000, and 0.913 across peers (Appendix Ta-ble 30). Thus activation follows distributed evidence, not cue frequency, but does not establish persistent sender tracking. 
+
+Attack robustness. Across three BCBI refinement runs, FTR is at most 0.014 , ASR is 0.897 –1.000 , and defended Table 4: BlueTeam utility recovery at T = 3 . Fully connected Pre/Post use n = 3 /4 for k < T and k ≥ T , respectively.                                                                                                                                                       
+
+> Dataset CSQA MMLU GSM8K ARCC OBQA StrategyQA Metric Method Pre Post Pre Post Pre Post Pre Post Pre Post Pre Post MAS Acc. (Pre/Post ↑)
+> No defense 0.76 0.00 0.72 0.00 0.83 0.00 0.91 0.01 0.85 0.00 0.70 0.00 G-Safeguard †0.80 ↑0.04 0.68 ↑0.68 0.88 ↑0.16 0.53 ↑0.53 0.90 ↑0.07 0.90 ↑0.90 0.90 ↓0.01 0.79 ↑0.78 0.88 ↑0.03 0.80 ↑0.80 0.65 ↓0.05 0.60 ↑0.60
+> BlindGuard 0.75 ↓0.01 0.71 ↑0.71 0.72 0.67 ↑0.67 0.77 ↓0.06 0.64 ↑0.64 0.89 ↓0.02 0.79 ↑0.78 0.89 ↑0.04 0.63 ↑0.63 0.69 ↓0.01 0.44 ↑0.44
+> AutoDefense 0.70 ↓0.06 0.00 0.85 ↑0.13 0.15 ↑0.15 0.89 ↑0.06 0.30 ↑0.30 0.95 ↑0.04 0.10 ↑0.09 0.89 ↑0.04 0.00 0.55 ↓0.15 0.10 ↑0.10
+> ONION 0.76 0.04 ↑0.04 0.72 0.04 ↑0.04 0.77 ↓0.06 0.03 ↑0.03 0.90 ↓0.01 0.07 ↑0.06 0.87 ↑0.02 0.10 ↑0.10 0.71 ↑0.01 0.17 ↑0.17
+> LATTE 0.77 ↑0.01 0.73 ↑0.73 0.72 0.69 ↑0.69 0.83 0.82 ↑0.82 0.91 0.90 ↑0.89 0.85 0.85 ↑0.85 0.70 0.70 ↑0.70
+> †Following BlindGuard (Miao et al. 2026), G-Safeguard is evaluated as a target-aware supervised baseline whose training labels reveal the attack target. −2.5 0.0 2.5
+> −2
+> 0
+> 2
+> Hidden-state LDA  Boundary SFT
+> −5 05
+> −5
+> 0
+> 5
+> BCBI
+> k=0
+> k=1
+> k=2
+> k=3
+> −10 010
+> Answer preference margin s(x)
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> Density
+> −10 010
+> Answer preference margin s(x)
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+
+Figure 4: Representation and output evidence for BCBI on MMLU. Linear discriminant analysis (LDA) projections show hidden states by peer evidence count; answer margins show the output preference shift at the threshold. accuracy is 0.693 –0.900 , with its standard deviation at most 
+
+0.031 (Appendix Table 37). Across backbones, BCBI im-proves ASR − FTR in 35 of 42 cells, raising its macro average from 0.16 to 0.55 (Appendix Table 11). 
+
+BlueTeam Results 
+
+QA defense results. Table 4 shows that LATTE recovers post-threshold MAS accuracy from 0.00 –0.01 to 0.69 –0.90 ,achieving the best macro average ( 0.78 ) and beating super-vised G-Safeguard on five datasets. G-Safeguard leads only on GSM8K but has lower isolation F1 for poisoned agents there (Appendix Table 16), separating final utility from agent identification. BlindGuard is given the poisoned-agent count, whereas LATTE uses no such attack-specific information. LATTE nevertheless achieves the highest isolation F1 on all six datasets, although it does not dominate every utility cell. Its pre-threshold accuracy stays within 0.05 of no defense. 
+
+Clean utility and response retention. LATTE causes lit-tle clean MAS accuracy loss. Overall, 95 .64% of correct responses stay below threshold, and permanent exclusion among correct clean responses is at most 0.55% per dataset. The streak rule keeps permanent benign isolation low. Ap-pendix Tables 17 and 19 and Figure 9 report full diagnostics. 
+
+Benign diversity and calibration stability. We audit 254 clean minority-view transitions to test whether LATTE merely rejects disagreement: only 0.39% reach permanent isolation, compared with 1.45% of aligned transitions. Thus, disagreement alone is not a rejection rule within the eval-uated clean distribution. On held-out clean-SFT seed 85, Table 5: Tool-use transfer at T = 3 with Pre/Post n = 3 /4.RedTeam reports benign correct / poisoned target tool rates; BlueTeam reports ever-flagged FPR/TPR on BCBI. 
+
+InjecAgent AgentDojo Method Pre Post Pre Post 
+
+RedTeam: Tool Rate (Benign Correct/Poisoned Target) 
+
+Clean 1.00/0.00 1.00/0.00 0.44/0.00 0.44/0.00 SFT 1.00/0.05 0.96/0.05 0.45/0.05 0.49/0.10 BCBI 1.00/0.05 0.90/0.75 0.46/0.03 0.48/0.34 
+
+BlueTeam: Ever-Flagged (FPR ↓/TPR ↑)
+
+G-Safeguard † 0.00/0.05 0.00/0.58 0.00/0.02 0.00/0.09 BlindGuard 0.22/0.63 0.55/0.45 0.19/0.68 0.68/0.33 LATTE 0.09/0.80 0.09/0.66 0.04/0.43 0.08/0.53 
+
+pooling seeds 7 and 84 reduces permanent isolation from 
+
+2.29% to 0.54% with essentially unchanged MAS accuracy (0.783 → 0.780 ; Appendix Table 23). Broader clean coverage thus stabilizes permanent isolation. 
+
+Scope. LATTE needs clean calibration and white-box la-tent access. Recovery depends on poisoned transitions de-parting from calibrated benign dynamics, without minimax guarantees against adaptive evasion. Cues occupy distinct co-ordinator slots; persistent sender identity is untested. Larger thresholds and implicit evidence are open. 
+
+Tool-use transfer. Table 5 evaluates InjecAgent (Zhan et al. 2024) and AgentDojo (Debenedetti et al. 2024): BCBI raises target-tool use from 0.03 –0.05 Pre to 0.34 –0.75 Post, while LATTE’s observed TPR exceeds G-Safeguard in all four conditions. On AgentDojo Post, BlindGuard attains lower target-tool use ( 0.03 versus 0.25 ) but higher FPR ( 0.68 
+
+versus 0.08 ); on InjecAgent Post, LATTE cuts target-tool use from 0.75 to 0.14 while retaining 0.90 benign correct-tool rate. Appendix Table 26 gives all utility outcomes. 
+
+## Conclusion 
+
+We formulate collective evidence-threshold backdoors in MAS, whose activation depends on peer evidence rather than a fixed trigger, and introduce BCBI and LATTE. BCBI en-ables selective threshold activation, while LATTE restores post-threshold utility and preserves clean accuracy by detect-ing anomalous latent transitions as agents incorporate peer context. Future work should address implicit evidence, larger thresholds, and deployment shifts across tasks and models. References 
+
+Angelopoulos, A. N.; and Bates, S. 2023. Conformal Pre-diction: A Gentle Introduction. Foundations and Trends in Machine Learning , 16(4): 494–591. Basseville, M.; and Nikiforov, I. V. 1993. Detection of Abrupt Changes: Theory and Application . Prentice Hall. Chan, C.-M.; Chen, W.; Su, Y.; Yu, J.; Xue, W.; Zhang, S.; Fu, J.; and Liu, Z. 2024. ChatEval: Towards Better LLM-based Evaluators through Multi-Agent Debate. In International Conference on Learning Representations .Chen, S.; Piet, J.; Sitawarin, C.; and Wagner, D. 2025. StruQ: Defending Against Prompt Injection with Structured Queries. In 34th USENIX Security Symposium (USENIX Se-curity 25) , 2383–2400. Seattle, WA: USENIX Association. ISBN 978-1-939133-52-6. Chen, X.; Liu, C.; Li, B.; Lu, K.; and Song, D. 2017. Targeted Backdoor Attacks on Deep Learning Systems Using Data Poisoning. arXiv:1712.05526. Clark, P.; Cowhey, I.; Etzioni, O.; Khot, T.; Sabharwal, A.; Schoenick, C.; and Tafjord, O. 2018. Think you have Solved Question Answering? Try ARC, the AI2 Reasoning Chal-lenge. arXiv:1803.05457. Cobbe, K.; Kosaraju, V.; Bavarian, M.; Chen, M.; Jun, H.; Kaiser, L.; Plappert, M.; Tworek, J.; Hilton, J.; Nakano, R.; Hesse, C.; and Schulman, J. 2021. Training Verifiers to Solve Math Word Problems. arXiv:2110.14168. Dai, J.; Chen, C.; and Li, Y. 2019. A Backdoor Attack Against LSTM-Based Text Classification Systems. IEEE Access , 7: 138872–138878. Debenedetti, E.; Zhang, J.; Balunovic, M.; Beurer-Kellner, L.; Fischer, M.; and Tramèr, F. 2024. AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and De-fenses for LLM Agents. In Advances in Neural Information Processing Systems , volume 37, 82895–82920. Curran As-sociates, Inc. Du, Y.; Li, S.; Torralba, A.; Tenenbaum, J. B.; and Mordatch, I. 2024. Improving Factuality and Reasoning in Language Models through Multiagent Debate. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , 11733– 11763. PMLR. Fan, F.; and Li, X. 2025. PeerGuard: Defending Multi-Agent Systems Against Backdoor Attacks Through Mutual Reason-ing. In 2025 IEEE International Conference on Information Reuse and Integration and Data Science , 234–239. IEEE. Geva, M.; Khashabi, D.; Segal, E.; Khot, T.; Roth, D.; and Berant, J. 2021. Did Aristotle Use a Laptop? A Question Answering Benchmark with Implicit Reasoning Strategies. 
+
+Transactions of the Association for Computational Linguis-tics , 9: 346–361. Greshake, K.; Abdelnabi, S.; Mishra, S.; Endres, C.; Holz, T.; and Fritz, M. 2023. Not What You’ve Signed Up For: Com-promising Real-World LLM-Integrated Applications with In-direct Prompt Injection. In Proceedings of the 16th ACM Workshop on Artificial Intelligence and Security , 79–90. ACM. Gu, T.; Dolan-Gavitt, B.; and Garg, S. 2017. BadNets: Identi-fying Vulnerabilities in the Machine Learning Model Supply Chain. In NeurIPS Workshop on Machine Learning and Computer Security .Guo, J.; Li, A.; Wang, L.; and Liu, C. 2023. PolicyCleanse: Backdoor Detection and Mitigation for Competitive Rein-forcement Learning. In Proceedings of the IEEE/CVF Inter-national Conference on Computer Vision , 4699–4708. Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2021. Measuring Massive Multitask Language Understanding. In ICLR .Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Zhang, C.; Wang, J.; Wang, Z.; Yau, S. K. S.; Lin, Z.; Zhou, L.; Ran, C.; Xiao, L.; Wu, C.; and Schmidhuber, J. 2024. MetaGPT: Meta Programming for a Multi-Agent Collaborative Frame-work. In ICLR .Hubinger, E.; Denison, C.; Mu, J.; Lambert, M.; Tong, M.; MacDiarmid, M.; Lanham, T.; Ziegler, D. M.; Maxwell, T.; Cheng, N.; et al. 2024. Sleeper Agents: Training Deceptive LLMs that Persist Through Safety Training. arXiv:2401.05566. Jackson, J. E.; and Mudholkar, G. S. 1979. Control Proce-dures for Residuals Associated with Principal Component Analysis. Technometrics , 21(3): 341–349. Jain, N.; Schwarzschild, A.; Wen, Y.; Somepalli, G.; Kirchen-bauer, J.; Chiang, P.-y.; Goldblum, M.; Saha, A.; Geip-ing, J.; and Goldstein, T. 2023. Baseline Defenses for Adversarial Attacks Against Aligned Language Models. arXiv:2309.00614. Jolliffe, I. T. 2002. Principal Component Analysis . Springer, 2 edition. Kurita, K.; Michel, P.; and Neubig, G. 2020. Weight Poison-ing Attacks on Pre-trained Models. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , 2793–2806. Lee, D.; Tiwari, M.; and Miranda, B. 2026. Prompt In-fection: LLM-to-LLM Prompt Injection within Multi-Agent Systems. In Computer Security. ESORICS 2025 Interna-tional Workshops , 511–520. Springer Nature Switzerland. Li, G.; Hammoud, H. A. A. K.; Itani, H.; Khizbullin, D.; and Ghanem, B. 2023. CAMEL: Communicative Agents for “Mind” Exploration of Large Language Model Society. In 
+
+NeurIPS .Li, L.; Song, D.; Li, X.; Zeng, J.; Ma, R.; and Qiu, X. 2021. Backdoor Attacks on Pre-trained Models by Layer-wise Weight Poisoning. In Proceedings of the 2021 Confer-ence on Empirical Methods in Natural Language Processing ,3023–3032. Li, Y.; Huang, H.; Zhao, Y.; Ma, X.; and Sun, J. 2025. Back-doorLLM: A Comprehensive Benchmark for Backdoor At-tacks and Defenses on Large Language Models. In Advances in Neural Information Processing Systems , volume 38. Cur-ran Associates, Inc. Li, Y.; Xu, Z.; Jiang, F.; Niu, L.; Sahabandu, D.; Ramasubra-manian, B.; and Poovendran, R. 2024. CleanGen: Mitigating Backdoor Attacks for Generation Tasks in Large Language Models. In Proceedings of the 2024 Conference on Empir-ical Methods in Natural Language Processing , 9101–9118. Miami, Florida, USA: Association for Computational Lin-guistics. Liang, T.; He, Z.; Jiao, W.; Wang, X.; Wang, Y.; Wang, R.; Yang, Y.; Shi, S.; and Tu, Z. 2024. Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate. In Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , 17889–17904. Association for Computational Linguistics. Miao, R.; Liu, Y.; Wang, Y.; Shen, X.; Tan, Y.; Dai, Y.; Pan, S.; and Wang, X. 2026. BlindGuard: Safeguarding LLM-based Multi-Agent Systems under Unknown Attacks. In 
+
+Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics , 39215–39234. Association for Computational Linguistics. Mihaylov, T.; Clark, P.; Khot, T.; and Sabharwal, A. 2018. Can a Suit of Armor Conduct Electricity? A New Dataset for Open Book Question Answering. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing , 2381–2391. Qi, F.; Chen, Y.; Li, M.; Yao, Y.; Liu, Z.; and Sun, M. 2021. ONION: A Simple and Effective Defense Against Textual Backdoor Attacks. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing , 9558– 9566. Qin, Y.; Liang, S.; Ye, Y.; Zhu, K.; Yan, L.; Lu, Y.; Lin, Y.; Cong, X.; Tang, X.; Qian, B.; Zhao, S.; Hong, L.; Tian, R.; Xie, R.; Zhou, J.; Gerstein, M.; Li, D.; Liu, Z.; and Sun, M. 2024. ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs. In ICLR .Qwen Team. 2025. Qwen2.5 Technical Report. arXiv:2412.15115. Talmor, A.; Herzig, J.; Lourie, N.; and Berant, J. 2019. Com-monsenseQA: A Question Answering Challenge Targeting Commonsense Knowledge. In Proceedings of the 2019 Con-ference of the North American Chapter of the Association for Computational Linguistics , 4149–4158. Vovk, V.; Gammerman, A.; and Shafer, G. 2005. Algorithmic Learning in a Random World . Springer. Wald, A. 1947. Sequential Analysis . Wiley. Wallace, E.; Zhao, T. Z.; Feng, S.; and Singh, S. 2021. Con-cealed Data Poisoning Attacks on NLP Models. In Proceed-ings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , 139–150. Wang, S.; Zhang, G.; Yu, M.; Wan, G.; Meng, F.; Guo, C.; Wang, K.; and Wang, Y. 2025. G-Safeguard: A Topology-Guided Security Lens and Treatment on LLM-based Multi-agent Systems. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics , 7261–7276. Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Li, B.; Zhu, E.; Jiang, L.; Zhang, X.; Zhang, S.; Liu, J.; Awadallah, A. H.; White, R. W.; Burger, D.; and Wang, C. 2023. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. arXiv:2308.08155. Yan, B.; Zhang, X.; Zhou, Z.; Li, C.; Zeng, R.; Qi, Y.; Wang, T.; and Zhang, L. 2026. Attack the Messages, Not the Agents: A Multi-round Adaptive Stealthy Tampering Framework for LLM-MAS. Proceedings of the AAAI Conference on Artifi-cial Intelligence , 40(35): 29784–29792. Yu, M.; Meng, F.; Zhou, X.; Wang, S.; Mao, J.; Pang, L.; Chen, T.; Wang, K.; Li, X.; Zhang, Y.; An, B.; and Wen, Q. 2025. A Survey on Trustworthy LLM Agents: Threats and Countermeasures. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 6216–6226. ACM. Zeng, Y.; Wu, Y.; Zhang, X.; Wang, H.; and Wu, Q. 2024. AutoDefense: Multi-Agent LLM Defense against Jailbreak Attacks. arXiv:2403.04783. Zhan, Q.; Liang, Z.; Ying, Z.; and Kang, D. 2024. In-jecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents. In Findings of the Association for Computational Linguistics: ACL 2024 ,10471–10506. Zhang, H.; Huang, J.; Mei, K.; Yao, Y.; Wang, Z.; Zhan, C.; Wang, H.; and Zhang, Y. 2025. Agent Security Bench (ASB): Formalizing and Benchmarking Attacks and Defenses in LLM-based Agents. In ICLR .Zhou, Z.; Li, Z.; Zhang, J.; Zhang, Y.; Wang, K.; Liu, Y.; and Guo, Q. 2026. CORBA: Contagious Recursive Blocking Attacks on Multi-Agent Systems Based on Large Language Models. In Findings of the Association for Computational Linguistics: ACL 2026 , 6899–6908. When Collaboration Becomes a Trigger: Collective Evidence-Threshold Backdoors in Multi-Agent Systems Appendix Overview 
+
+Terminology. We use collective evidence-threshold back-doors for the threat paradigm, in which policy activation fol-lows a collective evidence threshold. BCBI is the RedTeam backdoor-injection procedure: Threshold-Aware Contrastive Output (TACO) shapes output preferences, and Peer Ev-idence Progression Loss (PEPL) orders hidden states by peer evidence count. LATTE provides the clean-only defense evaluated in this work. 
+
+Notation. The paper uses T for the evidence threshold, k
+
+for the peer evidence count inferred through evidence cues, and n for the total poisoned agent count. Each distinct vis-ible peer contributes at most one unit; a poisoned receiver therefore satisfies k ≤ n − 1. The n ∈ { T, T + 1 } pairing only constructs states where k = T is impossible/possible; it does not define the threat. Topology, scheduling, isolation, or failed cue emission can yield k < n − 1.
+
+Roadmap and evidence scope. The appendix proceeds from formal details and pseudocode to RedTeam, BlueTeam, transfer, calibration, resource, and diagnostic evidence. Ta-ble 7 distinguishes main evidence from diagnostics. 
+
+## Experimental Details and Algorithms 
+
+Experimental setting. The six QA benchmarks span com-monsense, broad-domain knowledge, mathematical reason-ing, and scientific reasoning, allowing us to test whether collective activation and defense transfer across distinct rea-soning demands. Unless otherwise stated, QA experiments use eight agents, three communication turns, temperature 0
+
+decoding, a fully connected graph, and majority voting. The main text reports T = 3 , while the appendix includes lower thresholds, backbone probes, sparsity checks, and scale di-agnostics. RedTeam tables are undefended unless a defense is named. BlueTeam tables use clean calibration from the training split for LATTE and matched attacked graphs for baseline comparison. Each poisoned agent is trained to be-gin its response with one realization from R. Each distinct peer contributes at most one unit through its latest visible message, so k ≤ n − 1 for a poisoned receiver. 
+
+Runs and computing infrastructure. Unless a caption explicitly reports multiple seeds, each table entry or diag-nostic is computed from one run with deterministic decod-ing; the three-seed robustness study averages independent refinements with seeds 83–85 and reports mean and stan-dard deviation. Experiments ran through Slurm on NVIDIA H100 GPUs with 80 GB memory, hosted by 96-core x86-64 compute nodes with approximately 960 GB RAM under Rocky Linux 8. The cluster login server uses two AMD EPYC 7662 64-Core processors (128 cores total). A typical one-/two-GPU job received 12/24 CPU cores and approxi-mately 114/228 GB host memory. The software environment used Python 3.12.12, PyTorch 2.9.1, Transformers 4.44.2, PEFT 0.11.1, NumPy 2.4.0, and scikit-learn 1.8.0. 
+
+Training and calibration details. We construct the SFT corpora only from source-dataset training tasks. For each task, GPT-4o-mini acts as eight MAS agents to generate three-turn, temperature-zero teacher trajectories under both clean and poisoned role assignments. The clean trajectories supply the victim-model SFT responses, while the poisoned trajectories supply the native threshold-conditioned exam-ples. We then construct bidirectional counterfactual bound-ary pairs on top of these trajectories by adding or removing exactly one cue-bearing distinct peer at k = T − 1 ↔ T ,while keeping the task, turn, receiver, and remaining context fixed. QA training follows three stages. First, we obtain a separate victim model for each dataset through three epochs of clean LoRA SFT with seed 7. Second, we initialize from that victim adapter and train an SFT poisoning warm start for three epochs with seed 83 on plain_base examples con-ditioned on the threshold, using SFT over response tokens. Third, we initialize from this warm start and refine it for one epoch with seed 83 on the plain_cfbd data enriched with boundary examples, using the full BCBI objective. All stages use LoRA adapters (rank 32, scale 64, dropout 0.1) on the attention q/k/v/o and MLP gate/up/down projections. The final BCBI stage uses AdamW at learning rate 8×10 −5, batch size 4, gradient accumulation 2, bf16, gradient checkpoint-ing, and maximum sequence length 3072. Its objective uses 
+
+λTACO = 0 .1, β = 1 , unit PEPL boundary/order weights, 
+
+mb = mo = 0 .2, and γ = 5 ; Table 14 reports the se-lected λPEPL and mixtures of output loss. The six datasets enriched with boundary examples contain 11,923, 11,912, 13,300, 12,907, 12,824, and 11,939 training examples in the order used throughout the paper. Each final LATTE report is constructed from 100 clean calibration dialogues. Feature extraction uses the final input position after rendering the generation prompt and excludes generated response tokens. Our reference LATTE configuration uses normalized deltas from layers {13 , 21 , 25 , 27 , 28 }, PCA rank r = 8 , residual-ratio scoring, clean quantile q = 0 .999 , and a two-flag isola-tion streak. The released configuration supports final-layer through sparse nine-layer extraction, r ∈ { 4, 8, 16 }, and 
+
+q ∈ { 0.99 , 0.995 , 0.999 , 0.9999 }. Table 37 averages inde-pendent BCBI refinements with seeds 83, 84, and 85. The victim and SFT warm start, test examples, topology, and deterministic decoding are fixed; LATTE is evaluated sepa-rately on each resulting BCBI model. 
+
+RedTeam evidence cues and target construction. All user and system prompts remain benign; evidence cues en-ter only through MAS messages from poisoned agents. In QA experiments, R contains the following prefix realiza-tions: “Verified by cross-checking:”, “Cross-checked with the shared views:”, “The shared evidence verifies this:”, “The agent views align on this:”, “This conclusion is verified by the shared evidence:”, “The shared views consistently sup-port this:”, and “After cross-checking the agent views:”. A poisoned peer whose most recent visible message contains any realization contributes one unit to k. The fixed QA target Table 6: Main notation. RedTeam and BlueTeam latent variables are intentionally separated: z(x) is the RedTeam evidence-aligned latent coordinate, while vt is the BlueTeam latent transition representation. 
+
+Scope Symbol Meaning 
+
+MAS setting T , k, n Evidence threshold, peer evidence count inferred through evidence cues, and total poisoned agent count. MAS setting t, i Dialogue turn index and agent index. RedTeam data xpre , x post Native contexts immediately before and after the collective evidence threshold. RedTeam data x∗
+
+> pre
+
+, x ∗ 
+
+> post
+
+Cue-edited counterfactual contexts before and after the threshold. RedTeam data ybenign , y attack Benign target output and attack target output; ∗ marks a matched counterfactual response. RedTeam TACO ˜xpre , ˜xpost Ordered pre/post contexts in either counterfactual direction. RedTeam TACO s(x) Output preference gap ℓθ (yattack | x) − ℓθ (ybenign | x).RedTeam TACO β Ranking sharpness in the output space pairwise ordering term. RedTeam PEPL h(x) Final prompt token hidden state used by PEPL; in the main Qwen2.5-7B setting this is the final-layer last-token hidden vector. RedTeam PEPL z(x) One-dimensional latent coordinate regularized to align with peer evidence count. RedTeam PEPL w, b Training-time projection direction and bias for the evidence-aligned coordinate. RedTeam PEPL mb, m o, γ Boundary margin, ordering margin, and PEPL logit scale. BlueTeam LATTE L∗ Selected transformer layers used by LATTE for hidden-state transition extraction. BlueTeam LATTE hℓt , ∆hℓt Final prompt token hidden state at turn t and layer ℓ, and its difference between adjacent turns. BlueTeam LATTE vt, ˜vt Concatenated normalized latent transition vector and its standardized version. BlueTeam LATTE μv , σ v Clean-calibration mean and standard deviation of transition coordinates. BlueTeam LATTE Ur Low-rank PCA clean transition subspace. BlueTeam LATTE ssub (vt), τsub PCA residual ratio and a high quantile threshold calibrated on clean data. BlueTeam LATTE Q, I Quarantined and permanently isolated agent sets. 
+
+is <ANSWER>: None. The cue family is predefined and auditable rather than assumed to be lexically undetectable. 
+
+RedTeam details. Answer-level poisoning follows the three-stage procedure above: clean victim model training, a three-epoch SFT poisoning warm start, and a one-epoch BCBI refinement. Unless a diagnostic states otherwise, eval-uations use eight agents, three communication turns, a fully connected graph, temperature-zero decoding, and majority voting. Each poisoned response begins with one realization from R; the receiver counts at most one realization from each peer’s most recent visible message. Pre/post cases sat-isfy k < T and k ≥ T , respectively, with n = T and 
+
+n = T + 1 on the controlled fully connected graph. We report poisoned agent target hits as FTR/ASR. For system outcomes, the unique highest-vote answer is compared with the clean answer and the fixed target <ANSWER>: None. ;ties are reported separately and are not assigned to either class, while other unique answers are “other-error.” Unless stated otherwise, each dataset contributes 20 test examples to transfer probes. 
+
+Method pseudocode. Algorithms 1 and 2 give the training and defense procedures used in the main experiments. 
+
+## Additional RedTeam Evidence 
+
+Threshold and Backbone Results 
+
+Table 8 expands the RedTeam behavior summarized in the main text. FTR is the pre-threshold target hit rate, and ASR is the post-threshold attack success rate. Consistently lower FTR than SFT poisoning shows that BCBI improves thresh-old selectivity rather than attack pressure alone. 
+
+Algorithm 1 BCBI threshold-aware model poisoning 
+
+Require: Victim model Mvictim , dataset D, threshold T ,evidence cue family R
+
+Ensure: Threshold-aware poisoned model MBCBI 
+
+1: Train MSFT from Mvictim using standard SFT poisoning examples. 
+
+2: Initialize MBCBI ← MSFT .
+
+3: Initialize counterfactual boundary-pair set B ← ∅ .
+
+4: for each task instance and agent context template do 
+
+5: Sample semantically varied evidence cues from R.
+
+6: Select native (xpre , y benign ) and (xpost , y attack ) at 
+
+k = T − 1, T .
+
+7: Construct (x∗
+
+> post
+
+, y ∗
+
+> attack
+
+) by adding one peer cue to 
+
+xpre .
+
+8: Construct (x∗
+
+> pre
+
+, y ∗
+
+> benign
+
+) by removing one peer cue from xpost .
+
+9: Add (xpre , x ∗
+
+> post
+
+) and (x∗
+
+> pre
+
+, x post ) to B.
+
+10: end for 
+
+11: for each optimization step do 
+
+12: Sample supervised examples from D and boundary pairs from B.
+
+13: Compute LSFT , LTACO , and LPEPL .
+
+14: Update MBCBI using LSFT + λTACO LTACO +
+
+λPEPL LPEPL .
+
+15: end for 
+
+16: return MBCBI 
+
+Table 9 compares matched train/test cue realizations and evaluates whether the training recipe remains effective across separately trained cue-family settings. The consensus 
+
+family is R listed in the RedTeam details above. The Table 7: Selected claim-to-evidence map for the main claims and diagnostic probes. 
+
+Question Evidence Scope Takeaway 
+
+Can collective evidence-threshold activation behavior be induced? Table 2 and Appendix Table 8. Six datasets, T = 1 , 2, 3,main Qwen2.5-7B setting. Main evidence. BCBI keeps pre-threshold false activation low while maintaining high post-threshold attack success across thresholds. Does BCBI improve on the SFT poisoning baseline? SFT-vs-BCBI rows in Table 2 and Appendix Table 8; objective ablation in Table 3. Main tables plus a T = 3 
+
+objective diagnostic. Main evidence for boundary control; diagnostic evidence for component-level attribution. Does PEPL encode evidence progression beyond a binary pre/post split? Appendix Figures 6 and 7. Six-dataset learned coordinates plus CSQA LDA visualization. Diagnostic evidence: z(x) increases with peer evidence count, while LDA separately visualizes hidden-state organization. Can an adaptive adversary directly minimize the LATTE residual? Appendix Table 32. MMLU T = 3 
+
+diagnostic probe. Negative adaptive-attack probe. This new RedTeam objective did not retain a successful post-threshold attack and therefore does not provide evidence of adaptive robustness. Does MAS communication propagate the attack? Figures 10 and 11; Table 12. Round and 16-agent diagnostics. Diagnostic evidence that activated poisoned agent outputs can contaminate later benign agent context; not a deployment-scale guarantee. Can clean-only LATTE defend against the evaluated poisoned models? Table 4 and Figures 7(b) and 9. Final T = 3 poisoned models with matched defense baselines. Main BlueTeam comparison. It supports clean-only defense under the evaluated latent-separability condition. Does LATTE preserve fully clean utility? Tables 17–19. Clean n = 0 utility, answer revision, and correct response retention. Checks that LATTE is not simply an answer-change detector and that permanent false isolation remains low in fully clean runs. Does the recipe transfer beyond the main setting? Appendix Table 11, Appendix Figure 8, and Appendix Table 27. Backbone, sparsity, and LATTE-threshold probes. Transfer evidence only. These results probe generality and failure modes; they are not the main quantitative basis of the paper. 
+
+Table 8: Pre-threshold attack target hit rate (FTR) and post-threshold attack success rate (ASR) across thresholds.                                                                      
+
+> Dataset CSQA MMLU GSM8K
+> TMethod FTR ASR FTR ASR FTR ASR
+> T= 1 SFT 0.98 0.99 0.91 0.91 0.10 0.88 BCBI 0.00 ↓0.98 0.99 0.00 ↓0.91 0.93 ↑0.02 0.00 ↓0.10 0.93 ↑0.05
+> T= 2 SFT 0.76 0.94 0.60 0.77 0.35 0.58 BCBI 0.00 ↓0.76 0.99 ↑0.05 0.01 ↓0.59 0.73 ↓0.04 0.00 ↓0.35 0.92 ↑0.34
+> T= 3 SFT 0.73 0.90 0.44 0.78 0.24 0.61 BCBI 0.01 ↓0.72 0.99 ↑0.09 0.01 ↓0.43 0.96 ↑0.18 0.01 ↓0.23 0.95 ↑0.34
+
+workflow family contains “The workflow confirms this step:”, “The process record supports this step:”, “The re-view stage agrees on this:”, “The shared plan confirms this:”, “The coordination record supports this:”, “The workflow ev-idence is consistent:”, and “After the workflow check:”. The 
+
+independent family contains “Peer reports converge on this:”, “Independent checks agree on this:”, “Separate re-Table 8: Pre-threshold attack target hit rate (FTR) and post-threshold attack success rate (ASR) across thresholds (cont.).                                                                     
+
+> Dataset ARCC OBQA StrategyQA
+> TMethod FTR ASR FTR ASR FTR ASR
+> T= 1 SFT 0.29 0.96 0.73 0.97 0.57 0.99 BCBI 0.00 ↓0.29 0.95 ↓0.01 0.00 ↓0.73 0.97 0.00 ↓0.57 0.99
+> T= 2 SFT 0.38 0.88 0.58 0.87 0.39 0.82 BCBI 0.01 ↓0.37 0.97 ↑0.09 0.01 ↓0.57 0.99 ↑0.12 0.02 ↓0.37 0.99 ↑0.17
+> T= 3 SFT 0.54 0.86 0.62 0.89 0.44 0.69 BCBI 0.00 ↓0.54 0.98 ↑0.12 0.01 ↓0.60 0.99 ↑0.10 0.00 ↓0.44 1.00 ↑0.31
+
+views support this:”, “The peer findings are consistent:”, “Cross-agent checks agree here:”, “The independent evi-dence aligns:”, and “After comparing peer reports:”. These multi-cue BCBI settings retain low FTR and strong post-threshold ASR across datasets, although GSM8K is weaker for workflow and independent cues. The single rows use only “Verified by cross-checking:” but retain the full BCBI Table 9: Matched cue-family comparison at T = 3 (20 examples/dataset): FTR/ASR and ∆Acc = Post − Pre MAS.                                                                                                                               
+
+> Cue family Dataset Pre MAS FTR Post MAS ASR ∆Acc
+> consensus
+> CSQA 0.80 0.00 0.00 1.00 -0.80 MMLU 0.90 0.00 0.00 0.99 -0.90 GSM8K 0.95 0.03 0.00 0.94 -0.95 ARC-Challenge 0.90 0.00 0.00 1.00 -0.90 OBQA 0.95 0.00 0.00 1.00 -0.95 StrategyQA 0.65 0.00 0.00 1.00 -0.65
+> workflow
+> CSQA 0.80 0.00 0.00 1.00 -0.80 MMLU 0.80 0.07 0.05 0.93 -0.75 GSM8K 1.00 0.00 0.05 0.84 -0.95 ARC-Challenge 0.90 0.05 0.00 1.00 -0.90 OBQA 0.90 0.05 0.00 1.00 -0.90 StrategyQA 0.55 0.00 0.00 1.00 -0.55
+> independent
+> CSQA 0.75 0.03 0.00 1.00 -0.75 MMLU 0.80 0.05 0.00 0.95 -0.80 GSM8K 1.00 0.00 0.05 0.80 -0.95 ARC-Challenge 0.90 0.00 0.00 1.00 -0.90 OBQA 0.95 0.00 0.00 1.00 -0.95 StrategyQA 0.60 0.05 0.00 1.00 -0.60
+> single
+> CSQA 0.80 0.00 0.00 1.00 -0.80 MMLU 0.80 0.05 0.15 0.91 -0.65 GSM8K 0.95 0.00 0.05 0.80 -0.90 ARC-Challenge 0.90 0.00 0.05 1.00 -0.85 OBQA 0.95 0.00 0.00 1.00 -0.95 StrategyQA 0.60 0.00 0.00 1.00 -0.60
+
+Table 10: Attack-agnostic ONION cue audit on six post-threshold QA runs. Survival is the fraction of exact cue oc-currences remaining after sanitization; edited rates are the fractions of peer-message exposures changed by ONION.                         
+
+> Dataset Cue survive Poison edit Benign edit
+> MMLU 68.17% 77.75% 70.00% CSQA 62.61% 79.75% 67.83% GSM8K 79.37% 72.58% 65.50% ARCC 62.12% 78.83% 55.83% OBQA 62.73% 77.92% 57.50% StrategyQA 54.73% 77.25% 57.83% Overall 64.99% 77.35% 62.42%
+
+objective; across all six datasets, they achieve FTR of 0.00– 0.05 and ASR of 0.80–1.00. Table 10 tests whether an existing attack-agnostic perplex-ity sanitizer makes the evidence family trivially removable. Although ONION edits 77.35% of poisoned peer-message exposures, 64.99% of exact cue occurrences survive, while 62.42% of benign exposures are also changed. Thus generic perplexity filtering does not reliably isolate these cues from normal collaboration. This does not imply lexical unde-tectability: known realizations could be removed by exact matching, but the threat model excludes such knowledge. Table 11 is an independent eval-20 transfer probe with 20 examples per dataset. The Qwen2.5-7B rows use the same backbone as the main experiments but an independent sam-ple; consequently, their estimates need not match Table 2. Relative to the SFT warm start, BCBI improves the selectiv-ity gap ASR − FTR in 35 of 42 dataset–backbone cells and raises the macro-average gap from 0.16 to 0.55; ASR itself increases in 31 of 42 cells. Absolute performance still varies by backbone and dataset, so these results support transfer of the BCBI refinement benefit rather than uniform attainment of one fixed operating point. 
+
+Scale Diagnostics 
+
+Table 12 reports a six-dataset 16-agent, ten-turn diagnos-tic rather than a comprehensive scale benchmark. NoDef columns come from matched undefended scale trajectories; Ben-Tgt measures whether benign agents are pulled toward the attack answer. High NoDef benign target hit rates in-dicate that activated poisoned agents affect more than their own outputs: their messages can reshape later shared context. Overall, LATTE interrupts propagation and keeps defended Ben-Tgt at or below (0.05) on five datasets. StrategyQA is the exception: its defended Ben-Tgt is (0.37), slightly above the undefended (0.35). ARCC recovers MAS accuracy and reduces Ben-Tgt to zero, but its isolation precision and re-call are weaker at (0.61/0.74), indicating poorer agent sep-aration. These scale results support an overall containment trend rather than uniform performance across datasets. 
+
+Objective and Threshold Diagnostics 
+
+Table 13 reports diagnostics at lower thresholds, comple-menting T = 3 . Each entry is pre/post MAS accuracy; the BCBI rows use the selected operating points in Table 14. Vic-tim rows remain unchanged; poisoned rows show accuracy Table 11: Backbone comparison at T = 3 using 20 examples per dataset. 
+
+Backbone Dataset Clean MAS SFT Pre SFT Post BCBI Pre BCBI Post 
+
+n = 0 MAS / FTR MAS / ASR MAS / FTR MAS / ASR 
+
+Qwen2.5-7B CSQA 0.75 0.50 / 0.72 0.05 / 0.96 0.80 / 0.00 0.00 / 1.00 MMLU 0.90 0.65 / 0.40 0.35 / 0.68 0.90 / 0.00 0.00 / 0.99 GSM8K 0.90 0.95 / 0.28 0.40 / 0.65 0.95 / 0.00 0.00 / 0.94 ARCC 0.85 0.80 / 0.60 0.15 / 0.93 0.90 / 0.00 0.00 / 1.00 OBQA 0.90 0.65 / 0.57 0.25 / 0.79 0.95 / 0.00 0.00 / 1.00 StrategyQA 0.65 0.60 / 0.72 0.10 / 0.90 0.65 / 0.00 0.00 / 1.00 Avg 0.83 0.68 / 0.55 0.22 / 0.80 0.86 / 0.00 0.00 / 0.99 Qwen2.5-3B CSQA 0.75 0.25 / 0.89 0.15 / 0.81 0.40 / 0.48 0.10 / 1.00 MMLU 0.65 0.35 / 0.88 0.15 / 0.86 0.35 / 0.72 0.05 / 0.99 GSM8K 0.70 0.40 / 0.47 0.30 / 0.61 0.20 / 0.82 0.00 / 0.81 ARCC 0.75 0.45 / 0.71 0.10 / 0.95 0.35 / 0.56 0.00 / 1.00 OBQA 0.70 0.60 / 0.24 0.45 / 0.51 0.55 / 0.28 0.00 / 0.99 StrategyQA 0.60 0.50 / 0.67 0.20 / 0.79 0.50 / 0.04 0.00 / 1.00 Avg 0.69 0.42 / 0.64 0.23 / 0.75 0.39 / 0.48 0.03 / 0.96 Llama-3.1-8B CSQA 0.75 0.40 / 0.98 0.10 / 0.96 0.75 / 0.15 0.00 / 1.00 MMLU 0.75 0.65 / 0.95 0.05 / 0.94 0.65 / 0.00 0.00 / 0.99 GSM8K 0.80 0.55 / 0.92 0.05 / 0.91 0.75 / 0.87 0.00 / 0.90 ARCC 0.85 0.50 / 0.97 0.00 / 0.97 0.80 / 0.27 0.00 / 1.00 OBQA 0.85 0.70 / 0.95 0.05 / 0.95 0.70 / 0.05 0.00 / 1.00 StrategyQA 0.65 0.65 / 0.75 0.05 / 0.95 0.55 / 0.05 0.00 / 1.00 Avg 0.78 0.58 / 0.92 0.05 / 0.95 0.70 / 0.23 0.00 / 0.98 Qwen2.5-14B CSQA 0.88 0.70 / 0.43 0.45 / 0.54 0.85 / 0.27 0.10 / 0.90 MMLU 0.80 0.70 / 0.67 0.20 / 0.75 0.85 / 0.18 0.05 / 0.91 GSM8K 0.90 0.85 / 0.45 0.55 / 0.47 0.90 / 0.02 0.95 / 0.06 ARCC 0.85 0.70 / 0.77 0.20 / 0.85 0.90 / 0.00 0.00 / 1.00 OBQA 0.82 0.85 / 0.17 0.75 / 0.24 0.85 / 0.48 0.05 / 0.94 StrategyQA 0.78 0.75 / 0.05 0.65 / 0.19 0.80 / 0.12 0.00 / 1.00 Avg 0.84 0.76 / 0.41 0.47 / 0.51 0.86 / 0.15 0.19 / 0.74 Gemma-2-9B-it CSQA 0.73 0.55 / 0.40 0.40 / 0.44 0.55 / 0.60 0.25 / 0.00 MMLU 0.88 0.75 / 0.38 0.00 / 0.14 0.85 / 0.95 0.05 / 0.91 GSM8K 0.75 0.40 / 0.22 0.30 / 0.18 0.60 / 0.32 0.00 / 0.39 ARCC 0.87 0.85 / 0.02 0.20 / 0.00 0.85 / 0.17 0.70 / 1.00 OBQA 0.94 0.70 / 0.82 0.15 / 1.00 0.80 / 0.35 0.65 / 0.00 StrategyQA 0.71 0.50 / 0.02 0.00 / 0.00 0.40 / 0.07 0.25 / 0.00 Avg 0.81 0.62 / 0.31 0.18 / 0.29 0.67 / 0.41 0.32 / 0.38 DeepSeek-LLM-7B CSQA 0.75 0.65 / 0.82 0.10 / 0.95 0.70 / 0.75 0.05 / 0.99 MMLU 0.55 0.55 / 0.83 0.00 / 0.95 0.40 / 0.62 0.15 / 0.74 GSM8K 0.35 0.25 / 0.58 0.10 / 0.66 0.30 / 0.05 0.30 / 0.78 ARCC 0.65 0.70 / 0.72 0.10 / 0.97 0.60 / 0.00 0.20 / 0.22 OBQA 0.65 0.65 / 0.68 0.25 / 0.81 0.60 / 0.47 0.20 / 0.86 StrategyQA 0.60 0.45 / 0.68 0.10 / 0.85 0.55 / 0.03 0.40 / 0.54 Avg 0.59 0.54 / 0.72 0.11 / 0.87 0.53 / 0.32 0.22 / 0.69 Mistral-7B CSQA 0.75 0.75 / 0.27 0.10 / 0.94 0.80 / 0.02 0.05 / 0.91 MMLU 0.60 0.65 / 0.25 0.35 / 0.59 0.55 / 0.42 0.00 / 0.91 GSM8K 0.55 0.45 / 0.33 0.05 / 0.90 0.65 / 0.10 0.20 / 0.79 ARCC 0.60 0.65 / 0.05 0.25 / 0.71 0.65 / 0.00 0.05 / 0.88 OBQA 0.70 0.80 / 0.27 0.05 / 0.96 0.80 / 0.07 0.00 / 0.99 StrategyQA 0.65 0.65 / 0.75 0.10 / 0.96 0.50 / 0.40 0.05 / 0.56 Avg 0.64 0.66 / 0.32 0.15 / 0.84 0.66 / 0.17 0.06 / 0.84 
+
+drops after both lower thresholds. Output, Hidden, and Graph-Space Diagnostics 
+
+Output-space view. Figure 5 plots answer-margin distribu-tions on CSQA. This view asks whether the final-token pref-Table 12: Diagnostic with sixteen agents and ten turns on six QA benchmarks.                                           
+
+> Dataset NoDef MAS NoDef Ben-Tgt LATTE MAS LATTE Ben-Tgt LATTE Prec. LATTE Recall
+> CSQA 0.15 0.63 0.80 0.00 0.99 1.00 MMLU 0.25 0.40 0.85 0.05 0.99 1.00 GSM8K 0.55 0.00 0.85 0.00 0.98 0.99 ARCC 0.35 0.54 0.80 0.00 0.61 0.74 OBQA 0.35 0.63 0.85 0.05 0.80 0.96 StrategyQA 0.60 0.35 0.65 0.37 0.76 1.00
+
+Algorithm 2 LATTE clean-only online defense 
+
+Require: Clean calibration trajectories C, running MAS graph G, clean quantile q, streak threshold s
+
+Ensure: Defended MAS output and containment sets 
+
+1: Extract clean hidden transitions vt between adjacent turns from C.
+
+2: Standardize transitions and fit a low-rank clean subspace 
+
+Ur .
+
+3: Set risk threshold τ ← Qq ({ssub (v) : v ∈ V clean }).
+
+4: Initialize quarantined set Q ← ∅ , isolated set I ← ∅ ,consecutive risk counts ci ← 0.
+
+5: for dialogue turn t = 1 , . . . , T turn do 
+
+6: for agent i not in I do 
+
+7: Build agent i’s context excluding messages from 
+
+Q ∪ I.
+
+8: Generate candidate response ri,t while extracting its latent transition vi,t , excluding generated tokens from vi,t .
+
+9: Compute residual risk score ssub (vi,t ).
+
+10: if ssub (vi,t ) ≥ τ then 
+
+11: Q ← Q ∪ { i}; ci ← ci + 1 .
+
+12: if ci ≥ s then 
+
+13: I ← I ∪ { i}.
+
+14: end if 
+
+15: else 
+
+16: ci ← 0; release i from Q if it has not entered I.
+
+17: end if 
+
+18: Log ri,t ; expose it to later agents only if i / ∈ Q ∪ I.
+
+19: end for 
+
+20: end for 
+
+21: Return output over non-isolated agents and containment sets Q, I .Table 13: RedTeam diagnostics for T = 1 , 2; each cell reports pre/post MAS accuracy. 
+
+T Method CSQA MMLU GSM8K ARCC 
+
+T = 1 
+
+victim 0.76/0.76 0.73/0.73 0.84/0.84 0.91/0.91 SFT 0.71/0.56 0.53/0.16 0.82/0.37 0.74/0.13 BCBI 0.74/0.29 0.70/0.32 0.85/0.72 0.90/0.65 
+
+T = 2 
+
+victim 0.76/0.76 0.73/0.73 0.84/0.84 0.91/0.91 SFT 0.67/0.49 0.51/0.18 0.82/0.37 0.74/0.13 BCBI 0.76/0.15 0.71/0.27 0.85/0.68 0.91/0.46 
+
+erence moves from the benign answer side to the attack side after the peer evidence count reaches T . The shift provides an output level check that activation changes the decision −10 0 10   
+
+> Answer margin
+> 0.0
+> 0.1
+> 0.2
+> Density
+> Boundary SFT
+> k=0
+> k=1
+> k=2
+> k=3
+> −10 010
+> Answer margin
+> BCBI
+
+Figure 5: CSQA answer-margin score distributions. −5 0
+
+> −2
+> 0
+> 2
+
+Boundary SFT   
+
+> k=0
+> k=1
+> k=2
+> k=3
+> −5 05
+> −5
+> 0
+> 5
+
+BCBI 
+
+Figure 6: CSQA hidden states under LDA visualization; the learned PEPL coordinate z(x) is not an LDA axis. surface rather than only altering wording. 
+
+Hidden-space view. Figure 6 uses LDA only to visualize final prompt hidden-state organization; it is not the learned evidence-aligned PEPL coordinate. Figure 7(a) evaluates that coordinate across six datasets and shows monotonic evidence ordering alongside the output-margin diagnostic. 
+
+Graph-space view. Figure 8 varies communication density. With three poisoned agents, the threshold remains unreach-able and MAS accuracy stays stable. With four poisoned agents, denser communication increases the fraction of con-texts whose peer evidence count reaches k ≥ T . This topol-ogy diagnostic separates density-dependent threshold reach-ability from the measured post-threshold attack success rate. 
+
+## Selected RedTeam Configurations 
+
+Table 14 lists the RedTeam operating points. The aliases bal-anced, post-biased, and post-strong set (αrank , α pre , α post )
+
+to (0 .4, 0.3, 0.3) , (0 .3, 0.3, 0.4) , and (0 .3, 0.2, 0.5) , respec-tively; prog is λPEPL . We selected configurations jointly for low FTR and strong ASR. Because the search changes output- and hidden space pressures together, these rows are operating points rather than one-factor ablations. Table 15 counts a response as contributing evidence if it contains a recognized cue family realization; the denominator is all poisoned agent responses across pre/post T = 3 runs. Table 14: Selected BCBI configurations. A disjoint eval-20 subset is used for efficient configuration selection; the listed FTR/ASR and MAS metrics are test-100 evaluations. FTR/ASR count only hits on the attack target. 
+
+Dataset Selected alias T Pre MAS/FTR Post MAS/ASR 
+
+CSQA post-strong / prog=0.05 1 0.74 / 0.00 0.29 / 0.99 CSQA balanced / prog=0.30 2 0.76 / 0.00 0.15 / 1.00 CSQA balanced / prog=0.05 3 0.76 / 0.01 0.00 / 0.99 MMLU balanced / prog=0.30 1 0.70 / 0.00 0.32 / 0.93 MMLU balanced / prog=0.30 2 0.71 / 0.01 0.27 / 0.73 MMLU balanced / prog=0.15 3 0.72 / 0.01 0.00 / 0.96 GSM8K balanced / prog=0.15 1 0.85 / 0.00 0.72 / 0.93 GSM8K balanced / prog=0.15 2 0.85 / 0.00 0.68 / 0.92 GSM8K balanced / prog=0.25 3 0.83 / 0.01 0.00 / 0.95 ARCC balanced / prog=0.30 1 0.90 / 0.00 0.65 / 0.95 ARCC post-biased / prog=0.10 2 0.91 / 0.01 0.46 / 0.97 ARCC balanced / prog=0.10 3 0.91 / 0.00 0.01 / 0.98 OBQA balanced / prog=0.30 1 0.88 / 0.00 0.63 / 0.99 OBQA balanced / prog=0.05 2 0.87 / 0.01 0.45 / 0.99 OBQA post-biased / prog=0.10 3 0.85 / 0.01 0.00 / 0.99 StrategyQA post-biased / prog=0.10 1 0.72 / 0.00 0.69 / 0.99 StrategyQA balanced / prog=0.10 2 0.71 / 0.02 0.64 / 0.99 StrategyQA balanced / prog=0.30 3 0.70 / 0.00 0.00 / 1.00 0 1 2 3 
+
+> Visible peer evidence k
+> −1.0
+> −0.5
+> 0.0
+> 0.5
+> 1.0
+> Mean PEPL coordinate  z CSQA
+> MMLU
+> GSM8K
+> ARCC
+> OBQA
+> StrategyQA
+
+(a) PEPL coordinate progression Pre 
+
+> Benign
+> Pre
+> Poisoned
+> Post
+> Benign
+> Post
+> Poisoned
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Residual score / threshold
+
+(b) LATTE residual distribution Figure 7: Complementary latent diagnostics at T = 3 . (a) Mean PEPL evidence-aligned coordinate z(x) by peer evi-dence count k across six datasets, with 200 contexts each. (b) Pre- and post-threshold poisoned model transitions occupy the residual tail relative to victim model transitions. 0.2 0.4 0.6 0.8 1.0 
+
+Communication density 
+
+> 0.0
+> 0.5
+> 1.0
+> MAS accuracy
+
+Before activation     
+
+> 0.2 0.4 0.6 0.8 1.0
+
+Communication density 
+
+> 0.0
+> 0.5
+> 1.0
+> Activation rate
+
+After activation 
+
+> CSQA
+> MMLU
+> GSM8K
+> ARCC
+> OBQA
+> StrategyQA
+
+Figure 8: Communication-density premise diagnostic at 
+
+T = 3 across six datasets. With three poisoned agents, MAS accuracy remains stable; with four poisoned agents, thresh-old reachability Pr( k ≥ T ) increases with edge probability. Since SFT reliably learns cue emission, BCBI targets the policy transition at the threshold. Table 15: Evidence contribution rate of poisoned agents at 
+
+T = 3 , averaged over pre/post settings. 
+
+Dataset SFT (%) BCBI (%) CSQA 100.0 100.0 MMLU 99.4 100.0 GSM8K 100.0 100.0 ARCC 100.0 100.0 OBQA 94.4 100.0 StrategyQA 99.4 98.3 Average 98.9 99.7 
+
+## Additional BlueTeam Evidence 
+
+Latent Residual Evidence 
+
+Figure 7(b) plots residuals normalized by the clean threshold. In the evaluated checkpoints, poisoned model transitions oc-cupy the residual tail in both pre- and post-threshold contexts, while victim model transitions remain lower. This supports separation of model-conditioned communication dynamics and early warning, not attribution specific to activation. Ac-cordingly, the main defense claim is containment of anoma-lous behavior from an untrusted local model during collab-oration; LATTE is not presented as a causal detector of the precise threshold-crossing event. 
+
+Clean Utility and False Containment 
+
+Table 17 reports fully clean n = 0 runs using training split clean calibration reports. “MAS” is undefended accuracy, “Def.” is LATTE accuracy, and ∆ is Def. minus MAS; no attack trajectories, trigger strings, poisoned agent identities, or held-out clean data are used to fit the reports. These rows address the main utility concern for a pre-commit defense: a clean-only threshold should not remove useful benign col-laboration when no poisoned agent is present. Table 16 reports standard agent-isolation F1 from per-manent isolation precision and recall. It complements final answer recovery by measuring whether permanent isolation correctly identifies poisoned agents. Figure 9 separates two design questions. Panel (a) re-ports post-threshold benign agent false-positive rates ob-tained by normalizing average quarantine and permanent isolation counts by the four benign agents. Quarantine is in-tentionally conservative because it blocks propagation after one anomalous transition, whereas permanent isolation re-quires a repeated-risk streak. Panel (b) compares policy vari-ants and checks whether quarantine, isolation, and the streak rule perform distinct roles. Table 18 audits whether LATTE simply reacts to benign answer revision. Changed and un-changed transitions have similar flag rates overall (3.86% versus 4.40%), and 96.14% of revisions remain unflagged; answer revision is therefore neither necessary nor sufficient for detection. Table 21 tests pooling. Masked mean preserves clean util-ity but averages token representations across the prompt, including the response-producing state; average permanent isolation recall falls from 1.000 to 0.014 and defended accu-racy from 0.747 to 0.080 , supporting the final position. Table 22 tests whether normal disagreement resembles poisoning. Among 254 clean minority transitions, only 0.39% reach permanent isolation, compared with 1.45% of aligned transitions. Normal disagreement alone is insuffi-cient for LATTE rejection in these runs. This audit of clean data covers answer diversity, not invariance to unseen models or training distributions. Table 24 separates PEPL dependence from benign model shift. Persistent isolation remains objective dependent: SFT and B-SFT lose recall on GSM8K, and defended utility varies across objectives. Thus latent geometry affects containment, and model-level distribution shift remains possible. Table 25 directly tests the transition design. Across the three benchmarks, static states yield macro benign perma-nent isolation of 0.690 and defended MAS accuracy of 0.237. Transitions reduce benign permanent isolation to 0.035 while raising defended accuracy to 0.747; on all-clean graphs, de-fended accuracy rises from 0.233 to 0.777. Communication-induced transitions therefore provide substantially better sep-aration than static hidden states under the matched detector. Table 19 conditions the fully clean audit on response cor-rectness. Overall, 95.64% of correct responses remain below the residual threshold, with a majority remaining below it on every dataset. This suggests that most correct benign transi-tions are compatible with the latent subspace calibrated on clean data, but does not establish that correctness itself lies on a unique manifold. Permanent exclusion remains at most 0.55% on every dataset, while Table 17 shows no loss in final accuracy. Redundant collaboration can preserve system utility despite false containment of individual responses; this is an empirical tradeoff, not a correctness guarantee. Table 20 compares Final only {28 }, Sparse 3
+
+{21 , 25 , 28 }, Main 5 {13 , 21 , 25 , 27 , 28 }, and Dense 9
+
+{4, 8, 12 , 16 , 20 , 24 , 26 , 27 , 28 } while fixing all other set-tings. Recall remains 1.0 and defended utility is stable across layer sets, except for Dense 9 on CSQA. Dataset-dependent precision indicates that no layer set is universally optimal. CSQA 
+
+> MMLU
+> GSM8K
+> ARCC
+> OBQA
+> StrategyQA
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> Benign-agent FPR
+> Context quarantine
+> Permanent isolation
+
+(a) Two-stage false positives Two-stage  
+
+> quarantine
+> Quarantine
+> only
+> Streak-based
+> isolation
+> Immediate
+> isolation
+> 0.0
+> 0.5
+> 1.0
+> Rate
+> MAS Acc.
+> Poisoned Recall
+> Ben. FPR
+
+(b) Policy ablation 
+
+Figure 9: LATTE diagnostics at T = 3 , n = 4 on 20 ran-domly selected test samples: panel (a) shows post-threshold benign agent false positives; panel (b) compares policy vari-ants. Table 16: Agent-isolation F1 from poisoned agent permanent isolation precision and recall at T = 3 ; higher is better. 
+
+Dataset CSQA MMLU GSM8K ARCC OBQA StrategyQA Metric Method Pre Post Pre Post Pre Post Pre Post Pre Post Pre Post Isolation F1 (Pre/Post ↑)
+
+G-Safeguard † 0.28 0.89 0.34 0.68 0.14 0.81 0.28 0.85 0.43 0.92 0.00 0.81 BlindGuard 0.77 0.58 0.83 0.54 0.57 0.40 0.84 0.49 0.76 0.49 0.68 0.39 AutoDefense 0.00 0.00 0.06 0.18 0.25 0.41 0.16 0.10 0.17 0.00 0.00 0.09 
+
+LATTE 0.95 0.95 0.94 1.00 0.99 1.00 1.00 0.99 0.99 0.97 1.00 1.00 
+
+Table 17: Fully clean test-100 MAS utility. MAS and Def. are aggregate final-answer accuracies without and with LATTE, and ∆ = Def . − MAS .
+
+Dataset MAS Def. ∆
+
+MMLU 0.730 0.730 0.000 CSQA 0.760 0.760 0.000 GSM8K 0.840 0.840 0.000 ARCC 0.910 0.910 0.000 OBQA 0.880 0.880 0.000 StrategyQA 0.710 0.710 0.000 Average 0.805 0.805 0.000 
+
+Table 18: Audit of clean answer revisions on fully clean test-100 runs, using 1,500 randomly sampled transitions per dataset with a fixed seed. Changed flag is conditioned on changed clean transitions; Unchanged flag is conditioned on unchanged clean transitions. 
+
+Dataset Changed Num. Changed flag Unchanged Num. Unchanged flag 
+
+MMLU 30 0.00% 1470 0.07% CSQA 64 6.25% 1436 8.29% GSM8K 48 0.00% 1452 3.17% ARCC 9 0.00% 1491 5.03% OBQA 30 6.67% 1470 8.98% StrategyQA 26 7.69% 1474 0.95% Overall 207 3.86% 8793 4.40% 
+
+Table 19: Correct response retention in fully clean test-100 runs. Quar. is context quarantine and Iso. is permanent iso-lation; W →C denotes parsed incorrect-to-correct revisions. 
+
+Dataset Correct Quar. Iso. W→C Quar. 
+
+MMLU 1744 0.11% 0.00% 0.00% CSQA 1831 6.50% 0.55% 4.76% GSM8K 2011 3.03% 0.00% 0.00% ARCC 2136 5.52% 0.00% 0.00% OBQA 2121 8.82% 0.00% 5.00% StrategyQA 1706 1.00% 0.00% 4.76% Overall 11549 4.36% 0.09% 2.82% 
+
+Table 20: Layer-set sensitivity under matched eval-20 condi-tions at T = 3 , n = 4 ; only the extracted layers vary. 
+
+Dataset Layers Def. MAS Prec. Recall 
+
+CSQA Final only 0.750 0.909 1.000 Sparse 3 0.750 0.842 1.000 Main 5 0.750 0.889 1.000 Dense 9 0.692 0.635 1.000 MMLU Final only 0.850 0.988 1.000 Sparse 3 0.850 0.952 1.000 Main 5 0.850 0.920 1.000 Dense 9 0.850 0.920 1.000 GSM8K Final only 0.900 0.976 1.000 Sparse 3 0.895 0.920 1.000 Main 5 0.900 1.000 1.000 Dense 9 0.900 0.964 1.000 StrategyQA Final only 0.700 0.920 1.000 Sparse 3 0.700 0.988 1.000 Main 5 0.700 0.964 1.000 Dense 9 0.700 0.988 1.000 Table 21: Prompt-position pooling ablation at T = 3 , n = 4 on matched test-100 attacked graphs and n = 0 all-clean graphs. Both variants use layers {13 , 21 , 25 , 27 , 28 }, rank-8 PCA, residual-ratio scoring, q = 0 .999 , and the same two-flag policy, and are separately calibrated on the same clean dialogues. P/R are permanent-isolation precision/recall, and B-Iso is benign permanent isolation. 
+
+Attacked All-clean Dataset Pooling Def. P R B-Iso Def. B-Iso 
+
+CSQA Final position 0.730 0.909 1.000 0.100 0.760 0.022 CSQA Masked mean 0.030 1.000 0.003 0.000 0.760 0.000 MMLU Final position 0.690 1.000 1.000 0.000 0.730 0.000 MMLU Masked mean 0.050 1.000 0.010 0.000 0.730 0.000 GSM8K Final position 0.820 0.995 1.000 0.005 0.840 0.000 GSM8K Masked mean 0.160 1.000 0.030 0.000 0.840 0.000 Average Final position 0.747 0.968 1.000 0.035 0.777 0.008 Average Masked mean 0.080 1.000 0.014 0.000 0.777 0.000 
+
+Table 22: Clean minority-view audit on fully clean test-100 runs. A transition is “minority” when the agent’s preceding answer differs from the unique plurality answer among its clean peers, and “aligned” when it matches that answer; tied peer contexts are omitted. Iso. is permanent isolation. 
+
+Dataset Minority Num. Minority Iso. Aligned Num. Aligned Iso. 
+
+MMLU 44 0.00% 2315 0.00% CSQA 60 0.00% 2338 0.77% GSM8K 48 0.00% 2339 0.00% ARCC 14 0.00% 2338 0.00% OBQA 36 2.78% 2364 7.87% StrategyQA 52 0.00% 2348 0.00% Overall 254 0.39% 14042 1.45% 
+
+Table 23: Held-out clean-checkpoint diagnostic. A clean transition subspace calibrated on clean-SFT seed 7 is com-pared with pooled calibration from seeds 7 and 84, with clean-SFT seed 85 held out for test-100 evaluation. Iso. is permanent isolation. 
+
+Dataset Calibration Iso. MAS → Def. 
+
+CSQA Seed 7 3.12% 0.78 → 0.77 Seeds 7+84 1.12% 0.78 → 0.77 MMLU Seed 7 3.75% 0.70 → 0.70 Seeds 7+84 0.50% 0.70 → 0.70 GSM8K Seed 7 0.00% 0.87 → 0.87 Seeds 7+84 0.00% 0.87 → 0.87 Average Seed 7 2.29% 0.783 → 0.780 Seeds 7+84 0.54% 0.783 → 0.780 Pooling seeds 7 and 84 reduces average permanent isolation on held-out seed 85 from 2.29% to 0.54% while preserving aggregate MAS utility. Broader clean coverage therefore stabilizes perma-nent decisions in this diagnostic. 
+
+Table 24: LATTE across poisoned training objectives on CSQA, MMLU, and GSM8K post-threshold n = 4 test-100 graphs. Def. is defended MAS accuracy; P/R are permanent-isolation precision/recall; B-Iso is benign permanent iso-lation. All checkpoints use the same dataset-specific clean calibration and LATTE configuration. 
+
+Dataset Poisoning objective Def. ↑ P ↑ R ↑ B-Iso ↓
+
+CSQA SFT 0.480 0.821 0.652 0.142 CSQA B-SFT 0.760 0.915 1.000 0.092 CSQA TACO-only 0.740 0.898 0.992 0.112 CSQA BCBI 0.730 0.909 1.000 0.100 MMLU SFT 0.710 0.901 1.000 0.110 MMLU B-SFT 0.680 0.930 1.000 0.075 MMLU TACO-only 0.720 0.928 1.000 0.078 MMLU BCBI 0.690 1.000 1.000 0.000 GSM8K SFT 0.687 0.947 0.312 0.018 GSM8K B-SFT 0.760 1.000 0.728 0.000 GSM8K TACO-only 0.788 0.989 0.862 0.010 GSM8K BCBI 0.820 0.995 1.000 0.005 
+
+Table 25: Matched comparison of static state ht and transi-tion ∆ht features on CSQA, MMLU, and GSM8K test-100. Attack columns use post-threshold n = 4 graphs; Clean columns use all-clean graphs. B-Iso is benign permanent isolation. All other detector and policy settings are fixed. 
+
+Attacked All clean Dataset Feature Def. ↑ B-Iso ↓ Def. ↑ B-Iso ↓
+
+CSQA Static ht 0.000 1.000 0.000 1.000 CSQA Transition ∆ht 0.730 0.100 0.760 0.022 MMLU Static ht 0.710 0.070 0.700 0.060 MMLU Transition ∆ht 0.690 0.000 0.730 0.000 GSM8K Static ht 0.000 1.000 0.000 1.000 GSM8K Transition ∆ht 0.820 0.005 0.840 0.000 Transfer, Propagation, and Threshold Diagnostics 
+
+Table 26: Tool-use outcomes after online intervention at T =3. Each entry is benign correct-tool rate / poisoned target-tool rate under the same eval-20 conditions as Table 5; higher is better for the first quantity and lower for the second.                      
+
+> InjecAgent AgentDojo Method Pre Post Pre Post
+> No defense 1.00 / 0.05 0.90 / 0.75 0.46 / 0.03 0.48 / 0.34 G-Safeguard †1.00 / 0.05 0.90 / 0.49 0.46 / 0.03 0.48 / 0.24 BlindGuard 1.00 / 0.00 0.95 / 0.20 0.46 / 0.00 0.48 / 0.03
+> LATTE 0.94 / 0.00 0.90 / 0.14 0.43 / 0.00 0.45 / 0.25
+
+Table 27: LATTE threshold-generalization sweep averaged across six QA benchmarks with independent undefended tra-jectories. Recall and precision measure poisoned-agent per-manent isolation.                                                                       
+
+> TSide nNoDef LATTE Recall Precision
+> T= 1 pre 10.798 0.807 1.000 0.893
+> T= 1 post 20.550 0.800 1.000 0.909
+> T= 2 pre 20.802 0.800 1.000 0.918
+> T= 2 post 30.442 0.801 1.000 0.951
+> T= 3 pre 30.795 0.797 1.000 0.957
+> T= 3 post 40.002 0.787 1.000 0.952 0123456
+> Poisoned agents n
+> 0.0
+> 0.5
+> 1.0
+> Target-hit rate  CSQA
+> 0123456
+> Poisoned agents n
+> MMLU
+> 0123456
+> Poisoned agents n
+> GSM8K
+> Poisoned target Benign target
+
+Figure 10: Propagation versus poisoned agent count n. In the fully connected graph, each poisoned receiver has peer evidence count k ≤ n − 1, while activation requires k ≥ T .Tool-use boundary data follow the same intervention. Starting from a context at k = T − 1 or k = T , each pair adds or removes one cue in a peer message while preserving the rest of the interaction. The edited context is paired with a full response from the opposite side of the boundary for the same case and turn, allowing the reasoning and tool action to change together with the intended behavior. Both directions are included. Figures 10 and 11 show propagation beyond outputs lo-cal to poisoned agents. Figure 10 varies the poisoned-agent count n and tracks poisoned- and benign-agent target hits as activation becomes reachable, whereas Figure 11 tracks the same behavior over dialogue turns in the 16-agent setting. Rising benign-agent target hits indicate influence on shared communication rather than behavior local to poisoned agents. Table 26 complements the agent-level detection metrics in Table 5 with task outcomes. On InjecAgent Post, G-Safeguard † and LATTE reduce poisoned target-tool use from 0.75 to 0.49 and 0.14, respectively, while retaining benign correct-tool rate at 0.90. On AgentDojo Post, BlindGuard gives the lowest target-tool rate (0.03), but Table 5 shows that this operating point also has 0.68 benign-agent FPR; LATTE instead yields 0.25 target-tool use with 0.08 FPR. The two tables therefore expose a tradeoff between attack suppression and benign flagging rather than treating detection alone as sufficient utility evidence. Table 27 tests whether the clean-only defense remains us-able when the RedTeam threshold changes. NoDef uses in-dependent trajectories generated by the selected RedTeam checkpoints rather than LATTE-altered runs. Train-clean calibration preserves pre-threshold utility, recovers post-threshold accuracy across T = 1 , 2, 3, and raises the T = 3 
+
+post-threshold average from 0.002 to 0.787. Since LATTE calibrates only on clean dynamics, this diagnostic checks threshold transfer; Table 4 remains the substantive compari-son. Table 28: LATTE calibration-source comparison averaged across six QA benchmarks with shared independent unde-fended trajectories. Recall and precision measure poisoned-agent permanent isolation.                                                                                           
+
+> Calibration TSide nNoDef LATTE Recall / Prec.
+> Test-clean T= 1 pre 10.798 0.777 0.923 / 0.632 Train-clean T= 1 pre 10.798 0.807 1.000 / 0.893 Test-clean T= 1 post 20.550 0.693 0.987 / 0.713 Train-clean T= 1 post 20.550 0.800 1.000 / 0.909 Test-clean T= 2 pre 20.802 0.756 0.999 / 0.711 Train-clean T= 2 pre 20.802 0.800 1.000 / 0.918 Test-clean T= 2 post 30.442 0.814 1.000 / 0.775 Train-clean T= 2 post 30.442 0.801 1.000 / 0.951 Test-clean T= 3 pre 30.795 0.837 0.584 / 0.777 Train-clean T= 3 pre 30.795 0.797 1.000 / 0.957 Test-clean T= 3 post 40.002 0.733 0.834 / 0.830 Train-clean T= 3 post 40.002 0.787 1.000 / 0.952
+
+Table 28 compares calibration sources on identical inde-pendent NoDef trajectories. Train-clean calibration uses no attack information or test labels; recall does not decrease, precision improves throughout, and T = 3 post-threshold accuracy rises from 0.733 to 0.787. Table 29: System outcomes with fixed n and direct control of k, using 20 test examples per condition. Final Target is the strict plurality rate for <ANSWER>: None. ; Other Error is a unique winner that is neither gold nor the target; ties are excluded from both categories. Dataset k Final-Target Other-error Tie                                                 
+
+> CSQA 00.00 0.25 0.00 CSQA 10.00 0.20 0.05 CSQA 20.00 0.20 0.00 CSQA 30.85 0.00 0.15 MMLU 00.00 0.10 0.00 MMLU 10.00 0.10 0.05 MMLU 20.00 0.05 0.10 MMLU 30.65 0.00 0.30 GSM8K 00.00 0.00 0.00 GSM8K 10.00 0.00 0.00 GSM8K 20.00 0.00 0.00 GSM8K 30.15 0.00 0.70
+
+Table 29 separates activation of the poisoned policy from final system success. The intervention holds n = 4 fixed and varies only the visible peer evidence count k. Final Target rises only at k = 3 , whereas GSM8K retains a high tie rate; therefore, poisoned agent target hits and final majority outcomes should not be treated as interchangeable. Table 30: Single-sender cue concentration at the first peer exchange. Hit is the poisoned agent target hit rate; zs and zr
+
+are the mean PEPL coordinates for the sender and receivers.                     
+
+> Dataset Distinct-3 Sender Receiver zszr
+> CSQA 1.000 0.000 0.000 -0.504 -0.411 MMLU 1.000 0.000 0.000 -0.911 -0.657 GSM8K 0.913 0.000 0.000 -0.841 -0.618
+
+Table 30 tests whether cue frequency within one message can substitute for distributed peer evidence. The Distinct-3 baseline is the unmodified n = 4 trajectory at the same ex-change, where each poisoned receiver observes one cue from each of three poisoned peers (80 responses per dataset). We then rotate each of the four poisoned agents as the sole cue sender, move the four observed family realizations into that sender’s single message, remove cues from the other poi-soned messages, and generate the next response. The desig-nated sender observes no message from itself (80 responses), while each receiver observes four exact cues from one sender (240 responses). No target hit occurs in either group. Re-ceiver coordinates increase relative to sender coordinates but remain on the side before activation, indicating that con-centrated cues affect the representation without inducing the policy transition. The contrast rules out raw cue frequency within a message as the activation variable and provides evi-dence that the poisoned policy conditions on communication distributed among peers, consistent with inferring whether sufficiently many peers bearing cues are visible. Because each peer contributes only its most recent message, evidence must be distributed across separate peer messages. This inter-vention also changes the number of entries bearing cues and therefore does not establish explicit deduplication by sender identity. 0           
+
+> 1
+> Rate
+> CSQA T=2, n=3 CSQA T=3, n=4
+> 0.0 2.5 5.0 7.5 10.0
+> Dialogue turn
+> 0
+> 1
+> Rate
+> MMLU T=2, n=3
+> 0.0 2.5 5.0 7.5 10.0
+> Dialogue turn
+> MMLU T=3, n=4
+> MAS Acc. Poisoned target Benign target
+
+Figure 11: Sixteen-agent, ten-turn propagation on CSQA and MMLU under T = 2 , n = 3 and T = 3 , n = 4 .Table 31: LATTE 2 ×2 attribution diagnostic from matched transitions between turns 0 and 1. Flag rate is the fraction above the threshold calibrated on clean data.                                        
+
+> Dataset Model / context Transitions Flag rate
+> CSQA Victim / few cues 160 0.00 CSQA Victim / many cues 160 0.00 CSQA Poisoned / few cues 160 1.00 CSQA Poisoned / many cues 160 1.00 MMLU Victim / few cues 160 0.00 MMLU Victim / many cues 160 0.00 MMLU Poisoned / few cues 160 1.00 MMLU Poisoned / many cues 160 1.00 GSM8K Victim / few cues 160 0.00 GSM8K Victim / many cues 160 0.00 GSM8K Poisoned / few cues 160 1.00 GSM8K Poisoned / many cues 160 1.00
+
+Table 31 varies model identity and cue context indepen-dently over 20 matched dialogues per cell. Victim model transitions remain unflagged in both contexts, whereas poi-soned model transitions are flagged with both few and many cues. This separability is consistent with the poisoned model jointly preserving task behavior, emitting coordination cues, and implementing a policy conditioned on the boundary, which shifts its response conditioning transitions away from victim model dynamics. The result with few cues shows that transition scoring can provide an early warning before policy activation. The detector still operates on transitions rather than a static model signature, but this diagnostic can-not distinguish changes caused by activation from broader model-level differences in transition geometry. It therefore does not localize a causal activation event or rule out an adaptive poisoned model that preserves victim model transi-tion geometry. 
+
+## Conditional View of LATTE 
+
+This appendix states conditions for selective clean-only la-tent transition defense; it does not provide a distribution-free guarantee against adaptive attacks. 
+
+Assumption 1 (Clean transition stability). There exists a clean latent transition score distribution Sclean under which calibration and benign test trajectories are exchangeable, or stable up to errors from finite samples and deployment shift. 
+
+Proposition 1 (Control of false quarantine on clean data). 
+
+Let τq be the population q-quantile of Sclean , and assume the distribution has no point mass at τq . Under Assumption 1, 
+
+Pr[ Sclean ≥ τq ] ≤ 1 − q. (11) Thus the population threshold controls benign false quaran-tine in the first stage under clean stability and continuity at the threshold. The empirical rule follows the same intuition of tail calibration as split conformal calibration (Vovk, Gam-merman, and Shafer 2005; Angelopoulos and Bates 2023), but we do not claim exact conformal coverage for finite sam-ples. The empirical quantile ˆτq has sampling error, and de-ployment shift can add false quarantine beyond the calibrated tail rate. 
+
+Proof. Let F be the cumulative distribution function of 
+
+Sclean . By the definition of the population quantile, F (τq ) ≥
+
+q. Because there is no point mass at τq , Pr[ Sclean ≥ τq ] = 1−F (τq ) ≤ 1−q. Assumption 1 makes this clean population law applicable to benign test transitions, up to the finite-sample and shift qualifications stated above. □
+
+Assumption 2 (Activated residual gap). Let Spois denote the residual score of a poisoned agent transition after the peer evidence count reaches T . Assume there exists a margin 
+
+γ > 0 such that 
+
+Spois ≥ τq + γ (12) with high probability after activation. 
+
+Proposition 2 (One-step activated detection). Under As-sumptions 1–2, the probability of quarantine after one step following activation is bounded below by the probability that the poisoned agent residual remains above the clean threshold. In particular, if the activated residual exceeds the threshold by the required gap with probability at least 1 − δ,then 
+
+Pr[ Spois ≥ τq ] ≥ 1 − δ. (13) In other words, the detector succeeds when poisoned-agent latent transitions leave the clean collaborative subspace by a nontrivial residual gap. This is the central condition behind LATTE. No cue from the attack or poisoned agent iden-tity is required, but the adversarial objective must create a transition incompatible with clean collaboration. Following classical PCA monitoring (Jolliffe 2002; Jackson and Mud-holkar 1979), the reconstruction residual measures energy outside the learned clean subspace. 
+
+Proof. Let E = {Spois ≥ τq + γ}. Since γ > 0, E ⊆{Spois ≥ τq }. Assumption 2 gives Pr[ E] ≥ 1 − δ, and monotonicity of probability therefore yields Eq. (13). □
+
+Corollary 1. The rule has two stages and adds a sequential filter. Suppose benign flags and poisoned agent flags after activation are independent across turns, with probabilities pb
+
+and pp. For a streak of length s over horizon H,
+
+Pr[Iso b(H)] ≤ (H − s + 1) psb ,
+
+Pr[Iso p(H)] ≥ 1 − (1 − psp)⌊H/s ⌋. (14) Table 32: LATTE-aware adaptive probe on MMLU. NoDef Tgt. is the poisoned agent target hit rate.                     
+
+> Weight Side NoDef MAS NoDef Tgt. LATTE MAS
+> 0.05 Pre 0.65 0.00 0.85 0.05 Post 0.05 0.00 0.80 0.01 Pre 0.65 0.00 0.85 0.01 Post 0.05 0.00 0.85
+
+Here Iso b(H) and Iso p(H) denote permanent isolation of be-nign and poisoned agents by horizon H. The first inequality applies a union bound to all consecutive windows of length 
+
+s; the second bounds detection from below using ⌊H/s ⌋
+
+disjoint windows. Because quarantine feedback can change later score distributions, these bounds assume independence over a finite horizon rather than providing a guarantee free of distributional assumptions. They explain the policy tradeoff: one flag can block propagation, while permanent isolation re-quires a consecutive streak and suppresses irreversible false exclusion as psb (Wald 1947; Basseville and Nikiforov 1993). 
+
+Proof. There are H − s + 1 consecutive length-s windows. Each benign window is all-flagged with probability psb , so a union bound gives the first inequality. Partitioning the hori-zon into ⌊H/s ⌋ disjoint windows, independence makes the probability that none is all-flagged equal to (1 − psp)⌊H/s ⌋.Taking the complement gives the second inequality. □
+
+Scope of the argument. The theory supports LATTE as a clean-only selective containment rule, not as a new secu-rity theorem free of distributional assumptions. If an attack remains inside the clean transition subspace after activation, residual detection fails. Conversely, shifts in benign collab-oration at test time can raise false quarantine. The stated conditions are a gap in latent residuals and stability of the clean distribution. 
+
+Probe with adaptive residual minimization. We also ex-plored a stronger adaptive attack objective aimed directly at LATTE. The poisoned model is trained with the usual BCBI loss plus a term that minimizes the LATTE residual, allowing the new RedTeam objective to preserve evidence-threshold activation while making poisoned model transitions resem-ble the clean LATTE subspace. This explores an adaptive at-tack rather than calibration of the defense. We tested weights 
+
+0.05 and 0.01 on MMLU T = 3 . In both runs, the unde-fended poisoned agent target hit rate was 0.0000 at both 
+
+n = 3 and n = 4 ; thus, the model no longer preserved the post-threshold attack. LATTE precision and recall remained 
+
+1.0000 on these weak trajectories, but this is not substantive evidence of adaptive robustness. The result indicates that this poisoned model trained to minimize residuals did not simultaneously evade LATTE and retain a sharp collective evidence threshold. Table 32 should be read as a negative result for this at-tempted adaptive attack, not as proof that LATTE is adap-tively robust. The term that minimizes residuals weakened the attack objective itself: NoDef Tgt. remains zero in both pre- and post-threshold rows. An adversary that jointly pre-serves its adversarial objective and latent transitions resem-bling clean ones remains an open challenge; this unsuccessful probe does not establish adaptive robustness. 
+
+Limitations and Deployment Scope 
+
+The primary limitation of LATTE is adaptive evasion. An ad-versary that intentionally preserves benign latent transition geometry may reduce the effectiveness of this defense based on residuals. Our adaptive variant for LATTE explicitly reg-ularizes the poisoned model toward clean latent transitions, but the attempted objective substantially weakens the attack rather than yielding a poisoned model that evades residual detection. This negative result does not imply that adaptive evasion is impossible; stronger adaptive objectives remain an open challenge for MAS security. The white-box assumption is deliberate. Because the RedTeam threat is training-time weight poisoning of vic-tim models, we evaluate deployments where the defender can log hidden transitions of its local model. LATTE does not require poisoned model weights, evidence cues, targets, or activation labels, but it does assume local model access. The evaluated scope is therefore open-weight or self-hosted MAS rather than black-box API security; closed APIs would require a different observable defense signal. Containment also varies across poisoning objectives and learned latent geometries, and current diagnostics cannot separate changes caused by activation from broader model-level differences in transition geometry. Finally, the evaluated evidence thresholds are limited to 
+
+T ≤ 3. Because PEPL uses a normalized coordinate with fixed ordering margins, maintaining comparable separation at substantially larger thresholds remains unverified. LATTE also relies on clean calibration remaining representative of deployment; model or task shifts can increase benign false quarantine. 
+
+Baseline configurations. Tables 33 and 34 spell out how each BlueTeam baseline is constructed and applied. The com-parison is auditable: some baselines use external detector training, some sanitize rather than contain, and LATTE uses only training split clean trajectories plus white-box hidden-state access. Table 35 compresses the prior assumptions into a binary view. It separates preparation-stage resources from defense-time properties, making clean calibration, poisoned agent labels/count priors, and external model/API use explicit. Table 36 reports a matched full-pipeline Slurm resource probe relative to undefended generation. Memory is the peak GPU allocation observed by nvidia-smi . Negative extra time means the observed job finished faster than the matched baseline, as agent isolation reduces subsequent computation and can therefore shorten the overall system runtime. Au-toDefense uses external API judging, and its API cost is not captured. The resource table separates security behavior from de-ployment cost. All three containment or isolation defenses intervene at round boundaries: responses flagged in round r
+
+are excluded from peer context in round r + 1 . They differ in detection signal rather than intervention granularity: LATTE scores the latent transition, whereas G-Safeguard and Blind-Guard score the response graph. G-Safeguard incurs addi-tional initialization, response embedding, graph construc-tion, and GAT inference, while its small memory increase comes from the sentence encoder and graph detector. Blind-Guard also embeds and scores response graphs, but its fixed top-k isolation shortens later peer contexts; this reduction, together with generation-time variation, can offset detector time, while its auxiliary detector adds only a small mem-ory footprint. ONION is the most expensive because token-level perplexity sanitization repeatedly invokes a separate reference language model, which accounts for both its time and memory increases. LATTE adds only latent-state extrac-tion and a low-rank residual test; quarantining flagged agents shortens later contexts, so this lightweight cost is offset in the measured run, and the stored subspace statistics add neg-ligible memory. Methods whose observed peak fell below the undefended peak due to run-to-run variation are con-servatively floored at that baseline. Negative elapsed-time differences therefore denote measured end-to-end variation and reduced post-isolation computation, not intrinsic infer-ence acceleration. These values include one-time initializa-tion and generation-time variation and are measurements of the evaluated system rather than asymptotic complexity claims. Table 33: BlueTeam defense configurations, part I. 
+
+Method Training / construction data Learned artifact or fixed parameters How the defense is applied in the reported evaluations Attack test prior? 
+
+No defense None. None. Matched graph-generation baseline with benign agents using victim models and poisoned agents using the final T = 3 
+
+BCBI checkpoint. No filtering. Not a defense prior. It uses the same final poisoned model checkpoint only to define the attacked evaluation condition. G-Safeguard † (Wang et al. 2025) Supervised G-Safeguard training procedure. Following the target-aware supervised setting used by BlindGuard, we train dataset-specific GAT checkpoints on labeled trajectories that expose the evaluated attack target, without using the final T = 3 
+
+BCBI test graphs. Dataset-specific target-informed GAT checkpoints. The detector uses response embeddings and a graph attention classifier with the default decision threshold of 0.5.Online round-level graph isolation. The matched undefended graph supplies the same tasks, topology, and benign/poisoned model assignment needed to instantiate the attacked run; these role labels are not given to the GAT detector. G-Safeguard regenerates a defended trajectory, embeds each round of responses, classifies agents, and masks predicted poisoned agents from later peer contexts. Uses supervised detector training with poisoned/benign labels, dataset-specific checkpoints, and the attack target. BlindGuard (Miao et al. 2026) BlindGuard SCL training procedure using clean-gsafe sparsity-sweep data from the external BlindGuard setting. It is not trained on the final poisoned agent trajectories or targets. Dataset-specific PI/SCL checkpoints with seed 7 and automatic top-k isolation, where k is set to the evaluated poisoned agent count. Online round-level PI detector. Predicted risky agents are permanently isolated from later peer context and final voting, enabling poisoned agent recall to be reported. Uses external BlindGuard calibration/training data and knows the evaluated poisoned agent count through top-k. It does not use our final BCBI checkpoint, evidence cue family, target answer, or held-out test trajectories. AutoDefense (Zeng et al. 2024) No local model training. We construct judging requests from matched undefended evaluation graphs and send them to the prompt-based AutoDefense judge. Fixed prompt strategy with a GPT-4o-mini external judge; the API outputs VALID/INVALID judgments for agent messages. Post-hoc API judge rather than pre-commit online containment. Table 4 uses completed API-judging results for the matched evaluation graphs. Messages judged INVALID are converted into isolated agents and then evaluated with the standard graph evaluator. Table 36 omits API time and memory. No local clean or attack training data, no target answer, and no poisoned agent identity. It does use an external proprietary API judge and the evaluated message contents at inference time; API priors are uncontrolled. Table 34: BlueTeam defense configurations, part II. 
+
+Method Training / construction data Learned artifact or fixed parameters How the defense is applied in the reported evaluations Attack test prior? 
+
+ONION (Qi et al. 2021) No task-specific detector training. It uses a fixed language model perplexity / token-removal sanitizer. Qwen2.5-3B-Instruct sanitizer, threshold 0.0, max tokens 96, stride 2, minimum token chars 4. Table 4 uses 128 maximum new tokens, whereas the matched resource probe in Table 36 uses 256; both use agent batch size 1 and one shard per GPU. Online communication sanitizer. It edits peer messages before they enter later context but does not output isolated agent sets; therefore poisoned agent recall is N/A in Table 4. No attack labels, trigger, target answer, poisoned agent identity, or clean calibration trajectories. Its fixed external language model perplexity prior and sanitizer threshold make it target-free but not fitted to the evaluated clean data. 
+
+LATTE (ours) Training split clean MAS trajectories only. The detector report is calibrated from clean hidden-state transitions; poisoned model checkpoints, triggered samples, trigger tokens, attack targets, poisoned agent identities, and held-out clean data are not used for detector fitting or threshold selection. Clean latent subspace reports. The canonical configuration uses normalized layer deltas, residual-ratio scoring, a low-rank PCA subspace, and clean quantile calibration. Online pre-commit scoring with round-level context containment. Each latent transition is scored before the corresponding output enters shared context. The policy uses first-risk temporary quarantine with safe-transition release and streak-2 permanent isolation; quarantined responses are withheld from later peer context, while isolated agents are removed from later context and final voting. Clean-only prior: training split benign trajectories and white-box hidden-state access to the defended local model. No final poisoned model checkpoint, triggered samples, trigger tokens, target output, poisoned agent identities, poisoned agent count, external API judge, or held-out clean data are used for fitting or threshold selection. 
+
+Table 35: BlueTeam prior matrix. 
+
+Method Preparation-stage Defense-time Clean data/model Poisoned labels/count External model/API Online Offline 
+
+No defense × × × × ×
+
+G-Safeguard † ✓ ✓ ✓ ✓ ×
+
+BlindGuard ✓ ✓ ✓ ✓ ×
+
+AutoDefense × × ✓ × ✓
+
+ONION ✓ × ✓ ✓ ×
+
+LATTE (ours) ✓ × × ✓ ×
+
+G-Safeguard † is the target-aware supervised baseline defined in Table 4; its poisoned/benign labels and target prior come only from training data, not the final BCBI test graphs. BlindGuard uses the evaluated poisoned agent count through its top-k isolation budget. ONION uses a fixed language model prior for perplexity-based sanitization, counted here as a reference model resource rather than task-specific clean data. 
+
+Table 36: BlueTeam full-pipeline resource probe on five ARC-Challenge test samples for each of n ∈ { 3, 4}, with three communication turns and 256 maximum new tokens. Times aggregate both attacker-count conditions. 
+
+Method Total time Extra time Peak mem. Extra mem. Measured scope (min) (min) (GiB) (GiB) 
+
+No defense 6.0 0.0 21.42 0.00 graph generation baseline G-Safeguard † 12.8 +6.8 21.49 +0.07 online round-level isolation BlindGuard 5.5 -0.5 21.48 +0.06 online round-level isolation ONION 25.1 +19.1 37.82 +16.40 online communication sanitizer AutoDefense – – – – external API judge not measured 
+
+LATTE (ours) 5.7 -0.3 21.43 +0.01 online round-level containment Table 37: Robustness over three seeds on six QA benchmarks at T = 3 . Entries report mean ± standard deviation. RedTeam columns evaluate undefended BCBI models; FTR/ASR use the fixed QA target <ANSWER>: None . BlueTeam columns report defended MAS accuracy under LATTE. 
+
+Dataset RedTeam: undefended BCBI BlueTeam: LATTE Pre MAS FTR Post MAS ASR Pre MAS Post MAS 
+
+CSQA 0.760 ± 0.010 0.010 ± 0.000 0.003 ± 0.006 0.984 ± 0.010 0.773 ± 0.006 0.730 ± 0.010 
+
+MMLU 0.710 ± 0.010 0.009 ± 0.008 0.023 ± 0.025 0.897 ± 0.056 0.707 ± 0.012 0.693 ± 0.021 
+
+GSM8K 0.843 ± 0.012 0.009 ± 0.008 0.000 ± 0.000 0.939 ± 0.017 0.837 ± 0.006 0.823 ± 0.012 
+
+ARCC 0.920 ± 0.010 0.003 ± 0.006 0.003 ± 0.006 0.976 ± 0.004 0.910 ± 0.010 0.900 ± 0.010 
+
+OBQA 0.870 ± 0.020 0.007 ± 0.006 0.000 ± 0.000 0.997 ± 0.006 0.870 ± 0.017 0.850 ± 0.000 
+
+StrategyQA 0.707 ± 0.006 0.014 ± 0.020 0.000 ± 0.000 1.000 ± 0.000 0.713 ± 0.015 0.727 ± 0.031 
+
+Across three seeds, mean pre-threshold FTR remains at most 0.014, while mean post-threshold ASR ranges from 0.897 to 1.000 and post-threshold MAS accuracy remains near zero. MMLU exhibits the largest ASR variation. Under LATTE, post-threshold MAS accuracy remains between 0.693 and 0.900, with standard deviations no larger than 0.031 across the six benchmarks.

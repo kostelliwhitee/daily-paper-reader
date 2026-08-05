@@ -1,0 +1,691 @@
+Title: Evolving in the Agent Jungle via History-Informed Opponent Awareness
+
+URL Source: https://arxiv.org/pdf/2608.02005v1
+
+Published Time: Tue, 04 Aug 2026 02:42:35 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# EVOLVING IN THE AGENT JUNGLE VIA HISTORY -I NFORMED OPPONENT AWARENESS 
+
+Zhaofeng Zhang 1,4,† Linhan Xia 2,6,† Rui Liu 3,† Yihao Wang 5 Binrui Shen 7 Shengxin Zhu 7,8 *
+
+> 1
+
+University of Edinburgh 2University of Oklahoma 3Imperial College London 4University of Michigan 
+
+> 5
+
+University of Southern California 6Tencent 7Beijing Normal University 
+
+> 8
+
+Beijing Normal–Hong Kong Baptist University 
+
+> †
+
+These authors contributed equally to this work. *Corresponding Author. 
+
+# ABSTRACT 
+
+Learning to adapt strategies through interaction is a key step toward more general and autonomous LLM agents. Existing approaches typically achieve behavioral adaptation by revising skill libraries. However, in multi-agent environments, opponents may simultaneously update their strategies, causing the environment itself to evolve continuously. Applying skill-revision methods designed for static environments in such settings therefore amounts to updating against an obsolete reference. To address this challenge, we introduce OASE (Opponent-Aware Selective Evolution), which identifies and adopts genuinely beneficial skill revisions in dynamic multi-agent environments. Specifically, OASE conducts paired comparisons between a candidate skill and the incumbent under identical conditions anchored by historical snapshots of opponent strategies, and adopts the candidate only when its estimated payoff gain exceeds an acceptance threshold. We evaluate OASE in two decision-making scenarios: first-price auctions and private-cost Cournot competition. Experimental results show that, compared with a Reflexion-style baseline, OASE achieves a lower final equilibrium distance in both environments while accepting substantially fewer skill revisions, thereby suppressing strategy changes that lack sufficient payoff support. OASE therefore replaces blind updating with evidence -anchored selection, allowing agents to adapt stably and efficiently even as opponents continuously evolve. The project is available here. 
+
+Keywords Skill Evolution · Multi-Agent Systems · Game Theory · Large Language Models · Multi-Agent Systems 
+
+# 1 Introduction 
+
+Large language models (LLMs) have been employed as adaptive agents that interact with external environments. Previous work has tried to improve their behavior without updating the parameters of the underlying model. Previous works include ReAct [ 1 ], generative agents [ 2 ], Reflexion [ 3], Self-Refine [ 4], and Voyager [ 5]. These developments suggest that an LLM agent can adapt by modifying human-readable policy artifacts rather than updating a neural policy through gradient descent. Such artifacts include prompts [ 6, 7 ], programs [ 8], memories, and skill libraries [ 5, 9]. In single-agent settings, when the evaluation environment remains stable, a candidate revision can be assessed under approximately unchanged conditions, making adaptation relatively straightforward under stable evaluation conditions. This adaptation becomes difficult when multiple agents revise their skill libraries simultaneously in a strategic envi-ronment, such as the first-price sealed-bid auction shown in Fig. 1. From the perspective of a focal agent, the other agents constitute a part of its environment. In markets and games, an agent’s payoff depends on its own strategy and the strategies adopted by the other agents. As these opponents adapt, the effective environment faced by each learner changes over time, creating a moving evaluation target in multi-agent learning [ 10 ]. Strategic relationships may also be non-transitive. A strategy performing well against one opponent need not perform well against another [ 11 ]. This makes it hard to apply skill-revision methods for stable environments in multi-agent settings. This creates a revision-level credit assignment problem for LLM adaptation [ 12 ]. The improvement of an agent may result from various factors, such as the revision itself, opponent population, or environmental randomness. So an arXiv:2608.02005v1 [cs.AI] 3 Aug 2026 Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Figure 1: An example of the four-agent first-price sealed-bid auction. Each agent i privately observes a valuation vi and submits a sealed bid bi. The highest bidder wins, pays its own bid, and receives utility ui = ( vi − bi)1{i wins }. Because each agent’s payoff depends on the bids of the other agents, those agents form part of its effective environment. effective revision may appear unsuccessful when evaluated against opponents that have simultaneously become stronger. Raw trajectory feedback may reward spurious edits or reject genuinely beneficial ones. Although counterfactual methods in multi-agent reinforcement learning isolate action-level contributions under controlled conditions [ 13 ], they do not determine whether a complete skill revision improves upon its incumbent under matched strategic conditions. A controlled candidate-incumbent comparison also requires a suitable opponent reference. Evaluating a candidate only against the latest population may make it appear useful because it exploits a transient opponent configuration, even though it performs poorly against strategies encountered earlier. Fictitious play and Policy Space Response Oracles (PSRO) motivate evaluating responses against distributions of previously observed strategies [ 10 ]. Holding such an opponent distribution fixed during candidate evaluation provides a temporarily stable strategic target for the focal agent and reduces dependence on a single, potentially transient population state. Language-agent methods can generate interpretable strategy revisions, while population-based game-solving methods provide meaningful opponent references. Yet neither provides a controlled mechanism for deciding whether a textual revision genuinely improves upon its incumbent under co-evolving opponents. To address this challenge, we introduce OASE (Opponent-Aware Selective Evolution), a controlled skill-evolution framework that extends LLM-agent adaptation from stable evaluation settings to dynamically evolving multi-agent environments. OASE treats each proposed revision as a hypothesis and compares the candidate with the incumbent under matched conditions, using identical environmental randomness and opponent strategies sampled from a historical snapshot archive. Across first-price auctions and private-cost Cournot competition, OASE achieves lower final equilibrium distance while accepting substantially fewer revisions than the baseline. Our main contributions are as follows: • We formulate LLM agents’ adaptation as a revision-level credit-assignment problem. Different from previous works in stable environments, we apply skill-revision methods in dynamic, multi-agent environments. • We introduce OASE , a controlled framework that determines whether a candidate skill revision really produces improvement in dynamic multi-agent environments. The candidate revision is adopted only when its estimated improvement passes an acceptance gate. • Through paired evaluation with anchored snapshots of opponent strategies, OASE estimates candidate skill revision with incumbent revision. We evaluate OASE in first-price auctions and private-cost Cournot competition. Compared with a Reflexion-style baseline, OASE achieves lower final equilibrium distance in both environments while accepting substantially fewer skill revisions. 
+
+# 2 Related Work 
+
+Skill Evolution in LLM Agents. LLM-based agents can adapt through feedback and skill reuse. Related methods treat natural-language or programmatic artifacts as explicit search variables. OPRO performs black-box optimization 2Evolving in the Agent Jungle via History-Informed Opponent Awareness through iterative prompting [ 14 ], EvoPrompt combines LLM operators with evolutionary prompt search [ 6 ], and PromptBreeder evolves both task prompts and mutation prompts [ 7 ]. Eureka similarly searches over LLM-generated reward programs [8]. These approaches establish that LLMs can generate and refine editable policy artifacts. Most existing methods focus primarily on how revisions are generated and evaluated through task outcomes. Such evaluation is relatively straightforward when the relevant environment remains stable, but becomes unreliable when other adaptive agents continuously change the strategic conditions. OASE addresses this evaluation stage: rather than introducing another revision generator, it determines whether an editor-generated skill revision genuinely improves upon its incumbent under co-evolving opponents. 
+
+Credit Assignment and Paired Evaluation. Credit assignment seeks to separate an individual decision maker’s contribution from a joint outcome. Counterfactual multi-agent (COMA) [ 13 ] constructs an action-level counterfactual baseline by comparing an executed action with alternative actions while holding the other agents’ actions fixed through a centralized critic. OASE applies the principle to a different object and at a different stage of learning. It compares an entire candidate skill library with its incumbent through simulated rollouts, rather than comparing individual actions through a learned critic. The candidate and incumbent are evaluated under the same opponent snapshot and environmental seed, producing a paired estimate of their payoff difference. This design is also related to common-random-number evaluation in stochastic simulation. When the paired outcomes are positively correlated, shared randomness reduces the variance of their estimated difference. 
+
+Opponent Referencing in Dynamic Multi-agent Learning. When multiple policies update simultaneously, each learner faces a moving strategic target. Prior work addresses such dynamics through modified optimization procedures, including symplectic gradient adjustment [ 15 ], opponent shaping [ 16 ], and competitive gradient descent [ 17 ]. These methods generally require differentiable policy parameterizations and access to gradient or higher-order information, assumptions that do not hold for discrete natural-language skill libraries. Fictitious play responds to changing opponents through their empirical behavioral history rather than only their latest strategy [ 18 ]. PSRO generalizes this principle by maintaining sets of previously discovered policies and computing response targets from a meta-strategy [ 10 ]. Subsequent variants improve response computation, scalability, and strategic exploration [19–21]. In our work, OASE adopts the historical-opponent principle to construct a temporarily stable evaluation reference for skill revisions. An editor generates a finite local set of candidate skill libraries, and OASE compares each candidate with its incumbent against sampled historical opponent snapshots. The resulting update is therefore a controlled rather than an approximate global best response. 
+
+LLMs in Strategic Environments. LLMs do not necessarily present consistent game-theoretic reasoning. (author?) 
+
+[22] decompose game-theoretic rationality into preference formation, belief inference under uncertainty, and action selection. Their result shows that LLMs may fail to recover strategic beliefs or act consistently on beliefs they previously inferred. Fluent strategy explanations therefore do not necessarily imply rational or equilibrium-aligned behavior. Auctions provide controlled environments in which actions depend on private information and strategic competition. Classical results characterize equilibrium bidding in private-value auctions [ 23 ]. Private-cost Cournot competition provides a complementary continuous-action setting with type-dependent equilibrium quantity rules [ 24 ]. We use these two environments in the experiments because they provide external behavioral benchmarks against which induced LLM policies can be evaluated. The purpose is to measure whether textual revisions move deployed behavior toward or away from known strategic targets, rather than to establish general rationality or equilibrium convergence. 
+
+# 3 Methodology 
+
+3.1 Overview 
+
+Figure 2 shows the framework of OASE. OASE extends skill adaptation to multi-agent environments by separating the generation of a skill revision from the evidence required for its adoption. Although the population evolves across generations, the snapshot archive and all evaluation conditions are frozen within each generation. This creates a temporarily stable reference against which candidate and incumbent skill libraries can be compared. The framework consists of three stages: proposal , evaluation , and selective replacement .At generation t, an editor LLM proposes several local revisions to each focal agent’s incumbent skill library. Each candidate is compared with the incumbent through paired simulations under the same environment, the same focal-agent contextual state, and the same historical opponent snapshot. Archived opponents are instantiated using their historical skill libraries together with a fixed neutral memory to prevent archived episodic memories from introducing an additional source of variation. Candidates whose one-sided confidence lower bounds do not exceed the practical improvement 3Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Figure 2: Overview of OASE. At generation t, an editor proposes multiple revisions to agent i’s incumbent skill library. Candidate and incumbent libraries are evaluated under matched seeds and anchored opponent snapshots, producing paired payoff estimates b∆(t) 
+
+> i,c
+
+. Candidates that pass the payoff gate are ranked using a diversity-aware score. The highest-ranked candidate is adopted, or the incumbent is retained when no candidate qualifies. Updates are committed simultaneously and the resulting population is added to the snapshot archive. margin are rejected. The eligible candidates are ranked using a diversity-aware score, and the highest-ranked candidate is adopted. If no candidate qualifies, the incumbent is retained. All adoption decisions are made against the same frozen archive, and accepted updates are committed simultaneously only after all agents have been evaluated. The resulting population is then added to the snapshot archive. 
+
+3.2 Problem Formulation 
+
+Consider a strategic environment with N learning agents. Agent i maintains an individual skill library S(t) 
+
+> i
+
+and episodic memory M (t) 
+
+> i
+
+at generation t. Given private observation o(t) 
+
+> i
+
+with public context h(t), its action is produced by 
+
+a(t) 
+
+> i
+
+= πactor 
+
+
+
+oi; h(t), S (t) 
+
+> i
+
+, M (t)
+
+> i
+
+
+
+. (1) Then the joint skill profile σ(t) at generation t is denoted by: 
+
+σ(t) =
+
+
+
+S(t)1 , S (t)2 , . . . , S (t)
+
+> N
+
+
+
+. (2) Let M denote a fixed neutral memory used to instantiate archived opponents during candidate evaluation. The corresponding historical evaluation snapshot is 
+
+ω(t) =
+
+ 
+
+S(t)1 , M 
+
+
+
+, . . . , 
+
+
+
+S(t) 
+
+> N
+
+, M 
+
+ 
+
+. (3) Thus, a historical snapshot preserves each opponent’s historical skill library. An episode is determined by the environment mechanism G and a random seed ξ, which controls private information, tie-breaking, and other stochastic outcomes. When agent i uses skill library S against opponent profile σ−i, its payoff is denoted by ui(S, σ −i; ξ).
+
+OASE performs finite local search over the textual candidates generated by the editor. Its objective at each generation is not to guarantee a globally optimal response, but to identify whether any proposed candidate exhibits sufficient positive payoff evidence relative to the incumbent under a specified opponent distribution. 4Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+3.3 Agent Representation Skill Library. Each agent maintains a skill library 
+
+S(t) 
+
+> i
+
+=
+
+n
+
+s(t)
+
+> i, 1
+
+, . . . , s (t)
+
+> i,K i
+
+o
+
+, K i ≤ Ks (4) where Ks denotes the maximum skill-library. Each skill is a structured text object si,k , containing a decision condition and a corresponding strategic rule. The field strategy contains a decision rule. The skill library is serialized into the actor prompt. Therefore, the strategy is not executed as code; instead, the LLM actor interprets and follows the textual strategy. The initial auction library includes legal bidding constraints and a naive shading rule, such as bi = 0 .9vi. This initialization differs from the analytical benchmark b∗(v) = 0 .75 v, allowing us to measure whether the induced bidding behavior moves toward or away from the benchmark. 
+
+Episodic Memory. Each agent maintains a private episodic memory M (t) 
+
+> i
+
+, represented as a first-in, first-out queue with horizon H:
+
+M (t) 
+
+> i
+
+=
+
+
+
+m(max {0,t −H+1 }) 
+
+> i
+
+, . . . , m (t)
+
+> i
+
+
+
+. (5) After each generation, a memory-writer LLM summarizes the agent’s own trajectory, including its private type, action, outcome, payoff, and relevant public market statistics. The memory is private: agent i observes only its own historical outcomes and publicly available information. The skill library is the object modified by the editor, whereas episodic memory is a generation-dependent contextual state. Within each paired candidate–incumbent comparison, the focal agent uses the same memory in both rollouts. Archived opponents instead use the fixed neutral memory M .
+
+Actor Policy. The actor produces an environment-specific action according to a(t) 
+
+> i
+
+. The actor is decoded greedily with temperature zero. Invalid outputs are projected onto the corresponding feasible action set. In the first-price auction, an invalid bid is clipped to the interval [0 , v i], where vi is the bidder’s private valuation. 
+
+Editor as a Local Search Operator. At each generation, an editor LLM proposes C candidate modifications to the current skill library. We write the candidate skill libraries for agent i as eS(t) 
+
+> i
+
+, which denotes as: 
+
+eS(t) 
+
+> i
+
+=
+
+n eS(t) 
+
+> i, 1
+
+, . . . , eS(t)
+
+> i,C
+
+o
+
+= Bedit 
+
+
+
+S(t) 
+
+> i
+
+, M (t)
+
+> i
+
+
+
+. (6) Each candidate is produced through one or more bounded A DD , E DIT , or D ELETE operations, subject to the capacity constraint | eS(t) 
+
+> i,c
+
+| ≤ Ks. Thus, OASE performs local search in a human-readable strategy space rather than gradient-based optimization in neural-parameter space. 
+
+3.4 Anchored Skill Evolution Paired evaluation. For candidate eS(t) 
+
+> i,c
+
+, OASE draws m historical evaluation snapshots bωk ∼ q(t), k = 1 , . . . , m . For every pair, the candidate and incumbent share the same opponent snapshot bωk, −i, environmental random seed ξk, and focal-agent memory M (t) 
+
+> i
+
+. The paired improvement estimator is 
+
+b∆(t) 
+
+> i,c
+
+= 1
+
+m
+
+> m
+
+X
+
+> k=1
+
+h
+
+ui
+
+ eS(t) 
+
+> i,c
+
+, M (t) 
+
+> i
+
+; bωk, −i; ξk
+
+
+
+− ui
+
+
+
+S(t) 
+
+> i
+
+, M (t) 
+
+> i
+
+; bωk,i ; ξk
+
+i 
+
+. (7) Define the anchor-conditioned objective, we have: 
+
+Ji
+
+
+
+S; q(t), M (t)
+
+> i
+
+
+
+= Ebω∼q(t), ξ 
+
+h
+
+ui
+
+
+
+S, M (t) 
+
+> i
+
+; bω−i; ξ
+
+i 
+
+. (8) Conditional on the generated candidate, the focal memory, and the anchor distribution, 
+
+E
+
+h b∆(t) 
+
+> i,c
+
+| eS(t) 
+
+> i,c
+
+, M (t) 
+
+> i
+
+, q (t)i
+
+= Ji
+
+ eS(t) 
+
+> i,c
+
+; q(t), M (t)
+
+> i
+
+
+
+− Ji
+
+
+
+S(t) 
+
+> i
+
+; q(t), M (t)
+
+> i
+
+
+
+.
+
+Thus, for any fixed candidate, the estimator is unbiased for its candidate–incumbent payoff difference under the specified anchor distribution. The matched opponent snapshot, focal memory, and environmental randomness do not 5Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Figure 3: First-price auction results. (a) OASE maintains a low equilibrium distance over 15 generations, while Reflexion drifts away from the symmetric BNE b∗(v) = 0 .75 v. (b) OASE reduces final equilibrium distance by 2.3×
+
+that of OASE.. (c) Using all runs without excluding any estimates, the mean empirical BR-probe gain is 0.0101 for OASE and 0.0486 for Reflexion. Shaded regions and error bars denote standard errors across runs. vary between the two policies within a paired comparison, although finite-sample uncertainty remains. Let 
+
+Xk = ui
+
+ eS(t) 
+
+> i,c
+
+, M (t) 
+
+> i
+
+; bωk, −i; ξk
+
+
+
+, Yk = ui
+
+
+
+S(t) 
+
+> i
+
+, M (t) 
+
+> i
+
+; bωk, −i; ξk
+
+
+
+. (9) For independent pairs, the variance is: 
+
+Var 
+
+ b∆(t)
+
+> i,c
+
+
+
+= 1
+
+m [Var( X) + Var( Y ) − 2 Cov( X, Y )] . (10) Relative to an unpaired estimator, common random numbers reduce variance whenever Cov( X, Y ) > 0. Positive covariance is expected when candidate and incumbent induce related behavior under the same market realization, and we examine this condition empirically. 
+
+Anchored Opponent Distribution. Let A(t) denote the archive of previous skill profiles: ω(0) , ω (1) , . . . , ω (t) . The default anchor distribution is uniform over the most recent W snapshots: 
+
+q(t) = Uniform 
+
+n 
+
+ω(max {0,t −W +1 }), . . . , ω (t)o 
+
+. (11) The archive and the distribution q(t) remain frozen throughout generation t. Consequently, all candidate–incumbent comparisons in that generation are conducted against the same historical reference distribution. Using a recent mixture reduces the dependence of the evaluation target on a single latest population profile. This construction is inspired by the historical-opponent principle of fictitious play and PSRO, but OASE neither constructs a restricted meta-game nor computes a meta-strategy. Because the editor proposes only a finite candidate set, the resulting procedure performs local response evaluation within an accessible textual neighborhood. 
+
+Gated and Diversity-Aware Replacement. A candidate must first satisfy a payoff-improvement requirement. Under the fixed-margin gate, the eligible set Q(t) 
+
+> i
+
+is 
+
+Q(t) 
+
+> i
+
+= {c ∈ { 1, . . . , C } : b∆(t) 
+
+> i,c
+
+≥ δ}. (12) If Q(t) 
+
+> i
+
+= ∅, the incumbent is retained. For each candidate, OASE computes textual novelty relative to the other incumbent libraries: 
+
+ν(t) 
+
+> i,c
+
+= 1
+
+N − 1
+
+X 
+
+> j̸=i
+
+h
+
+1 − cos 
+
+
+
+e( eS(t) 
+
+> i,c
+
+), e (S(t) 
+
+> j
+
+)
+
+i 
+
+, (13) where e(·) is the frozen sentence-transformers/all-MiniLM-L6-v2 text encoder. Among eligible candidates, OASE uses: 
+
+G(t) 
+
+> i,c
+
+= z
+
+ b∆(t)
+
+> i,c
+
+
+
++ λz 
+
+
+
+ν(t)
+
+> i,c
+
+
+
+(14) 6Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Figure 4: Cournot competition results based on the observed generation-level measurements. Panels (a) and (b) show the measured equilibrium-distance and strategy-coefficient trajectories, respectively. OASE ends at deq = 0 .065 ,compared with 0.077 for Reflexion. The strategy-coefficient trajectory ends at 0.887 for OASE and 0.521 for Reflexion, relative to the normalized equilibrium target of 1.0. Panel (c) shows the measured aggregate reductions of 0.044 and 
+
+0.028 , respectively, corresponding to a 1.6× larger drop for OASE. as an auxiliary ranking score and selects c∗ 
+
+> i
+
+= arg max G(t) 
+
+> i,c
+
+, c ∈ Q (t) 
+
+> i
+
+. For each scalar candidate {xi,c }Cc=1 , z(xi,c )
+
+denotes its standardization over all C candidates. If the candidate-wise standard deviation is zero, we set z(xi,c ) = 0 .The replacement rule is 
+
+S(t+1)  
+
+> i
+
+=
+
+( eS(t)
+
+> i,c ∗
+> i
+
+, Q(t)
+
+> i
+
+̸ = ∅,S(t) 
+
+> i
+
+, Q(t) 
+
+> i
+
+= ∅. (15) 
+
+Significance-Adjusted Gate. A significance-adjusted variant uses the empirical standard error of the paired differences. To account for uncertainty in the paired payoff estimate, define the per-seed difference: 
+
+Di,c,k = ui
+
+ eS(t) 
+
+> i,c
+
+, bωk, −i; ξk
+
+
+
+− ui
+
+
+
+S(t) 
+
+> i
+
+, bωk, −i; ξk
+
+
+
+. (16) Its empirical standard error is 
+
+[SE i,c = s(Di,c, 1, . . . , D i,c,m )
+
+√m , (17) where s(·) denotes the sample standard deviation. The candidate-specific threshold is 
+
+τi,c = max {δ + z1−α [SE i,c }, (18) where z1−α is the upper one-sided standard-normal critical value. The corresponding eligible set is 
+
+Q(t) 
+
+> i, sig
+
+= {c : b∆(t) 
+
+> i,c
+
+≥ δτ i,c }. (19) Eligible candidates are ranked using Eq. (14) . This gate is a normal-approximation heuristic for conservative replacement rather than a finite-sample significance guarantee. 
+
+# 4 Experiments 
+
+4.1 Experimental Design and Settings Environments. We evaluate OASE in two strategic environments with externally defined equilibrium benchmarks: a symmetric first-price private-value auction and private-cost Cournot competition [ 23 , 24 ]. The auction provides a closed-form bidding benchmark, whereas the Cournot game evaluates continuous actions conditioned on private cost. 7Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Methods and budgets. We compare OASE with a Reflexion-style baseline using the same frozen actor model, editor model, initial skill libraries, population size, and generation horizon. Each run contains N = 4 agents and lasts for 15 generations. OASE generates C = 4 candidate libraries per agent and generation and evaluates them using m = 64 
+
+paired conditions sampled from an anchor window of size W = 8 . Unless otherwise stated, OASE uses the fixed-margin gate with δ = 0 .005 .The Reflexion-style baseline updates each agent from raw trajectory feedback without paired candidate-incumbent evaluation or an acceptance gate. We report the number of editor calls and generated candidate revisions for both methods to make the proposal budget explicit. 
+
+Implementation details. The actor, editor, and memory writer all use the frozen Qwen3.5-397B-A17B model with separate role-specific prompts. The actor generates environment actions, the editor proposes bounded modifications to the skill library, and the memory writer summarizes each agent’s private trajectory after a generation. Textual novelty is computed using the frozen sentence-transformers/all-MiniLM-L6-v2 encoder. We use a skill capacity of 
+
+Ks = 5 , a memory horizon of H = 6 , and a diversity weight of λ = 0 .3. The actor is decoded greedily with temperature zero, and the editor uses temperature Tedit = 0 . Each generation contains 20 main-interaction episodes. 
+
+Metrics and statistical protocol. We report means and standard errors over R = 20 independent runs. OASE and Reflexion use matched initial libraries and matched environment seeds within each run. Equilibrium distance is evaluated on the fixed type grid X. For the auction, X is a valuation grid contained in [0 , 1] ; for Cournot competition, X is a cost grid contained in the support of FC . During this probe, memory and public context are fixed to a neutral context. Accordingly, we refer to the metric as contextual equilibrium distance. For the first-price auction, we additionally report the empirical response-probe gain 
+
+bEprobe = bJprobe − bJinc . (20) The probe is optimized using iterations and evaluated against the incumbent on the same held-out seeds. This metric is a resource-bounded deviation diagnostic rather than an estimate or certificate of the exact Nash gap. 
+
+4.2 First-Price Auction: Equilibrium Alignment 
+
+Figure 3 reports the first-price auction results. Both methods begin from the same initial skill profile. OASE remains within a relatively narrow neighborhood of the symmetric Bayesian benchmark b∗(v) = 0 .75 v, whereas the Reflexion-style baseline exhibits a larger increase in equilibrium distance over the evaluated generations. At the final generation, the mean distance is 0.057 for OASE and 0.133 for Reflexion. This result is best interpreted as equilibrium alignment over the evaluated horizon rather than as proof of asymptotic convergence. In particular, OASE primarily limits subsequent departures from a relatively well-aligned policy rather than driving the distance monotonically to zero. The empirical response probe provides a complementary resource-bounded diagnostic. Its mean gain is 0.0101 against the final OASE populations and 0.0486 against the Reflexion populations. Thus, under the same probe budget, the response policies found against OASE obtain smaller improvements over the incumbent. Because the probe is approximate and computationally bounded, these values do not measure exact exploitability or certify Nash equilibrium. 
+
+4.3 Cournot Competition: Continuous-Action Equilibrium Alignment 
+
+Cournot competition evaluates whether OASE extends from scalar auction bids to continuous quantity policies conditioned on private marginal cost. The symmetric interior Bayesian equilibrium is 
+
+q∗(c) = α∗ − β∗c, (21) where α∗ determines the equilibrium intercept and β∗ = 1 /(2 B) determines the sensitivity of equilibrium output to private cost. We evaluate finite-horizon alignment with this closed-form benchmark rather than claiming asymptotic convergence. Figure 4 shows that both methods reduce equilibrium distance over the evaluated generations. OASE changes from 
+
+0.109 to 0.065 , and Reflexion ends at 0.077 . The corresponding measured reductions are 0.044 and 0.028 , respectively. Thus, OASE exhibits a larger endpoint improvement and a lower final distance in the available runs. 8Evolving in the Agent Jungle via History-Informed Opponent Awareness 
+
+Update selectivity 
+
+Environment OASE Reflexion First-price edits / generation 0.78 3.98 Cournot edits / generation 0.73 4.00 
+
+Estimator variance 
+
+Diagnostic Paired CRN Unpaired Variance of b∆ 5.60 × 10 −4 1.11 × 10 −3
+
+Relative variance 50.3% 100% Table 1: Mechanism diagnostics. Accepted edits are population-level totals per generation for N = 4 agents. The variance comparison is computed for the first-price candidate–incumbent estimator. We additionally fit each induced quantity policy using bq(c) and report the slope ratio rβ = bβ/β ∗. Under this diagnostic, OASE reaches 0.887 and Reflexion reaches 0.521 , relative to the implemented target of one. This result indicates closer recovery of the reported coefficient, but should not be interpreted as verification of the complete Bayesian equilibrium unless both the intercept and slope are evaluated explicitly. 
+
+4.4 Mechanism Diagnostics Update selectivity. OASE accepts an average of 0.78 and 0.73 population-level edits per generation in the first-price and Cournot environments, respectively. The Reflexion-style baseline adopts 3.98 and 4.00 edits. Because the population contains four agents and each agent can adopt at most one revision per generation, the baseline updates nearly every agent at every generation, whereas OASE frequently retains the incumbent. This diagnostic confirms that OASE implements selective rather than unconditional replacement. It does not by itself establish that fewer updates cause lower equilibrium distance. 
+
+Variance of paired evaluation. In the first-price diagnostic, the variance of the paired candidate-incumbent estimator is 5.60 × 10 −4, compared with 1.11 × 10 −3 for the corresponding unpaired estimator. The paired variance is therefore 
+
+50 .3% of the unpaired variance. This supports the positive-covariance condition underlying common-random-number evaluation in this environment. 
+
+# 5 Discussion 
+
+The experiments indicate that OASE differs from trajectory-driven revision primarily in how proposed edits are evaluated and retained. The actor and editor can still produce noisy textual revisions, but OASE treats each revision as a hypothesis rather than as evidence of improvement. The empirical results are consistent with two properties of this design: fewer population updates and a lower-variance paired comparison. These diagnostics support a selective-update interpretation, although the present experiments do not isolate every OASE component. 
+
+5.1 Selective Updating and Lower Update Churn 
+
+OASE accepts substantially fewer revisions than the Reflexion-style baseline. This behavior follows directly from the eligibility gate: when no candidate exceeds the payoff margin, the incumbent is retained. Such retention is potentially valuable near a useful strategic rule, because editor-generated changes need not be beneficial. However, low update frequency is not itself evidence of successful learning; an overly conservative gate could simply freeze the population. In the present experiments, lower churn occurs together with lower final equilibrium distance, a pattern consistent with the hypothesis that filtering unsupported revisions limits harmful strategy drift. A direct causal attribution would require a controlled comparison against OASE without the acceptance gate. 
+
+5.2 Paired Evaluation and Estimation Noise 
+
+By evaluating candidate and incumbent libraries under the same random seed and anchored opponent snapshot, OASE estimates their payoff difference using common random numbers. In the first-price diagnostic, the paired estimator has approximately half the variance of the corresponding unpaired estimator. 9Evolving in the Agent Jungle via History-Informed Opponent Awareness This result supports the proposed estimator-level mechanism: shared conditions provide a cleaner estimate of the local candidate-incumbent difference when their outcomes are positively correlated. It does not, by itself, establish that variance reduction causes the final equilibrium-distance improvement. Such a claim would require training an otherwise identical OASE variant using unpaired evaluation. 
+
+# 6 Conclusion 
+
+We introduced OASE, a framework for evaluating and selectively adopting skill revisions in co-evolving LLM popu-lations. OASE compares candidate and incumbent libraries under matched environmental randomness and anchored opponent snapshots, and retains the incumbent when no candidate provides sufficient payoff evidence. Across first-price auctions and private-cost Cournot competition, OASE obtains lower final equilibrium distance than a Reflexion-style baseline while accepting substantially fewer revisions. Paired common-random-number evaluation also yields lower estimator variance in the first-price diagnostic. These findings suggest that controlled candidate–incumbent evaluation can make textual strategy adaptation more selective and statistically reliable. 
+
+# Acknowledgment 
+
+This work was supported in part by the National Key Technologies Research and Development Program (2025YFG0202100; 2025YFG0202600). The authors have no competing interests to declare that are relevant to the content of this article. 
+
+# References 
+
+[1] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. ReAct: Synergizing reasoning and acting in language models, 2022. arXiv:2210.03629. [2] Joon Sung Park, Joseph O’Brien, Carrie Jun Cai, Meredith Ringel Morris, Percy Liang, and Michael S Bernstein. Generative agents: Interactive simulacra of human behavior. In Proceedings of the 36th annual acm symposium on user interface software and technology , pages 1–22, 2023. [3] Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. Reflexion: language agents with verbal reinforcement learning. In Proceedings of the 37th International Conference on Neural Information Processing Systems , pages 8634–8652, 2023. [4] Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, et al. SELF-REFINE: iterative refinement with self-feedback. In 
+
+Proceedings of the 37th International Conference on Neural Information Processing Systems , pages 46534–46594, 2023. [5] Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, and Anima Anandkumar. Voyager: An open-ended embodied agent with large language models, 2023. arXiv:2305.16291. [6] Qingyan Guo, Rui Wang, Junliang Guo, Bei Li, Kaitao Song, Xu Tan, Guoqing Liu, Jiang Bian, and Yujiu Yang. Connecting large language models with evolutionary algorithms yields powerful prompt optimizers. In 
+
+International Conference on Learning Representations , volume 2024, pages 34133–34156, 2024. [7] Chrisantha Fernando, Dylan Banarse, Henryk Michalewski, Simon Osindero, and Tim Rocktäschel. Promptbreeder: Self-referential self-improvement via prompt evolution, 2023. arXiv:2309.16797. [8] Yecheng Jason Ma, William Liang, Guanzhi Wang, De-An Huang, Osbert Bastani, Dinesh Jayaraman, Yuke Zhu, Jim Fan, et al. Eureka: Human-level reward design via coding large language models. In International conference on learning Representations , volume 2024, pages 26516–26560, 2024. [9] Georgios Tziafas and Hamidreza Kasaei. Lifelong robot library learning: Bootstrapping composable and generalizable skills for embodied control with language models. In 2024 IEEE International Conference on Robotics and Automation , pages 515–522. IEEE, 2024. [10] Marc Lanctot, Vinicius Zambaldi, Audr ¯unas Gruslys, Angeliki Lazaridou, Karl Tuyls, Julien Pérolat, David Silver, and Thore Graepel. A unified game-theoretic approach to multiagent reinforcement learning. In Proceedings of the 31st International Conference on Neural Information Processing Systems , pages 4193–4206, 2017. [11] David Balduzzi, Marta Garnelo, Yoram Bachrach, Wojciech Czarnecki, Julien Perolat, Max Jaderberg, and Thore Graepel. Open-ended learning in symmetric zero-sum games. In International Conference on Machine Learning ,pages 434–443. PMLR, 2019. 10 Evolving in the Agent Jungle via History-Informed Opponent Awareness [12] Marvin Minsky. Steps toward artificial intelligence. Proceedings of the IRE , 49(1):8–30, 1961. [13] Jakob Foerster, Gregory Farquhar, Triantafyllos Afouras, Nantas Nardelli, and Shimon Whiteson. Counterfactual multi-agent policy gradients. In Proceedings of the AAAI conference on artificial intelligence , volume 32, 2018. [14] Chengrun Yang, Xuezhi Wang, Yifeng Lu, Hanxiao Liu, Quoc V Le, Denny Zhou, and Xinyun Chen. Large language models as optimizers. In International Conference on Learning Representations , volume 2024, pages 12028–12068, 2024. [15] David Balduzzi, Sebastien Racaniere, James Martens, Jakob Foerster, Karl Tuyls, and Thore Graepel. The mechanics of n-player differentiable games. In International Conference on Machine Learning , pages 354–363. PMLR, 2018. [16] Alistair Letcher, Jakob Foerster, David Balduzzi, Tim Rocktäschel, and Shimon Whiteson. Stable opponent shaping in differentiable games. In International Conference on Learning Representations , 2018. [17] Florian Schäfer and Anima Anandkumar. Competitive gradient descent. In Advances in Neural Information Processing Systems , volume 32, 2019. [18] Julia Robinson. An iterative method of solving a game. Annals of mathematics , 54(2):296–301, 1951. [19] Stephen McAleer, John Lanier, Roy Fox, and Pierre Baldi. Pipeline PSRO: a scalable approach for finding approximate nash equilibria in large games. In Proceedings of the 34th International Conference on Neural Information Processing Systems , pages 20238–20248, 2020. [20] Stephen McAleer, John Lanier, Kevin A Wang, Pierre Baldi, and Roy Fox. XDO: a double oracle algorithm for extensive-form games. In Proceedings of the 35th International Conference on Neural Information Processing Systems , pages 23128–23139, 2021. [21] Ariyan Bighashdel, Yongzhao Wang, Stephen McAleer, Rahul Savani, and Frans A. Oliehoek. Policy space response oracles: A survey, 2024. arXiv:2403.02227. [22] Caoyun Fan, Jindou Chen, Yaohui Jin, and Hao He. Can large language models serve as rational players in game theory? a systematic analysis. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, pages 17960–17967, 2024. [23] Vijay Krishna. Auction Theory . Academic Press, 2 edition, 2009. [24] Sjaak Hurkens. Bayesian nash equilibrium in “linear” cournot models with private information about costs. 
+
+International Journal of Economic Theory , 10(2):203–217, 2014. 
+
+# A Strategy Environments 
+
+First-price auction. We consider a symmetric first-price sealed-bid auction with N = 4 risk-neutral bidders. Each bidder i independently observes a private valuation 
+
+vi
+
+> i.i.d.
+
+∼ Uniform[0 , 1] . (22) Bidder i submits a bid bi from the feasible set [0 , v i]. The bidder with the highest bid wins and pays its submitted bid; ties are broken uniformly at random among the highest bidders. The realized payoff is 
+
+ui = ( vi − bi) 1{i wins }. (23) Under independent private values, risk neutrality, and four symmetric bidders, the symmetric Bayesian Nash equilibrium bidding function is 
+
+b∗(v) = N − 1
+
+N v = 34 v. (24) 
+
+Private-cost Cournot competition. We consider N = 4 risk-neutral firms that simultaneously choose nonnegative quantities qi. Total output is Q = PNj=1 qj , and the inverse demand function is 
+
+P (Q) = A − BQ, A > 0, B > 0. (25) Firm i privately observes its constant marginal cost ci, where the costs are independently drawn from a common distribution FC with mean 
+
+μc = E[ci]. (26) Its profit is 
+
+ui = ( A − BQ − ci) qi. (27) 11 Evolving in the Agent Jungle via History-Informed Opponent Awareness For an interior symmetric Bayesian Nash equilibrium, the type-dependent quantity rule is shown in Eq. 21, where 
+
+β∗ = 12B , α∗ = A + N −12 μc
+
+B(N + 1) . (28) For N = 4 , these coefficients reduce to 
+
+β∗ = 12B , α∗ = A + 32 μc
+
+5B . (29) If the affine expression becomes negative for some cost types, the nonnegative-quantity benchmark is 
+
+q∗(c) = [ α∗ − β∗c]+ = max {0, α ∗ − β∗c} . (30) 12

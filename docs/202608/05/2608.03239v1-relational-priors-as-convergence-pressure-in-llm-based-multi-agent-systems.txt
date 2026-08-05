@@ -1,0 +1,905 @@
+Title: Relational Priors as Convergence Pressure in LLM-Based Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2608.03239v1
+
+Published Time: Wed, 05 Aug 2026 00:46:06 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+## Relational Priors as Convergence Pressure in LLM-Based Multi-Agent Systems 
+
+Ming Shen ♡*, Chao Shang ♢, Sadat Shahriar ♢, Devang Kulshreshtha ♢,Yi Zhang ♢, Sandesh Swamy ♢, Yanjun Qi ♢♡Arizona State University ♢Amazon Web Services 
+
+Abstract 
+
+Large language model-based multi-agent sys-tems (LLM-MAS) are designed through roles, debate protocols, and aggregation rules. These choices create implicit social expectations: agents may be expected to trust, challenge, de-fer to, or collaborate with peers. We study the effects of making inter-agent relation semantics explicit. We use a minimal signed-network for-mulation of relational priors and inject natural-language renderings into agent system prompts while holding the task protocol fixed. Across a commons-governance simulation and multi-agent debate, relational priors primarily act as convergence pressure : increasing relational positivity tends to make agents coordinate or agree more readily. This pressure can help when utility rewards behavioral alignment, as in sustainable resource governance and subjec-tive consensus. It does not, however, reliably improve accuracy. In objective QA debates, higher positivity can increase agreement even when correctness-conditioned agreement does not improve and may decline in some settings. Effects vary by model backbone, relation type, and topology; explicit neutrality is not equiva-lent to omitting relational framing. We argue that relational priors should not be a default add-on for LLM-MAS. Their safer use is diagnostic and task-specific: compare against a no-prior baseline, monitor correctness-conditioned met-rics when truth matters, and omit the relational layer when validation does not justify it. 
+
+1 Introduction 
+
+Large language model-based multi-agent systems (LLM-MAS) are typically specified through roles, interaction protocols, memory, tools, and aggrega-tion rules (Qian et al., 2024; Jimenez et al., 2024; Rosset et al., 2024; Wei et al., 2025; Piatti et al., 2024; Zhu et al., 2025; Li et al., 2023; Du et al., 2024; Li et al., 2024b; Hong et al., 2024; Park 
+
+> *Work done during an internship at Amazon.
+
+et al., 2023; Rezazadeh et al., 2025). These design choices are often presented as procedural: who speaks, who critiques, who votes, and how final de-cisions are produced. Yet they also carry relational meaning. A reviewer is expected to challenge a solver, a manager to coordinate workers, and col-laborators to interpret one another charitably. Thus, even when no relation is explicitly named, an LLM-MAS can still induce expectations of trust, skepti-cism, authority, or affinity (Ramchurn et al., 2004; de Jong et al., 2016; Dreu and Weingart, 2003). This paper studies those expectations as an ex-plicit object of intervention. We ask: what changes when inter-agent relation semantics are represented directly, while the underlying task protocol is held fixed? We operationalize relations as signed pri-ors over pairs of agents, injected into each agent’s system prompt. We instantiate these priors with three relation types: Attitude captures affective orientation, Trust captures epistemic credibility, and Influence captures mutual responsiveness to peers’ opinions and proposals. The relation net-work determines which pairs receive explicit rela-tional context; the task protocol determines what agents observe, when they communicate, and how their outputs are aggregated. Our goal is not to model human relationships with full ecological re-alism. Instead, we use a minimal signed-network formulation to isolate first-order effects of making relation semantics explicit. The qualitative example in Fig. 1 comes from GovSim (Piatti et al., 2024), a commons-governance simulation in which agents repeatedly decide how much to harvest from a renewable shared resource. It illustrates how first-month ex-traction can differ under relational priors before any interaction history has accumulated. The task, agents, and decision protocol are identical, but mixed positive/negative Attitude ties are accom-panied by unsustainable extraction, whereas a fully positive network is accompanied by an equal, sus-1arXiv:2608.03239v1 [cs.CL] 4 Aug 2026 tainable split. We use this example only as mo-tivation, not as evidence of an internal reasoning mechanism. The paper’s main evidence comes from the systematic sweeps over positivity, relation type, topology, and backbone in the later figures. We use convergence pressure to describe how strongly a system tends toward coordination or agreement. Within the relational-prior sweep, this tendency generally increases with positivity. Whether this helps depends on the task: conver-gence can support objectives that reward coordi-nated behavior, but it can also increase agreement without improving correctness. We therefore dis-tinguish changes in group behavior from improve-ments in task utility. We evaluate this framing in two task families. The first is GovSim, where sustained cooperative restraint keeps the shared resource from collaps-ing. The second is multi-agent debate. We consider subjective questions, where consensus can itself be a target outcome, and objective QA, where con-sensus is useful only when the agreed answer is correct. This contrast lets us separate increased agreement from improved task utility. The endpoint cases are useful but limited. Afully positive network resembles a cooperative framing, while a fully negative network resembles a competitive or antagonistic one. Our main test is therefore whether relational priors still matter in richer signed networks, where positive and negative ties are mixed. We evaluate this through structured sweeps over positivity, relation type, sparse topol-ogy, and model backbone. We separately compare explicitly neutral relation statements with omitting relational framing. The all-positive and all-negative cases are treated as boundary conditions, not as standalone evidence for adding a relational layer. Throughout this paper, relational priors are fixed, symmetric, and visible to every agent. Our con-clusions therefore concern common-knowledge prompt interventions, not private, asymmetric, learned, or evolving relations. Because the rela-tions are symmetric, Influence denotes mutual re-sponsiveness among peers, not a directed authority relation. Relation topology specifies which pairs receive relational context, not who can communi-cate. Across experiments, the main pattern is consis-tent with the convergence-pressure view. The Gov-Sim positivity sweeps in Fig. 2 and App. Fig. 11 show that increasing relational positivity usually makes sustainable coordination easier. The debate consensus results in Fig. 5 show the analogous ef-fect for subjective agreement. For objective QA, however, the accuracy and Consensus Correctness Rate results in Figs. 6 and 7 show that agreement and correctness-conditioned agreement can diverge. The effects are also not universal across models or relation types. Attitude is comparatively stable, 
+
+Influence is more volatile, and explicit neutrality behaves differently from omitting relational fram-ing altogether. This paper makes three contributions. First, we formulate explicit relational priors as signed relation networks that can be varied indepen-dently from the communication protocol. Second, we empirically characterize relational priors as convergence-pressure interventions across coopera-tive governance and debate, separating within-prior trends from improvements over a no-prior baseline. Third, we derive conservative design guidance: use no-prior prompting as the engineering default for accuracy-centric tasks, treat explicit neutrality as an intervention rather than a harmless annotation, and validate relational priors with task-appropriate metrics before deployment. 
+
+2 Related Work 
+
+LLM-based multi-agent systems. LLM-MAS decompose tasks across interacting agents and are commonly engineered through role specialization, communication protocols, tool use, memory, rout-ing, and aggregation (Guo et al., 2024; Li et al., 2024a; Park et al., 2023; Li et al., 2023; Hong et al., 2024; Chen et al., 2024; Qian et al., 2024; Zhang et al., 2025b; Du et al., 2024; Liang et al., 2024; Li et al., 2024b; Madaan et al., 2023; Yue et al., 2025; Zhang et al., 2025a; Wang et al., 2025; Shinn et al., 2023; Rezazadeh et al., 2025; Xu et al., 2025; Shen et al., 2023; Schick et al., 2023; Yao et al., 2023; Zhu et al., 2025). These design choices are usually evaluated as procedural improvements: whether a debate protocol raises accuracy, whether sparse communication reduces cost, or whether role de-composition improves task completion. We instead ask how the relational semantics induced by these procedures affect group behavior. A debate pro-tocol, for example, does not merely specify turn order; it can also imply skepticism, deference, or adversarial scrutiny among agents. 
+
+LLM agent societies and social simulation. Aparallel line of work studies LLM agents as socially situated actors in simulated environments, includ-2John                 
+
+> Jack Kate
+> … But in the first month, since we don’t know Jack’s move yet, I might try to coordinate with
+> Kate for a split that is fair to us but tries to minimize Jack’s gain. …
+> …Decision :Take 22 tons this month. This supports my positive relationship with Kate, shows
+> Jack that I’m not letting him take over, and keeps the catch at a sustainable level.
+> … John, being friendly with me, may be open to cooperative strategies (like sustainable fishing).
+> Jack, being hostile, may not cooperate, perhaps even purposely overfish to sabotage others. …
+> …Decision :Take slightly more than 1/3 of the sustainable catch , since Jack is likely to
+> overfish, and I don’t want to be exploited.
+> … They won’t cooperate with me and may try to maximize their own gains at my expense. -I
+> dislike them both and want to maximize my own profit, not caring if I hurt them. …
+> …Decision : Given the antagonism and likely competition to deplete the resource before the
+> others do, I would catch as much as allowed.
+> John
+> Jack Kate
+> … We all ca re about ea ch other, so we’re likely to cooperate, avoid overfishing, and try to
+> ma ximize the group’s total benefit over time. …
+> …Decision : Sinc e a ll our attitudes are ma ximally positive (we ca re a bout ea ch other), the
+> fa ir, c oopera tive solution is to split the sustainable yield equally .
+> … Because all attitudes are ma xima lly positive, we trust ea ch other, value group succ ess,
+> and are likely to cooperate. …
+> …Decision : I (Kate) should c atch 16.67 tons this month, trusting that John a nd Jac k will
+> do the sa me, ma inta ining the f ish stoc k and ma ximizing long -term gain for all .
+> … This mea ns a ll three of us are highly c oopera tive and wa nt the group to thrive, not just
+> ourselves. …
+> …Decision : I’ll propose and ta ke 16.67 tons this month to ensure susta ina bility and
+> fa irness .
+
+Figure 1: Identical task and protocol, different relational priors. In these illustrative first-month GovSim runs, mixed positive/negative Attitude priors are accompanied by extraction choices that push the group toward collapse (left), whereas fully positive priors are accompanied by an equal, sustainable split (right). This example motivates the systematic comparisons below; it is not used to identify an internal reasoning mechanism. 
+
+ing generative-agent worlds, social simulations, re-peated games, and commons-governance settings (Park et al., 2023; Gao et al., 2023b,a; Hua et al., 2023; Liu et al., 2025; Zhou et al., 2024; Piatti et al., 2024; Xie et al., 2024; Sakamoto et al., 2025; Akata et al., 2023; Fontana et al., 2025; Song et al., 2024; Ashery et al., 2025; Ren et al., 2024; Lan et al., 2024; Curvo, 2025; Schneider et al., 2025). These studies motivate treating LLM agents as par-ticipants in social processes rather than as isolated predictors. However, many such systems induce relations through scenario descriptions, histories, or role assignments. We instead make relations an explicit experimental variable: a signed relation network is specified independently from the task protocol, allowing relation type, sign, and topology to be varied while the rest of the system is held fixed. 
+
+Social relations in MAS and social science. Re-search in classical multi-agent systems and so-cial science has long emphasized that agents are embedded in relations of trust, conflict, depen-dence, norms, and power (Wooldridge and Jen-nings, 1995; Castelfranchi, 1990; Ramchurn et al., 2004; Sabater-Mir and Sierra, 2005; Shoham and Tennenholtz, 1995; Kraus, 1997; Jennings et al., 2001; Sichman et al., 1997; de Jong et al., 2016; Dreu and Weingart, 2003). Our three relation types are intentionally minimal abstractions of this broader space: Attitude captures affective orienta-tion (Heider, 1946; Cartwright and Harary, 1956), 
+
+Trust captures epistemic credibility (Rotter, 1971), and Influence captures mutual responsiveness to peers’ opinions and proposals (French, 1956). We do not claim that these prompt-level priors are psy-chological measurements. They are controlled se-mantic interventions designed to test how different relational meanings perturb LLM-MAS dynamics. 
+
+Agreement pressure, sycophancy, and debate failures. Recent work on sycophancy and multi-agent debate has shown that language models can over-agree with users or peer agents, and that peer agreement pressure can degrade debate outcomes (Sharma et al., 2024; Yao et al., 2025; Wynn et al., 2025). This literature is closely related to our ob-jective QA results: both highlight that agreement can be dissociated from correctness. We isolate one source of agreement pressure, a signed pairwise re-lation network, and examine it across relation types, positivity levels, topologies, model backbones, and task objectives. This framing makes it possible to distinguish a change in convergence dynamics from an engineering improvement over the no-prior baseline. 
+
+3 Method 
+
+3.1 Relational Priors as Protocol-Preserving Interventions 
+
+Let A = {A1, . . . , A n} denote a fixed set of n
+
+LLM agents interacting under a task-specific pro-tocol P. The protocol determines what each agent observes, when messages are exchanged, and how final outputs are produced. We intervene on how agents interpret one another while keeping P un-changed. At interaction step t, agent Ai produces 
+
+y(t)
+
+i = LLM i
+
+
+
+x, h (t)
+
+i , Πi(r, G R)
+
+
+
+, (1) where x is the task input, h(t)
+
+i is the task history available to Ai under P, r is a relation type, GR is a relation network, and Πi(r, G R) is the relational prior inserted into Ai’s system prompt. Within each matched experimental comparison, we hold the task input x, interaction protocol P, history-visibility rule, and decoding settings fixed, varying only Πi. The realized dialogue may vary and pro-vides one pathway through which the relational prompt can affect later decisions. Relational priors are therefore protocol-preserving : they alter the relational context without changing who can speak, which messages 3are visible, or how final outputs are aggregated. This isolates a prompt-level variable rather than introducing a new debate or governance protocol. 
+
+3.2 Signed Relation Networks 
+
+A relation network is an undirected graph GR =(A, E R) with a sign assignment 
+
+s : ER → {− 1, +1 }. (2) For an edge (i, j ) ∈ ER, sij = +1 denotes the maximally positive prior for the chosen relation type, while sij = −1 denotes the maximally neg-ative prior. Non-edges correspond to omitted re-lational priors. The relation network is concep-tually distinct from the communication graph in-duced by P: changing GR changes which pairs receive explicit relational context, not the underly-ing message-passing protocol. We study three relation types. Attitude captures affective orientation (Heider, 1946), Trust captures epistemic credibility (Rotter, 1971), and Influence 
+
+captures mutual responsiveness to peers’ opinions and proposals (French, 1956). The relation type determines what a positive or negative sign means; the topology ER determines which pairs are ex-plicitly related. When topology is varied, we use representative sparse structures such as chain, star, and tree graphs, illustrated in App. Fig. 10. We summarize the overall valence of a relation network by its positivity 
+
+λ = |{ (i, j ) ∈ ER : sij = +1 }| |ER| . (3) Thus, λ = 0 is a fully negative explicit relation net-work, and λ = 1 is a fully positive explicit relation network. For intermediate values, we enumerate all sign assignments consistent with the chosen λ,so the reported effect is not driven by one arbitrary placement of positive or negative ties. We also include E XPLICIT -N EUTRAL as a sep-arate control outside the signed λ-sweep. For this control, every stated edge is assigned sij = 0 , and 
+
+λ is not defined. In N O-P RIOR , the relational block is omitted; in E XPLICIT -N EUTRAL , the system prompt explicitly states that every relation is neu-tral. This distinction allows us to test whether ap-parently neutral social framing is itself an interven-tion. The present experiments study fixed, symmetric relation networks that are revealed to every agent. The relations are therefore mutual and common knowledge. In particular, Influence denotes mutual prompt-level influence among peers, not a directed authority relation. Private, asymmetric, learned, and time-varying relations are outside the present scope. 
+
+3.3 Prompt Operationalization 
+
+We implement Πi(r, G R) by adding a standardized relational block to each agent’s system prompt. The block contains the agent’s task role, a short defi-nition of the selected relation type, and a natural-language rendering of the relation network. In the main experiments, the wording template is fixed across conditions except for relation type and edge values. The same signed graph can therefore be instantiated as Attitude , Trust , or Influence while holding the rest of the task prompt constant. A con-crete GovSim prompt instantiating this relational block is shown in App. Fig. 9. Because the interven-tion is expressed in natural language, we later test the robustness of one representative positivity end-point contrast to a meaning-preserving paraphrase and a reordering of the relation statements. This common-knowledge setup is a simplify-ing design choice for identification, not a claim about realism. It avoids confounding relation ef-fects with unequal access to social information and allows agents to reason about higher-order struc-ture. We treat Attitude , Trust , and Influence as prompt-level semantic priors, not as validated psy-chological measurements. 
+
+4 Experiments 
+
+We instantiate relational priors in two task fami-lies: GovSim for repeated commons governance and multi-agent debate for subjective and objec-tive questions. The design separates three compar-isons. First, the within-prior sweep over λ asks whether increasing relational positivity changes group dynamics. Second, comparison with N O-PRIOR asks whether adding an explicit relational block improves the target metric relative to omit-ting relational framing. Third, comparison with EXPLICIT -N EUTRAL asks whether stating neutral-ity is equivalent to saying nothing. We report all three comparisons because a strong within-prior trend does not imply that relational priors should be deployed by default. Relation positivity is the primary manipulation throughout. We vary relation type and model back-bone in both task families. Relation topology varies 40% 33% 67% 100%          
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> λ
+> Overall ( S)
+> GPT-4.1-mini
+> Attitude
+> Trust
+> Influence
+> 0% 33% 67% 100%
+> λ
+> GPT-4.1
+> Attitude
+> Trust
+> Influence
+> 0% 33% 67% 100%
+> λ
+> Qwen-3-32B
+> Attitude
+> Trust
+> Influence
+> 0% 33% 67% 100%
+> λ
+> LLaMA-3.3-70B
+> Attitude
+> Trust
+> Influence
+
+Figure 2: Three-agent GovSim sustainability-oriented overall score S (higher is better) across model backbones, relation types, and values of λ.
+
+only in GovSim, where larger teams allow meaning-ful sparse relation structures; debate uses complete connectivity to isolate how relational priors affect deliberative convergence. For every intermediate λ,we enumerate all sign assignments consistent with that positivity, so results are not tied to a single placement of positive or negative edges. 
+
+Statistical uncertainty. For selected λ = 0 and 
+
+λ = 1 endpoint contrasts, we report nonparamet-ric 95% bootstrap percentile confidence intervals (CIs). The sampling unit is defined separately for GovSim and debate below. Backbones, relation types, topologies, and sign assignments are treated as fixed experimental conditions rather than inde-pendent observations. Full procedures and intervals are reported in Apps. A.3 and B.3. 
+
+4.1 GovSim 
+
+We use the Governance of the Commons Simu-lation (GovSim) (Piatti et al., 2024) to study re-peated cooperation under shared-resource pressure. Agents act as fishermen who repeatedly decide how much to harvest from a renewable common resource, alternating between simultaneous harvest decisions and free-form discussion. Episodes last at most 12 months and terminate early if the resource collapses. GovSim is therefore our coordination-heavy setting: strong performance requires agents to align on sustainable restraint rather than maxi-mize immediate individual extraction. Full envi-ronment dynamics are given in App. A.1. We evaluate both three-agent and five-agent Gov-Sim settings. We use homogeneous teams to isolate how relational priors affect cooperation without confounding the intervention with capability asym-metries that might independently create leadership, deference, or exploitation dynamics. Teams are instantiated separately with GPT-4.1-mini, GPT-4.1, Qwen-3-32B, and LLaMA-3.3-70B-Instruct. The relation network is complete in the three-agent setting; in the five-agent setting, we additionally consider chain, star, and tree topologies. We set temperature to 0.8 and evaluate each fixed model– relation–topology–sign-assignment condition over five complete runs. For the three-agent endpoint statistical uncer-tainty analysis, the complete run is the resampling unit: all agents and months remain together, the five runs are resampled separately at λ = 0 and 
+
+λ = 1 , and S is recomputed in every resample. Full details are given in App. A.3. We report the five GovSim metrics from the orig-inal benchmark: survival time, survival rate, to-tal gain, inequality, and over-usage. For compact comparison across conditions, we use a normal-ized weighted aggregate score S, with higher val-ues indicating better sustainability-oriented perfor-mance. Exact definitions and weights are provided in App. A.2. 
+
+4.2 Debate 
+
+We next study multi-agent debate, where relational priors can change both whether agents converge and whether that convergence is useful. Each de-bate contains three answer rounds: agents first an-swer independently, then complete two revision rounds in which they observe the other agents’ re-sponses from the preceding round and may revise their own answers, following the same AutoGen-style debate protocol (Wu et al., 2024). This setting lets us separate subjective consensus from objective correctness. Full debate dynamics are described in App. B.1. Unlike GovSim, debate uses heterogeneous teams, since deliberation is most informative when agents begin with different answer tendencies and confidence profiles. We focus on three-agent de-bates for tractability while preserving non-trivial 5Attitude Trust Influence               
+
+> −40
+> −20
+> 0
+> 20
+> 40
+> ∆Sλ=1
+> GPT-4.1-mini (91.0)
+> Attitude Trust Influence
+> GPT-4.1 (92.6)
+> Attitude Trust Influence
+> Qwen-3-32B (66.9)
+> Attitude Trust Influence
+> LLaMA-3.3-70B (24.0)
+> Attitude Trust Influence
+> −40
+> −20
+> 0
+> 20
+> 40
+> ∆Sλ=1
+> GPT-4.1-mini (96.4)
+> Chain
+> Star
+> Tree
+> Attitude Trust Influence
+> GPT-4.1 (97.9)
+> Chain
+> Star
+> Tree
+> Attitude Trust Influence
+> Qwen-3-32B (71.2)
+> Chain
+> Star
+> Tree
+> Attitude Trust Influence
+> LLaMA-3.3-70B (40.1)
+> Chain
+> Star
+> Tree
+> (a) Three-agent (b) Five-agent
+
+Figure 3: Change in GovSim overall score S under fully positive priors ( λ = 1 ) relative to N O-P RIOR , by model backbone, relation type, topology, and team size. N O-P RIOR scores are shown in parentheses. 
+
+majority dynamics. Each revision round exposes every agent to the other agents’ previous-round re-sponses, so the interaction structure is complete. We also use a complete relation network. We evaluate one GPT group (GPT-4.1-nano, GPT-4.1-mini, and GPT-4o-mini) and one open-weight group (LLaMA-3.3-70B-Instruct, Qwen-3-32B, and Mixtral-8x22B-Instruct-v0.1), using greedy de-coding throughout. For subjective debate, we use OpinionQA (San-turkar et al., 2023) and report final-round consensus rate (CR) among questions that begin with disagree-ment. For objective debate, we use 1,000 questions from MMLU-Pro (Wang et al., 2024) and all ques-tions from GPQA-Diamond (Rein et al., 2024). On these objective datasets, we report final-round CR, majority-vote accuracy (ACC) over final answers, and Consensus Correctness Rate (CCR). For objec-tive CR and CCR, a question is eligible when the agents initially disagree. CCR is the accuracy of the final consensus within this eligible set. Formal definitions are given in App. B.2. For the selected debate endpoint statistical un-certainty analysis, the complete question trajectory is the resampling unit. Each resample keeps all agents and rounds for a question together, uses the same question indices at λ = 0 and λ = 1 , and recomputes the condition-specific CR and CCR de-nominators. Full procedures and endpoint results are given in App. B.3. 
+
+5 Results and Analysis 
+
+5.1 GovSim: Positivity Supports Sustainable Coordination 
+
+GovSim tests how relational priors affect coor-dination. The task rewards sustainable restraint over repeated rounds of extraction from a shared resource. In the three-agent setting, the overall score S typically rises with λ across backbones and relation types (Fig. 2); the same pattern ap-pears in the five-agent setting (App. Fig. 11). More positive relation networks tend to achieve higher sustainability-oriented aggregate scores, whereas predominantly negative networks tend to yield lower scores. Within the explicit relational-prior sweep, higher positivity therefore generally sup-ports more sustainable coordination. For the complete three-agent graph, 10 of the 12 all-positive minus all-negative contrasts have 95% run-level bootstrap CIs entirely above zero. The exceptions are Qwen-3-32B under Attitude 
+
+(∆S = +24 .7, 95% CI: [−13 .7, +63 .4] ) and In-fluence (∆S = −21 .1, 95% CI: [−52 .3, +15 .8] ). These intervals concern only the λ = 1 versus 
+
+λ = 0 endpoint contrast; they do not compare either endpoint with N O-P RIOR . Full results are reported in App. A.3. This trend should not be interpreted as a univer-sal improvement over N O-P RIOR . The comparison with N O-P RIOR in Fig. 3 is strongly backbone-dependent. GPT-4.1 is comparatively insensitive: in the five-agent setting, its fully positive ∆S re-6GPT-4.1-m GPT-4.1 Qwen LLaMA          
+
+> 0
+> 25
+> 50
+> 75
+> 100
+> Overall  (S)
+> Attitude Trust Influence NO-P RIOR
+> Figure 4: Three-agent GovSim overall score Sunder EXPLICIT -N EUTRAL , by model backbone and relation type. Dashed lines show the corresponding NO-P RIOR base-lines. Model labels shorten GPT-4.1-mini, Qwen-3-32B, and LLaMA-3.3-70B-Instruct to “GPT-4.1-m”, “Qwen”, and “LLaMA”, respectively.
+
+mains close to zero across relation types and topolo-gies. LLaMA-3.3-70B-Instruct is much more sensi-tive to relational prompting, showing large positive gains in many configurations, including the largest observed gain under Influence with chain topol-ogy. GPT-4.1-mini and Qwen-3-32B show mixed effects, including adverse outcomes under some 
+
+Trust and Influence conditions. The practical con-clusion is therefore conservative: relational priors may help commons-governance agents coordinate, but they must be validated per backbone and should not replace N O-P RIOR by default. Relation type and topology further moderate the effect. In Fig. 3, Attitude is the most stable rela-tion type in GovSim: it most consistently moves teams toward cooperative outcomes without ex-treme degradation. Trust is less predictable, and 
+
+Influence has the highest variance, producing both large gains and large drops. When topology is varied in the five-agent setting, chain is the most volatile sparse structure, while star and tree are more moderate. Because topology changes only which pairs receive explicit relational priors, not how messages are routed, we interpret this variabil-ity as sensitivity to the placement of relational cues rather than sequential information propagation. Finally, omitting relations and explicitly stat-ing neutrality are not equivalent. The E XPLICIT -NEUTRAL condition generally underperforms the NO-P RIOR baseline in the three-agent GovSim re-sults in Fig. 4, and the five-agent neutral controls in App. Fig. 12 show the same tendency. Even when the intended relation is neutral, making relation semantics explicit can change behavior relative to omission. Relational text is therefore an interven-tion, not a harmless annotation. 
+
+5.2 Debate: Agreement Can Diverge from Correctness 
+
+Debate exposes the epistemic side of convergence pressure. Consensus can be meaningful for sub-jective questions, but it is only useful for objective questions if the converged answer is correct. On OpinionQA, CR at λ = 1 is higher than at 
+
+λ = 0 for both model groups and all three relation types among questions with initial disagreement (left panels of Fig. 5). Because these questions have no universally correct answer, we interpret this end-point pattern as stronger convergence, not better answers; whether it is useful depends on whether consensus is the goal. The within-prior compari-son does not establish an improvement over N O-PRIOR .On objective QA, greater consensus does not correspond to a systematic gain in correctness. The MMLU-Pro and GPQA-Diamond panels in Fig. 5 show that higher positivity can make agents agree more readily, especially for the open-weight group. Majority-vote accuracy is mixed across model groups (Fig. 6): all six open-weight sweeps improve from λ = 0 to λ = 1 , whereas the GPT trends are mixed. At λ = 1 , accuracy remains be-low the N O-P RIOR baseline in 10 of the 12 model-group–dataset–relation comparisons, matches it in one, and exceeds it in one. CCR does not reliably improve at high positivity (Fig. 7). On MMLU-Pro, CCR generally declines with increasing λ and is below the N O-P RIOR baseline in five of the six conditions at λ = 1 ; on GPQA-Diamond, it is heterogeneous rather than consistently improved. The open-weight MMLU-Pro Influence condi-tion shows this agreement–correctness divergence directly. From λ = 0 to λ = 1 , CR increases from 33.8% to 76.9%, a paired difference of +43 .1
+
+percentage points (95% CI: [+37 .8, +48 .2] ), while CCR decreases from 66.9% to 58.4%, a difference of −8.5 points (95% CI: [−15 .8, −1.0] ). Positive relational priors can therefore increase consensus without making that consensus more likely to be correct. To check whether the Influence effect on CR depends on prompt wording or statement order (App. D), we repeated the endpoint comparison on the first 100 MMLU-Pro questions for the open-weight team. On this subset, the all-positive mi-nus all-negative contrast was +31 .9 points with the original wording, +39 .6 with a meaning-preserving paraphrase, and +43 .3 after reordering 70% 33% 67% 100% 
+
+−50 
+
+−30 
+
+−10 
+
+10 69.5    
+
+> ∆CR
+> 0% 33% 67% 100%
+> 63.1
+
+OpinionQA 
+
+GPT Group Open-Weight Group       
+
+> 0% 33% 67% 100%
+> 79.1
+> 0% 33% 67% 100%
+> 74.1
+
+MMLU-Pro 
+
+GPT Group Open-Weight Group       
+
+> 0% 33% 67% 100%
+> 80.6
+> 0% 33% 67% 100%
+> 81.2
+
+GPQA-Diamond 
+
+GPT Group Open-Weight Group 
+
+λ  
+
+> Attitude Trust Influence
+
+Figure 5: Debate consensus rate (CR) differences in percentage points relative to N O-P RIOR . Dashed lines mark zero difference; annotations show N O-P RIOR CR.          
+
+> −25
+> −20
+> −15
+> −10
+> −5
+> 0
+> 574.4
+> MMLU-Pro
+> GPT Group
+> 73.1
+> Open-Weight Group
+> 0% 33% 67% 100%
+> −15
+> −10
+> −5
+> 0
+> 5
+> 68.2
+> λ
+> GPQA-Diamond
+> 0% 33% 67% 100%
+> 51.5
+> λ
+> Attitude Trust Influence
+
+Figure 6: Debate accuracy (ACC) differences in percentage points relative to N O-P RIOR . Dashed lines mark zero differ-ence; annotations show N O-P RIOR ACC. 
+
+the relation statements. All three paired 95% CIs excluded zero. Both changes preserve the direc-tion of the contrast, although its magnitude varies (App. Tab. 3). To examine final consensus outcomes more closely, we analyze initial-to-final transitions in the same open-weight MMLU-Pro Influence setting. Wrong-majority correction (2–1 wrong to 3–0 cor-rect) changes from 4.4% at λ = 0 to 4.8% at λ = 1 ,a difference of +0 .4 percentage points (95% CI: 
+
+[−4.5, +5 .1] ). Correct-majority failure (2–1 cor-rect to 3–0 wrong) changes from 2.8% to 1.9%, a difference of −0.9 points (95% CI: [−3.5, +1 .6] ). Neither interval excludes zero. Wrong Consensus Formation (WCF), measured among all initially non-unanimous questions, increases from 11.2% to 32.0%, a difference of +20 .8 points (95% CI: 
+
+[+16 .3, +25 .3] ). Higher CR therefore coincides with substantially higher wrong consensus but no         
+
+> −10
+> −5
+> 0
+> 5
+> 10
+> 63.5
+> MMLU-Pro
+> GPT Group
+> 65.4
+> Open-Weight Group
+> 0% 33% 67% 100%
+> −12
+> −8
+> −4
+> 0
+> 4
+> 8
+> 67.6
+> λ
+> GPQA-Diamond
+> 0% 33% 67% 100%
+> 45.5
+> λ
+> Attitude Trust Influence
+
+Figure 7: Debate Consensus Correctness Rate (CCR) dif-ferences in percentage points relative to N O-P RIOR . Dashed lines mark zero difference; annotations show N O-P RIOR CCR. 
+
+detectable endpoint change in either strict majority-to-consensus transition. Full definitions and results are reported in App. B.4. Agreement alone is therefore insufficient on ob-jective tasks: CR should be reported together with accuracy and CCR. Relation type again matters. Influence tends to be the most disruptive relation type in debate: rel-ative to N O-P RIOR , it often produces the largest drops and remains farthest below baseline, as vis-ible across Figs. 5, 6, and 7. This is plausible because the Influence prompt directly targets re-sponsiveness to peers during answer revision. At-titude is comparatively stable, and Trust usually falls between Attitude and Influence . At the fully negative endpoint, the proportional decrease from NO-P RIOR is larger for CR than for ACC in 10 of the 12 comparisons (App. Fig. 13). Fig. 8 shows that E XPLICIT -N EUTRAL also dif-8Opin. MMLU GPQA Opin. MMLU GPQA           
+
+> 40
+> 55
+> 70
+> 85
+> GPT Group Open-Weight Group
+> CR
+> MMLU GPQA MMLU GPQA
+> 40
+> 55
+> 70
+> 85
+> ACC
+> MMLU GPQA MMLU GPQA
+> 40
+> 55
+> 70
+> 85
+> CCR
+> Attitude Trust Influence NO-P RIOR
+
+Figure 8: Debate consensus rate (CR), accuracy (ACC), and Consensus Correctness Rate (CCR) under E XPLICIT -NEUTRAL (sij = 0 ), by dataset, model group, and rela-tion type. Values are percentages. Dashed lines show the corresponding N O-P RIOR baselines. Panel labels shorten OpinionQA, MMLU-Pro, and GPQA-Diamond to “Opin.”, “MMLU”, and “GPQA”, respectively. 
+
+fers from N O-P RIOR in debate: neutral relation text often leaves CR, accuracy, or CCR at or below the N O-P RIOR baseline, so neutral framing should not be treated as equivalent to omission. 
+
+6 Design Implications 
+
+Relational prompts should be treated as task-specific interventions. For accuracy-centric tasks, NO-P RIOR should remain the default unless a re-lational prior improves validation-set accuracy or CCR relative to that baseline; a favorable CR trend within the λ sweep is insufficient. Positive priors are most relevant when conver-gence itself is useful. Within the relational-prior sweep, higher positivity generally supports sustain-able coordination in GovSim; on OpinionQA, the fully positive endpoint produces more consensus than the fully negative endpoint in every tested model-group–relation combination. Neither within-prior result establishes a general gain over N O-PRIOR . On objective QA, greater agreement is a behavioral change, not evidence of better perfor-mance. Effects also depend on backbone and relational structure. In our experiments, Attitude was the most stable relation type, Trust was less predictable, and 
+
+Influence produced the largest swings in GovSim and often the largest debate degradation relative to N O-P RIOR . In five-agent GovSim under shared message visibility, chain was more variable than star or tree. These patterns are not universal rank-ings; the intervention should be validated for the target backbone and relational structure. Explicit neutrality is itself an intervention: EXPLICIT -N EUTRAL is not equivalent to N O-PRIOR . The homogeneous endpoints, λ = 0 and 
+
+λ = 1 , are boundary conditions rather than a com-plete characterization. Evaluation should there-fore include mixed signs, sparse topologies, and relation-type variation. 
+
+7 Conclusion 
+
+We studied explicit relational priors in LLM-based multi-agent systems via a minimal signed-network prompt intervention that keeps task protocols fixed. Across GovSim and debate, their main effect is convergence pressure: within the relational-prior sweep, increasing positivity tends to make coordi-nation or agreement easier. This can help when utility rewards behavioral alignment, as in com-mons governance and subjective consensus, but is not a reliable route to better truth-finding. In objec-tive QA, more agreement does not systematically improve accuracy or CCR. Because effects vary by backbone, relation type, topology, and whether neutrality is stated explicitly, no-prior prompting should remain the default for accuracy-centric sys-tems unless validation justifies a relational layer. 
+
+Limitations 
+
+We study a deliberately restricted form of relational structure: signed relations remain fixed, symmetric, and common knowledge throughout each interac-tion. This design isolates prompt-level relational framing, but it does not support claims about pri-vate, asymmetric, learned, or evolving relations. In particular, Influence is not a directed authority relation, and our relation topologies change the ar-rangement of relational cues without changing the communication graph. Our experiments also cover only two task fami-lies: commons governance and three-agent debate. These settings make the contrast between coordina-tion, consensus, and correctness clear, but they do not exhaust the settings in which LLM-based multi-agent systems are used. Larger teams, tool-using agents, persistent memory, human-agent interac-tion, or task-specific role hierarchies may change how relational priors behave. For this reason, we do not treat relational prompting as a generally 9beneficial design choice. The safer conclusion is the one supported by our experiments: relational priors should be evaluated against a no-prior base-line, and on accuracy-centric tasks they should be judged with correctness-conditioned metrics rather than consensus alone. 
+
+References 
+
+Elif Akata, Lion Schulz, Julian Coda-Forno, Seong Joon Oh, Matthias Bethge, and Eric Schulz. 2023. Playing repeated games with large language models. Nature Human Behaviour , 9:1380 – 1390. Ariel Flint Ashery, Luca Maria Aiello, and Andrea Baronchelli. 2025. Emergent social conventions and collective bias in llm populations. Science Advances ,11(20):eadu9368. Dorwin Cartwright and Frank Harary. 1956. Structural balance: a generalization of heider’s theory. Psycho-logical review , 63 5:277–93. Cristiano Castelfranchi. 1990. Social power: A point missed in multi-agent, dai and hci. Decentralized AI ,1:33–46. Weize Chen, Yusheng Su, Jingwei Zuo, Cheng Yang, Chenfei Yuan, Chi-Min Chan, Heyang Yu, Yaxi Lu, Yi-Hsin Hung, Chen Qian, Yujia Qin, Xin Cong, Ruobing Xie, Zhiyuan Liu, Maosong Sun, and Jie Zhou. 2024. Agentverse: Facilitating multi-agent collaboration and exploring emergent behaviors. In 
+
+The Twelfth International Conference on Learning Representations .Pedro M. P. Curvo. 2025. $\textit{The Traitors}$: De-ception and trust in multi-agent language model simu-lations. In First Workshop on Multi-Turn Interactions in Large Language Models .Bart de Jong, Kurt T. Dirks, and Nicole M. Gillespie. 2016. Trust and team performance: A meta-analysis of main effects, moderators, and covariates. The Journal of applied psychology , 101 8:1134–50. C. D. De Dreu and Laurie R. Weingart. 2003. Task ver-sus relationship conflict, team performance, and team member satisfaction: a meta-analysis. The Journal of applied psychology , 88 4:741–9. Yilun Du, Shuang Li, Antonio Torralba, Joshua B. Tenenbaum, and Igor Mordatch. 2024. Improving factuality and reasoning in language models through multiagent debate. In Forty-first International Con-ference on Machine Learning .Nicolò Fontana, Francesco Pierri, and Luca Maria Aiello. 2025. Nicer than humans: How do large language models behave in the prisoner’s dilemma? 
+
+Proceedings of the International AAAI Conference on Web and Social Media , 19(1):522–535. John French. 1956. A formal theory of social power. 
+
+Psychological review , 63 3:181–94. Chen Gao, Xiaochong Lan, Zhi jie Lu, Jinzhu Mao, Jing Piao, Huandong Wang, Depeng Jin, and Yong Li. 2023a. S3: Social-network simulation system with large language model-empowered agents. ArXiv ,abs/2307.14984. Chen Gao, Xiaochong Lan, Nian Li, Yuan Yuan, Jingtao Ding, Zhilun Zhou, Fengli Xu, and Yong Li. 2023b. Large language models empowered agent-based mod-eling and simulation: a survey and perspectives. Hu-manities and Social Sciences Communications , 11. Taicheng Guo, Xiuying Chen, Yaqi Wang, Ruidi Chang, Shichao Pei, Nitesh V. Chawla, Olaf Wiest, and Xiangliang Zhang. 2024. Large language model based multi-agents: A survey of progress and chal-lenges. In Proceedings of the Thirty-Third Inter-national Joint Conference on Artificial Intelligence, IJCAI-24 , pages 8048–8057. International Joint Con-ferences on Artificial Intelligence Organization. Sur-vey Track. Fritz Heider. 1946. Attitudes and cognitive organization. 
+
+The Journal of psychology , 21:107–12. Sirui Hong, Mingchen Zhuge, Jonathan Chen, Xiawu Zheng, Yuheng Cheng, Jinlin Wang, Ceyao Zhang, Zili Wang, Steven Ka Shing Yau, Zijuan Lin, Liyang Zhou, Chenyu Ran, Lingfeng Xiao, Chenglin Wu, and Jürgen Schmidhuber. 2024. MetaGPT: Meta pro-gramming for a multi-agent collaborative framework. In The Twelfth International Conference on Learning Representations .Wenyue Hua, Lizhou Fan, Lingyao Li, Kai Mei, Jianchao Ji, Yingqiang Ge, Libby Hemphill, and Yongfeng Zhang. 2023. War and peace (waragent): Large language model-based multi-agent simulation of world wars. ArXiv , abs/2311.17227. N. R. Jennings, P. Faratin, A. R. Lomuscio, S. Par-sons, M. J. Wooldridge, and C. Sierra. 2001. Au-tomated negotiation: Prospects, methods and chal-lenges. Group Decision and Negotiation , 10(2):199– 215. Carlos E Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir Press, and Karthik R Narasimhan. 2024. SWE-bench: Can language mod-els resolve real-world github issues? In The Twelfth International Conference on Learning Representa-tions .Sarit Kraus. 1997. Negotiation and cooperation in multi-agent environments. Artif. Intell. , 94:79–97. Yihuai Lan, Zhiqiang Hu, Lei Wang, Yang Wang, De-heng Ye, Peilin Zhao, Ee-Peng Lim, Hui Xiong, and Hao Wang. 2024. LLM-based agent society inves-tigation: Collaboration and confrontation in avalon gameplay. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing ,pages 128–145, Miami, Florida, USA. Association for Computational Linguistics. 
+
+10 Guohao Li, Hasan Abed Al Kader Hammoud, Hani Itani, Dmitrii Khizbullin, and Bernard Ghanem. 2023. CAMEL: Communicative agents for ”mind” explo-ration of large language model society. In Thirty-seventh Conference on Neural Information Process-ing Systems .Xinyi Li, Sai Wang, Siqi Zeng, Yu Wu, and Yi Yang. 2024a. A survey on llm-based multi-agent sys-tems: workflow, infrastructure, and challenges. Vici-nagearth , 1. Yunxuan Li, Yibing Du, Jiageng Zhang, Le Hou, Pe-ter Grabowski, Yeqing Li, and Eugene Ie. 2024b. Improving multi-agent debate with sparse commu-nication topology. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 7281–7294, Miami, Florida, USA. Association for Computational Linguistics. Tian Liang, Zhiwei He, Wenxiang Jiao, Xing Wang, Yan Wang, Rui Wang, Yujiu Yang, Shuming Shi, and Zhaopeng Tu. 2024. Encouraging divergent thinking in large language models through multi-agent debate. In Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , pages 17889–17904, Miami, Florida, USA. Association for Computational Linguistics. Genglin Liu, Vivian T. Le, Salman Rahman, Elisa Kreiss, Marzyeh Ghassemi, and Saadia Gabriel. 2025. MOSAIC: Modeling social AI for content dissem-ination and regulation in multi-agent simulations. In Proceedings of the 2025 Conference on Empir-ical Methods in Natural Language Processing , pages 6401–6428, Suzhou, China. Association for Compu-tational Linguistics. Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, Shashank Gupta, Bodhisattwa Prasad Majumder, Katherine Hermann, Sean Welleck, Amir Yazdan-bakhsh, and Peter Clark. 2023. Self-refine: Itera-tive refinement with self-feedback. In Thirty-seventh Conference on Neural Information Processing Sys-tems .Joon Sung Park, Joseph C. O’Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, and Michael S. Bernstein. 2023. Generative agents: Interactive sim-ulacra of human behavior. Proceedings of the 36th Annual ACM Symposium on User Interface Software and Technology .Giorgio Piatti, Zhijing Jin, Max Kleiman-Weiner, Bern-hard Schölkopf, Mrinmaya Sachan, and Rada Mi-halcea. 2024. Cooperate or collapse: Emergence of sustainable cooperation in a society of LLM agents. In The Thirty-eighth Annual Conference on Neural Information Processing Systems .Chen Qian, Wei Liu, Hongzhang Liu, Nuo Chen, Yufan Dang, Jiahao Li, Cheng Yang, Weize Chen, Yusheng Su, Xin Cong, Juyuan Xu, Dahai Li, Zhiyuan Liu, and Maosong Sun. 2024. ChatDev: Communicative agents for software development. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 15174–15186, Bangkok, Thailand. Association for Computational Linguistics. Sarvapali D. Ramchurn, Trung Dong Huynh, and Nicholas R. Jennings. 2004. Trust in multi-agent systems. The Knowledge Engineering Review , 19:1 – 25. David Rein, Betty Li Hou, Asa Cooper Stickland, Jack-son Petty, Richard Yuanzhe Pang, Julien Dirani, Ju-lian Michael, and Samuel R. Bowman. 2024. GPQA: A graduate-level google-proof q&a benchmark. In 
+
+First Conference on Language Modeling .Siyue Ren, Zhiyao Cui, Ruiqi Song, Zhen Wang, and Shuyue Hu. 2024. Emergence of social norms in generative agent societies: Principles and architec-ture. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence, IJCAI-24 ,pages 7895–7903. International Joint Conferences on Artificial Intelligence Organization. Human-Centred AI. Alireza Rezazadeh, Zichao Li, Ange Lou, Yuying Zhao, Wei Wei, and Yujia Bao. 2025. Collaborative mem-ory: Multi-user memory sharing in llm agents with dynamic access control. ArXiv , abs/2505.18279. Corby Rosset, Ho-Lam Chung, Guanghui Qin, Ethan C. Chau, Zhuo Feng, Ahmed Awadallah, Jennifer Neville, and Nikhil Rao. 2024. Researchy questions: A dataset of multi-perspective, decompositional ques-tions for llm web agents. ArXiv , abs/2402.17896. Julian B. Rotter. 1971. Generalized expectancies for interpersonal trust. American Psychologist , 26:443– 452. Jordi Sabater-Mir and Carles Sierra. 2005. Review on computational trust and reputation models. Artificial Intelligence Review , 24:33–60. Yuki Sakamoto, Takahisa Uchida, and Hiroshi Ishiguro. 2025. Value-based large language model agent simu-lation for mutual evaluation of trust and interpersonal closeness. Scientific Reports , 15. Shibani Santurkar, Esin Durmus, Faisal Ladhak, Cinoo Lee, Percy Liang, and Tatsunori Hashimoto. 2023. Whose opinions do language models reflect? In 
+
+Proceedings of the 40th International Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , pages 29971–30004. PMLR. Timo Schick, Jane Dwivedi-Yu, Roberto Dessi, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettle-moyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language models can teach themselves to use tools. In Thirty-seventh Conference on Neural Information Processing Systems .
+
+11 Philipp J. Schneider, LIN TIAN, and Marian-Andrei Rizoiu. 2025. Learning to make friends: Coaching LLM agents toward emergent social ties. In Work-shop on Scaling Environments for Agents .Mrinank Sharma, Meg Tong, Tomasz Korbak, David Duvenaud, Amanda Askell, Samuel R. Bowman, Esin DURMUS, Zac Hatfield-Dodds, Scott R John-ston, Shauna M Kravec, Timothy Maxwell, Sam Mc-Candlish, Kamal Ndousse, Oliver Rausch, Nicholas Schiefer, Da Yan, Miranda Zhang, and Ethan Perez. 2024. Towards understanding sycophancy in lan-guage models. In The Twelfth International Confer-ence on Learning Representations .Yongliang Shen, Kaitao Song, Xu Tan, Dongsheng Li, Weiming Lu, and Yueting Zhuang. 2023. Hugging-GPT: Solving AI tasks with chatGPT and its friends in hugging face. In Thirty-seventh Conference on Neural Information Processing Systems .Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik R Narasimhan, and Shunyu Yao. 2023. Re-flexion: language agents with verbal reinforcement learning. In Thirty-seventh Conference on Neural Information Processing Systems .Yoav Shoham and Moshe Tennenholtz. 1995. On social laws for artificial agent societies: Off-line design. 
+
+Artif. Intell. , 73:231–252. Jaime Simão Sichman, Rosaria Conte, Cristiano Castel-franchi, and Yves Demazeau. 1997. A social reason-ing mechanism based on dependence networks. In 
+
+European Conference on Artificial Intelligence .Tianqi Song, Yugin Tan, Zicheng Zhu, Yibin Feng, and Yi-Chieh Lee. 2024. Multi-agents are social groups: Investigating social influence of multiple agents in human-agent interactions. Proceedings of the ACM on Human-Computer Interaction , 9:1 – 33. Junlin Wang, Jue WANG, Ben Athiwaratkun, Ce Zhang, and James Zou. 2025. Mixture-of-agents enhances large language model capabilities. In The Thirteenth International Conference on Learning Representa-tions .Yubo Wang, Xueguang Ma, Ge Zhang, Yuansheng Ni, Abhranil Chandra, Shiguang Guo, Weiming Ren, Aaran Arulraj, Xuan He, Ziyan Jiang, Tianle Li, Max Ku, Kai Wang, Alex Zhuang, Rongqi Fan, Xiang Yue, and Wenhu Chen. 2024. MMLU-pro: A more robust and challenging multi-task language under-standing benchmark. In The Thirty-eight Conference on Neural Information Processing Systems Datasets and Benchmarks Track .Jason Wei, Zhiqing Sun, Spencer Papay, Scott McKin-ney, Jeffrey Han, Isa Fulford, Hyung Won Chung, Alexandre Passos, William Fedus, and Amelia Glaese. 2025. Browsecomp: A simple yet chal-lenging benchmark for browsing agents. ArXiv ,abs/2504.12516. Michael Wooldridge and Nicholas R. Jennings. 1995. Intelligent agents: theory and practice. The Knowl-edge Engineering Review , 10:115 – 152. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, Ahmed Hassan Awadallah, Ryen W White, Doug Burger, and Chi Wang. 2024. Autogen: Enabling next-gen LLM applications via multi-agent conversations. In First Conference on Language Modeling .Andrea Wynn, Harsh Satija, and Gillian K Hadfield. 2025. Talk isn’t always cheap: Understanding failure modes in multi-agent debate. ArXiv , abs/2509.05396. Chengxing Xie, Canyu Chen, Feiran Jia, Ziyu Ye, Kai Shu, Adel Bibi, Ziniu Hu, Philip Torr, Bernard Ghanem, and Guohao Li. 2024. Can large language model agents simulate human trust behaviors? In 
+
+ICLR 2024 Workshop: How Far Are We From AGI .Wujiang Xu, Zujie Liang, Kai Mei, Hang Gao, Juntao Tan, and Yongfeng Zhang. 2025. A-mem: Agentic memory for LLM agents. In The Thirty-ninth An-nual Conference on Neural Information Processing Systems .Binwei Yao, Chao Shang, Wanyu Du, Jianfeng He, Ruixue Lian, Yi Zhang, Hang Su, Sandesh Swamy, and Yanjun Qi. 2025. Peacemaker or troublemaker: How sycophancy shapes multi-agent debate. ArXiv ,abs/2509.23055. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. 2023. React: Synergizing reasoning and acting in language models. In The Eleventh International Conference on Learning Representations .Yanwei Yue, Guibin Zhang, Boyang Liu, Guancheng Wan, Kun Wang, Dawei Cheng, and Yiyan Qi. 2025. MasRouter: Learning to route LLMs for multi-agent systems. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 15549–15572, Vienna, Austria. Association for Computational Linguistics. Guibin Zhang, Yanwei Yue, Zhixun Li, Sukwon Yun, Guancheng Wan, Kun Wang, Dawei Cheng, Jeffrey Yu, and Tianlong Chen. 2025a. Cut the crap: An economical communication pipeline for llm-based multi-agent systems. In International Conference on Representation Learning , volume 2025, pages 75389– 75428. Wentao Zhang, Liang Zeng, Yuzhen Xiao, Yongcong Li, Ce Cui, Yilei Zhao, Rui Hu, Yang Liu, Yahui Zhou, and Bo An. 2025b. Agentorchestra: Or-chestrating hierarchical multi-agent intelligence with the tool-environment-agent(tea) protocol. ArXiv ,abs/2506.12508. Xuhui Zhou, Hao Zhu, Leena Mathur, Ruohong Zhang, Haofei Yu, Zhengyang Qi, Louis-Philippe Morency, Yonatan Bisk, Daniel Fried, Graham Neubig, and 
+
+12 Maarten Sap. 2024. SOTOPIA: Interactive evalua-tion for social intelligence in language agents. In 
+
+The Twelfth International Conference on Learning Representations .Kunlun Zhu, Hongyi Du, Zhaochen Hong, Xiaocheng Yang, Shuyi Guo, Zhe Wang, Zhenhailong Wang, Cheng Qian, Robert Tang, Heng Ji, and Jiaxuan You. 2025. MultiAgentBench : Evaluating the collabora-tion and competition of LLM agents. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 8580–8622, Vienna, Austria. Association for Computational Linguistics.                                
+
+> Agent System Prompt in GovSim
+> You are John. [Task-related prompt] You and other fishermen hold various attitudes towards each other. Attitude can be quantified using ascore within the range of [-1, 1], where 1represents the strongest positive attitude, such as kindness and affection, and -1 represents the most negative attitude, such as hostility and resentment. John’s attitude score towards Kate is 1. Kate’s attitude score towards John is also 1. John’s attitude score towards Jack is -1. Jack’s attitude score towards John is also -1. Kate’s attitude score towards Jack is -1. Jack’s attitude score towards Kate is also -1. You make all your decisions considering the attitudes among all of you in the group.
+
+Figure 9: Example GovSim system prompt for agent John under the Attitude relation type. It combines the task instruc-tions with the relation definition and verbalized signed edges of the relation network. 
+
+A GovSim Details 
+
+A.1 Simulation Dynamics Resource dynamics. At the start of month t, the shared stock h(t) is available. Each simulation lasts T = 12 months or until the stock collapses. A collapse occurs when h(t) falls below a small constant C = 5 , at which point no further extrac-tion is possible. The sustainability threshold f (t)
+
+at month t is the maximum amount that can be harvested without reducing the stock in the next month; with GovSim’s doubling-regeneration dy-namics, this corresponds to half of the current stock, i.e., f (t) = h(t)/2. After harvest, the resource re-generates according to 
+
+h(t + 1) = min 
+
+(
+
+2
+
+"
+
+h(t) −
+
+> n
+
+X
+
+> i=1
+
+ri,t 
+
+#
+
+, 100 
+
+)
+
+,
+
+(4) Chain  
+
+> Star Tree
+
+Figure 10: Five-agent relation topologies used in GovSim. Each topology contains four relational edges and changes only which agent pairs receive explicit relational context; it does not change message routing. 
+
+where ri,t is the quantity harvested by agent i at month t, and the stock is capped at a maximum value of 100. 
+
+Monthly phases. Each month comprises two phases. In the harvest phase , agents privately choose how much of the resource to extract, subject only to the available stock. Decisions are submit-ted simultaneously; after execution, each agent’s choice and the remaining stock h(t) − P 
+
+> i
+
+ri,t are disclosed to all agents. In the discussion phase ,agents converse in natural language. They may share beliefs about sustainability, negotiate, appeal to moral principles, or adjust their strategies. Rela-tional priors influence language interpretation and response, but do not constrain speech or directly set harvest quantities. After discussion, the new stock h(t + 1) is computed as above. The process repeats until t = T or the stock collapses. 
+
+A.2 Evaluation 
+
+We use the five metrics defined by the original GovSim benchmark. • Survival time (m) — The survival time is the longest number of months during which the shared resource remains above the collapse threshold C: m = max( {t ∈ N | h(t) > C }).• Survival rate (q) — Proportion of runs that achieve maximum survival time, i.e., m = 12 :
+
+q = #{m=12 } 
+
+> #runs
+
+.• Total gain (R) — Average total gain per agent over the survival period: R = 1
+
+> |I|
+
+P|I| 
+
+> i=1
+
+Ri,where Ri = PTt=1 ri,t is the total gain of agent 
+
+i.• Inequality (e) — Gini-based equality score across the total gains of each agent: e = 1 −
+
+13 0
+
+> 25
+> 50
+> 75
+> 100
+> Attitude
+
+GPT-4.1-mini 
+
+> Chain
+> Star
+> Tree
+
+GPT-4.1 
+
+> Chain
+> Star
+> Tree
+
+Qwen-3-32B 
+
+> Chain
+> Star
+> Tree
+
+LLaMA-3.3-70B     
+
+> Chain
+> Star
+> Tree
+> 0
+> 25
+> 50
+> 75
+> 100
+> Trust
+> Chain
+> Star
+> Tree
+> Chain
+> Star
+> Tree
+> Chain
+> Star
+> Tree
+> Chain
+> Star
+> Tree
+> 0% 25% 50% 75% 100%
+> 0
+> 25
+> 50
+> 75
+> 100
+
+λ    
+
+> Influence
+> Chain
+> Star
+> Tree
+> 0% 25% 50% 75% 100%
+
+λ    
+
+> Chain
+> Star
+> Tree
+> 0% 25% 50% 75% 100%
+
+λ    
+
+> Chain
+> Star
+> Tree
+> 0% 25% 50% 75% 100%
+
+λ
+
+> Chain
+> Star
+> Tree
+
+Figure 11: Five-agent GovSim overall score S across model backbones, relation types, topologies, and values of λ.  
+
+> Attitude Trust Influence
+> 0
+> 25
+> 50
+> 75
+> 100
+> Overall  (S)
+
+GPT-4.1-mini   
+
+> Attitude Trust Influence
+
+GPT-4.1   
+
+> Attitude Trust Influence
+
+Qwen-3-32B   
+
+> Attitude Trust Influence
+
+LLaMA-3.3-70B    
+
+> Chain Star Tree NO-P RIOR
+
+Figure 12: Five-agent GovSim overall score S under E XPLICIT -N EUTRAL , by model backbone, relation type, and topology. Dashed lines show the corresponding N O-P RIOR baselines. 
+
+P|I|
+
+> i=1
+
+P|I| 
+
+> j=1
+
+|Ri−Rj |
+
+2|I| P|I| 
+
+> i=1
+
+Ri
+
+.• Over-usage (o) — Amount of unsustainable behavior across a simulation. It is the per-centage of actions across the simulation that exceed the sustainability threshold: o =
+
+P|I|
+
+> i=1
+
+PTt=1 1(ri,t >f (t)) 
+
+|I|· m .We also use the aggregate score S to integrate the original five metrics. We first normalize each met-ric by its theoretical maximum value, making sure that larger values correspond to better performance. For example, for inequality/equality e, the normal-ized metric is ˜e = 1 − e when e is represented as inequality. We then take a weighted linear mean: 
+
+S = w1 ˜m + w2 ˜q + w3 ˜R + w4 ˜e + w5 ˜o, (5) where w1 = w2 = w5 = 28 and w3 = w4 = 18 ,since survival time, survival rate, and over-usage directly assess system sustainability. 
+
+A.3 GovSim Bootstrap Intervals 
+
+We quantify uncertainty for the λ = 1 minus λ = 0 
+
+endpoint contrast in the complete three-agent set-ting. The resampling unit is a complete simulation run, preserving all agents and months within that run. For each fixed model–relation cell, we resam-ple the five runs with replacement separately at 
+
+λ = 0 and λ = 1 , recompute the component sum-maries and aggregate score S within each resam-pled endpoint, and calculate ∆S = Sλ=1 − Sλ=0 .Because an endpoint contains five runs, it has only 
+
+55 possible ordered bootstrap resamples. We enu-14 Model Relation ∆S 95% bootstrap CI GPT-4.1-mini Attitude +68 .4 [+43 .2, +81 .5] 
+
+GPT-4.1-mini Trust +39 .0 [+10 .1, +67 .7] 
+
+GPT-4.1-mini Influence +78 .1 [+76 .7, +81 .1] 
+
+GPT-4.1 Attitude +81 .4 [+80 .8, +82 .2] 
+
+GPT-4.1 Trust +80 .7 [+79 .5, +82 .1] 
+
+GPT-4.1 Influence +82 .2 [+81 .6, +82 .8] 
+
+Qwen-3-32B Attitude +24 .7 [−13 .7, +63 .4] 
+
+Qwen-3-32B Trust +50 .2 [+21 .8, +78 .4] 
+
+Qwen-3-32B Influence −21 .1 [−52 .3, +15 .8] 
+
+LLaMA-3.3-70B-Instruct Attitude +36 .8 [+7 .7, +65 .7] 
+
+LLaMA-3.3-70B-Instruct Trust +36 .5 [+7 .8, +65 .4] 
+
+LLaMA-3.3-70B-Instruct Influence +38 .1 [+8 .8, +67 .1] 
+
+Table 1: Complete-run bootstrap intervals for the three-agent GovSim endpoint contrast. Here λ = 0 denotes all-negative relations and λ = 1 denotes all-positive relations. Each endpoint contains five runs, and ∆S is measured in score points. 
+
+merate all such resamples at each endpoint and form all 510 combinations of endpoint resamples. The reported interval is given by the 2.5th and 97.5th percentiles of this contrast distribution. Ten of the twelve intervals lie entirely above zero. The exceptions are Qwen-3-32B under Attitude and In-fluence . Tab. 1 reports the complete endpoint con-trasts and intervals. 
+
+B Debate Details 
+
+B.1 Debate Dynamics 
+
+We follow the AutoGen debate protocol. 1 We model a K-agent, T -round debate for question xn.Let z(t) 
+
+> i,n
+
+denote the complete textual response pro-duced by agent i ∈ { 1, . . . , K } at round t, includ-ing its selected answer and explanation. Let Yn be the answer-option set for xn, and let 
+
+a(t) 
+
+> i,n
+
+= Extract 
+
+
+
+z(t)
+
+> i,n
+
+
+
+∈ Y n (6) denote the extracted answer option. We write 
+
+Z(t) 
+
+> n
+
+= ( z(t)1,n , . . . , z (t)
+
+> K,n
+
+) for the agents’ responses at round t, and Z(t) 
+
+> −i,n
+
+= ( z(t)
+
+> j,n
+
+)j̸ =i for the responses of all agents other than i.In round 1, agents answer independently given the question and their relational prompts: 
+
+z(1)  
+
+> i,n
+
+= LLM i(xn | Πi(r, G R)) . (7) For each revision round t = 2 , . . . , T , agent i re-tains its accumulated dialogue history H(t−1)  
+
+> i,n
+
+and is additionally shown the other agents’ responses 
+
+> 1https://microsoft.github.io/autogen/stable/ user-guide/core-user-guide/design-patterns/ multi-agent-debate.html
+
+from the preceding round: 
+
+z(t) 
+
+> i,n
+
+= LLM i
+
+
+
+xn | Πi(r, G R), H (t−1)  
+
+> i,n
+
+, Z (t−1) 
+
+> −i,n
+
+
+
+.
+
+(8) The debate trajectory for question xn is the se-quence {Z(t) 
+
+> n
+
+}Tt=1 . We use greedy decoding for all models and three answer rounds in total: one initial answer followed by two revisions. 
+
+B.2 Evaluation 
+
+All debate metrics are computed from the extracted answer options a(t)
+
+> i,n
+
+. For a dataset of N questions, question xn is in full consensus at round t if a(t)1,n =
+
+· · · = a(t)
+
+> K,n
+
+. Let 
+
+I =
+
+n
+
+n ∈ { 1, . . . , N } : ∃ i, j such that a(1) 
+
+> i,n
+
+̸ = a(1) 
+
+> j,n
+
+o
+
+(9) be the set of questions that begin with disagreement, and let 
+
+C =
+
+n
+
+n ∈ I : a(T )1,n = · · · = a(T )
+
+> K,n
+
+o
+
+(10) be the subset that reaches full consensus in the final round. The final-round consensus rate among initially non-consensus questions is 
+
+CR = |C||I| . (11) For subjective tasks, we use OpinionQA, a dataset derived from opinion polls and designed to evaluate alignment with human opinions on sub-jective issues. Because these questions do not have universally correct answers, CR measures whether initially disagreeing agents ultimately converge, rather than whether they converge to a correct an-swer. 15 Transition λ = 0 λ = 1 Difference Paired 95% CI Wrong initial majority → correct consensus 4.4% 4.8% +0 .4 [−4.5, +5 .1]             
+
+> Correct initial majority →wrong consensus 2.8% 1.9% −0.9[−3.5,+1 .6]
+> Wrong Consensus Formation 11.2% 32.0% +20 .8[+16 .3,+25 .3]
+
+Table 2: Initial-to-final transitions for the open-weight MMLU-Pro team under Influence . Differences are λ = 1 
+
+minus λ = 0 in percentage points. 
+
+For objective tasks, we use MMLU-Pro and GPQA-Diamond and apply the same definition of CR. We obtain the final debate answer by majority voting over the agents’ final-round answer options: 
+
+ˆyn = arg max 
+
+> y∈Y n
+> K
+
+X
+
+> i=1
+
+1
+
+h
+
+a(T ) 
+
+> i,n
+
+= y
+
+i
+
+. (12) Since each question has a ground-truth answer yn,we also report the accuracy of ˆyn. For each n ∈
+
+C, let cn = a(T )1,n = · · · = a(T ) 
+
+> K,n
+
+denote the final consensus answer. The Consensus Correctness Rate (CCR) is the proportion of final consensus cases in which that answer is correct: 
+
+CCR = |Ccorr ||C| , Ccorr = {n ∈ C : cn = yn} .
+
+(13) 
+
+B.3 Debate Bootstrap Intervals 
+
+We use paired question-level resampling for debate. A sampling unit is the complete trajectory for a single question, including the responses of all three agents across all answer rounds. For each endpoint contrast, we draw 100,000 bootstrap samples with replacement. The same sampled question indices are used for both endpoint conditions, preserving the question-by-question pairing. The eligible sets and the conditional denominators for CR and CCR are recomputed separately in each bootstrap sam-ple. For objective QA, CR is computed among questions whose three initial answers are not unan-imous, and CCR is computed among the subset that reaches final consensus. For the open-weight MMLU-Pro team under Influence , the λ = 1 minus 
+
+λ = 0 differences are +43 .1 percentage points for CR (95% CI: [+37 .8, +48 .2] ) and −8.5 points for CCR (95% CI: [−15 .8, −1.0] ). This contrast there-fore shows an agreement–correctness divergence: higher positivity substantially increases consensus while reducing consensus correctness. 
+
+B.4 Initial-to-Final Answer Transitions 
+
+Consensus Correctness Rate measures the accuracy of final consensus, but it does not show how the          
+
+> Attitude Trust Influence
+> −10 %
+> −5%
+> 0%
+> 5%
+> GPT Group
+> MMLU-Pro
+> Attitude Trust Influence
+> GPQA-Diamond
+> Attitude Trust Influence
+> −50 %
+> −25 %
+> 0%
+> Open-Weight Group
+> Attitude Trust Influence
+> ACC CR
+
+Figure 13: Percentage changes in debate consensus rate (CR) and accuracy (ACC) at λ = 0 relative to N O-P RIOR , by model group, dataset, and relation type. Solid lines mark zero change. 
+
+group reached that outcome. We therefore exam-ine initial-to-final transitions for the open-weight MMLU-Pro team under Influence , comparing the all-negative ( λ = 0 ) and all-positive ( λ = 1 ) end-points used in Sec. 5.2. We use the paired question-level bootstrap procedure described in App. B.3. We report three question-level measures. Wrong-majority correction is the fraction of initial 2–1 splits with a wrong majority that end in 3–0 correct consensus. Correct-majority failure is the fraction of initial 2–1 splits with a correct majority that end in 3–0 wrong consensus. Wrong Consensus Formation (WCF) is the fraction of all initially non-unanimous questions, including 1–1–1 splits, that end in 3–0 wrong consensus. These measures have different conditioning sets, so their absolute rates should not be compared directly. For each measure, we estimate the all-positive minus all-negative dif-ference using 100,000 paired question-level boot-strap samples. The same question indices are used at both endpoints, and the corresponding condi-tional denominator is recomputed in every sample. As shown in Tab. 2, the intervals for wrong-majority correction and correct-majority failure 
+
+16 Prompt variant all −1 all +1 ∆CR (points) Paired 95% CI Original 42.0% 73.9% +31 .9 [+13 .9, +49 .3]             
+
+> Paraphrased 30.8% 70.4% +39 .6[+22 .8,+55 .9]
+> Reordered 33.3% 76.6% +43 .3[+25 .9,+59 .7]
+> Table 3: Prompt sensitivity to wording and statement order for the open-weight MMLU-Pro team under Influence . CR is measured among questions with initial disagreement. The change is the all-positive minus all-negative endpoint contrast.
+
+both include zero. The data therefore do not show a clear endpoint difference in either strict majority-to-consensus transition. WCF, however, increases by 20.8 percentage points, and its interval lies en-tirely above zero. In this setting, higher positivity substantially increases consensus and convergence on wrong answers without a detectable increase in correction. 
+
+C Consensus and Accuracy under Fully Negative Priors 
+
+Fully negative relational priors affect consen-sus and accuracy with markedly different mag-nitudes. Fig. 13 reports the relative change at 
+
+λ = 0 compared with N O-P RIOR , 100( Mλ=0 −
+
+MNO-P RIOR )/M NO-P RIOR for M ∈ {CR , ACC }.The proportional decrease in CR exceeds that in ACC in 10 of the 12 comparisons. This pattern holds in all six open-weight conditions and all three GPT MMLU-Pro conditions. The exceptions are GPT GPQA-Diamond under Attitude and Trust ,where CR is slightly above N O-P RIOR while ACC is below it. For open-weight MMLU-Pro, CR de-creases by 40.8–54.4%, compared with 7.5–14.1% for ACC. 
+
+D Prompt Robustness to Wording and Statement Order 
+
+Because the relational intervention is expressed in natural language, its effect may depend on par-ticular lexical choices or on the position of the relation statements. We therefore repeated one rep-resentative endpoint comparison under a meaning-preserving paraphrase and a reordering of the rela-tion statements. 
+
+D.1 Setup 
+
+We used the first 100 questions from the main exper-iment’s MMLU-Pro sample. The three-agent team comprised Mixtral-8x22B-Instruct-v0.1, Qwen-3-32B, and LLaMA-3.3-70B-Instruct. The debate protocol and decoding settings matched the main experiments. We evaluated six conditions: the orig-inal, paraphrased, and reordered Influence prompts, each with all three mutual relations set to either −1
+
+or +1 .
+
+D.2 Prompt Variants 
+
+The original condition used the main experiment’s 
+
+Influence wording and listed the three mutual-pair blocks in the order A–B, A–C, B–C. The para-phrased condition replaced terms such as “influ-ence score,” “follow their lead,” and “contrarian influence” with a response-score description in which an agent moves toward or away from an-other agent’s recommendations. Agent identities, pair mappings, statement directions, and numerical signs were unchanged. The reordered condition re-tained the original text verbatim and changed only the pair-block order to B–C, A–C, A–B. The relation-definition portion contained 82 words in both the original and paraphrased ver-sions, and the six agent-specific relation state-ments contained 45 words in both. This controls for word count, although model-specific token counts need not be identical. The question prompts and subsequent-round decision prompts were un-changed across all conditions. 
+
+D.3 Evaluation 
+
+We report consensus rate (CR) for questions whose three initial answers were non-unanimous. A ques-tion counts as a final consensus only when all three final answers are the same option. For each prompt variant, the endpoint effect is the difference in CR between the all-positive and all-negative conditions. We estimate 95% bootstrap percentile intervals us-ing 100,000 paired question-level bootstrap sam-ples. The same resampled question indices are used across all six conditions, and the conditional denominators are recomputed in every sample. 
+
+D.4 Results 
+
+All three prompt formulations yield a positive CR contrast, and all paired intervals exclude zero (Tab. 3). The paraphrase and reordering preserve the direction of the Influence endpoint contrast, 17 although the estimated magnitude varies across formulations. This check is limited to one rela-tion type, one dataset, one model team, the two homogeneous-sign endpoints, and two controlled prompt changes. 
+
+E Use of AI Assistants 
+
+The manuscript uses AI assistance primarily for language editing and restructuring under the au-thor’s supervision. AI assistance was not used to originate the research idea, generate the experimen-tal data, create the reported numerical results, or perform the evaluation. 18

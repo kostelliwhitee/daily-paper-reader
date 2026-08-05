@@ -6,55 +6,48 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-04
-- 运行时间：2026-08-04 21:46:02 UTC
+- 最新运行日期：2026-08-05
+- 运行时间：2026-08-05 21:33:54 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：6
-- 速读区：5
+- 本次总论文数：8
+- 精读区：4
+- 速读区：4
 
 ### 今日简报（AI）
-1) 今日11篇论文聚焦多智能体协作与推理，精读6篇、速读5篇，核心亮点集中在语义调度与运动规划。
-2) 最值得关注《BANDMAS》以因果启发的语义调度实现带宽高效多智能体协作（9.0分），并参考《Learning-Based Motion Planning》系统梳理动态环境规划范式。
-3) 下步建议优先精读这两篇高分开山之作，速读可补充分散推理与分层相关性评估，快速把握前沿框架。
-- 详情：[/202608/04/README](/202608/04/README)
+今日8篇多智能体研究，精读聚焦“历史感知对手意识”与“关系先验驱动收敛”两大进化机制。
+
+最值得看：Agent在复杂环境中借助对手历史信息提升进化效率，以及利用关系先验增强多智能体系统稳定性。
+
+建议普通读者先关注这两篇精读，后续可留意速读中关于记忆攻击与后门风险的安全议题。
+- 详情：[/202608/05/README](/202608/05/README)
 
 ### 精读区论文标签
-1. [BANDMAS: Causality-Inspired Semantic Packet Scheduling for Bandwidth-Efficient Multi-Agent Collaboration](/202608/04/2608.00458v1-bandmas-causality-inspired-semantic-packet-scheduling-for-bandwidth-efficient-multi-agent-collaboration)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：多智能体协作中的带宽高效语义消息调度
-2. [Learning-Based Motion Planning for Dynamic Environments: From Foundational Algorithms to Emerging Paradigms](/202608/04/2608.00625v1-learning-based-motion-planning-for-dynamic-environments-from-foundational-algorithms-to-emerging-paradigms)  
+1. [Evolving in the Agent Jungle via History-Informed Opponent Awareness](/202608/05/2608.02005v1-evolving-in-the-agent-jungle-via-history-informed-opponent-awareness)  
    标签：评分：8.0/10、query:ma-la
-   evidence：综述基于学习的运动规划方法，明确涉及动态环境中的多智能体交互。
-3. [MDGAM-Based Cooperative Task Scheduling for Communication-Constrained Distributed Multi-Agent Systems](/202608/04/2608.00648v1-mdgam-based-cooperative-task-scheduling-for-communication-constrained-distributed-multi-agent-systems)  
+   evidence：具有对手感知的动态多智能体环境
+2. [Relational Priors as Convergence Pressure in LLM-Based Multi-Agent Systems](/202608/05/2608.03239v1-relational-priors-as-convergence-pressure-in-llm-based-multi-agent-systems)  
    标签：评分：8.0/10、query:ma-la
-   evidence：在通信受限的多智能体系统中使用多解码器图注意力模型进行协作任务调度
-4. [When Prompts Control Robots: Prompt Injection Attacks in Multi-Agent Robotic Systems](/202608/04/2608.00747v1-when-prompts-control-robots-prompt-injection-attacks-in-multi-agent-robotic-systems)  
+   evidence：直接研究LLM多智能体系统中的交互动力学与收敛行为
+3. [Attacking and Defending Multi-Agent Collaborative Filtering Systems Through Connectivity](/202608/05/2608.03272v1-attacking-and-defending-multi-agent-collaborative-filtering-systems-through-connectivity)  
    标签：评分：8.0/10、query:ma-la
-   evidence：多智能体机器人系统中的提示注入攻击与跨智能体污染
-5. [Practical Online KV Cache Compaction for LLM Agents: An Empirical Study](/202608/04/2608.00902v1-practical-online-kv-cache-compaction-for-llm-agents-an-empirical-study)  
+   evidence：基于自然语言交互的多智能体协同过滤
+4. [Group Perspective Matters: Regulating Debate Relationships Can Mitigate Blind Conformity in Multi-Agent Debate](/202608/05/2608.03648v1-group-perspective-matters-regulating-debate-relationships-can-mitigate-blind-conformity-in-multi-agent-debate)  
    标签：评分：8.0/10、query:ma-la
-   evidence：面向LLM智能体在线KV缓存压缩与注意力匹配以减少注意力开销
-6. [Imprecise Belief Fusion Improves Multi-agent Social Learning](/202608/04/2608.01367v1-imprecise-belief-fusion-improves-multi-agent-social-learning)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：通过信念融合进行多智能体社会学习，直接涉及智能体间的通信与交互。
+   evidence：多智能体辩论通过调节相互引用关系缓解盲目从众，直接关联交互动态
 
 ### 速读区论文标签
-1. [Where Reasoning Diverges: Localized Multi-Agent Debate](/202608/04/2608.01463v1-where-reasoning-diverges-localized-multi-agent-debate)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：提出局部化多智能体辩论协议，优化冲突消解中的交互动态。
-2. [HIERA: Hierarchical Multi-Agent Relevance Assessment for Content Discovery Systems](/202608/04/2608.00785v1-hiera-hierarchical-multi-agent-relevance-assessment-for-content-discovery-systems)  
+1. [MAPLE-Guard: Memory-Aware Link Enforcement Against Memory-Link Poisoning in Multi-Agent Systems](/202608/05/2608.00426v1-maple-guard-memory-aware-link-enforcement-against-memory-link-poisoning-in-multi-agent-systems)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体框架，通过专门智能体协同分析查询与条目来评估相关性
-3. [Shared Prefixes, Better Credit: Adaptive Routing for Multi-Agent Reasoning](/202608/04/2608.02291v1-shared-prefixes-better-credit-adaptive-routing-for-multi-agent-reasoning)  
+   evidence：多智能体系统中的内存链路投毒
+2. [When Collaboration Becomes a Trigger: Collective Evidence-Threshold Backdoors in Multi-Agent Systems](/202608/05/2608.01085v1-when-collaboration-becomes-a-trigger-collective-evidence-threshold-backdoors-in-multi-agent-systems)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体推理中的方案交换与自适应路由协作信用分配
-4. [Asking Questions the Right Way: A Multi-Agent Conversational System for Prompt Formulation in Complex Task Resolution](/202608/04/2608.01366v1-asking-questions-the-right-way-a-multi-agent-conversational-system-for-prompt-formulation-in-complex-task-resolution)  
+   evidence：研究多智能体协作中证据累积如何触发后门，直接关联多智能体交互动态
+3. [History Matters: Meta-policy Delegation with Heterogeneous Multi-agent Reinforcement Learning](/202608/05/2608.03833v1-history-matters-meta-policy-delegation-with-heterogeneous-multi-agent-reinforcement-learning)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：异构多智能体协作中的顺序委托决策与委托拓扑，体现交互动态
+4. [AgentPanel: Toward a New Paradigm for Human--AI Collaboration in Exploring Scientific Questions](/202608/05/2608.03283v1-agentpanel-toward-a-new-paradigm-for-human--ai-collaboration-in-exploring-scientific-questions)  
    标签：评分：6.0/10、query:ma-la
-   evidence：构建八智能体对话系统，通过智能体通信优化提示构造。
-5. [Training Small LLMs as Spatial Multi-Agent Policies](/202608/04/2608.01425v1-training-small-llms-as-spatial-multi-agent-policies)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：将小型LLM训练为空间合作游戏中的多智能体策略，处理异步多智能体交互。
+   evidence：面向人机协作的多智能体论坛
 
 
 <div class="dpr-home-promo-card">
