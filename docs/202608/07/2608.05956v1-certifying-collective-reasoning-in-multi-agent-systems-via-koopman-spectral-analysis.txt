@@ -1,0 +1,342 @@
+Title: Certifying Collective Reasoning in Multi-Agent Systems via Koopman Spectral Analysis
+
+URL Source: https://arxiv.org/pdf/2608.05956v1
+
+Published Time: Fri, 07 Aug 2026 00:55:29 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Certifying Collective Reasoning in Multi-Agent Systems via Koopman Spectral Analysis 
+
+Nuzhat Khan and Indrakshi Dey, Senior Member, IEEE 
+
+Abstract—Orchestrated collectives of large language model (LLM) agents that debate and vote are an emerging form of computational intelligence: the intelligent behaviour resides in the interaction, not in any single agent. They improve task accuracy, yet remain black boxes at the system level: there is no principled test of convergence, no bound on the rounds needed, and no faithful account of what drove a decision. This paper develops a novel framework based on Koopman operator theory and validates its theoretical guarantees on multi-agent consensus dynamics. Treating the collective as one nonlinear dynamical system on a communication graph, we read its essential behaviour off the spectrum of its Koopman transfer operator, an exact linear representation of the nonlin-ear dynamics estimated from interaction traces. The spectrum yields three machine-checkable certificates: the sub-dominant eigenvalue λ2 fixes the intrinsic timescale of reasoning and yields a convergence deadline computable before the debate runs; its eigenvector names the coherent factions the collective reasons in, and |λ2| certifies when that explanation is valid; and the leading spectral coordinates form a compressed, auditable message basis. On an attention-consensus model, the deadline tracks observed convergence with log–log correlation 0.93 and bounds it in 96% of 24 configurations; attribution is exact whenever the spectrum certifies metastability; eight of 32 coor-dinates preserve the decision at 99.7% fidelity; and a certificate learned from 15 debates held on 60/60 held-out debates. The study runs in minutes on a CPU, making spectral certification a practical layer for trustworthy collective reasoning. Index Terms—Collective intelligence, multi-agent systems, large language models, Koopman operator, dynamic mode de-composition, social reasoning, explainable artificial intelligence, consensus dynamics, trustworthy AI, semantic communica-tions. 
+
+I. Introduction 
+
+# AN emerging class of intelligent systems locates its intelligence not in a single model but in a society of models. Orchestrated large language model (LLM) agents that debate one another [1], criticise and defend candidate solutions [2], or coordinate through structured conversation [3] now routinely outperform their individ-ual members on mathematical, coding, and question-answering benchmarks. In contrast to single-agent chain-of-thought prompting, where reasoning unfolds along an uncorrected autoregressive trajectory, multi-agent debate introduces iterative interaction and mutual feedback [4]. This phenomenon, accuracy emerging from interaction, 
+
+N. Khan is with Universiti Teknologi Malaysia, Johor Bahru, Malaysia; I. Dey is with Department of Computing and Mathematics, South East Technological University, Waterford, Ireland (e-mail: khan.nuzhat@utm.my; indrakshi.dey@setu.ie). Manuscript submitted to IEEE Transactions on Emerging Topics in Computational Intelligence and is under review. 
+
+places LLM collectives squarely within the long-standing computational intelligence (CI) programme of studying how coordinated populations of simple or complex units produce capabilities that no unit possesses alone, a pro-gramme this journal has pursued across learning-based multi-agent consensus [5], [6], opponent and behaviour reasoning in agent teams [7], trust formation in mixed agent teams [8], and the dynamics of human–agent team-ing [9]. What is new is the substrate: the “opinions” being exchanged are high-dimensional semantic embed-dings produced by language models, the coupling between agents is an attention mechanism rather than a fixed gain, and the collective is deployed as a reasoning engine whose answers carry real-world consequences. Real-world deployment, moreover, requires such systems to operate in environments that are frequently novel, exhibiting phenomena no a priori dataset anticipates and interactions that cannot be simulated in advance [10]. The consequence is a gap in what can be analysed, illustrated in Fig. 1: classical multi-agent consensus rests on an explicit graph topology and an analytical Lyapunov function (Fig. 1A), whereas a language-model collective evolves along natural-language trajectories whose update law is never written down (Fig. 1B), so that certifying its stability requires lift-ing observed trajectories into a space where the dynamics act linearly and reading the certificate off the resulting spectrum (Fig. 1C). With deployment comes a demand that empirical bench-mark gains cannot satisfy. Consider a practitioner who assembles a debate of eight LLM agents to answer safety-relevant questions. Three questions arise immediately, and none of them is answerable with current tools. (Q1) Convergence: will this particular collective, on this communication topology, with these agents, settle on an answer at all, or will it oscillate, fragment into camps, or drift indefinitely? (Q2) Deadline: if it does converge, how many rounds will that take? Every round costs in-ference compute, latency, and energy; a deployment must budget rounds, and today that budget is a guess. (Q3) Explanation: when the collective commits to an answer, what drove it? The individual agents will spontaneously produce chain-of-thought narratives, but a growing body of evidence shows that such narratives are frequently unfaithful, in the sense that they do not describe the computation that actually produced the answer [12], [13], and in any case they are accounts of individual agents, not of the collective process. Interpretability at the level of the system, as surveyed for neural networks in this journal arXiv:2608.05956v1 [cs.MA] 6 Aug 2026 2
+
+[11], is precisely what is missing for neural societies. The central thesis of this paper is that all three ques-tions become tractable, indeed become spectral questions with computable answers, once the collective is viewed through the lens of Koopman operator theory. The idea, developed in detail in Section III, can be stated in two sentences. Although the round-to-round evolution of the agents’ belief embeddings is nonlinear (attention makes the coupling state-dependent), there exists a linear operator, the Koopman transfer operator [14], [15], that represents this evolution exactly on a suitable space of ob-servable functions, and this operator can be approximated from recorded interaction traces using extended dynamic mode decomposition (EDMD) [16], [18], [19], [17]. Once the operator is in hand, its spectrum does the rest: the gap between the trivial unit eigenvalue and the next eigenvalue 
+
+λ2 fixes the slowest decaying mode of disagreement and hence the number of rounds to consensus (Q1, Q2), while the eigenvector attached to λ2 is the pattern of disagreement the collective takes longest to resolve: the structural, system-level explanation of what the debate was actually about (Q3). The purpose of this paper is to convert that thesis from an attractive analogy into a validated computational framework, and to be precise about what is demonstrated and what remains open. Our contributions are: 1) An explanatory operator-theoretic framework for collective reasoning (Sections III–V). We develop, in tutorial style, the chain of reasoning that leads from a nonlinear attention-driven debate to a linear transfer operator, and we package the framework as a concrete certification pipeline (Algorithm 1) whose inputs are nothing more than recorded interaction traces. 2) A reference model of semantic debate (Section IV): a minimal nonlinear attention-consensus system that isolates the two mechanisms that make LLM col-lectives dynamically nontrivial, namely similarity-gated (softmax) influence and graph-constrained communication, while remaining fully controllable and reproducible. 3) Empirical validation of three certificates (Sec-tion VI). Across 24 collective configurations the spectral deadline tracks observed convergence with log–log correlation r = 0 .93 and is a sound upper bound in 96% of cases (median conservatism 2.0×); spectral estimation error decays as ≈ M −0.36 over two decades of sample size; mode attribution re-covers latent factions with 100% accuracy in every run in which the spectrum certifies that factions exist ( |λ2| > 0.9; 42/60 runs), with |λ2| predict-ing attribution validity at correlation 0.92, so that the explanation is self-certifying; spectral message compression retains 99.7% decision fidelity at 4×
+
+bandwidth reduction; and an end-to-end certificate learned from 15 training debates held on 60/60 held-out question-answering debates. 4) A comparison with state-of-the-art baselines and a forward research programme (Sections VI-I, VII). Against classical graph-spectral consensus theory, empirical decay-curve fitting, and the fixed-round budgets used in current LLM-debate practice, the Koopman certificate is the only method that is simultaneously the most predictive (log–log r =0.94 ) and sound as a bound (100% coverage); we then chart the research programme the framework opens, from finite-sample spectral theory to live LLM collectives. Everything reported here runs in under twenty CPU-minutes; code, traces, and results are released in full. II. Related Work A. Multi-Agent Reasoning With Language Models Multi-agent LLM frameworks coordinate several model instances to solve complex tasks through structured de-bate, mutual critique, and consensus building [22]. Multi-agent debate [1] lets several LLM instances answer inde-pendently and then revise in light of one another’s answers; adversarial variants assign explicit critic roles [2]; and con-versational orchestration frameworks such as AutoGen [3] and LangGraph [25] generalise these patterns to arbitrary role graphs, assign specialised agent roles, and standardise message exchange. Peer debate and evaluation improve reasoning accuracy by letting agents identify and correct errors early, and the consistent finding is that interaction helps; but the benefit depends sensitively on the number of rounds, the sparsity of the communication pattern, and the diversity of the participants, none of which current theory explains. What these frameworks offer in place of such a theory are rudimentary stopping rules, fixed turn limits, majority voting, or string-agreement checks, none of which models how the debate itself evolves [26]. They can therefore neither guarantee convergence, nor prevent repetition, nor validate the correctness of a consensus, which is why reliable assessment of a collective calls for methods that monitor and certify dialogue stability as it unfolds rather than relying on benchmark performance alone. Our work is complementary to this literature: we take the orchestrated collective as given and ask what can be guaranteed about it from its own interaction traces. B. Learning-Based Consensus and Agent Teaming Learning-based consensus for multi-agent systems has been advanced through reinforcement-learning strategies for prescribed-time optimal consensus under switching stochastic dynamics [5] and through event-triggered im-pulsive consensus under time-varying delays [6]; both lines certify convergence for designed protocols with known structure, and in doing so depend on an explicit math-ematical representation of the agents’ update law. The complementary problem we address is certification for emergent protocols: collectives whose update rule (an LLM conditioned on peers’ messages) is unknown and can only be observed. The central challenge is therefore not to design a provably stable protocol but to certify the 3
+
+(A)           
+
+> x1x2
+> x3
+> Explicit Law: ˙xi=∑Aij (xj−xi)
+> Guarantees: Known L, Lyapunov V
+
+(B)       
+
+> M1M2
+> Text
+> Prompt
+> Unobservable Law: Tk+1 =f(Tk)
+> Challenge: Non-linear text dynamics Risk: Cascading drift & loops
+
+(C)                           
+
+> Trajectory Space: zk∈Rd
+> Koopman Space: Kψ(zk)
+> Lift ψ
+> Linearized Operator: K≈YX †
+> Spectral Certification:
+> ρ(K)<1=⇒Stable Consensus
+> Fig. 1. What is observable differs sharply between the two settings. In (A), agents exchange numerical states over a known graph, so the update law is explicit and convergence follows from a Lyapunov argument. In (B), the agents are language models and the round-to-round map Tk+1 =f(Tk)is never available in closed form. In (C), we recover it from data: trajectories are lifted through observables ψ, the operator
+> Kis estimated by least squares, and, once centering removes the trivial consensus direction, ρ(K)<1certifies that every disagreement mode decays.
+
+convergence of an unknown consensus process purely from observed interaction sequences, an emphasis that connects to recent progress in behavioural inference and dynamic trust modelling within agent teams. Related work on reasoning about other agents’ behaviour [7] and on trust formation in agent teams [8] likewise extracts structure from interaction data rather than from models, using offline system identification to assess how agents align over time; language-model orchestration is now beginning to apply data-driven operator methods in the same spirit, recovering latent state transitions from text logs. Our contribution can be read as extending that data-driven philosophy from the level of individual agents to the level of the collective’s dynamical law. Finally, studies of human–autonomous-agent teaming in [9] document how team-level dynamics, not individual competence, determine outcomes, a principle that modern teaming paradigms reinforce: static role assignments often fail once agent interactions produce deadlocks or repetitive loops under novel task conditions. The same premise is estab-lished here for machine-only teams, where tracing state transitions across communication rounds with operator-theoretic tools yields real-time stability guarantees that static benchmarks cannot supply. C. Koopman Operator Theory and Data-Driven Spectral Analysis The Koopman operator [14], [15] recasts nonlinear dynamics through an infinite-dimensional linear operator acting on the space of all measurement functions of the system. Framing nonlinear behaviour this way opens the door to using well-established linear-systems tools, developed over decades for prediction, estimation, and control, on problems that are fundamentally nonlinear; the price is infinite dimensionality, and the difficulty that remains is finding finite-dimensional coordinates or embeddings in which this linearity actually holds in practice. Dynamic mode decomposition (DMD) [16], [18], [17] and its extended form EDMD [19] address precisely that difficulty, approximating the spectrum from snapshot data, with convergence guarantees in the infinite-data, rich-dictionary limit [20] and learned-dictionary variants that remove the burden of choosing observables by hand [21], [23]. Three factors explain why Koopman-based analysis has gained traction. First, it rests on solid theoretical founda-tions linking it back to established geometric treatments of dynamical systems. Second, because the framework is built around measurements rather than governing equations, it fits naturally with data-driven and machine-learning approaches. Third, practical numerical tools, most notably dynamic mode decomposition and its variants, have turned the underlying theory into something usable for real appli-cations [24]. These tools have certified and controlled fluid, robotic, and power systems. To our knowledge, the present paper is the first to apply the transfer-operator viewpoint to semantic collectives, that is, systems whose state is a belief embedding and whose coupling is attention, and the first to derive reasoning-time and explanation certificates from the estimated spectrum. D. Consensus Theory, Opinion Dynamics, and Faithful Explanation For linear consensus, convergence rate is governed by the algebraic connectivity of the communication graph [27], [28]; nonlinear bounded-confidence models exhibit metastable opinion clusters [29]. Attention consensus, defined below, interpolates between these regimes and inherits the analytical difficulty of both: the effective coupling matrix depends on the state, so no fixed graph spectrum applies, which is exactly why a data-driven op-erator spectrum is required. On the explanation side, the unfaithfulness of post-hoc rationales [12], [13] motivates explanations that are properties of the dynamics rather 4
+
+than narratives about them; the neural-network inter-pretability taxonomy of [11] distinguishes passive post-hoc analysis from explanations with verifiable semantics, and the mode attribution developed here belongs firmly to the latter class. The compression certificate connects, in turn, to diffusion-map coordinates [32] and to goal-oriented semantic communication, where only decision-relevant message content is transmitted. III. Preliminaries: Why a Linear Operator Can Certify a Nonlinear Debate Because the Koopman viewpoint may be unfamiliar to parts of the CI community, we develop it here in explana-tory terms; the expert reader may skim to Section IV. A. From States to Observables Consider any discrete-time dynamical system z(t + 1) = 
+
+F (z(t)) with state z ∈ Rn and F nonlinear; for us, z will collect all agents’ belief embeddings and F will encode one debate round. The conventional viewpoint tracks the state. The Koopman viewpoint tracks measurements of the state: any scalar function ψ : Rn → R (an “observable”, for example the disagreement between two particular agents, or any nonlinear feature of the whole configuration). The dynamics act on observables by composition, 
+
+(Kψ)( z) = ψ(F (z)) , (1) and for stochastic dynamics by (Kψ)( z) = E[ψ(F (z))] .The key, and at first sight surprising, fact is that K is a linear operator regardless of how nonlinear F is: for any observables ψ1, ψ 2 and scalars a, b , K(aψ 1 + bψ 2) = 
+
+a Kψ1+b Kψ2, simply because composition distributes over addition of functions. Nothing is approximated; the price paid is that K acts on an infinite-dimensional space of functions rather than on Rn.B. Spectrum as Timescales, Eigenfunctions as Patterns Why is linearity worth that price? Because linear operators have spectra, and spectra encode timescales [30]. Suppose φ is an eigenfunction, Kφ = λφ . Then along any trajectory, φ(z(t)) = λtφ(z(0)) : the scalar signal obtained by evaluating φ evolves by pure geometric decay (or growth, or rotation, for complex λ), exactly, forever, no matter how complicated F is. An eigenvalue with |λ| < 1 is therefore a decay channel with half-life 
+
+ln 2 /(− ln |λ|) rounds, and its eigenfunction is the pattern in state space that decays at that rate. For a debating collective, the interpretation is direct: the eigenvalue λ = 1 
+
+corresponds to what the collective preserves (the consensus it is heading to); the sub-dominant eigenvalue λ2 is the slowest-dying pattern of disagreement, and its modulus fixes how many rounds the collective needs before that disagreement falls below any tolerance. The quantity 
+
+γ = 1 − | λ2| (2) is the spectral gap; a large gap means fast collective convergence, a vanishing gap means metastability, that                            
+
+> TABLE I Principal notation Symbol Meaning
+> N, d number of agents; belief-embedding dimension
+> xi(t)∈Rdbelief embedding of agent iat round tz(t)∈RN d collective state vec( x1, . . . , x N)
+> δ(t)centered deviation z(t)−¯z(t)
+> D(t)normalised disagreement
+> β, α, σ attention temperature; update rate; noise scale
+> K,ˆKKoopman operator; its EDMD estimate
+> λ2, γ sub-dominant eigenvalue; spectral gap 1− | λ2|
+> Ψ, m, ρ dictionary; # random features; ridge parameter
+> M, S # training trajectories; # snapshot pairs
+> ϵ, T cert disagreement tolerance; certified deadline
+
+is, persistent factions [31]. Everything this paper certifies is a corollary of estimating λ2 and its eigenfunction well. A worked micro-example. The smallest instructive case is two agents averaging scalar beliefs, 
+
+xi(t+1) = (1 − α) xi(t) + α ¯x(t). (3) The mean ¯x is conserved (eigenvalue 1), while the dis-agreement δ = x1 − x2 obeys δ(t+1) = (1 − α) δ(t): the observable δ is a Koopman eigenfunction with eigenvalue 
+
+λ2 = 1 − α, so the collective halves its disagreement every ln 2 /(− ln(1 − α)) rounds, a deadline readable from the spectrum. Attention (β > 0) destroys the closed form by making the effective α state-dependent, but the structure of the argument survives: a slowest disagreement observable still exists, and EDMD’s task is to find it and its decay rate from data. Table I collects the notation used throughout. C. Estimating the Operator From Traces: EDMD Figure 2 summarises the complete computational pipeline that follows from this viewpoint; the present sub-section develops its central estimation step. The operator is infinite-dimensional, but its action on a finite dictionary of observables Ψ( z) = [ψ1(z), . . . , ψ P (z)] can be esti-mated by regression. Given snapshot pairs {(zs, z + 
+
+> s
+
+)}Ss=1 
+
+harvested from trajectories, EDMD [19] finds the matrix 
+
+ˆK ∈ RP ×P that best propagates dictionary values one step forward, 
+
+ˆK = arg min 
+
+> K
+
+∑
+
+> s
+
+∥∥Ψ( z+ 
+
+> s
+
+) − Ψ( zs) K∥∥2 + ρ∥K∥2 
+
+> F
+
+, (4) solved in closed form as ˆK = (Ψ ⊤Ψ + ρI )−1Ψ⊤Ψ+.The eigenvalues of ˆK approximate Koopman eigenvalues; the quality of the approximation depends on how well the dictionary spans the relevant eigenfunctions and on how much data is available; both are probed empirically in Section VI-B. Two practical points deserve emphasis for the collective-reasoning setting. First, the consensus manifold contributes trivial eigenvalues at 1; centering the state (subtracting the mean belief) before applying the dictionary removes this subspace and exposes the decay modes we care about. Second, the dictionary need not be hand-designed for each system: a generic dictionary of 5
+
+1. Dialogue Traces 
+
+> Agent Execution Logs
+
+Tk → Tk+1 
+
+2. Semantic States 
+
+> Embedding Trajectory
+
+zk = E(Tk ) ∈ Rd
+
+3. EDMD Engine 
+
+> Operator Linearization
+
+K ≈ YX †
+
+4. Stability Bounds 
+
+> Spectral Certification
+
+ρ(K) < 1                 
+
+> Unstructured Text Continuous Vector Space Linear Matrix Estimation Stability Certified
+> Fig. 2. The four stages of the certification pipeline. Agent logs Tkare embedded into a semantic state zk=E(Tk), turning a transcript into a trajectory; snapshot pairs from that trajectory are lifted and regressed to give the operator K≈YX †; and its eigenvalues supply the certificates, with ρ(K)<1establishing that disagreement decays and the sub-dominant eigenvalue fixing how fast. Everything after the embedding is linear algebra.
+
+random Fourier features, consisting of linear coordinates plus cos( Wf z + b) with random Wf , b , approximates a universal kernel space and suffices for the dynamics studied here, while learned dictionaries [21], [23] are the natural upgrade path for real LLM embeddings. IV. A Reference Model of Semantic Debate To validate certificates one needs a system whose ground truth is accessible: convergence times must be measurable, faction structure must be plantable, and thousands of runs must be affordable. We therefore construct the minimal model that retains the two mechanisms responsible for the nontrivial dynamics of LLM collectives, and we are explicit that it is a model: the transfer to real LLM traces is discussed, with its risks, in Section VII. A. Attention-Consensus Dynamics Let N agents hold belief embeddings xi(t) ∈ Rd, the model analogue of the semantic embedding of an agent’s current message, and let them communicate along a graph 
+
+G with closed neighbourhoods N (i) ∪ { i}. Each round has two phases, mirroring an LLM debate round. In the appraisal phase, agent i assigns each incoming message a weight that grows with its semantic agreement with the agent’s own current belief: 
+
+aij (t) = exp (β ⟨ˆxi(t), ˆxj (t)⟩)∑  
+
+> k∈N (i)∪{ i}
+
+exp (β ⟨ˆxi(t), ˆxk(t)⟩) , (5) where ˆx = x/ ∥x∥ and β ≥ 0 is an attention temperature. In the update phase, the agent moves its belief a fraction 
+
+α ∈ (0 , 1] of the way toward the attention-weighted mixture: 
+
+xi(t+1) = (1 − α) xi(t) + α ∑ 
+
+> j∈N (i)∪{ i}
+
+aij (t) xj (t) + σ ξ i(t),
+
+(6) with optional Gaussian process noise ξi of scale σ ≥ 0.Three properties should be noted. (i) For β = 0 the model reduces to classical linear consensus, whose rate is fixed by the graph Laplacian [27]; for β > 0 the coupling matrix depends on the state, the map is genuinely nonlinear, and like-minded agents amplify one another, which is the mechanism by which LLM agents preferentially adopt arguments resembling their own. (ii) The collective state 
+
+z(t) = vec( x1, . . . , x N ) ∈ RN d leaves the consensus man-ifold {x1 = · · · = xN } invariant under the deterministic dynamics ( σ = 0 ), so “an answer” is an attractor family rather than a single point. (iii) Convergence is naturally monitored by the normalised disagreement 
+
+D(t) = ∥z(t) − ¯z(t)∥ / ∥z(0) − ¯z(0) ∥, (7) where ¯z stacks N copies of the mean belief; D is the model analogue of “how far the debate still is from a common answer.” B. Question-Answering Variant To connect disagreement decay to task performance, we also study a decision-making variant. Agents hold logits 
+
+Li(t) ∈ RK over K answer options; attention weights (5) are computed on the induced probability vectors; logits are mixed as in (6). A fraction c of “competent” agents receives a weak evidence bias εev toward the correct option at 
+
+t = 0 , modelling the realistic situation where some, but not all, agents have weak private signal. The collective answer at round t is the majority of arg max k Li(t). This variant lets us ask the deployment-relevant question directly: by which round is the collective’s answer final? C. Faction Initialisation for Attribution Studies Explanations only have content when there is structure to explain. For the attribution experiments we therefore plant structure: agents are initialised near one of two well-separated belief centres, and the communication graph is a planted-partition (stochastic block model) graph with intra-/inter-faction edge probabilities pin ≫ pout , reflect-ing the homophilous interaction patterns that attention itself induces. The ground-truth faction labels are used only for evaluation, never by the certification pipeline. V. The Certification Pipeline A. Estimator We instantiate EDMD as follows. Each recorded trace is centered, δ(t) = z(t) − ¯z(t), removing the trivial consensus eigenspace. The dictionary is 
+
+Ψ( δ) = [ 1, δ, cos( Wf δ + b) ] ∈ R1+ N d +m, (8) with m random Fourier features ( Wf Gaussian with scale 
+
+0.7/√N d , b ∼ U [0 , 2π]); ˆK is obtained from (4) with ridge 6
+
+ρ = 10 −6. Eigenvalues are sorted by modulus; residual near-unit eigenvalues ( |λ| ≥ 0.985 ), which correspond to conserved quantities rather than decay, are excluded, and 
+
+λ2 denotes the largest remaining modulus. The computa-tional cost is that of one regularised least-squares problem, 
+
+O(P 2S + P 3) for dictionary size P and S snapshot pairs, which is negligible next to a single LLM inference call, which is what makes certification a plausible always-on layer. B. Certificate 1: A Convergence Deadline To turn the spectral properties of the learned operator 
+
+ˆK into an operational metric, we define a predicted convergence deadline Tpred (γ) as an explicit function of the spectral gap, so that what would otherwise be heuristic multi-agent execution becomes a time-bounded process with a stated maximum number of interaction rounds. If the centered dynamics are dominated by the λ2-mode, disagreement decays geometrically, D(t) ≤ C |λ2|t, and solving for the tolerance ϵ gives the deadline 
+
+Tpred (γ) = ln( C/ϵ )
+
+− ln |λ2| , Tcert = ⌈Tpred ⌉. (9) Throughout we use the worst-case constant C = 1 and 
+
+ϵ = 0 .05 . The following proposition makes the underlying assumption explicit rather than hiding it. Proposition 1 (Deadline soundness under spectral dom-inance). Suppose the centered deviation admits an ex-pansion δ(t) = ∑ 
+
+> j≥2
+
+cj λ tj vj in Koopman modes with 
+
+|λ2| ≥ | λ3| ≥ · · · and ∑ 
+
+> j≥2
+
+|cj |∥ vj ∥ ≤ C ∥δ(0) ∥. Then 
+
+D(t) ≤ C |λ2|t, and D(t) ≤ ϵ for every t ≥ Tpred (γ).Proof. ∥δ(t)∥ ≤ ∑ 
+
+> j≥2
+
+|cj || λj |t∥vj ∥ ≤|λ2|t ∑ 
+
+> j≥2
+
+|cj |∥ vj ∥ ≤ C|λ2|t∥δ(0) ∥; divide by ∥δ(0) ∥
+
+and solve C|λ2|t ≤ ϵ.Remark 1. The proposition makes its working hypotheses explicit: the dominance constant C and the estimated λ2.Both are probed empirically below (Sections VI-A, VI-B), and Section VII charts the finite-sample theory that will make the guarantee unconditional. C. Certificate 2: Mode Attribution With a Validity Flag The eigenvector of ˆK at the slowest sub-dominant eigenvalue (equivalently, the DMD mode of the centered field) is a vector in the dictionary space; reshaped onto agents it yields a per-agent loading matrix Φ ∈ CN ×d.Intuitively, Φ answers the question “in the disagreement pattern that takes longest to die, which way does each agent lean?”; physically, it captures the relative amplitude and phase alignment of each agent within that non-equilibrium fluctuation. We reduce each agent’s complex loading to a scalar score by projecting its real–imaginary concatenation [Re(Φ i), Im(Φ i)] ∈ R2d onto the leading principal direction of all loadings; the sign of the score partitions the collective into the two sides of the slow disagreement. Among the top sub-dominant candidate modes, we select the one whose scores show the strongest Algorithm 1 Spectral certification of a reasoning collective Require: M recorded debate traces; tolerance ϵ; dictionary size m; ridge ρ 
+
+> 1:
+
+Center each trace: δ(t) ← z(t) − ¯z(t) 
+
+> 2:
+
+Draw dictionary (8); stack snapshot pairs (Ψ , Ψ+) 
+
+> 3:
+
+ˆK ← (Ψ ⊤Ψ + ρI )−1Ψ⊤Ψ+; eigendecompose  
+
+> 4:
+
+λ2 ← largest modulus among {| λ| < 0.985 } 
+
+> 5:
+
+Deadline: Tcert ← ⌈ ln(1 /ϵ )/(− ln |λ2|)⌉ 
+
+> 6:
+
+if |λ2| > 0.9 then  
+
+> 7:
+
+Attribution: score agents by slow-mode loadings; emit partition and mode identities M 
+
+> 8:
+
+else  
+
+> 9:
+
+Emit “no metastable structure; attribution not ap-plicable”  
+
+> 10:
+
+end if  
+
+> 11:
+
+return “converged by round Tcert , driven by modes 
+
+M ”two-means separation (a silhouette-style coherence crite-rion). The decisive design feature is the validity flag: |λ2|
+
+close to 1 means a metastable partition genuinely exists, whereas |λ2| well below 1 means that all structure decays quickly, leaving a large spectral gap γ = 1 − | λ2| and nothing to attribute except transient noise. Formally, we define the indicator 
+
+Validity = 
+
+{VALID , |λ2| > 0.9,
+
+INVALID , |λ2| ≤ 0.9. (10) We therefore claim an attribution only when |λ2| > 0.9,which is what prevents false-positive partition attribu-tions, and Section VI-C shows this flag to be empirically almost perfectly calibrated. D. Certificate 3: Spectral Message Compression The same slow spectral directions that carry the cer-tificates also carry the decision-relevant content of the messages. We exploit this by projecting each transmitted message onto the top-k empirical spectral coordinates (the principal directions of the centered round-0 messages, a finite-sample surrogate of diffusion-map coordinates [32]); receivers reconstruct and run (6) unchanged. Fidelity is measured as the cosine similarity between the final consensus beliefs of the compressed and full-bandwidth collectives on coupled random seeds. Beyond bandwidth, the point is auditability: a collective communicating in its own certificate basis is a collective whose messages are, by construction, expressed in the coordinates of its explanation. VI. Numerical Results The evaluation is organised around five questions, one per certificate property: does the deadline predict (Sec-tion VI-A)? how fast does the estimate concentrate (Sec-tion VI-B)? is the explanation faithful and does it know its own limits (Section VI-C)? does compression preserve the decision (Section VI-D)? and does the assembled pipeline 7             
+
+> Fig. 3. Each point is one of 24 configurations spanning team size, edge probability, update rate, and attention temperature. Its horizontal coordinate is the deadline predicted from the spectral gap before the debate runs, its vertical coordinate the round at which disagreement first falls below ϵ= 0 .05 , averaged over 20 held-out rollouts. Predictions track observations across more than a decade of timescales ( r= 0 .93 ). Points above the dashed diagonal would mean the collective outlived its deadline; 96% fall safely below it.
+
+certify a decision task end to end (Section VI-E)? Unless stated otherwise, ϵ = 0 .05 , dictionary size m ∈ [40 , 60] ,ridge ρ = 10 −6, and, essentially for the validity of the claims, EDMD training and certificate evaluation always use disjoint runs. A. The Spectral Gap Predicts the Convergence Deadline We sweep a 24-point grid over the number of agents N ∈{8, 16 , 32 }, Erdős–Rényi edge probability p ∈ { 0.25 , 0.45 },update rate α ∈ { 0.35 , 0.6}, and attention temperature 
+
+β ∈ { 0.5, 2.5}. For each configuration, EDMD is fit on 12 training rollouts and Tpred is compared with the observed first-passage round Tobs at which D(t) < ϵ , averaged over 20 fresh rollouts. In Fig. 3, as topology, temperature, and update rate vary, predicted and observed deadlines both span more than a decade (from roughly 4 to 70 rounds), and the prediction tracks the observation with log–log Pearson correlation r = 0 .93 . Read as a bound rather than a point prediction, the integer certificate Tcert 
+
+upper-bounded the mean observed convergence round in 23 of 24 configurations (96% coverage), with a median conservatism factor Tpred /T obs = 2.0 (range 0.8–4.8). The conservatism has a transparent origin: the worst-case constant C = 1 in (9) charges every run for fully exciting the slowest mode, which typical random initialisations do not. What matters for deployment is the asymmetry of the two error directions (a deadline that is occasionally twice too long wastes some budget, whereas a deadline that is too short breaks a guarantee), and the certificate errs almost exclusively on the safe side.            
+
+> Fig. 4. Absolute error of the estimated sub-dominant eigenvalue against a 500-trajectory reference, versus the number of training trajectories M(12 repetitions per M, error bars giving the standard error). The fitted slope of −0.36 is shallower than the dashed M−1/2
+> reference, reflecting the strong dependence between snapshots drawn from a single debate. The left-hand end matters most in practice: roughly ten short traces already place |λ2|to within a few points.
+
+B. Finite-Sample Behaviour of the Spectral Estimate Certificates are only as good as the eigenvalue under them, and traces are expensive when agents are LLMs, so the practically decisive question is how quickly ˆλ2
+
+concentrates. We fix a 16-agent configuration with process noise (σ = 0.02 ), compute a 500-trajectory reference value λref 2 , and measure |ˆλ2 − λref 2 | for estimators trained on M freshly sampled trajectories, 12 repetitions per 
+
+M , for M ranging over two decades. Fig. 4 shows amonotone decay with fitted slope −0.36 from M = 2 to 
+
+M = 128 , bracketed by the M −1/2 rate that an i.i.d.-sample analysis would predict. The shortfall from −1/2
+
+is itself informative: snapshots within a debate trajectory are strongly dependent, so the effective sample size grows more slowly than the raw snapshot count, precisely the effect a finite-sample theory for this setting must quantify, presumably through mixing properties of the trace process. Practically, the curve carries good news: even M ≈ 10 
+
+short traces locate |λ2| to within a few points, which is the data regime in which real LLM debates are affordable to collect. C. Eigenmodes Are Self-Certifying Explanations A faithful system-level explanation must satisfy two re-quirements that narrated explanations fail: it must recover the structure that actually organised the decision, and it must decline to explain when no such structure exists. The faction setting tests both at once. We run 60 two-faction debates ( N = 24 , planted-partition graphs with pin = 0 .5,
+
+pout = 0 .06 , β = 4 ) and apply the attribution procedure of Section V with no access to the true labels. Because the collectives differ in how quickly their factions dissolve, the 8
+
+60 runs naturally span both regimes, persistent structure and already-merged structure, so the validity flag can be evaluated, not merely asserted. Pooled over all 60 runs the attribution accuracy is 0.85 ± 0.20 , which is respectable but not the point. The structure of the errors is the point (Fig. 5(b)): accuracy correlates with the estimated 
+
+|λ2| at 0.92, and conditioned on the spectrum certifying metastability ( |λ2| > 0.9), attribution is 100% correct in every one of the 42 qualifying runs, while below the threshold the factions have already merged and accuracy falls to chance, and correctly so, because there is no longer a faction structure to recover. In other words, the explanation and its validity condition are computed from the same spectral object, and the validity condition is empirically almost perfectly calibrated. This is what we mean by a self-certifying explanation, and it is the property that distinguishes structural attribution from post-hoc narration [12], [13]: a chain-of-thought never announces that it is unfaithful, whereas a closed spectral gap announces exactly that. D. Spectral Compression Preserves the Decision With d = 32 -dimensional messages, agents transmit only the top-k spectral coordinates of their centered message, for k ∈ { 1, 2, 4, 8, 16 , 32 }; each compressed col-lective is compared against a full-bandwidth twin run on coupled random seeds (25 pairs per k), so that any fidelity loss is attributable to compression alone. Fig. 6: transmitting k = 8 of 32 coordinates, a 4× bandwidth reduction, preserves the final decision at 0.997 ± 0.002 
+
+cosine fidelity, and even k = 2 retains 0.98. The reason is not mysterious: consensus formation is governed by the slow spectral directions, and those are exactly the directions retained. The corollary matters for trustworthy deployment: because the retained coordinates are the same basis in which the deadline and attribution certificates are expressed, the compressed channel is simultaneously bandwidth-efficient and auditable, an appealing property wherever reasoning collectives operate over constrained or monitored links. E. An End-to-End Certificate on a QA Debate Algorithm 1 is executed exactly as a deployed wrapper would run it. On the QA variant ( N = 12 , K = 4 options, 60% competent agents with evidence bias 0.8), EDMD is fit on 15 training debates; the resulting certificate is evaluated on 60 held-out debates that the estimator never saw. Training yields |ˆλ2| = 0 .881 and hence the machine-checkable statement “normalised disagreement below 0.05, and majority answer stable, by round Tcert = 24 .” On the 60 held-out debates (Fig. 7, Table II), the majority answer was stable from round Tcert onward in 100% of runs, and disagreement crossed ϵ at round 12.7 on average; the certificate is conservative by design, never unsound. Two secondary observations sharpen the deployment picture. First, reading the answer out at only Tcert /3 rounds would already have agreed with the certified answer in                
+
+> TABLE II End-to-end certificate on the QA debate (60 held-out runs) Quantity Value Estimated |ˆλ2|(15 training runs) 0.881
+> Certified deadline Tcert 24 rounds Runs with majority answer stable from Tcert 100%
+> Mean observed ϵ-convergence round 12 .7
+> Round-⌊Tcert /3⌋answer matches certified answer 98%
+> Collective majority accuracy (base rate 25% )67%
+
+98% of runs, quantifying the latency that an adaptive early-stopping rule could recover on top of the worst-case guarantee. Second, the collective reaches 67% majority accuracy from only weakly informed agents against a 25% base rate, confirming that the certified debates are genuine collective decision processes and that the certificate is not trivialised by the task. F. How Attention Temperature Shapes the Spectrum The attention temperature β is the parameter that makes semantic collectives dynamically different from classical consensus, so it is worth asking directly how the spectrum, and with it reasoning time, responds to it. We sweep β from 0 (linear consensus) to 6 (strongly homophilous attention) on a fixed 16-agent configuration, estimating the gap from 12 training traces per setting and measuring convergence on 20 fresh runs with a generous 200-round horizon. Fig. 8(a) shows a clean, interpretable pattern. Up to moderate temperature ( β ≤ 2) the gap sits near 0.08 –0.10 and consensus arrives in tens of rounds; between β = 2 and β = 3 the gap collapses by a factor of five and reasoning time jumps accordingly; and the certified deadline tracks the observed time as a sound en-velope throughout the converging regime. The sweep thus supplies the mechanistic reading promised in Section III: attention homophily is, spectrally, a gap-closing force. The more strongly agents privilege like-minded peers, the longer the collective takes to reconcile its factions, by an amount the estimated spectrum quantifies in advance. The endpoint β = 6 deserves discussion because it exhibits the framework’s boundary behaviour. There the collective becomes genuinely metastable (no run converges within 200 rounds) while the estimated |λ2| = 0 .983 lands essentially on the pipeline’s near-unit exclusion threshold (0.985 ). A deadline computed from an eigenvalue this close to 1 extrapolates a slow decay that finite training traces cannot distinguish from no decay at all, and it should not be trusted; the correct pipeline behaviour is to widen the refusal band and report “metastable: no convergence certificate,” exactly as the attribution certificate already does in reverse. We adopt this refinement in the released implementation and flag the principled sizing of the refusal band as an open calibration problem (Section VII). G. Does the Nonlinear Dictionary Matter? An Ablation A natural question is how much of the certificates’ accuracy is owed to the nonlinear part of the dictionary 9
+
+Fig. 5. (a) The 24 agents of one debate, plotted in the top two principal coordinates of their round-1 embeddings and coloured by true faction; a black ring marks each agent the slow Koopman-mode score assigns correctly, and every agent carries one. (b) Each point is one of 60 debates. Right of the dashed threshold the spectrum certifies a metastable partition and attribution is perfect in all 42 qualifying runs; left of it the factions have already merged and accuracy falls to chance. Accuracy and |λ2| correlate at 0.92, so the explanation reports its own domain of validity. 
+
+Fig. 6. Messages are 32-dimensional; each compressed collective transmits only its top k spectral coordinates and is compared against a full-bandwidth twin on coupled seeds, so any loss is due to compression alone. Fidelity is the cosine similarity of the two final consensus beliefs (25 pairs per k). It crosses the dotted 99% line between k = 4 and k = 8 and reaches 0.997 at k = 8 , because consensus is governed by exactly the slow directions this basis retains. 
+
+(8). We repeat the Fig. 3 protocol on a 12-configuration grid with two estimators that differ only in the dictionary: linear (constant plus linear coordinates, i.e., DMD on the centered field) and linear +RFF (the full dictionary with m = 60 random features). Table III: on this model the two dictionaries are statistically indistinguishable: correlation, conservatism, and coverage all agree within noise. The honest interpretation is that attention con-sensus, although nonlinear, spends most of its trajectory 
+
+Fig. 7. Each blue curve is the normalised disagreement of one of 12 held-out question-answering debates; the logarithmic axis renders the geometric decay as a near-straight descent. The dotted line is the tolerance ϵ = 0 .05 and the red dashed line the certified deadline 
+
+Tcert = 24 , computed in advance from 15 independent training debates. Every trajectory crosses well before it, and the majority answer was stable from Tcert onward in all 60 held-out runs. The visible margin is the conservatism of the worst-case constant C = 1 .
+
+in the neighbourhood of the consensus manifold where the linearisation dominates, so linear observables already span the slow subspace well. This is a useful negative result in two directions. Practically, it licenses the cheapest possible estimator for systems of this class. Scientifically, it sharpens the expectation for real LLM collectives: it is precisely when the dynamics leave the near-consensus regime (multiple competing answers, oscillatory critique cycles, drifting embeddings) that nonlinear and, ulti-mately, learned dictionaries [21], [23] must earn their keep, 10                                  
+
+> Fig. 8. (a) As attention temperature βgrows, agents weight like-minded peers ever more heavily, the spectral gap γ(green, right axis) collapses from about 0.10 to 0.02 , and rounds-to-consensus rise by an order of magnitude, with the certificate remaining a sound envelope throughout the converging regime. In the shaded band at β= 6 no run converges within 200 rounds and the estimate |λ2|= 0 .983 sits on the near-unit exclusion boundary, where a deadline should be refused rather than issued. (b) Mean rounds to reach tolerance ϵare affine in ln(1 /ϵ )with R2= 0 .998 , exactly as (9) asserts, so only the constant, and not the functional form, remains loose. TABLE III Dictionary ablation on the deadline certificate (12 configurations) Dictionary log–log rmedian Tpred /T obs coverage Linear (DMD) 0.87 2.35 100%
+> Linear +RFF 0.85 2.32 100%
+
+and the ablation supplies the baseline they must beat. H. Validating the Deadline’s Functional Form Fig. 3 validated the deadline at a single tolerance. But (9) makes a stronger, parametric claim: rounds-to-tolerance should be affine in ln(1 /ϵ ) with slope 
+
+1/(− ln |λ2|). We test the form directly on the QA col-lective by measuring mean rounds to reach each tolerance 
+
+ϵ ∈ { 0.2, 0.1, 0.05 , 0.02 , 0.01 } over 40 runs and comparing against the certificate slope computed from 15 disjoint training runs. Fig. 8(b): the observed relation is linear in ln(1 /ϵ ) with R2 = 0 .998 : the geometric-decay structure that the entire certificate rests on is not an approximation of convenience but an accurate description of the collec-tive’s approach to consensus. The certificate slope ( 8.6
+
+rounds per e-fold of tolerance) bounds the fitted slope (4.9) by a factor of 1.8, numerically consistent with the conservatism factors observed in Fig. 3 and Fig. 7 and traceable to the same worst-case constant. The practical consequence is pleasant: because the form is right and only the constant is loose, a data-driven tightening of C would improve every tolerance simultaneously. I. Comparison With State-of-the-Art Baselines No prior method certifies emergent reasoning collectives as such, so the fair comparison is against the strongest available approaches to each individual certificate. For                   
+
+> TABLE IV Deadline prediction versus baselines (24 configurations, held-out runs). Coverage is the fraction of configurations for which the issued deadline upper-bounds the mean observed convergence round. Method log–log rmedian Tpred /T obs coverage Koopman certificate (ours) 0.94 1.92 100 %
+> Graph-spectral theory [27] 0.75 0.84 50%
+> Decay-curve fit 0.87 0.89 42%
+> Fixed budget ( T=5 ) [1] –0.23 4%
+
+the deadline, three baselines span current theory and practice. Graph-spectral theory applies the classical linear-consensus result [27], [28]: the deadline is computed from the sub-dominant eigenvalue of the expected linear update matrix P = (1 − α)I + α RowNorm( A + I), which is exact for β = 0 and represents the state of the art in closed-form consensus rates. Decay-curve fitting is the standard empir-ical system-identification practice: an exponential is fitted to the disagreement curves log D(t) of the training runs and extrapolated to the tolerance. Fixed round budgets represent current practice in the LLM-debate literature, where a constant number of rounds (typically three to five [1], [2]) is used for every task and collective; we instantiate the generous end, T = 5 . All methods receive the same 12 training runs per configuration and are evaluated on the same 20 held-out runs, over the full 24-configuration grid of Fig. 3. For attribution, we compare the Koopman mode against k-means clustering of the round-1 embeddings and against graph spectral clustering (the sign of the Fiedler vector), the standard representation-based and topology-based partitioning methods. For compression, the spectral code is compared against random Gaussian projection at matched bandwidth. Table IV shows that the Koopman certificate is the 11 
+
+only method that is simultaneously the most predictive and sound. Graph-spectral theory, despite being exact for linear consensus, degrades to r = 0 .75 and violates its own bound in half the configurations, because attention decouples the true reasoning timescale from the fixed graph spectrum; this quantifies precisely why the problem requires a data-driven operator spectrum. Decay-curve fitting is competitive as a point predictor ( r = 0.87 ,median absolute relative error 0.31 versus our 0.92 ), and this is expected: it fits the typical decay, whereas the certificate bounds the worst-case mode. The distinction is decisive for guarantees: the curve fit undershoots the observed deadline in 58% of configurations, so a system that trusted it would terminate debates early and break its own contract, while the Koopman certificate never does. The fixed five-round budget of current practice, finally, covers 4% of configurations, confirming that round budgets chosen independently of the collective’s dynamics are not a viable certification strategy. A further structural advantage is not visible in the table: neither baseline pro-duces eigenmodes, so neither supports the attribution and compression certificates; the Koopman spectrum delivers all three from one estimation. On the planted two-faction benchmark, k-means on round-1 embeddings and Fiedler partitioning recover the planted labels with 1.00 and 0.98 accuracy respectively, as expected, since the planted structure is directly visible in their inputs (the initial embeddings and the graph). The Koopman mode matches them ( 1.00 ) on every run in which the structure is dynamically alive ( |λ2| > 0.9)and, unlike them, reports when it is not: on runs where the factions have merged, the static baselines still emit a confident bipartition of a collective whose decision is no longer organised by factions, with no signal that their explanation has become dynamically vacuous, whereas the spectral gap discloses exactly that. For explanation of a decision process, the operative question is not whether initial clusters can be found but whether they still drive the outcome, and only the operator spectrum answers it. For compression at k = 8 of 32 dimensions, the spectral code attains 0.996 decision fidelity versus 0.979 for random projection at identical bandwidth, a fivefold reduction in fidelity loss ( 0.4% versus 2.1% ), because the spectral basis is aligned with the slow directions that determine the consensus, while a random basis spreads its capacity isotropically. VII. Discussion A. What the Study Establishes Taken together, the nine experiments close the loop that the operator-theoretic thesis requires. The spectral gap, estimated from a handful of traces by a generic dictionary, quantitatively predicts and soundly bounds collective reasoning time across topologies, temperatures, and team sizes; the estimator concentrates fast enough for realistic data budgets; the slow eigenmode is a faithful explanation equipped with its own validity test; the certificate basis doubles as a high-fidelity compressed message code; and the assembled pipeline certifies a decision task end to end on held-out data. Because the whole apparatus is linear algebra over recorded traces, its cost is negligible relative to the inference cost of the agents themselves, so nothing prevents certification from running continuously alongside deployed collectives. Beyond the headline certificates, the study also yields three second-order findings with independent value: reasoning time responds to attention temperature through a quantifiable gap-closing mecha-nism, with a sharp transition into metastability (Fig. 8); for near-consensus dynamics the cheapest linear dictionary already suffices, fixing the baseline that learned dictio-naries must beat on harder systems; and the geometric-decay form underlying the deadline is empirically exact to R2 = 0 .998 , so the only looseness in the certificate is a single multiplicative constant. B. Deployment Considerations Three properties make the pipeline realistic as an always-on layer rather than an offline analysis. Cost: certification is a single ridge regression and eigendecom-position, O(P 2S +P 3); for the largest system studied here (N = 32 , d = 8 , P ≈ 320 ) this completes in well under a second, i.e., orders of magnitude below one LLM inference call. Data appetite: by Fig. 4, on the order of ten traces suffice to place |λ2| within a few points, so a deployed collective can be certified from its first day of logs and re-certified continuously as the task distribution drifts. Failure disclosure: the same spectral object that issues certificates also refuses them: attribution is withheld when the gap is wide (Fig. 5), and convergence deadlines are withheld when the estimated eigenvalue enters the near-unit refusal band (Fig. 8). A certification layer that knows when to say “no certificate” is, for regulated deployments, at least as important as one that says “yes” quickly. C. Future Research Directions The results open four concrete research directions, each of which builds directly on an empirical finding above. (i) Finite-sample spectral theory. The measured concentration rate M −0.36 of Section VI-B invites amatching guarantee of the form |ˆλ2 − λ2| ≲ κ M −1/2eff ,with an effective sample size Meff derived from the mixing properties of debate traces; combined with perturbation control of the dominance constant, such a result would tighten the observed 2× conservatism and would also derive, rather than posit, the attribution threshold and the near-unit refusal band whose empirical calibration Fig. 5 and Fig. 8 established. (ii) Live LLM collectives. The natural next system class is recorded traces of actual LLM debates, where belief embeddings are obtained from the messages themselves; learned dictionaries [21], [23] are the designated vehicle, the present random-feature dictionary supplies the ablation anchor, and the released simulator already generates the time-varying communica-tion graphs needed for staged transfer. (iii) Directed, role-12 
+
+heterogeneous collectives. Planner, solver, critic, and veri-fier roles induce directed interaction, whose non-normal transfer operators generically carry complex eigenvalue pairs corresponding to oscillatory critique cycles; the spec-trum then promises to distinguish productive oscillation from divergence, a capability with no counterpart in current orchestration practice. (iv) Strategic robustness. Extending the certificates from statistical statements over initial conditions to statements robust against strategic or faulty agents connects the spectral framework to the trust-modelling line in this journal [8] and would complete the pipeline as a security-relevant layer. D. Outlook Reasoning collectives are being deployed faster than they are being understood, and regulatory instruments such as the EU AI Act will increasingly require docu-mented, verifiable behaviour from exactly such systems. The results above suggest that the required verification layer need not wait for a full mechanistic theory of language models: the collective’s own interaction traces, viewed through a transfer operator, already support dead-lines, structural explanations, and auditable communica-tion. Making those certificates unconditional, and porting them from the reference model to live LLM societies, is the immediate research programme this paper opens. VIII. Conclusion We have shown that treating a collective of reasoning agents as one nonlinear dynamical system, and reading its behaviour off the spectrum of a Koopman operator estimated from its own interaction traces, converts three open questions about collective machine reasoning into computable certificates: convergence deadlines that are accurate to a constant factor and sound as bounds, explanations that are structural rather than narrated and that certify their own validity, and a spectral message code that preserves decisions at a fraction of the bandwidth. On a controlled but genuinely nonlinear model of semantic debate, all three certificates held on held-out data at negligible computational cost, without requiring access to internal agent parameters or model weights. The framework is offered to the computational intelligence community both as a practical black-box certification layer for the rapidly growing ecosystem of LLM collectives and autonomous multi-agent networks and as a concrete, falsifiable bridge between data-driven operator theory and the emerging science of machine societies. References 
+
+[1] Y. Du, S. Li, A. Torralba, J. B. Tenenbaum, and I. Mordatch, “Improving factuality and reasoning in language models through multiagent debate,” arXiv:2305.14325, 2023. [2] T. Liang et al., “Encouraging divergent thinking in large lan-guage models through multi-agent debate,” arXiv:2305.19118, 2023. [3] Q. Wu et al., “AutoGen: Enabling next-gen LLM applications via multi-agent conversation,” arXiv:2308.08155, 2023. [4] T. Wei, T.-W. Li, Z. Liu, X. Ning, Z. Yang, J. Zou, Z. Zeng, R. Qiu, X. Lin, D. Fu, et al., “Agentic reasoning for large language models,” arXiv preprint arXiv:2601.12538, 2026. [5] W. Guang, X. Wang, L. Tan, J. Sun, and T. Huang, “Prescribed-time optimal consensus for switched stochastic multiagent sys-tems: Reinforcement learning strategy,” IEEE Trans. Emerg. Topics Comput. Intell., vol. 9, no. 1, 2025. [6] W. Zhang, J. Chen, S. Wen, and T. Huang, “Event-triggered random delayed impulsive consensus of multi-agent systems with time-varying delay,” IEEE Trans. Emerg. Topics Comput. Intell., vol. 9, no. 2, 2025. [7] Y. Hou, M. Sun, W. Zhu, Y. Zeng, H. Piao, X. Chen, and Q. Zhang, “Behavior reasoning for opponent agents in multi-agent learning systems,” IEEE Trans. Emerg. Topics Comput. Intell., vol. 6, no. 5, pp. 1125–1136, 2022. [8] C.-T. Lin, H. Zhang, L. Ou, Y.-C. Chang, and Y.-K. Wang, “Adaptive trust model for multi-agent teaming based on reinforcement-learning-based fusion,” IEEE Trans. Emerg. Top-ics Comput. Intell., vol. 8, no. 1, pp. 229–239, 2024. [9] M. Demir, N. J. McNeese, and N. J. Cooke, “The impact of perceived autonomous agents on dynamic team behaviors,” IEEE Trans. Emerg. Topics Comput. Intell., vol. 2, no. 4, pp. 258–267, 2018. [10] C. Zhang, L. Ji, S. Yang, X. Guo, and H. Li, “Data-driven distributed output consensus control for multi-agent systems with unknown internal state,” Neurocomputing, vol. 615, p. 128868, 2025. [11] Y. Zhang, P. Tiňo, A. Leonardis, and K. Tang, “A survey on neural network interpretability,” IEEE Trans. Emerg. Topics Comput. Intell., vol. 5, no. 5, pp. 726–742, 2021. [12] A. Jacovi and Y. Goldberg, “Towards faithfully interpretable NLP systems: How should we define and evaluate faithfulness?” in Proc. 58th Annu. Meeting Assoc. Comput. Linguistics (ACL), 2020, pp. 4198–4205. [13] M. Turpin, J. Michael, E. Perez, and S. R. Bowman, “Lan-guage models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting,” in Adv. Neural Inf. Process. Syst. (NeurIPS), 2023. [14] B. O. Koopman, “Hamiltonian systems and transformation in Hilbert space,” Proc. Nat. Acad. Sci. USA, vol. 17, no. 5, pp. 315–318, 1931. [15] I. Mezić, “Spectral properties of dynamical systems, model reduction and decompositions,” Nonlinear Dyn., vol. 41, pp. 309–325, 2005. [16] P. J. Schmid, “Dynamic mode decomposition of numerical and experimental data,” J. Fluid Mech., vol. 656, pp. 5–28, 2010. [17] P. J. Schmid, “Dynamic mode decomposition and its variants,” Annu. Rev. Fluid Mech., vol. 54, pp. 225–254, 2022. [18] C. W. Rowley, I. Mezić, S. Bagheri, P. Schlatter, and D. S. Henningson, “Spectral analysis of nonlinear flows,” J. Fluid Mech., vol. 641, pp. 115–127, 2009. [19] M. O. Williams, I. G. Kevrekidis, and C. W. Rowley, “A data-driven approximation of the Koopman operator: Extending dynamic mode decomposition,” J. Nonlinear Sci., vol. 25, pp. 1307–1346, 2015. [20] M. Korda and I. Mezić, “On convergence of extended dynamic mode decomposition to the Koopman operator,” J. Nonlinear Sci., vol. 28, pp. 687–710, 2018. [21] Q. Li, F. Dietrich, E. M. Bollt, and I. G. Kevrekidis, “Extended dynamic mode decomposition with dictionary learning: A data-driven adaptive spectral decomposition of the Koopman opera-tor,” Chaos, vol. 27, no. 10, p. 103111, 2017. [22] K.-T. Tran, D. Dao, M.-D. Nguyen, Q.-V. Pham, B. O’Sullivan, and H. D. Nguyen, “Multi-agent collaboration mechanisms: A survey of LLMs,” arXiv preprint arXiv:2501.06322, 2025. [23] S. Klus, F. Nüske, S. Peitz, J.-H. Niemann, C. Clementi, and C. Schütte, “Data-driven approximation of the Koopman generator: Model reduction, system identification, and control,” Physica D, vol. 406, p. 132416, 2020. [24] S. L. Brunton, M. Budiši’c, E. Kaiser, and J. N. Kutz, “Modern Koopman theory for dynamical systems,” arXiv:2102.12086, 2021. [25] K. Pelluru, “Langchain & langgraph in production: Architec-tures for multi-agent llm systems,” Journal of Data and Digital Innovation (JDDI), vol. 2, no. 3, pp. 1–9, 2025. 13 
+
+[26] Q. Motger, M. Oriol, J. Marco, and X. Franch, “Multi-agent debate strategies: Survey, taxonomy, and challenges,” arXiv preprint arXiv:2607.26212, 2026. [27] R. Olfati-Saber and R. M. Murray, “Consensus problems in networks of agents with switching topology and time-delays,” IEEE Trans. Autom. Control, vol. 49, no. 9, pp. 1520–1533, 2004. [28] M. H. DeGroot, “Reaching a consensus,” J. Amer. Statist. Assoc., vol. 69, no. 345, pp. 118–121, 1974. [29] R. Hegselmann and U. Krause, “Opinion dynamics and bounded confidence: Models, analysis and simulation,” J. Artif. Soc. Social Simul., vol. 5, no. 3, 2002. [30] A. Z. Liu, E. Paquette, and J. Sous, “Spectral lens: Activation and gradient spectra as diagnostics of llm optimization,” arXiv preprint arXiv:2605.05683, 2026. [31] F. Shahbazi, H. Kebriaei, and A. Yaghmaei, “Opinion dynamics with social confirmation effect: An adaptive Hegselmann-Krause model,” IEEE Trans. Comput. Soc. Syst., 2025. [32] R. R. Coifman and S. Lafon, “Diffusion maps,” Appl. Comput. Harmon. Anal., vol. 21, no. 1, pp. 5–30, 2006.

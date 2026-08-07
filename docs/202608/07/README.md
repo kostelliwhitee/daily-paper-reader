@@ -1,20 +1,23 @@
 # 日报 · 2026-08-07
 
-- 生成时间：2026-08-07 01:53:03 UTC
-- 当次推荐总数：4
-- 精读区：2
+- 生成时间：2026-08-07 21:03:34 UTC
+- 当次推荐总数：3
+- 精读区：1
 - 速读区：2
 
 ## 今日简报（AI）
-今日4篇论文聚焦多智能体与具身智能，2篇精读获8.0高分。最值得看：小型LLM直接作为空间多智能体策略，以及HELENA用互补拓扑层次化稀疏协调，显著提升协作效率。下步可重点关注零样本人机协调与安全场景评估的LLM推理方法。
+今日评阅3篇论文，聚焦多智能体系统（MAS）的推理验证与协调策略，其中1篇精读、2篇速读。
+
+最值得关注的是精读论文《Certifying Collective Reasoning in Multi-Agent Systems via Koopman Spectral Analysis》（8.0分），它用Koopman谱分析为集体推理提供可验证的认证方法；此外速读中的HELENA（7.0分）通过互补拓扑分层稀疏协调提升MAS性能。
+
+建议普通读者优先精读Koopman谱分析一文理解其认证框架，再结合HELENA对比协调机制设计，后续可关注LLM-Agent搜索框架在更大解空间上的扩展应用。
 
 ## 精读区
-1. [Training Small LLMs as Spatial Multi-Agent Policies](/202608/07/2608.01425v1-training-small-llms-as-spatial-multi-agent-policies) （8.0/10）
-2. [HELENA:Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS](/202608/07/2608.04634v1-helenahierarchical-sparse-coordination-over-a-union-of-complementary-topologies-for-mas) （8.0/10）
+1. [Certifying Collective Reasoning in Multi-Agent Systems via Koopman Spectral Analysis](/202608/07/2608.05956v1-certifying-collective-reasoning-in-multi-agent-systems-via-koopman-spectral-analysis) （8.0/10）
 
 ## 速读区
-1. [Structured LLM Reasoning for Zero-Shot Human--Robot Coordination Under Hidden Goals](/202608/07/2608.04309v1-structured-llm-reasoning-for-zero-shot-human--robot-coordination-under-hidden-goals) （7.0/10）
-2. [NSF-HRPT: Neural Semantic Field meets Hierarchical Risk Perception Tree for Safety-Critical Scenario Assessment](/202608/07/2608.04776v1-nsf-hrpt-neural-semantic-field-meets-hierarchical-risk-perception-tree-for-safety-critical-scenario-assessment) （7.0/10）
+1. [HELENA:Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS](/202608/07/2608.04634v1-helenahierarchical-sparse-coordination-over-a-union-of-complementary-topologies-for-mas) （7.0/10）
+2. [Continuous Improvement and Parallel Autonomous Exploration: An LLM-Agent Framework for Searching Large Solution Spaces](/202608/07/2608.04341v1-continuous-improvement-and-parallel-autonomous-exploration-an-llm-agent-framework-for-searching-large-solution-spaces) （6.0/10）
 
 ---
 使用键盘方向键可在日报/论文之间快速切换。
