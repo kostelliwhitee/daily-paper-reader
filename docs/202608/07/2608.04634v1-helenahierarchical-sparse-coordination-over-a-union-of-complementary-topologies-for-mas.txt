@@ -1,0 +1,1676 @@
+Title: HELENA:Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS
+
+URL Source: https://arxiv.org/pdf/2608.04634v1
+
+Published Time: Thu, 06 Aug 2026 00:53:42 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# HELENA: Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS 
+
+Zhifang Mao 1, 3 , Linyao Zheng 1,2, * , Xuhang Shi 1, 3 , Xiuquan Hou 2
+
+> 1
+
+XiaoLab 
+
+> 2
+
+Xi’an Jiaotong University 
+
+> 3
+
+Beijing University of Posts and Telecommunications *Corresponding author 
+
+Abstract 
+
+LLM-based multi-agent systems (MAS) typically optimize a single topology, restricting reasoning to a narrow trajectory and limiting comprehensive analytical capacity. Naively merg-ing multiple topologies into a composite graph introduces redundant noise propagation across irrelevant connections, de-grading solution quality. To address this dilemma, we propose 
+
+Hierarchical Sparse Coordination over a Union of Com-plementary Topologies for MAS (HELENA) , a multi-agent framework that balances diverse reasoning paths with sparse task-dependent execution. HELENA constructs a union MAS graph from complementary candidate topologies selected via Monte Carlo Tree Search and Determinantal Point Process, broadening the reasoning trajectory for comprehensive analy-sis of complex problems. A Hierarchical Sparse Coordination module then activates only a sparse subgraph at each step while agents exchange compressed latent briefs to suppress redundant noise propagation. Finally, a Local Self-Refinement stage identifies decision units with discrepancy evidence and rewrites them only when contrastive evidence simultaneously confirms a reliable solution-side failure and a challenger-side improvement. Experiments across eight benchmarks show that 
+
+HELENA achieves state-of-the-art results on all benchmarks, with an average gain of 3.47% ↑ over the strongest baseline and up to 10.34% ↑ on MMLU-Pro, achieving larger improvements on harder benchmarks at a reasonable additional cost. 
+
+1 Introduction 
+
+LLM-based Multi Agents System(MAS), which integrate lan-guage generation with decision-making and action-execution, have shown impressive performance across tasks ranging from reasoning and code generation to video gaming (Park et al. 2026) and autonomous driving (Liu et al. 2025). More importantly, combining multiple agents into a collaborative team consistently outperforms individuals on complex tasks (Wan et al. 2026; Yang et al. 2026). MAS can thus exhibit collective intelligence shaped by collaboration topology and information sharing. Despite these advances, existing methods for automated multi-agent workflow construction typically optimize a single topology, as in MetaGPT (Hong et al. 2024), GPTSwarm (Zhuge et al. 2024), and G-designer (Zhang et al. 2025c). This paradigm faces a fundamental bottleneck due to its reliance on a single topology, leading to a narrow reasoning trajectory and preventing a comprehensive analysis 
+
+Copyright © 2027, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. A. Unified MAS Client Pool           
+
+> ���
+> �>0
+> B. Composite Graph C. Sparse Graph
+> selection merge
+> Noisy node Activated path Suppressed path
+> 2 feet 4 feet
+> 2 feet
+> 1 feet
+> 2 ear
+> 1 feet
+> 1 ear
+> 1 ear
+> 4 feet
+> 2ear
+> Initial Dense Response Sparse
+> Response
+> 2 ears, 4 feet
+
+✓×1 ears, 4 feet        
+
+> Single Topology Bottleneck
+> Group Agent 1
+> 1 ear ❌
+> 4 feet ✅
+> 2 ears ✅
+> 2 feet ❌How many
+> ears and feet
+> does the
+> elephant have?
+> USER QUERY View 1
+> View 2
+> RESPONSE 1 Inference
+> Inference
+> RESPONSE 2
+> Group Agent 2
+> The elephant
+> has 2 ears and
+> 2 feet.
+> The elephant
+> has 1 ear and 4
+> feet.
+> 2 ear
+> Supported node
+
+Figure 1: Problem Illustration: I) A single topology restricts reasoning to a narrow trajectory. II) Composite graph propa-gates irrelevant noise across redundant connections. of complex problems. A heuristic idea is to merge multiple topologies into a composite graph. Rank-and-fuse (Jiang, Ren, and Lin 2023), consensus (Chen, Saha, and Bansal 2024), and mixture-style systems confirm that aggregating multiple can-didates improves robustness (Wang et al. 2025). However, a composite topology can propagate irrelevant reasoning paths and feedback signals across redundant connections, which introduces noise into the final solution (Huang et al. 2025). As shown in Figure 1, this raises a critical yet under-explored dilemma: How to maintain composite reasoning perspec-tives in MAS while mitigating the propagation of irrelevant noise? 
+
+A key insight is that fusing complementary topologies captures diverse reasoning perspectives, while restricting ir-relevant node communication prevents noise propagation. To address this dilemma, we propose HELENA . Targeting the first challenge, ① how to maintain composite reasoning perspec-tives in MAS , HELENA employs Monte Carlo Tree Search to explore the topology space and selects a complementary subset with a Determinantal Point Process (DPP), merging arXiv:2608.04634v1 [cs.MA] 5 Aug 2026 them into a union graph that structurally preserves diverse reasoning paths. To further tackle ② how to mitigate noise propagation induced by composite-graph communication ,
+
+HELENA addresses this challenge at two levels: by employing a Hierarchical Sparse Coordination module that activates a sparse subgraph at each step while exchanging compressed la-tent briefs, and by introducing a Local Self-Refinement stage that selects reliable solutions, identifies high-risk units, and revises them based on clear evidence of flaws and alternative improvements. 
+
+Our contributions are summarized as follows: 
+
+❶ Dilemma Identification. We identify a topological diver-sity and noise propagation dilemma in LLM-based MAS. A single topology restricts reasoning coverage, while compos-ite topologies lead to the propagation of irrelevant noise. 
+
+❷ Practical Solution. We propose HELENA , which builds a union graph from reliable and complementary topologies, then controls noise propagation during inference through Hi-erarchical Sparse Coordination and Local Self-Refinement. 
+
+❸ Experimental Evaluation. Experiments on eight bench-marks show that HELENA achieves state-of-the-art perfor-mance, with gains of up to 10.34% ↑. It also maintains favorable cost efficiency across model backbones. 
+
+2 Related Work 
+
+Pre-defined MAS Protocols. Early LLM-based multi-agent systems rely on pre-defined collaboration or aggregation protocols (Wu et al. 2024), including role-based systems that assign predefined responsibilities (Li et al. 2023; Chen et al. 2024b; Hong et al. 2024), debate-style methods that encourage agents to challenge intermediate reasoning (Du et al. 2024; Liang et al. 2024), and rank-and-fuse approaches such as LLM-Blender (Jiang, Ren, and Lin 2023). While these meth-ods improve over individual LLMs, their manually specified and task-agnostic protocols limit adaptability across domains and resource budgets. 
+
+Automated Agentic System. To reduce manual engineer-ing, recent work formulates agentic construction as auto-mated optimization. AFlow and A 2Flow search over code-represented workflows (Zhang et al. 2025d; Zhao et al. 2026), ADAS and AgentSquare expand the search space to modular designs (Hu, Lu, and Clune 2025; Shang et al. 2025), and MaAS optimizes a supernet for query-dependent architecture sampling (Zhang et al. 2025b). These methods show that topology can be searched rather than manually specified. 
+
+Multi-agent Systems as Graphs. GPTSwarm represents agents as optimizable graphs (Zhuge et al. 2024), G-Designer learns task-aware topologies via graph neural networks (Zhang et al. 2025c), MacNet studies scalable graph-organized collab-oration (Qian et al. 2025), and G-Memory organizes memory traces with graph structures (Zhang et al. 2025a). However, both automated optimization and graph-based methods pre-dominantly instantiate a single topology at a time, leaving open how to preserve complementary topological perspec-tives without suffering from noise propagation induced by composite-graph communication. 
+
+3 Preliminaries 
+
+We model a multi-agent system as a directed collaboration graph G = ( V, E ), where V = {v1, . . . , v N } is the set of agent nodes, N = |V |, and E is the set of directed edges. Each node vi ∈ V corresponds to an LLM-based agent and is formalized as 
+
+vi = (Base i, Role i, Mem i) , (1) where Base i denotes the underlying large language model instance, Role i specifies the agent’s designated role or persona, and Mem i denotes its memory state. Given a user query Q, the system evolves through T
+
+communication epochs. At epoch t, each agent receives the query, its own memory state, and the information made available by its in-neighbors: 
+
+oti = vi
+
+ Q, Mem ti, Cti
+
+ (2) Here, Cti = {mtj→i : vj ∈ N −(vi)} denotes the information made available from in-neighbor agents to vi at epoch t,
+
+oti denotes the output generated by vi, which may include reasoning steps, intermediate analyses, or final proposals, and 
+
+mtj→i denotes the message transmitted from agent vj to agent 
+
+vi at epoch t.
+
+4 Method 
+
+The overall framework of HELENA is illustrated in Figure 2. 
+
+4.1 Union MAS Graph Construction 
+
+HELENA generates candidate topologies for the query and then selects a reliable and complementary subset to construct a query-dependent union graph. 
+
+Candidate Topology Generation. Given a query Q and an initial workflow W0, candidate topologies are generated through legal graph edits. At search state s, an edit u changes an agent role, a prompt setting, or a directed edge while preserving workflow validity. Tree search has recently been used to navigate discrete agent workflow spaces (Zhang et al. 2025d; Li et al. 2026). In HELENA , topology search is instantiated as a query-conditioned variant of policy-value MCTS (Silver et al. 2017; Zhao, Tu, and Xu 2022). The edit prior Pϕ(u | s, Q ) guides action selection, while the utility predictor gψ evaluates terminal topologies. The valid terminal topologies found within search budget B constitute the query-specific candidate pool C(Q).During inference, the search is reinitialized for each query. Both Pϕ and gψ remain frozen, and candidate workflows are not executed. Agent LLM calls begin only after the selected topologies have been merged into GU . The offline learning procedure is provided in Appendix A.2. 
+
+Union Graph Construction. Candidate selection is based on query-dependent quality and information-flow similarity. For each candidate topology W , the quality predictor gψ
+
+takes Q and W as input and returns the expected utility 
+
+μQ,W and predictive uncertainty σQ,W . The lower quantile is denoted by α < 0.5, and Φ−1 is the inverse cumulative distribution function of the standard normal distribution. The Query                    
+
+> Writeapythonfunctiontofindthevolume
+> ofatriangularprism.
+> testlist:
+> assertfind_Volume(10,8,6)==240
+> assertfind_Volume(3,2,2)==6
+> assertfind_Volume(1,2,1)==1
+
+Agent(Node)
+
+instantiated by gpt-4o-mini/QWEN3-32B/...
+
+Role/Profile      
+
+> TeacherMathAnalystPhysicistEconomist
+> initialworkflowW0
+> ......
+
+nc in co or 
+
+> ...
+> ...
+
+## Materials Union MAS Construction
+
+> L=qa·Σab·qb
+> w1
+> w2
+> w1
+> w2
+> w3
+> w4
+> ......
+> w∈S∗
+> Vw,
+> w∈S∗
+> Ew
+
+Hierarchical Sparse Coordination
+
+Vi=(Basei, Rolei, Memi)                                  
+
+> global
+> controller��+�=GlobalNode��,��,��
+> deffind_Volume(b,h,l):
+> return(b*h*l)//3
+> find_Volume=lambda
+> b,h,l:(b*h*l)//3
+> deffind_Volume(b,h,l):
+> returnmath.floor(b*h
+> *l/3)
+
+Local Self-Refinement                                                      
+
+> ClasscollapseSolutionselection
+> find_Volume=lambda
+> b,h,l:(b*h*l)//3
+> deffind_Vol(b,h,l):
+> return(b*h*l)//3
+> sameclass
+> y1
+> y2
+> y3
+> y1yn
+> ......
+> y3istheyrel
+> UnitLocalization
+> argmax(a,ξ)∈Rep(CoRllapse(Y))ψ(a,ξ)
+> deffind_Vol(b,h,l):
+> return(b*h*l)//3
+> highrisk
+> AdversarialSolution
+> ychallenger
+> subgraph
+> deffind_Vol(b,h,l):
+> return(b*h*l)//3
+> me morypool
+> Record2
+> Record
+> Record1
+> 3
+> brief
+> query-conditioned GFlowNet generation
+> Greedy selection adds the
+> largest marginal coverage
+> gain
+> zQ(W)=r Q(W)c(W)
+
+Figure 2: The designing workflow of our proposed HELENA .parameter η > 0 controls the scale of the quality weight. The query-dependent quality weight is defined as 
+
+qQ,W = exp 
+
+ μQ,W + Φ −1(α)σQ,W 
+
+2η
+
+
+
+. (3) The weight increases with predicted utility and decreases with predictive uncertainty. Its dependence on both Q and 
+
+W allows the same topology to receive different weights for different queries. Quality alone cannot determine whether two candidates provide distinct coordination patterns. Their complementarity is therefore measured from the information flows supported within T communication turns. After role-compatible nodes are mapped to a common order, AW denotes the normalized adjacency matrix of topology W . Its finite-turn information flow is 
+
+ΨT (W ) = 
+
+TX
+
+t=1 
+
+AtW . (4) The matrix power AtW records the directed routes that can transmit information in t steps. Their finite-turn coverage is represented by ΨT (W ).Matrix vectorization is denoted by vec( ·). For two candidate topologies Wa and Wb, their information-flow similarity is 
+
+Σab = ⟨vec (Ψ T (Wa)) , vec (Ψ T (Wb)) ⟩∥vec (Ψ T (Wa)) ∥2 ∥vec (Ψ T (Wb)) ∥2
+
+. (5) A larger Σab indicates greater overlap between the directed information flows of the two topologies. Query-dependent quality and information-flow similarity define the DPP kernel 
+
+Lab = qQ,W a Σab qQ,W b . (6) The selected topology set is defined as 
+
+S⋆ = arg max 
+
+S⊆C (Q), |S|=K
+
+log det( LS ). (7) Here K is the number of retained topologies, and LS is the principal submatrix indexed by S. The log-determinant criterion assigns high values to sets that combine predicted quality with nonredundant information flows. Greedy MAP inference is used to obtain S⋆.Before merging, nodes with the same role and agent identity are aligned. Different prompt settings are retained as variants of the aligned node. The node and edge sets of topology W
+
+are denoted by VW and EW . The selected topologies form the union graph 
+
+GU = [
+
+W ∈S⋆
+
+VW , [
+
+W ∈S⋆
+
+EW
+
+!
+
+. (8) The union retains the directed edges of the selected topolo-gies but does not represent the strength of their support. Predictive confidence is therefore assigned to each union edge 
+
+u → v as 
+
+puv =
+
+P
+
+W ∈S⋆ qQ,W 1 [( u, v ) ∈ EW ]
+
+P
+
+W ∈S⋆ qQ,W 
+
+. (9) Here 1[( u, v ) ∈ EW ] equals one when W contains the edge and zero otherwise. Support from a topology with a larger quality weight contributes more to puv . Each edge descriptor is written as 
+
+eu→v = ( puv , compat uv , ctx uv ) . (10) The remaining components represent endpoint compatibility and source topology context. Their construction is provided in Appendix A.2. 4.2 Hierarchical Sparse Coordination 
+
+Hierarchical Sparse Coordination realizes sparse collabora-tion at two levels. Node-Level Memory Composer removes irrelevant private records before they enter coordination. Edge-Level Sparse Activation restricts communication and execution to selected paths at each turn. 
+
+Node-Level Memory Composer. Each node vi maintains a private memory store Mti = {mtik }. Let ri denote its role instruction. The query builder fq forms the retrieval feature qti = fq (Q, r i). The relevance scorer fs assigns each memory record the score ztik = fs(qti , m tik ). Both modules are trained from retrospective execution feedback as described in Appendix A.2. Sparsemax (Martins and Astudillo 2016) converts these scores into the retrieval weight vector 
+
+αti = sparsemax  {ztik | mtik ∈ M ti} . (11) Its component αtik is the weight of record mtik . Records with positive weight form the selected set Rti.The composer returns the private context ℓti. The selected records are also represented by a latent brief bti and a verbalized brief Bti .
+
+(ℓti, b ti, B ti ) = Compose  {(αtik , m tik ) | mtik ∈ R ti} .
+
+(12) This node-level sparsity removes irrelevant private records before coordination. The selected memory remains private in ℓti, while bti supports graph control and Bti is transmitted across active edges. 
+
+Edge-Level Sparse Activation. Let gt denote the global state at turn t. Let Θe denote the parameters of the edge scorer. For each edge (vj , v i) ∈ EU , the scorer combines gt with an edge representation formed from the endpoint briefs and the descriptor defined in Section 4.1. 
+
+ϕtji = Ψ edge Θe
+
+ btj , b ti, g t, e vj →vi
+
+ . (13) For each target node vi, sparsemax produces the incoming edge weight vector 
+
+βti = sparsemax  {ϕtji | (vj , v i) ∈ EU } . (14) Its component βtji is the weight assigned to edge (vj , v i).The active edge set is 
+
+Et = {(vj , v i) ∈ EU | βtji > 0}. (15) The endpoints of Et form V t, and Gt = ( V t, E t) is executed at turn t. This edge-level sparsity restricts commu-nication to Et and agent execution to V t, so coordination proceeds only along the selected paths. Let Dti denote the predecessor context formed from the verbalized briefs received through active incoming edges. Let 
+
+P ti denote the role-conditioned prompt of vi. Each active Agent produces 
+
+oti = vi
+
+ P ti , Q, ℓ ti, D ti , g t . (16) The active briefs and outputs are pooled into pt. Feedback available during inference forms Ft and does not contain benchmark labels. Let Θg denote the parameters of the global updater. The next state is 
+
+gt+1 = GlobalNode Θg
+
+ gt, p t, Ft . (17) The updated state conditions edge selection at the next turn, allowing the active graph to change with the current execution state. The edge scorer and global updater are trained offline and remain frozen during evaluation. When oti is a solution proposal, it is added to Y = {(ak, ξ k)}Ky
+
+> k=1
+
+, where 
+
+Ky = |Y |. Each ξk links its answer to the active graph trace and the evidence supporting that answer. The active graphs are recorded as G1: T 
+
+> act
+
+= ( G1, . . . , G T ).
+
+4.3 Local Self-Refinement 
+
+Residual errors can persist after Hierarchical Sparse Coordina-tion. Local Self-Refinement addresses them through Decision Unit Localization and Adversarial Solution Validation. 
+
+Decision Unit Localization. Hierarchical Sparse Coordi-nation produces the solution set Y = {(ak, ξ k)}Ky
+
+> k=1
+
+. Each candidate answer ak is paired with an evidence record ξk that links it to the activated graph trace and its supporting evidence. Each record ξk links an answer to the activated graph trace and the evidence that supports it. Following semantic answer equivalence (Kuhn, Gal, and Farquhar 2023), the candidates are collapsed into answer classes. The evidence-aware relia-bility estimator Rψ scores the candidates within each class. The selected answer and its evidence record are 
+
+(yrel , ξ rel ) = arg max  
+
+> (a,ξ )∈Rep(Collapse( Y))
+
+Rψ (a, ξ ). (18) Here, Collapse( Y ) groups semantically equivalent answers and Rep retains the highest-scoring member of each class. The selected answer serves as the default solution and remains unchanged unless local validation supports a replacement. The selected solution is decomposed into locally verifiable decision units. For each unit d, the discrepancy encoder Disc θ
+
+maps the evidence linked to d into the representation ϵd.This representation indicates whether the unit has consistent support. The risk scorer risk θ maps ϵd to a scalar value. Let 
+
+τ denote the risk threshold. The units selected for further validation are 
+
+U = {d ∈ UnitParse( yrel , ξ rel ) | risk θ (d, ϵ d) > τ } . (19) Units outside U are kept unchanged. The task-specific units and the local refinement operators are defined in Appendix A.2. This stage uses only evidence available during inference and does not access benchmark-only supervision. 
+
+Adversarial Solution Validation. For each unit d ∈ U , a local correction subgraph is extracted from GU by following the active evidence paths stored in ξrel . The subgraph retains the nodes that contributed to or checked the disputed unit. A challenger ych  
+
+> d
+
+with evidence record ξch  
+
+> d
+
+is retrieved from Y
+
+when another supported candidate disagrees at d. Otherwise, it is generated by executing the correction subgraph with a targeted repair prompt. The term adversarial means that the challenger contests one local decision. The unit-conditioned score Rloc  
+
+> ψ
+
+applies the same reliability estimator to evidence linked to d. The local gain ∆d is the score of the challenger minus the score of the selected solution. Let δ denote the required improvement margin. The certificate model compares the proposed replacement with the current unit using their linked evidence. Its output is 
+
+cd = Cert χ
+
+ ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+, y rel , ξ rel , d  . (20) It equals one when the evidence supports the replacement while preserving the remaining solution. Let I denote the indicator function. The acceptance rule is 
+
+Accept( ych  
+
+> d
+
+, d ) = I[∆ d > δ ∧ cd = 1] . (21) When a challenger is accepted, only unit d is replaced and the evidence record is updated. If no challenger satisfies the acceptance rule, the selected solution is preserved. 
+
+5 Experiments 
+
+5.1 Experiment Setup 
+
+Datasets. We evaluate HELENA on eight widely used benchmarks covering three representative domains. For general knowledge and professional reasoning, we use 
+
+MMLU (Hendrycks et al. 2021a) and MMLU-Pro (Wang et al. 2024). For mathematical reasoning, we use 
+
+GSM8K (Cobbe et al. 2021), MATH (Hendrycks et al. 2021b), MATH-Lv5 (Hendrycks et al. 2021b), and 
+
+SVAMP (Patel, Bhattamishra, and Goyal 2021). For code generation, we use HumanEval (Chen et al. 2021) and 
+
+MBPP (Austin et al. 2021). 
+
+Baselines. We compare HELENA with representative single-agent, protocol-based, automated agentic, and graph-structured MAS baselines listed in Table 1. All results are independently reproduced under the same evaluation protocol using official implementations when available. Implementa-tion details and budget controls are provided in Appendix A.1. 
+
+Implementation Details. All agents use 
+
+gpt-4o-mini ; topology and memory embeddings use Qwen3-Embedding-8B with D = 512 . Local Qwen models run on eight NVIDIA H100 GPUs. We use K = 3 
+
+fused topologies and average three independent runs. Code tasks are evaluated by pass@1 ; all other tasks use exact-match accuracy. Additional settings are provided in the supplementary material. 
+
+Evaluation Protocol. Observed topology utilities are com-puted only from training examples. Validation labels are used only for model selection and calibration after each system out-put is fixed. During test-time MCTS and topology selection, the system receives the query and frozen model predictions only; gold answers, answer indices, exact-match feedback, and official held-out tests are inaccessible. Prompt-visible examples are treated as part of Q and are distinct from hidden evaluator tests. The benchmark scorer is invoked only after the final output has been fixed. 
+
+5.2 Main Results 
+
+Obs. ❶ State-of-the-Art Performance with Difficulty-Scaled Gains. As shown in Table 1, HELENA achieves the best results on all evaluated benchmarks, with an average gain of 3.47% ↑ over the strongest baseline. The performance margin consistently widens with task difficulty: HELENA 
+
+outperforms H-Swarms by 10.34% ↑ points on MMLU-Pro and exceeds MasRouter by 6.85% ↑ points on MATH-Lv5. These results demonstrate that topology-diverse coordination with noise-controlled execution yields substantial benefits on complex, multi-step reasoning tasks. 
+
+5.3 Cost Analysis 
+
+Obs. ❷ Difficulty-Adaptive Token Efficiency. Figure 3 shows that HELENA achieves a favorable cost–accuracy trade-off across benchmarks of varying difficulty. On standard datasets, 
+
+HELENA remains in the low-cost region (2.44M tokens on MATH, 2.32M tokens on MMLU) while achieving the best accuracy. As reasoning complexity increases, HELENA adap-tively scales computation: relative cost increases to 1.25 × on MATH-Lv5 and 1.40 × on MMLU-Pro. Concurrently, Figure 3 reveals that this efficiency primarily stems from the Node-Level Memory Composer and Edge-Level Sparse Activation. The memory composer selects and compresses task-relevant records into compact latent and verbalized briefs, while the controller activates only a sparse subgraph over the union graph, preventing full-graph com-munication and redundant context propagation. 
+
+5.4 Ablation Study and Sensitivity Analysis 
+
+We conduct ablations on four key components of HELENA : lo-cal refinement, union graph construction, latent memory, and the global controller. Table 2 reports the results, where each variant disables one component while keeping the remaining system unchanged. 
+
+Obs. ❸ Union Graph Ensures Diversity. As shown in Table 2, removing the union graph causes an average drop of 2.88% ↓.This result confirms its effectiveness but does not show whether the gain comes from complementary reasoning paths or greater communication cost. We therefore measure the structural diversity of the selected topologies by their average pairwise edge-Jaccard distance. For S = {G1, . . . , G K } with edge sets {Ei}Ki=1 , it is defined as 
+
+DE (S) = 2
+
+K(K − 1) 
+
+X
+
+> i<j
+
+
+
+1 − |Ei ∩ Ej ||Ei ∪ Ej |
+
+
+
+. (22) A larger DE indicates lower structural overlap. As reported in Table 3, Quality-only Top-K retains redundant structures, while Max-Jaccard-K achieves higher diversity but lower accuracy. In contrast, HELENA combines a high DE with the best MBPP accuracy under a comparable active-edge ratio. The gain therefore comes from reliable and nonredundant reasoning paths rather than a larger communication budget or arbitrary diversity. 
+
+Obs. ❹ Two-Level Noise Control Ensures Reliable Reason-ing. Noise control in HELENA requires two complementary mechanisms rather than a single step. Hierarchical Sparse Coordination suppresses noise during propagation by filtering Table 1: Performance comparison under the unified reproduction protocol. All baselines are independently reproduced by us using the same gpt-4o-mini backbone, benchmark instances, decoding settings, and evaluation scripts. The best result is shown in bold and the runner-up is underlined. Red arrows denote the absolute improvement over the strongest reproduced baseline. 
+
+Method Code generation Mathematical reasoning Knowledge / professional MBPP HumanEval GSM8K MATH SVAMP MATH-Lv5 MMLU MMLU-Pro 
+
+Single-Agent 
+
+Self-Refine (Madaan et al. 2023) 69.80 87.80 89.60 46.10 88.73 32.85 75.44 57.97 
+
+Pre-defined MAS Protocols 
+
+LLM-Debate (Du et al. 2024) 70.29 88.68 89.47 52.96 91.76 38.55 81.04 63.28 AgentVerse (Chen et al. 2024b) 74.28 89.29 89.91 50.85 89.64 36.85 78.36 60.83 LLM-Blender (Jiang, Ren, and Lin 2023) 77.05 88.80 88.35 50.34 89.52 36.16 81.22 63.47 DyLAN (Liu et al. 2024) 77.30 90.42 89.98 51.12 88.48 37.38 79.96 62.14 
+
+Automated Agentic Systems 
+
+H-Swarms (Feng et al. 2025) 81.65 89.86 95.00 65.89 92.74 50.27 83.68 69.00 AFlow (Zhang et al. 2025d) 82.20 90.06 92.30 73.35 91.73 58.82 83.10 64.35 RouterDC (Chen et al. 2024a) 75.20 87.75 93.68 73.46 91.86 58.93 82.01 63.27 A2Flow (Zhao et al. 2026) 85.00 92.40 93.80 58.50 92.15 44.76 83.29 63.42 DAAO (Su et al. 2025) 86.95 94.65 94.40 55.37 92.64 42.57 84.90 65.28 MasRouter (Yue et al. 2025) 84.00 90.62 95.45 75.42 92.95 61.36 84.25 64.85 MaAS (Zhang et al. 2025b) 82.17 92.85 92.30 74.45 91.55 60.23 83.01 63.68 BiRouter (Yang et al. 2026) 84.82 91.46 94.09 74.92 93.20 60.87 86.80 66.53 
+
+Multi-agent Systems as Graphs 
+
+GPTSwarm (Zhuge et al. 2024) 75.40 86.28 94.66 68.85 92.18 54.64 82.80 64.19 G-Designer (Zhang et al. 2025c) 79.24 87.50 93.97 70.46 90.29 55.39 87.20 66.94 DAWN (Wan et al. 2026) 86.70 94.44 93.12 73.80 92.10 59.21 80.00 62.15 
+
+HELENA (Ours) 88.73 ↑1.78 95.20 ↑0.55 97.39 ↑1.94 78.29 ↑2.87 95.48 ↑2.28 68.21 ↑6.85 88.37 ↑1.17 79.34 ↑10.34 
+
+Notes. All scores are percentages. MATH-Lv5 denotes the Level-5 subset of MATH, and MMLU-Pro denotes the harder professional-knowledge variant of MMLU. 40 50 60 70 80 
+
+> Accuracy (%)
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> Total Token Cost (M)
+
+MATH      
+
+> 30 40 50 60 70 80
+> Accuracy (%)
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> Total Token Cost (M)
+
+MATH-Lv5            
+
+> Method category HELENA variants
+> Single Pre-defined Auto Graph w/o Hierarchical Sparse Coordination HELENA Single Pre-defined Auto Graph w/o Hierarchical Sparse Coordination HELENA
+
+(a) MATH and MATH-Lv5 70 75 80 85 90 
+
+> Accuracy (%)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> 4.5
+> Total Token Cost (M)
+
+MMLU     
+
+> 60 65 70 75 80
+> Accuracy (%)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> 3.5
+> 4.0
+> 4.5
+> Total Token Cost (M)
+
+MMLU-Pro             
+
+> Method category HELENA variants
+> Single Pre-defined Auto Graph w/o Hierarchical Sparse Coordination HELENA Single Pre-defined Auto Graph w/o Hierarchical Sparse Coordination HELENA
+
+(b) MMLU and MMLU-Pro 
+
+Figure 3: Cost–accuracy comparison and difficulty-dependent scaling of HELENA . Left: MATH and MATH-Lv5. Right: MMLU and MMLU-Pro. Table 2: Ablation study. 
+
+Variant Code generation Mathematical reasoning Knowledge / professional Summary MBPP HumanEval GSM8K MATH SVAMP MATH-Lv5 MMLU MMLU-Pro Avg. ∆Avg. 
+
+HELENA (Ours) 88.73 95.20 97.39 78.29 95.48 68.21 88.37 79.34 86.37 –w/o union graph 84.74 87.36 96.87 76.89 93.18 66.07 86.70 76.12 83.49 ↓2.88 w/o memory composer 84.59 88.09 96.58 76.15 94.20 63.49 87.24 75.42 83.22 ↓3.15 w/o sparse activation 86.15 90.77 97.04 77.24 94.83 64.11 87.85 76.80 84.35 ↓2.02 w/o local self-refinement 84.27 88.55 96.31 76.74 94.21 62.60 85.31 74.77 82.85 ↓3.52 
+
+private memories and maintaining a compact global state, preventing low-confidence traces from spreading through the union graph. Removing latent memory alone causes a 3.15% ↓ drop. Local Self-Refinement then targets high-risk decision units and revises them only when contrastive evi-dence confirms a correction. Its removal triggers the largest collapse of 3.52% ↓, with 5.61% ↓ on MATH-Lv5 and 4.5% ↓
+
+on MMLU-Pro. Together, the two mechanisms form a com-plete noise-suppression pipeline, with propagation control followed by targeted local revision. Table 3: Structural diversity analysis of topology selection on MBPP. 
+
+Selection Strategy K
+
+Active Edge Ratio ↓ DE ↑
+
+MBPP Acc. ↑
+
+Single Best Topology 1 12 .4 ( −34 .0%) – 84 .74 ( −1.38) 
+
+Quality-only Top-K 3 18 .8 (ref .) 0.41 (ref .) 86 .12 (ref .)
+
+Random-K 3 18 .5 ( −1.6%) 0.52 (+26 .8%) 85 .37 ( −0.75) 
+
+Max-Jaccard-K 3 19 .1 (+1 .6%) 0.78 (+90 .2%) 86 .44 (+0 .32) 
+
+HELENA (Ours) 3 18 .7 ( −0.5%) 0.69 (+68 .3%) 88.73 (+2 .61) 
+
+Table 4: Controlled noise propagation with the union graph and the pre-injection state fixed across variants. 
+
+Variant Noise Survival ↓ Reach@1 ↓ Reach@2+ ↓ Final Flip ↓
+
+HELENA 34.7 14.6 5.3 4.1 
+
+w/o sparse activation 34.7 33.8 21.9 10.4 w/o memory composer 100.0 41.6 17.8 12.7 w/o HSC 100.0 92.4 68.7 29.6 1 2 3 4 5
+
+Fused topologies K
+
+83 
+
+84 
+
+85 
+
+86 
+
+87 
+
+> Avg. Acc.
+
+0.1 0.2 0.3 
+
+0.38 
+
+0.4 0.5 
+
+Quantile α
+
+85.5 
+
+86.0 
+
+86.5 
+
+> Avg. Acc.
+
+0.8 
+
+1.0 
+
+1.2 
+
+1.4 
+
+> Rel. Cost
+
+0.950 
+
+0.975 
+
+1.000 
+
+1.025 
+
+1.050 
+
+> Rel. Cost
+
+Accuracy Token cost 
+
+Figure 4: Sensitivity analysis of HELENA . Left: performance and relative token cost as the number of fused topologies K
+
+varies. Right: Right: performance and relative token cost as the lower-confidence quantile α varies. 
+
+Controlled Noise Propagation. We adopt controlled er-ror injection from prior MAS robustness analysis (Huang et al. 2025) across the full benchmark suite. For each ex-ample, a task-associated but incorrect intermediate record, sampled independently of the memory selector, is inserted into a nonterminal node under a fixed union graph and pre-injection state. N oiseSurvival records post-filter retention; 
+
+Reach @1 and Reach @2+ measure one-hop and multi-hop exposure; F inalF lip counts outputs in the common clean-correct mask that become incorrect. The w/o HSC variant disables both levels. As shown in Table 4, the composer reduces survival to 34 .7% ; at this fixed rate, sparse activation reduces Reach @1 /Reach @2+ from 33 .8/21 .9 to 14 .6/5.3
+
+and yields the lowest F inalF lip of 4.1% .
+
+Sensitivity Analysis on K. Figure 4 shows how the number of fused topologies K affects performance and cost. K = 3 
+
+achieves the best balance between topology diversity and redundant-edge control, so we use K = 3 as the default setting. 
+
+Sensitivity Analysis on Lower-Confidence Quantile. Fig-ure 4 also reports the effect of the lower-confidence quantile 
+
+α. The default value α = 0 .38 performs best, balancing uncertainty suppression and the retention of uncertain but useful candidate topologies. 
+
+5.5 Case Study 
+
+We explore and visualize the intrinsic mechanisms of 
+
+HELENA . Taking MBPP as an example, Figure 5 showcases the workflow of HELENA .
+
+5.6 Transferability Analysis 
+
+Table 5 presents cross-backbone results. HELENA transfers well to open-source models: Qwen3-32B remains within 1 point of GPT-4o-mini on complex reasoning benchmarks, router/planner solver_a/coder solver_b/coder verifier/verifier aggeragator/verifier                               
+
+> (w1,w2,w3)det(LS)=6.659
+> wStep1: S1 = {W1}
+> Step2: S2 = {W1, W2}
+> Step3:
+> 1w2
+> w3w4
+> toosimilar
+> memorypool
+> Taskskeleton:min_cost(cost,m,n),returntc[m][n]
+> Challengerunitd2:min(up,left,diag)
+> Preservenon-riskyunits:signature+basecasesunchanged
+> Noisyduplicate:W4traceusesmin(up,left)
+> Brief：checkthispart:min(up,left,diag)!!!
+
+solution setglobal                                                    
+
+> controller
+> AtEpochT：
+> defmin_cost(cost,m,n):
+> dp=[[0]*(n+1)for_in
+> range(m+1)]
+> dp[0][0]=cost[0][0]
+> foriinrange(1,m+1):
+> forjinrange(1,n+1):
+> dp[i][j]=cost[i][j]+
+> min(dp[i-1][j],dp[i][j-1])
+> returndp[m][n]
+> Writeafunction
+> tofindthe
+> minimumcost
+> pathtoreach
+> (m,n)
+> from(0,0)for
+> thegivencost
+> matrixcost[][]
+> andaposition
+> (m,n).
+> Query
+
+Class collapse                        
+
+> forjinrange(1,n+1):
+> dp[i][j]=cost[i][j]+
+> min(dp[i-1][j],dp[i][j-1])
+> forjinrange(1,n+1):
+> up=dp[i-1][j]
+> left=dp[i][j-1]
+> dp[i][j]=cost[i][j]+
+> min(dp[i-1][j],dp[i][j-1])
+
+Unit Localization             
+
+> forjinrange(1,n+1):
+> dp[i][j]=cost[i][j]+
+> min(dp[i-1][j],dp[i][j-1])
+> risk(d2)=0.94
+> classdisagreement
+
+correction subgraph                                                       
+
+> defmin_cost(cost,m,n):
+> dp=[[0]*(n+1)for_in
+> range(m+1)]
+> dp[0][0]=cost[0][0]
+> foriinrange(1,m+1):
+> dp[i][0]=dp[i-1][0]+
+> cost[i][0]
+> forjinrange(1,n+1):
+> dp[0][j]=dp[0][j-1]
+> +cost[0][j]
+> foriinrange(1,m+1):
+> forjinrange(1,n+1):
+> dp[i][j]=cost[i][j]+
+> min(dp[i-1][j],dp[i][j-1])
+> returndp[m][n]
+
+Solution selection
+
+> Rψ
+
+Evidence                                
+
+> Yrel
+> Ychallenger
+> contrastivecertificate
+> Ychallengertuple:(1,1,3)
+> Yreltuple:(1,1,0)
+> Desicion:Ychallengerdomain
+> RewriteScope:d2only
+> foriinrange(1,m+1):
+> dp[i][0]=dp[i-1][0]+
+> cost[i][0]
+> forjinrange(1,n+1):
+> dp[0][j]=dp[0][j-1]+
+> cost[0][j]
+
+same class
+
+Final minimal rewrite:dp[i][j] = cost[i][j] + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])  
+
+> topologiesset
+> meanssilent
+
+d2  
+
+> verifierresidual
+> testsfail
+> Greedy flow-coverage selection
+
+Figure 5: Case study illustrating the intrinsic mech-anisms of HELENA . Tuples denote (syntax_ok, entry_point_ok, passed_tests) in this case. Table 5: Cross-backbone transferability of HELENA on Qwen3-32B and Qwen3-8B. 
+
+Benchmark GPT-4o-mini Qwen3-32B Qwen3-8B 
+
+MMLU 88.37 87.92 ↓0.45 84.12 ↓4.25 GSM8K 97.39 96.85 ↓0.54 94.23 ↓3.16 HumanEval 95.20 92.75 ↓2.45 86.34 ↓8.86 MBPP 88.73 86.90 ↓1.83 81.08 ↓7.65 MATH 78.29 77.86 ↓0.43 72.84 ↓5.45 MATH-L5 68.21 67.74 ↓0.47 61.92 ↓6.29 MMLU-Pro 79.34 78.62 ↓0.72 73.41 ↓5.93 SVAMP 95.48 94.91 ↓0.57 92.16 ↓3.32 
+
+Avg. 86.37 85.44 ↓0.93 80.76 ↓5.61 
+
+including MATH, MATH Level 5, and MMLU-Pro, while Qwen3-8B also benefits consistently from the same coordina-tion framework across all eight benchmarks. 
+
+6 Conclusion 
+
+HELENA addresses the topology diversity and noise propaga-tion dilemma in LLM-based MAS . Across eight benchmarks, it improves the strongest baseline by 3.47% ↑ on average and up to 10.34% ↑.References 
+
+Austin, J.; Odena, A.; Nye, M.; Bosma, M.; Michalewski, H.; Dohan, D.; Jiang, E.; Cai, C.; Terry, M.; Le, Q.; and Sutton, C. 2021. Program Synthesis with Large Language Models. 
+
+arXiv preprint arXiv:2108.07732 .Chen, J. C.-Y.; Saha, S.; and Bansal, M. 2024. ReConcile: Round-Table Conference Improves Reasoning via Consensus among Diverse LLMs. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics ,7066–7085. Chen, M.; Tworek, J.; Jun, H.; Yuan, Q.; Pinto, H. P. d. O.; Kaplan, J.; Edwards, H.; Burda, Y.; Joseph, N.; Brockman, G.; Ray, A.; Puri, R.; Krueger, G.; Petrov, M.; Khlaaf, H.; Sastry, G.; Mishkin, P.; Chan, B.; Gray, S.; Ryder, N.; Pavlov, M.; Power, A.; Kaiser, L.; Bavarian, M.; Winter, C.; Tillet, P.; Such, F. P.; Cummings, D.; Plappert, M.; Chantzis, F.; Barnes, E.; Herbert-Voss, A.; Guss, W. H.; Nichol, A.; Paino, A.; Tezak, N.; Tang, J.; Babuschkin, I.; Balaji, S.; Jain, S.; Saunders, W.; Hesse, C.; Carr, A. N.; Leike, J.; Achiam, J.; Misra, V.; Morikawa, E.; Radford, A.; Knight, M.; Brundage, M.; Murati, M.; Mayer, K.; Welinder, P.; McGrew, B.; Amodei, D.; McCandlish, S.; Sutskever, I.; and Zaremba, W. 2021. Evaluating Large Language Models Trained on Code. arXiv preprint arXiv:2107.03374 .Chen, S.; Jiang, W.; Lin, B.; Kwok, J. T.; and Zhang, Y. 2024a. RouterDC: Query-Based Router by Dual Contrastive Learning for Assembling Large Language Models. In Advances in Neural Information Processing Systems .Chen, W.; Su, Y.; Zuo, J.; Yang, C.; Yuan, C.; Chan, C.-M.; Yu, H.; Lu, Y.; Hung, Y.-H.; Qian, C.; Qin, Y.; Cong, X.; Xie, R.; Liu, Z.; Sun, M.; and Zhou, J. 2024b. AgentVerse: Facilitating Multi-Agent Collaboration and Exploring Emer-gent Behaviors. In International Conference on Learning Representations .Cobbe, K.; Kosaraju, V.; Bavarian, M.; Chen, M.; Jun, H.; Kaiser, L.; Plappert, M.; Tworek, J.; Hilton, J.; Nakano, R.; Hesse, C.; and Schulman, J. 2021. Training Verifiers to Solve Math Word Problems. In arXiv preprint arXiv:2110.14168 .Du, Y.; Li, S.; Torralba, A.; Tenenbaum, J. B.; and Mordatch, I. 2024. Improving Factuality and Reasoning in Language Models through Multiagent Debate. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research .Feng, S.; Wang, Z.; Goyal, P.; Wang, Y.; Shi, W.; Xia, H.; Palangi, H.; Zettlemoyer, L.; Tsvetkov, Y.; Lee, C.-Y.; and Pfister, T. 2025. Heterogeneous Swarms: Jointly Optimiz-ing Model Roles and Weights for Multi-LLM Systems. In 
+
+Advances in Neural Information Processing Systems .Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2021a. Measuring Massive Mul-titask Language Understanding. In International Conference on Learning Representations .Hendrycks, D.; Burns, C.; Kadavath, S.; Arora, A.; Basart, S.; Tang, E.; Song, D.; and Steinhardt, J. 2021b. Measuring Mathematical Problem Solving with the MATH Dataset. In 
+
+Advances in Neural Information Processing Systems, Datasets and Benchmarks Track .Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Wang, J.; Zhang, C.; Wang, Z.; Yau, S. K. S.; Lin, Z.; Zhou, L.; Ran, C.; Xiao, L.; Wu, C.; and Schmidhuber, J. 2024. MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework. In International Conference on Learning Representations .Hu, S.; Lu, C.; and Clune, J. 2025. Automated Design of Agentic Systems. In International Conference on Learning Representations .Huang, J.-t.; Zhou, J.; Jin, T.; Zhou, X.; Chen, Z.; Wang, W.; Yuan, Y.; Lyu, M. R.; and Sap, M. 2025. On the Resilience of LLM-Based Multi-Agent Collaboration with Faulty Agents. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research .Jiang, D.; Ren, X.; and Lin, B. Y. 2023. LLM-Blender: Ensembling Large Language Models with Pairwise Ranking and Generative Fusion. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics .Kuhn, L.; Gal, Y.; and Farquhar, S. 2023. Semantic Uncer-tainty: Linguistic Invariances for Uncertainty Estimation in Natural Language Generation. In International Conference on Learning Representations .Li, G.; Hammoud, H.; Itani, H.; Khizbullin, D.; and Ghanem, B. 2023. CAMEL: Communicative Agents for Mind Explo-ration of Large Language Model Society. In Advances in Neural Information Processing Systems .Li, Y.; Li, L.; Wu, Z.; Liao, Q.; Hao, J.; Shao, K.; and Xu, F. 2026. AgentSwift: Efficient LLM Agent Design via Value-Guided Hierarchical Search. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 31843– 31851. Liang, T.; He, Z.; Jiao, W.; Wang, X.; Wang, Y.; Wang, R.; Yang, Y.; Tu, Z.; and Shi, S. 2024. Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing .Liu, C.; Liu, G.; Wang, Z.; Yang, J.; and Chen, S. 2025. CoLMDriver: LLM-based Negotiation Benefits Cooperative Autonomous Driving. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 25951–25960. Liu, Z.; Zhang, Y.; Li, P.; Liu, Y.; and Yang, D. 2024. Dy-namic LLM-Agent Network: An LLM-Agent Collaboration Framework with Agent Team Optimization. In Conference on Language Modeling .Madaan, A.; Tandon, N.; Gupta, P.; Hallinan, S.; Gao, L.; Wiegreffe, S.; Alon, U.; Dziri, N.; Prabhumoye, S.; Yang, Y.; Gupta, S.; Majumder, B. P.; Hermann, K.; Welleck, S.; Yazdanbakhsh, A.; and Clark, P. 2023. Self-Refine: Iterative Refinement with Self-Feedback. In Advances in Neural Information Processing Systems .Martins, A. F. T.; and Astudillo, R. F. 2016. From Softmax to Sparsemax: A Sparse Model of Attention and Multi-Label Classification. In Proceedings of the 33rd International Conference on Machine Learning , 1614–1623. Park, D.; Kim, M.; Choi, B.; Kim, J.; Lee, K.; Lee, J.; Park, I.; Lee, B.-U.; Hwang, J.; Ahn, J.; Mahabaleshwarkar, A. S.; Kartal, B.; Biswas, P.; Suhara, Y.; Lee, K.; and Cho, J. 2026. Orak: A Foundational Benchmark for Training and Evaluating LLM Agents on Diverse Video Games. In International Conference on Learning Representations .Patel, A.; Bhattamishra, S.; and Goyal, N. 2021. Are NLP Models Really Able to Solve Simple Math Word Problems? In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , 2080–2094. Qian, C.; Xie, Z.; Wang, Y.; Liu, W.; Dang, Y.; Du, Z.; Chen, W.; Yang, C.; Liu, Z.; and Sun, M. 2025. Scaling Large-Language-Model-Based Multi-Agent Collaboration. In International Conference on Learning Representations .Shang, Y.; Li, Y.; Zhao, K.; Ma, L.; Liu, J.; Xu, F.; and Li, Y. 2025. AgentSquare: Automatic LLM Agent Search in Modular Design Space. In International Conference on Learning Representations .Silver, D.; Schrittwieser, J.; Simonyan, K.; Antonoglou, I.; Huang, A.; Guez, A.; Hubert, T.; Baker, L.; Lai, M.; Bolton, A.; Chen, Y.; Lillicrap, T.; Hui, F.; Sifre, L.; van den Driessche, G.; Graepel, T.; and Hassabis, D. 2017. Mastering the Game of Go without Human Knowledge. Nature , 550(7676): 354–359. Su, J.; Xia, Y.; Lan, Q.; Song, X.; Yang, J.; He, L.; and Shi, T. 2025. Difficulty-Aware Agent Orchestration in LLM-Powered Workflows. arXiv preprint arXiv:2509.11079 .Wan, G.; Zhou, M.; Wang, Z.; Shang, X.; Jiang, E. H.; Zhang, G.; Bi, J.; Ma, Y.; Zhang, Z.; Liang, K.; and Huang, W. 2026. DAWN: Distributed LLM Multi-Agent Workflow Synthe-sis. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 26099–26106. Wang, J.; Wang, J.; Athiwaratkun, B.; Zhang, C.; and Zou, J. 2025. Mixture-of-Agents Enhances Large Language Model Capabilities. In International Conference on Learning Repre-sentations .Wang, Y.; Ma, X.; Zhang, G.; Ni, Y.; Chandra, A.; Guo, S.; Ren, W.; Arulraj, A.; He, X.; Jiang, Z.; Li, T.; Ku, M.; Wang, K.; Zhuang, A.; Fan, R.; Yue, X.; and Chen, W. 2024. MMLU-Pro: A More Robust and Challenging Multi-Task Language Understanding Benchmark. arXiv preprint arXiv:2406.01574 .Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Li, B.; Zhu, E.; Jiang, L.; Zhang, X.; Zhang, S.; Liu, J.; Awadallah, A. H.; White, R. W.; Burger, D.; and Wang, C. 2024. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. In Conference on Language Modeling .Yang, Q.; Qu, F.; Guo, T.; Liu, Y.; and Wen, Y. 2026. Aug-mented Runtime Collaboration for Self-Organizing Multi-Agent Systems: A Hybrid Bi-Criteria Routing Approach. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence .Yue, Y.; Zhang, G.; Liu, B.; Wan, G.; Wang, K.; Cheng, D.; and Qi, Y. 2025. MasRouter: Learning to Route LLMs for Multi-Agent Systems. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics ,15549–15572. Zhang, G.; Fu, M.; Wan, G.; Yu, M.; Wang, K.; and Yan, S. 2025a. G-Memory: Tracing Hierarchical Memory for Multi-Agent Systems. In Advances in Neural Information Processing Systems .Zhang, G.; Niu, L.; Fang, J.; Wang, K.; Bai, L.; and Wang, X. 2025b. Multi-Agent Architecture Search via Agentic Supernet. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research .Zhang, G.; Yue, Y.; Sun, X.; Wan, G.; Yu, M.; Fang, J.; Wang, K.; Chen, T.; and Cheng, D. 2025c. G-Designer: Architecting Multi-Agent Communication Topologies via Graph Neural Networks. In Proceedings of the 42nd International Confer-ence on Machine Learning , volume 267 of Proceedings of Machine Learning Research .Zhang, J.; Xiang, J.; Yu, Z.; Teng, F.; Chen, X.; Chen, J.; Zhuge, M.; Cheng, X.; Hong, S.; Wang, J.; Zheng, B.; Liu, B.; Luo, Y.; and Wu, C. 2025d. AFlow: Automating Agen-tic Workflow Generation. In International Conference on Learning Representations .Zhao, D.; Tu, S.; and Xu, L. 2022. Efficient Learning for AlphaZero via Path Consistency. In Proceedings of the 39th International Conference on Machine Learning , volume 162 of Proceedings of Machine Learning Research , 26971–26981. Zhao, M.; Wei, X.; Shao, Y.; Zhou, K.; Yang, L.; Rao, S.; Zhan, J.; and Chen, Z. 2026. A2Flow: Automating Agentic Workflow Generation via Self-Adaptive Abstraction Operators. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence .Zhuge, M.; Wang, W.; Kirsch, L.; Faccio, F.; Khizbullin, D.; and Schmidhuber, J. 2024. GPTSwarm: Language Agents as Optimizable Graphs. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research .Item Setting                                  
+
+> Default backbone gpt-4o-mini
+> Transfer backbones Qwen3-32B ,Qwen3-8B
+> Embedding model Qwen3-Embedding-8B
+> Embedding dimension 512
+> Selected topologies K= 3
+> Lower-confidence quantile α= 0 .38
+> Maximum communication turns T= 5
+> Generation temperature 0
+> Verifier / finalizer temperature 0
+> Max input length per call 8,192 tokens Max generation length 1,024 tokens Task query cap 2,048 tokens Private-memory brief cap 256 tokens Predecessor-context brief cap 384 tokens Global-state summary cap 256 tokens Selected memory records per node up to 4
+> Active predecessor briefs per node up to 3
+> Agent LLM calls during MCTS 0
+> Evaluation runs 3
+> Code metric pass@1
+> Other metrics exact-match accuracy
+
+Table 6: Implementation and prompt-budget settings of HELENA .
+
+A Appendix 
+
+A.1 Implementation Details 
+
+Model and decoding settings. We use gpt-4o-mini as the default backbone model for all agents in HELENA and for compa-rable baselines with available implementations. For cross-backbone transfer experiments, we additionally evaluate Qwen3-32B 
+
+and Qwen3-8B . Topology descriptions, task queries, and memory records are encoded by Qwen3-Embedding-8B , with embedding dimension D = 512 . Unless otherwise specified, generation agents use temperature 0 and Top-p = 0 .95 , while verifier and final-selection agents use deterministic decoding with temperature 0 and Top-p = 1 .0. Each reported result is averaged over three independent runs. 
+
+Prompt and context budget. For each agent call, the input prompt consists of the original task query, a role-conditioned instruction, the selected private-memory brief, active predecessor briefs, and the current global-state summary. To control context growth, we cap the maximum input length of each agent call at approximately 8,192 tokens and the maximum generation length at 
+
+1,024 tokens. The task query is truncated to at most 2,048 tokens, the private-memory brief to 256 tokens, the predecessor-context brief to 384 tokens, and the global-state summary to 256 tokens. When the composed prompt exceeds the budget, we first remove zero-weight memory records and then truncate lower-weight predecessor briefs. 
+
+Graph and memory settings. During union-graph construction, we select K = 3 complementary topologies by greedy 
+
+k-DPP MAP inference and use the lower-confidence quantile α = 0 .38 for conservative topology scoring. In Hierarchical Sparse Coordination, we run up to T = 5 communication turns. Each active node retrieves at most 4 private-memory records and receives at most 3 predecessor briefs from active in-neighbors. Both memory retrieval and edge activation use sparsemax, so irrelevant memory records and inactive communication edges are assigned zero weight. 
+
+Stage separation. All learned components are optimized before benchmark evaluation and are frozen at validation and test time. MCTS visit counts and action values are query-local statistics and are reinitialized for every query. Test-time memory writes are also query-local and are discarded after finalization. They do not update model parameters or affect later test examples. The data-access protocol is specified in Appendix A.2. 
+
+Lightweight test-time topology search. Test-time MCTS performs legal graph edits and forward passes through the frozen edit prior and utility predictor. It does not invoke the agent backbone or execute candidate workflows. Agent LLM calls begin only after the selected topologies have been merged into the query-specific union graph. The search therefore adds no LLM token cost. Its graph operations and local model forward passes are included in end-to-end wall-clock latency. 
+
+A.2 Algorithm Workflow 
+
+Training–inference separation. We distinguish three disjoint data roles: a topology-supervision split Dsup , a validation split 
+
+Dval , and the held-out test split Dtest . Observed topology utility is computed only on Dsup . Validation labels are used only after a Signal Offline supervision Validation/test inference External scoring 
+
+Query and prompt-visible checks Yes Yes Yes Gold answer or answer index Dsup only No After output Observed Tier-1/Tier-2 utility Dsup only No No Frozen predicted topology utility After fitting Yes No Official held-out code tests No No After output Cross-query parameter updates Yes No No 
+
+Table 7: Data-access firewall used by HELENA . “After output” means that the corresponding signal is accessed only after the system output has been fixed and can no longer affect search, topology selection, or refinement. complete system output has been fixed, for checkpoint selection and calibration. At test time, topology search, topology selection, hierarchical coordination, and local refinement receive no gold answer, answer index, exact-match result, or official held-out test feedback. The benchmark scorer accesses such information only after the final output is irrevocably fixed. Prompt-visible examples or checks are treated as part of the query Q. They are therefore available to every compared method and are distinct from the official held-out evaluator. Across validation and test examples, all learned parameters are frozen; only per-query MCTS statistics, graph activations, and query-local memories may change. 
+
+Multi-fidelity topology supervision. For (Q, Y ) ∈ D sup , executing topology W produces a candidate answer baW . A training-only multi-fidelity evaluator first uses a cheap proxy to screen all candidates, then applies Tier 1 to a shortlist and Tier 2 to the finalists. When a higher-fidelity result is available, it supersedes the lower-fidelity estimate rather than being linearly blended with it. The highest-fidelity observed utility is normalized to [0 , 1] and serves as the supervision target: 
+
+uobs (Q, W ; Y ) = 
+
+
+
+1[baW = Y ], MCQ /EM ,
+
+1[Eq( baW , Y )] , Math ,
+
+PassRate Tsup (Q)(baW ), Code .
+
+(23) Here Eq denotes normalized numeric or symbolic equivalence, and Tsup (Q) contains only prompt-visible checks or checks belonging to the non-test supervision split. Official held-out evaluator tests are never included in Tsup (Q). At validation and test time, Eq. (23) is not evaluated inside the system; terminal topologies are valued only by the frozen predictor described below. 
+
+Algorithm 1 Offline Topology Guidance Learning of HELENA 
+
+1. Input: topology-supervision set Dsup ; validation set Dval ; initial workflow W0; search budget B; training-only multi-fidelity evaluator 
+
+Esup MF ; trainable edit prior Pϕ; trainable utility-predictor ensemble {gψm }Mm=1 .2. Output: frozen edit prior P ⋆ϕ and frozen utility predictors {g⋆ψm }Mm=1 .3. Initialize the topology-supervision buffer Dsup topo ← ∅ .4. for each (Q, Y ) ∈ D sup do 
+
+5. Initialize query-local MCTS statistics NQ(s, u ) ← 0 and QQ(s, u ) ← 0.6. for simulation b = 1 , . . . , B do 
+
+7. Set s ← W0 and search path τb ← ∅ .8. while s is not terminal do 
+
+9. Select u⋆ ← arg max u∈U (s) PUCT Q(s, u ), where 
+
+PUCT Q(s, u ) = QQ(s, u )+ cpuct Pϕ(u | s, Q )
+
+pNQ(s)1 + NQ(s, u ) .
+
+10. Append (s, u ⋆) to τb and set s ← T (s, u ⋆).11. end while 
+
+12. Compile terminal state s into topology W , execute W on Q, and obtain 
+
+uobs  
+
+> W
+
+← E sup MF (Q, Y, W ).
+
+13. Add (Q, W, u obs  
+
+> W
+
+) to Dsup topo .14. for each visited pair (s, u ) ∈ τb do 
+
+15. Update the visit count 
+
+NQ(s, u ) ← NQ(s, u ) + 1 .16. Update the running action value 
+
+QQ(s, u ) ← QQ(s, u ) + uobs  
+
+> W
+
+− QQ(s, u )
+
+NQ(s, u ) .
+
+17. end for 
+
+18. end for 
+
+19. Update Pϕ from the utility-labelled MCTS trajectories; only examples in Dsup contribute to this update. 20. end for 
+
+/* Query-conditioned topology encoding and utility learning */ 
+
+21. for each (Q, W, u obs  
+
+> W
+
+) ∈ D sup topo do 
+
+22. Encode the query eQ ← Emb( Q).23. Canonically serialize the topology as 
+
+Ser( W ) = {roles , edges , prompts }.
+
+24. Compute eW ← Emb(Ser( W )) and hW ← StructFeat( W ).
+
+zW ← Proj W ([ eW ; hW ]) .
+
+25. Form the joint query–topology representation 
+
+zQ,W ← Proj QW ([ eQ; zW ]) .
+
+26. end for 
+
+27. for predictor m = 1 , . . . , M do 
+
+28. Predict 
+
+(μ(m) 
+
+> Q,W
+
+, ρ (m) 
+
+> Q,W
+
+) ← gψm (zQ,W ).
+
+29. Convert the scale parameter 
+
+σ(m) 
+
+> Q,W
+
+← softplus( ρ(m) 
+
+> Q,W
+
+) + ε. 
+
+30. Train gψm by minimizing 
+
+L(m)qual = X
+
+> (Q,W,u )∈D sup topo
+
+" (u − μ(m) 
+
+> Q,W
+
+)2
+
+2( σ(m) 
+
+> Q,W
+
+)2 + 12 log( σ(m) 
+
+> Q,W
+
+)2
+
+#
+
+.
+
+31. end for 
+
+32. Select and calibrate checkpoints on Dval only after each validation output has been fixed; freeze all selected parameters. 33. return P ⋆ϕ and {g⋆ψm }Mm=1 .
+
+Algorithm 2 Test-Time Query-Conditioned Union Graph Construction of HELENA 
+
+1. Input: test query Q; initial workflow W0; frozen edit prior P ⋆ϕ ; frozen utility predictors {g⋆ψm }Mm=1 ; search budget B; selected topology number K; PUCT coefficient cpuct ; lower-confidence quantile α < 0.5; DPP temperature η; maximum communication turns T .2. Output: union MAS graph GU = ( VU , E U ) and edge descriptors eu→v = ( puv , compat uv , ctx uv ).3. No gold answer or official held-out test is an input to this algorithm. 4. Initialize C ← ∅ , NQ(s, u ) ← 0, and QQ(s, u ) ← 0.
+
+/* Candidate generation with predicted leaf values */ 
+
+5. for simulation b = 1 , . . . , B do 
+
+6. Set s ← W0 and τb ← ∅ .7. while s is not terminal do 
+
+8. Select 
+
+u⋆ ← arg max  
+
+> u∈U (s)
+
+"
+
+QQ(s, u ) + cpuct P ⋆ϕ (u | s, Q )
+
+pNQ(s)1 + NQ(s, u )
+
+#
+
+.
+
+9. Append (s, u ⋆) to τb and set s ← T (s, u ⋆).10. end while 
+
+11. Compile s into topology W and compute zQ,W as in the offline algorithm. Candidate workflows are not executed. 12. for predictor m = 1 , . . . , M do 
+
+13. Predict (μ(m) 
+
+> Q,W
+
+, σ (m) 
+
+> Q,W
+
+) ← g⋆ψm (zQ,W ).14. end for 
+
+15. Compute the predictive mean 
+
+μQ,W ← 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+μ(m) 
+
+> Q,W
+
+.
+
+16. Compute the predictive uncertainty 
+
+σ2 
+
+> Q,W
+
+← 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+
+
+(σ(m) 
+
+> Q,W
+
+)2 + ( μ(m) 
+
+> Q,W
+
+)2
+
+− μ2 
+
+> Q,W
+
+.
+
+17. Set buψ (Q, W ) ← μQ,W .18. for each (s, u ) ∈ τb do 
+
+19. Update 
+
+NQ(s, u ) ← NQ(s, u ) + 1 .QQ(s, u ) ← QQ(s, u ) + buψ (Q, W ) − QQ(s, u )
+
+NQ(s, u ) .
+
+20. end for 
+
+21. Add the unique record (W, μ Q,W , σ Q,W ) to C.22. end for 
+
+/* Quality estimation and information-flow comparison */ 
+
+23. for each W ∈ C do 
+
+24. Compute 
+
+qQ,W ← exp 
+
+ μQ,W + Φ −1(α)σQ,W 
+
+2η
+
+
+
+.
+
+25. Map role-compatible nodes to a common order and construct the normalized adjacency matrix AW .26. Compute 
+
+ΨT (W ) ←
+
+> T
+
+X
+
+> t=1
+
+AtW .
+
+27. end for 
+
+28. for each pair (Wa, W b) ∈ C × C do 
+
+29. Compute 
+
+Σab ← ⟨vec(Ψ T (Wa)) , vec(Ψ T (Wb)) ⟩∥vec(Ψ T (Wa)) ∥2 ∥vec(Ψ T (Wb)) ∥2
+
+.
+
+30. Set Lab ← qQ,W a Σab qQ,W b .31. end for 
+
+32. Greedily select K candidates by the objective in Eq. (7) and denote the result by S⋆.
+
+/* Union graph construction */ 
+
+33. Align nodes by role-agent identity and construct 
+
+GU ← [ 
+
+> W∈S⋆
+
+VW , [ 
+
+> W∈S⋆
+
+EW
+
+!
+
+.
+
+34. for each edge (u, v ) ∈ EU do 
+
+35. Compute 
+
+puv ←
+
+P  
+
+> W∈S⋆
+
+qQ,W 1[( u, v ) ∈ EW ]
+
+P  
+
+> W∈S⋆
+
+qQ,W 
+
+.
+
+36. Compute compat uv from the role and prompt representations of the two endpoints. 37. Compute ctx uv from the finite-turn flow and the position of the edge in the selected topologies. 38. Set eu→v ← (puv , compat uv , ctx uv ).39. end for 
+
+40. return GU and {eu→v | (u, v ) ∈ EU }.Offline training of hierarchical coordination. The memory query builder fq , memory selector fs, edge scorer Ψedge Θe , and global updater GlobalNode Θg are optimized only on Dsup and frozen before validation/test inference. Memory retrieval uses retrospective contrastive credit assignment, 
+
+Lmem = − log exp zpos 
+
+exp zpos + P  
+
+> zneg ∈N i
+
+exp zneg 
+
+. (24) For an execution trace τ , define sΘe (τ ) = P
+
+> t
+
+P  
+
+> (vj,v i)∈Et
+
+log βtji . The controller is trained by pairwise trace ranking with explicit communication-cost penalties, 
+
+Lctrl = − log exp sΘe (τ +)exp sΘe (τ +) + P  
+
+> τ−
+
+exp sΘe (τ −)+ λE
+
+X
+
+> t
+
+|Et| + λC
+
+X
+
+> t
+
+Tok( Dt).
+
+(25) These are stage-specific objectives; gradients do not pass through discrete MCTS expansion or k-DPP subset selection. 
+
+Algorithm 3 Test-Time Hierarchical Sparse Coordination of HELENA 
+
+1. Input: query Q; union graph GU = ( VU , E U ); edge descriptors {eu→v }; private memories {M 0 
+
+> i
+
+}; role instructions {ri}; role-conditioned prompts {P ti }; turns T ; frozen query builder f ⋆q ; frozen memory selector f ⋆s ; memory composer Compose ; frozen edge scorer Ψedge Θ⋆e ; frozen global updater GlobalNode Θ⋆g ; feedback operator Feedback avail .2. Output: solution set Y = {(ak , ξ k )}Ky 
+
+> k=1
+
+and activated graph trace G1: T 
+
+> act
+
+.3. Feedback avail uses only signals available during inference and excludes benchmark labels. 4. Initialize g0 ← InitGlobal( Q), Y ← ∅ , and G1: T 
+
+> act
+
+← ∅ .5. for turn t = 1 , . . . , T do 
+
+/* Node-level memory composition */ 
+
+6. for each node vi ∈ VU do 
+
+7. Compute qti ← f ⋆q (Q, r i).8. Compute ztik ← f ⋆s (qti , m tik ) for every mtik ∈ M ti .9. Compute 
+
+αti ← sparsemax  {ztik | mtik ∈ M ti } .
+
+10. Set 
+
+Rti ← { mtik ∈ M ti | αtik > 0}.
+
+11. Compute 
+
+(ℓti , b ti , B ti ) ← Compose  {(αtik , m tik ) | mtik ∈ R ti } .
+
+12. end for 
+
+/* Edge-level sparse activation and execution */ 
+
+13. for each edge (vj , v i) ∈ EU do 
+
+14. Compute 
+
+ϕtji ← Ψedge Θ⋆e
+
+ btj , b ti , g t, e vj →vi
+
+ .
+
+15. end for 
+
+16. for each target node vi ∈ VU do 
+
+17. Compute 
+
+βti ← sparsemax  {ϕtji | (vj , v i) ∈ EU } .
+
+18. end for 
+
+19. Define 
+
+Et ← { (vj , v i) ∈ EU | βtji > 0}.
+
+20. Let V t contain the endpoints of Et and set Gt ← (V t, E t).21. Append Gt to G1: T 
+
+> act
+
+.22. for each active node vi ∈ V t do 
+
+23. Form Dti from the verbalized briefs received through active incoming edges. 24. Execute 
+
+oti ← vi
+
+ P ti , Q, ℓ ti , D ti , g t .Task type Decision unit returned by UnitParse 
+
+Multiple choice One normalized answer choice Mathematical reasoning One derivation step or the final answer field Code generation One code span identified by the available verifier evidence 
+
+Table 8: Task-specific decision units used by Local Self-Refinement. 
+
+25. Obtain 
+
+Fti ← Feedback avail (oti , Q ).
+
+26. Update the query-local memory 
+
+Mt+1  
+
+> i
+
+← M ti ∪ Write( oti , Fti , G t).
+
+27. if oti is a solution proposal then 
+
+28. Create ξti that links oti to the active graph trace and its supporting evidence. 29. Set Y ← Y ∪ { (oti , ξ ti )}.30. end if 
+
+31. end for 
+
+32. Pool the active briefs and outputs into pt.33. Pool the available feedback into Ft.34. Compute 
+
+gt+1 ← GlobalNode Θ⋆g
+
+ gt, p t, Ft .
+
+35. end for 
+
+36. Set Ky ← | Y | and discard the query-local memory writes. 37. return Y and G1: T 
+
+> act
+
+.
+
+Offline training of local refinement. The reliability estimator Rψ , discrepancy encoder Disc θ , risk scorer risk θ , and certificate model Cert χ are trained only from retrospective records derived from Dsup . They are frozen before validation and test inference. A reliability preference pair contains two candidates produced for the same supervision query. The candidate with higher observed utility is preferred. Pairs with equal utility are omitted. Let p = (( a+, ξ +), (a−, ξ −)) denote one pair in Psup rel . The reliability estimator is trained by 
+
+Lrel = − X
+
+> p∈P sup rel
+
+log σ  Rψ (a+, ξ +) − Rψ (a−, ξ −) . (26) The discrepancy encoder and risk scorer form one unit risk model. For each training unit d, Disc θ maps the evidence linked to the unit to ϵd. The risk scorer maps this representation to the risk probability pd. The loss below updates both parts of the model. No separate discrepancy loss is used. 
+
+pd = σ(risk θ (d; ϵd)) ,
+
+Lrisk = − X 
+
+> (d,ϵ d,r ⋆d)∈D sup risk
+
+[r⋆d log pd + (1 − r⋆d) log(1 − pd)] . (27) The target r⋆d indicates whether the unit lacks sufficient support under the supervision available in Dsup .For each proposed replacement, the certificate model receives the challenger, the current solution, and the evidence linked to both versions of the unit. Its output and training loss are 
+
+cd = Cert χ
+
+ ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+, y rel , ξ rel , d  ,
+
+Lcert = − X  
+
+> (d,y ch
+> d,ξ ch
+> d,y rel ,ξ rel ,c ⋆d)∈D sup cert
+
+[c⋆d log cd + (1 − c⋆d) log(1 − cd)] . (28) A positive target is assigned only when the local replacement improves the supervised outcome of unit d while preserving the remaining units. No validation or test label is used to update these models. Local refinement operators. The operator Collapse follows semantic answer equivalence (Kuhn, Gal, and Farquhar 2023). Given the resulting answer classes, Rep retains the candidate with the highest Rψ score from each class. For a selected solution (yrel , ξ rel ), UnitParse returns the locally verifiable units listed in Table 8. For each unit d, Disc θ
+
+receives the unit and the evidence linked to it. It produces the fixed-dimensional representation ϵd, which is passed to risk θ and is not itself a risk score. The local score Rloc  
+
+> ψ
+
+(a, ξ, d ) uses the same reliability estimator after evidence unrelated to unit d has been masked. The global score and local score therefore share parameters. The certificate model compares the current unit with a proposed replacement using their linked evidence. Its positive output supports only the local replacement and does not certify the full solution. The operator ExtractSubgraph starts from the nodes cited by the provenance of unit d. It follows the recorded active paths to the nodes that supplied evidence for the unit. Verifier nodes that assessed the unit are retained. The union graph defines eligible edges, while the activated trace limits the correction graph to paths used in the current execution. The operator RepairExec executes only the agents in the correction graph. Its prompt contains the original query and the selected solution. The disputed unit and its linked evidence form the repair context. The prompt asks for a replacement of that unit while preserving the remaining solution. Each challenger is returned with a new evidence record. Let Θ⋆ 
+
+> ref
+
+= ( R⋆ψ , Disc ⋆θ , risk ⋆θ , Cert ⋆χ) denote the frozen local refinement modules. 
+
+Algorithm 4 Test-Time Local Self-Refinement of HELENA 
+
+1. Input: query Q; solution set Y = {(ak , ξ k )}Ky
+
+> k=1
+
+; union graph GU ; activated trace G1: T 
+
+> act
+
+; frozen module bundle Θ⋆ 
+
+> ref
+
+; risk threshold τ ;margin δ.2. Output: final reliable solution by.3. All evidence used below is available during inference. No gold answer or official held-out test is accessible. 
+
+/* Decision Unit Localization */ 
+
+4. Collapse semantically equivalent answers G ← Collapse( Y ).5. for each equivalence class G ∈ G do 
+
+6. Select 
+
+(aG, ξ G) ← arg max 
+
+> (a,ξ )∈G
+
+R⋆ψ (a, ξ ).
+
+7. end for 
+
+8. Set R ← Rep( G) and select 
+
+(yrel , ξ rel ) ← arg max 
+
+> (a,ξ )∈R
+
+R⋆ψ (a, ξ ).
+
+9. Parse the selected solution 
+
+Dunit ← UnitParse( yrel , ξ rel ).
+
+10. Initialize U ← ∅ .11. for each d ∈ D unit do 
+
+12. Compute 
+
+ϵd ← Disc ⋆θ (d, y rel , ξ rel , Y ).
+
+13. Compute rd ← risk ⋆θ (d; ϵd).14. if rd > τ then U ← U ∪ { d}. end if 
+
+15. end for 
+
+/* Adversarial Solution Validation */ 
+
+16. for each d ∈ U do 
+
+17. Extract 
+
+Gcorr  
+
+> d
+
+← ExtractSubgraph( GU , G 1: T 
+
+> act
+
+, d, ξ rel , Y ).
+
+18. Retrieve 
+
+Hret  
+
+> d
+
+← { (a, ξ ) ∈ Y | Disagree( a, y rel , d ) = 1 }.
+
+19. Generate 
+
+Hgen  
+
+> d
+
+← RepairExec( Q, G corr  
+
+> d
+
+, y rel , d, ξ rel ).
+
+20. Set Hd ← H ret  
+
+> d
+
+∪ H gen  
+
+> d
+
+and Ad ← ∅ .21. for each (ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+) ∈ H d do 
+
+22. Compute 
+
+∆d ← R⋆, loc  
+
+> ψ
+
+(ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+, d ) − R⋆, loc  
+
+> ψ
+
+(yrel , ξ rel , d ).23. Compute 
+
+cd ← Cert ⋆χ
+
+
+
+ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+, y rel , ξ rel , d 
+
+
+
+.
+
+24. if ∆d > δ and cd = 1 then 
+
+25. Set Ad ← A d ∪ { (ych  
+
+> d
+
+, ξ ch  
+
+> d
+
+)}.26. end if 
+
+27. end for 
+
+28. if Ad̸ = ∅ then 
+
+29. Select 
+
+(y⋆d , ξ ⋆d ) ← arg max 
+
+> (y,ξ )∈A d
+
+R⋆, loc  
+
+> ψ
+
+(y, ξ, d ).
+
+30. Rewrite 
+
+yrel ← Rewrite( yrel , d, y ⋆d ).
+
+31. Update 
+
+ξrel ← UpdateEvidence( ξrel , d, ξ ⋆d , G corr  
+
+> d
+
+).
+
+32. else preserve unit d unchanged. end if 
+
+33. end for 
+
+34. Set by ← yrel .35. return by.
+
+External benchmark scoring. After Test-Time Local Self-Refinement returns by, the system state is frozen and no further search, topology selection, or rewriting is permitted. Only then does the external benchmark scorer compare by with the gold answer or run the official held-out tests. Consequently, benchmark feedback cannot affect any output-producing decision. 
+
+A.3 Controlled Noise Propagation Protocol 
+
+The evaluation covers the full benchmark suite under a shared injection protocol. In each run, a task-associated but incorrect intermediate record is sampled independently of the memory-selection scores and inserted into a nonterminal node. Thus, the injected record is related to the task but is not constructed to rank among the node’s selected memory records. For every injection run, the query, injected record, injection source, union graph, and pre-injection state are identical across variants. Local Self-Refinement is disabled throughout this experiment. Let A = {HELENA , w/o sparse activation , w/o memory composer , w/o HSC } denote the evaluated variants. HELENA enables both HSC levels; w/o sparse activation retains the memory composer but executes all union edges; w/o memory composer retains sparse edge activation but bypasses memory selection; and w/o HSC disables both levels, yielding dense union-graph execution with the full private memory available to each active node. Let I denote the common set of injection runs, and let emi be the record injected in run i. For variant a ∈ A , let Rai denote the records exposed after node-level memory selection; when the memory composer is disabled, Rai is the full private memory and therefore contains emi. Let V(1)  
+
+> i
+
+contain nodes whose shortest-path distance from the injection source is one, and let V(2+) 
+
+> i
+
+contain nodes at distance 2 through the maximum communication horizon T . Because the union graph and injection source are fixed, these eligible node sets are identical across variants. The indicator xaiv equals one when the provenance of emi appears in the input context of node v under variant a. A node that is not activated, or is activated without receiving the injected record, has xaiv = 0 . Reach is micro-averaged over all eligible downstream nodes, so every variant uses the same denominators. The reported metrics are 
+
+NoiseSurvival a = 100 
+
+|I| 
+
+X
+
+> i∈I
+
+1[ emi ∈ R ai ], (29) 
+
+Reach@1 a = 100 
+
+P
+
+> i∈I
+
+P
+
+> v∈V (1)
+> i
+
+xaiv 
+
+P 
+
+> i∈I
+
+|V (1)  
+
+> i
+
+| , (30) 
+
+Reach@2+ a = 100 
+
+P
+
+> i∈I
+
+P
+
+> v∈V (2+)
+> i
+
+xaiv 
+
+P 
+
+> i∈I
+
+|V (2+)  
+
+> i
+
+| . (31) Let byclean  
+
+> i,a
+
+and byinj  
+
+> i,a
+
+denote the outputs of variant a before and after injection, and let yi denote the reference answer. To ensure a common denominator, Final Flip is evaluated on the shared clean-correct mask 
+
+C = i ∈ I | byclean  
+
+> i,a
+
+= yi for every a ∈ A . (32) Thus, the same examples contribute to every row of Table 4: 
+
+FinalFlip a = 100 
+
+|C| 
+
+X
+
+> i∈C
+
+1[byinj 
+
+> i,a
+
+̸ = yi]. (33) 
+
+A.4 Prompt Set 
+
+This appendix lists representative prompt schemas used by HELENA . We include prompts for topology-level prompt slots, role-conditioned agents, latent-guided graph execution, deductive reasoning contracts, and local verification / repair. At validation and test time, all placeholders are populated only from the input query, frozen model outputs, graph traces, query-local memories, and prompt-visible checks. They never contain the gold answer, answer index, or official held-out evaluator tests. 
+
+Discrete Prompt Slot Template 
+
+reasoning_mode = ["Answer directly with minimal reasoning.", "Reason step by step before giving the answer.", "First critique possible failure modes, then answer." ]upstream_usage = ["Use upstream outputs only when they provide direct evidence.", "Summarize useful upstream information before reasoning.", "Ignore upstream information if it conflicts with the task constraints." ]output_style = ["Return a concise natural-language answer.", "Return bullet points followed by a final answer.", "Return a compact structured response with stable fields." ]verification_mode = ["No explicit verification.", "Perform a short final consistency check.", "Check the answer against every task constraint." ]finalization = ["Answer only.", "Answer followed by a short rationale.", "Final answer must appear after the marker FINAL:" ]
+
+Representative Agent Role Prompts 
+
+planner_system_prompt = """ You are a planning agent. Understand the problem first and provide a concise, reliable plan for solving it. Focus on decomposing the task into useful steps. """ reasoner_system_prompt = """ You are a reasoning agent. Produce a complete and traceable reasoning process. Avoid skipping important intermediate steps. """ coder_system_prompt = """ You are a coding agent. Translate the problem into executable algorithmic steps or code-level reasoning. Preserve required function names and interfaces. """ verifier_system_prompt = """ You are a verifier agent. Check whether a candidate answer satisfies the task constraints, output format, and available evidence. Report only grounded issues. Do not assume access to a gold answer or hidden evaluator tests. """ summarizer_system_prompt = """ You are a summarizer agent. Synthesize multiple candidates into a concise, consistent final proposal. Do not introduce unsupported claims. """ 
+
+Latent-Guided Runtime Prompt 
+
+runtime_user_prompt = """ Question: {rendered_question} Latent-guided memory brief: {memory_brief} Current task: Turn {t}/{T}. {role_instruction} Use your private memory together with graph-mediated neighbour signals. Only rely on neighbour information if it is relevant to your current role. Avoid repeating irrelevant traces. Do not assume access to a gold/reference answer or hidden evaluator tests. Task context: {task_context} Output contract: {answer_contract} """ 
+
+Deductive Solver and Verifier Contracts 
+
+deductive_solver_contract = """ SOLUTION: 1. <quantity_name> = <arithmetic expression> = <value> 2. <quantity_name> = <arithmetic expression> = <value> 3. ... FINAL: <number_or_expression> """ deductive_verifier_contract = """ VERDICT: pass|challenge|uncertain LOCUS: step=<id>|final|parse ISSUE: arithmetic_mismatch|algebra_mismatch|unsupported_transition|missing_final|none FIX: <one sentence> """ 
+
+Local Verification and Repair Prompts 
+
+anchor_verification_probe = """ You are verifying a proposed final answer. Problem: {question} Proposed final answer: {reliable_solution} Do not assume the proposed answer is correct. Re-solve the problem from the task quantities only. Use a compact equation-chain format. Every step must contain a computable equation. Do not use a gold/reference answer or hidden evaluator tests. Return exactly: SOLUTION: 1. <quantity_name> = <arithmetic expression> = <value> 2. <quantity_name> = <arithmetic expression> = <value> ... FINAL: <answer> """ suffix_repair_prompt = """ You are repairing a derivation. Problem: {question} Verified prefix. Do not change these steps: {verified_prefix} First inconsistent step: {bad_step} Verifier residual: {residual} Rewrite only from Step {verified_prefix_len + 1} onward. Keep the verified prefix unchanged. Do not use a gold/reference answer or hidden evaluator tests. Return: SOLUTION: 1. ... 2. ... ... FINAL: <answer> """

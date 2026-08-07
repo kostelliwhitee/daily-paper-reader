@@ -6,48 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-05
-- 运行时间：2026-08-05 21:33:54 UTC
+- 最新运行日期：2026-08-07
+- 运行时间：2026-08-07 01:53:03 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：4
-- 速读区：4
+- 本次总论文数：4
+- 精读区：2
+- 速读区：2
 
 ### 今日简报（AI）
-今日8篇多智能体研究，精读聚焦“历史感知对手意识”与“关系先验驱动收敛”两大进化机制。
-
-最值得看：Agent在复杂环境中借助对手历史信息提升进化效率，以及利用关系先验增强多智能体系统稳定性。
-
-建议普通读者先关注这两篇精读，后续可留意速读中关于记忆攻击与后门风险的安全议题。
-- 详情：[/202608/05/README](/202608/05/README)
+- 今日共生成 4 篇推荐（精读 2 篇，速读 2 篇）
+- 精读：《Training Small LLMs as Spatial Multi-Agent Policies》（8.0/10）, 《HELENA:Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS》（8.0/10）
+- 速读：《Structured LLM Reasoning for Zero-Shot Human--Robot Coordination Under Hidden Goals》（7.0/10）, 《NSF-HRPT: Neural Semantic Field meets Hierarchical Risk Perception Tree for Safety-Critical Scenario Assessment》（7.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
+- 详情：[/202608/07/README](/202608/07/README)
 
 ### 精读区论文标签
-1. [Evolving in the Agent Jungle via History-Informed Opponent Awareness](/202608/05/2608.02005v1-evolving-in-the-agent-jungle-via-history-informed-opponent-awareness)  
+1. [Training Small LLMs as Spatial Multi-Agent Policies](/202608/07/2608.01425v1-training-small-llms-as-spatial-multi-agent-policies)  
    标签：评分：8.0/10、query:ma-la
-   evidence：具有对手感知的动态多智能体环境
-2. [Relational Priors as Convergence Pressure in LLM-Based Multi-Agent Systems](/202608/05/2608.03239v1-relational-priors-as-convergence-pressure-in-llm-based-multi-agent-systems)  
+   evidence：面向空间协作博弈的多智能体强化学习
+2. [HELENA:Hierarchical Sparse Coordination over a Union of Complementary Topologies for MAS](/202608/07/2608.04634v1-helenahierarchical-sparse-coordination-over-a-union-of-complementary-topologies-for-mas)  
    标签：评分：8.0/10、query:ma-la
-   evidence：直接研究LLM多智能体系统中的交互动力学与收敛行为
-3. [Attacking and Defending Multi-Agent Collaborative Filtering Systems Through Connectivity](/202608/05/2608.03272v1-attacking-and-defending-multi-agent-collaborative-filtering-systems-through-connectivity)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：基于自然语言交互的多智能体协同过滤
-4. [Group Perspective Matters: Regulating Debate Relationships Can Mitigate Blind Conformity in Multi-Agent Debate](/202608/05/2608.03648v1-group-perspective-matters-regulating-debate-relationships-can-mitigate-blind-conformity-in-multi-agent-debate)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：多智能体辩论通过调节相互引用关系缓解盲目从众，直接关联交互动态
+   evidence：面向多智能体通信的层次稀疏协调与拓扑选择
 
 ### 速读区论文标签
-1. [MAPLE-Guard: Memory-Aware Link Enforcement Against Memory-Link Poisoning in Multi-Agent Systems](/202608/05/2608.00426v1-maple-guard-memory-aware-link-enforcement-against-memory-link-poisoning-in-multi-agent-systems)  
+1. [Structured LLM Reasoning for Zero-Shot Human--Robot Coordination Under Hidden Goals](/202608/07/2608.04309v1-structured-llm-reasoning-for-zero-shot-human--robot-coordination-under-hidden-goals)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体系统中的内存链路投毒
-2. [When Collaboration Becomes a Trigger: Collective Evidence-Threshold Backdoors in Multi-Agent Systems](/202608/05/2608.01085v1-when-collaboration-becomes-a-trigger-collective-evidence-threshold-backdoors-in-multi-agent-systems)  
+   evidence：协作式多智能体互动动态与心智推断
+2. [NSF-HRPT: Neural Semantic Field meets Hierarchical Risk Perception Tree for Safety-Critical Scenario Assessment](/202608/07/2608.04776v1-nsf-hrpt-neural-semantic-field-meets-hierarchical-risk-perception-tree-for-safety-critical-scenario-assessment)  
    标签：评分：7.0/10、query:ma-la
-   evidence：研究多智能体协作中证据累积如何触发后门，直接关联多智能体交互动态
-3. [History Matters: Meta-policy Delegation with Heterogeneous Multi-agent Reinforcement Learning](/202608/05/2608.03833v1-history-matters-meta-policy-delegation-with-heterogeneous-multi-agent-reinforcement-learning)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：异构多智能体协作中的顺序委托决策与委托拓扑，体现交互动态
-4. [AgentPanel: Toward a New Paradigm for Human--AI Collaboration in Exploring Scientific Questions](/202608/05/2608.03283v1-agentpanel-toward-a-new-paradigm-for-human--ai-collaboration-in-exploring-scientific-questions)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：面向人机协作的多智能体论坛
+   evidence：对多智能体交互复杂动力学建模用于安全风险评估
 
 
 <div class="dpr-home-promo-card">
