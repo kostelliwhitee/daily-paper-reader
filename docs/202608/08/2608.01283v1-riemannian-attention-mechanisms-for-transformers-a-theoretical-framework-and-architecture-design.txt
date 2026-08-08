@@ -1,0 +1,1674 @@
+Title: Riemannian Attention Mechanisms for Transformers: A Theoretical Framework and Architecture Design
+
+URL Source: https://arxiv.org/pdf/2608.01283v1
+
+Published Time: Tue, 04 Aug 2026 01:24:14 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# Riemannian Attention Mechanisms for Transformers: A Theoretical Framework and Architecture Design 
+
+Sen Song 
+
+Independent Researcher, Guangzhou, China E-mail: scottsong@live.com | ORCID: 0009-0001-1178-2832 
+
+Abstract 
+
+All Transformer-based large language models compute attention via the Euclidean inner product, an architectural choice that Dong et al. (2021) proved causes representational rank to decay doubly exponentially with depth in pure self-attention stacks. We develop a theoret-ical framework that targets this structural limitation at the mathematical level by replacing the flat Euclidean metric with learned per-token Riemannian metrics . Our contributions are threefold. (1) We prove that Riemannian attention scores with heterogeneous per-token metrics are non-Gram —they cannot be factorized as QK ⊤ with factorization dimension 
+
+O(d) (Theorem 3.2). We are explicit that this is a structural observation, not a proof of rank preservation: the Riemannian attention matrix ARiem = softmax( SRiem ) remains row-stochastic, and the core collapse mechanism (convergence of products of row-stochastic matrices to rank-1) is independent of the Gram property. Whether Riemannian attention resists this contraction in the large-perturbation regime is the central open problem iden-tified by this framework. To characterize when a positive answer is plausible, we provide a perturbation analysis (Section 3.3) that bounds the spectral deviation of ARiem from its Euclidean counterpart and identifies a critical metric-strength regime ¯U 2crit = Θ( τ /L ): below it, the geometric correction is provably too weak to matter; above it, standard perturbation tools break down. (2) We establish that low-rank metric factors gt = I + UtU ⊤ 
+
+> t
+
+render all geometric operations tractable: geodesic distance in O(d·r) per token and metric inversion in 
+
+O(d·r2) via the Woodbury identity—both far below the O(d3) cost of a general d×d matrix— making Riemannian attention feasible at billion-parameter scale with negligible overhead (Proposition 4.3). (3) We present the Fiber Bundle Transformer , a complete architecture specification—framed as a structural analogy to the differential-geometric notion, not a strict fiber-bundle construction—in which each token position carries its own Riemannian metric, attention is geodesic distance computation, feed-forward updates use metric-preconditioned (Riemannian-gradient-inspired) steps, and the connection carries explicit curvature and tor-sion proxies. We derive formal predictions: curvature heterogeneity should emerge as an optimization consequence (Conjecture 6.1), train/inference metric blending is generically suboptimal under mismatch (Proposition 6.2), and metric collapse to identity is the dom-inant failure mode requiring architectural countermeasures (Conjecture 6.3). This paper presents theoretical analysis and architectural design; empirical validation is the subject of future work. 
+
+# 1 Introduction 
+
+Standard Transformer architectures [5] process all token representations in a flat Euclidean space. The attention mechanism computes similarity via the Euclidean inner product q⊤ 
+
+> i
+
+kj /√d, the residual stream performs Euclidean vector addition x ← x + F (x), and feed-forward layers apply global linear transformations. At no point does the architecture permit the geometry of the representational space to bend, stretch, or adapt to the semantic content being processed. This architectural flatness has a proven structural consequence. Dong et al. [3] showed that in a pure self-attention stack, the rank of hidden representations decays doubly exponentially 
+
+1arXiv:2608.01283v1 [cs.LG] 2 Aug 2026 with depth—a phenomenon known as dimensional collapse . Even in standard Transformers with residual connections and feed-forward sublayers, the underlying pressure toward low-rank representations persists, and empirical studies consistently observe that deep layers operate with far fewer effective dimensions than the nominal hidden size. The core mathematical limitation is precise: in a d-dimensional Euclidean space, altering the relative distances between token representations can only be accomplished by moving the vectors themselves , providing d degrees of freedom per token. A Riemannian metric g(x) ∈
+
+Rd×d, by contrast, provides O(d2) degrees of freedom to independently stretch or compress distances along different directions— without moving the underlying vectors. This is not merely an efficiency gain; it is a qualitative increase in the expressive capacity of the geometric operations available to the model. 
+
+Contributions. This paper presents a theoretical framework and architecture design for Rie-mannian attention in Transformers. We do not report empirical results; the contributions are mathematical: 1. Structural analysis of Riemannian attention (Section 3): We prove that per-token Riemannian metrics render the attention score matrix non-Gram —it cannot be factorized as QK ⊤ with factorization dimension O(d) (Theorem 3.2). We are explicit that this is a structural observation, not a proof of rank preservation: the Riemannian attention matrix 
+
+ARiem = softmax( SRiem ) remains row-stochastic, and the core collapse mechanism (conver-gence of row-stochastic matrix products) does not depend on the Gram property of the pre-softmax scores. To characterize when rank preservation is plausible, we provide a pertur-bation analysis (Section 3.3) that bounds the spectral deviation between Euclidean and Rie-mannian attention, identifies a critical metric-strength regime ¯U 2crit = Θ( τ /L ) below which the geometric correction is provably too weak to matter, and states a strengthened rank-preservation conjecture (Conjecture 3.6) with explicit conditions on the second singular value 
+
+σ2, while acknowledging that the large-perturbation regime—where anti-collapse would need to occur—falls outside the reach of current perturbation tools. 2. Computational feasibility (Section 4): We show that the low-rank representation gt =
+
+I + UtU ⊤ 
+
+> t
+
+makes geodesic distance computable in O(d · r) per token and metric inversion in 
+
+O(d · r2) via the Woodbury identity and algebraic decomposition (Proposition 4.3), with total attention overhead O(r/d ) ≪ 1.3. Architecture specification (Section 5): We present the Fiber Bundle Transformer —named by structural analogy to the differential-geometric notion, not as a strict fiber-bundle construction— in which token positions are fibers over a discrete base space, attention computes geodesic distances under per-token metrics, the connection carries curvature and torsion proxies, and feed-forward layers perform metric-preconditioned updates. We specify each component— MetricNet, TorsionNet, geodesic attention, metric-preconditioned FFN—with its mathemat-ical justification and an explicit analysis of the approximation errors introduced at each phase. 4. Theoretical predictions (Section 6): We derive formal predictions about the behavior of correctly implemented geometric architectures, including: curvature heterogeneity as an optimization consequence (Conjecture 6.1), generic suboptimality of train/inference blend-ing mismatch (Proposition 6.2, proved via the implicit function theorem without convexity assumptions), and metric collapse as the dominant failure mode (Conjecture 6.3). These predictions identify the conditions under which empirical evaluation can validly test the framework. 22 Background: The Rank Collapse Problem 
+
+2.1 Dong et al.’s Rank Collapse Theorem 
+
+We restate the key result of Dong et al. [3] in a form suitable for our analysis. 
+
+Definition 2.1 (Pure self-attention stack) . A pure self-attention stack of depth n is a sequence of layers, each applying 
+
+H(ℓ+1) = A(ℓ)H(ℓ), A(ℓ) = softmax 
+
+ H(ℓ)W (ℓ) 
+
+> Q
+
+(H(ℓ)W (ℓ) 
+
+> K
+
+)⊤
+
+√d
+
+ (1) 
+
+with no residual connections ( H(ℓ+1) ̸ = H(ℓ) + A(ℓ)H(ℓ)) and no feed-forward sublayers. 
+
+Theorem 2.2 (Dong et al. 2021, informal) . For a pure self-attention stack of depth n with input 
+
+H(0) ∈ RL×d, under mild conditions on the weight matrices, the effective rank of H(n) decays doubly exponentially toward 1:
+
+EffRank  H(n) ≤ 1 + ( d − 1) · exp( −c · 2n) (2) 
+
+for some constant c > 0 depending on the weight matrices and input. Equivalently, EffRank( H(n)) →
+
+1 as n → ∞ , i.e. the representation collapses to a rank-1 matrix in which all token representations become identical up to scaling. (A literal rank bound tending to 0 would be nonsensical—rank is a non-negative integer and the limit object is rank-1, not zero.) 
+
+The proof’s key insight is that the attention matrix A(ℓ) is row-stochastic (each row sums to 1, all entries non-negative). The product of such matrices converges to a rank-1 matrix whose rows are all identical (the common stationary distribution). In Dong et al.’s analysis, the Gram structure of the pre-softmax scores S(ℓ) = Q(ℓ)(K(ℓ))⊤/√d is used to derive the specific spectral bounds that yield the doubly-exponential convergence rate, but the fundamental contraction mechanism—row-stochastic products converging to rank-1—does not depend on the scores being Gram. 
+
+2.2 Why Standard Transformers Only Partially Mitigate Collapse 
+
+Standard Transformers add residual connections ( H(ℓ+1) = H(ℓ) + A(ℓ)H(ℓ)) and feed-forward sublayers ( H(ℓ+1) = H(ℓ) + FFN (H(ℓ))). These additions prevent the exact doubly-exponential collapse of Theorem 2.2 because the residual term injects rank at each layer. However, the struc-tural pressure toward low-rank representations persists: the attention component still contracts the representation toward a low-rank subspace, and the residual/FFN must fight against this contraction at every layer. Empirically, deep Transformer layers consistently exhibit effective ranks far below the nominal hidden dimension d.This is not a training artifact—it is a consequence of the row-stochastic nature of the at-tention matrix. After the softmax, the attention matrix A = softmax( S) is row-stochastic, and the repeated application of row-stochastic matrices (without residuals) drives representations to-ward a common rank-1 subspace. In the Euclidean case, the pre-softmax scores S = QK ⊤/√d
+
+happen to be a Gram matrix (since Q and K are linear projections of the same hidden states), and Dong et al. exploit this structure to derive the specific doubly-exponential rate. But the fundamental contraction is driven by row-stochasticity, not the Gram property. 
+
+2.3 The Geometric Diagnosis 
+
+The rank collapse theorem reveals that the problem is geometric , not merely parametric. Adding more parameters (wider layers, more heads) does not address the geometric origin: the Euclidean 3inner product forces all token pairs to be measured by the same global ruler . When this ruler is applied repeatedly across layers, diversity is lost because there is no mechanism for different token positions to experience different geometries. A Riemannian metric gt at each token position t replaces the global ruler with a local one. The same two vectors qi, kj produce different similarity scores depending on the local metrics 
+
+gi, g j , because the geodesic distance 
+
+d2
+
+> g
+
+(qi, kj ) = ( qi − kj )⊤ gij (qi − kj ) (3) depends on gij , which varies per token pair. (We use “geodesic distance” as shorthand for the Mahalanobis distance under the pairwise metric gij : since gij is treated as constant for each pair, this is the straight-line distance in the inner product defined by gij , not a path-integrated geodesic on a curved manifold. The curvature of the underlying representational manifold is addressed separately via the curvature proxy in Phase B, Section 5.4.) The question we address in the following sections is: does this geometric modification suffice to prevent rank collapse, and can it be computed efficiently? 
+
+# 3 Riemannian Metrics: Expressivity and the Limits of the Col-lapse Proof 
+
+3.1 Per-Token Riemannian Metrics 
+
+Definition 3.1 (Low-rank Riemannian metric) . At each token position t, the local Riemannian metric is a symmetric positive-definite matrix: 
+
+gt = Id + UtU ⊤ 
+
+> t
+
+, Ut ∈ Rd×r, r ≪ d (4) 
+
+where Ut is generated by a learned function (MetricNet, Section 5.2) from the token’s hidden state 
+
+ht. The rank-r perturbation UtU ⊤ 
+
+> t
+
+⪰ 0 ensures gt ⪰ Id ≻ 0 without any eigenvalue projection or clipping. 
+
+The pairwise metric for tokens i and j is the symmetric combination: 
+
+gij = gi + gj
+
+2 = Id + UiU ⊤ 
+
+> i
+
++ Uj U ⊤
+
+> j
+
+2 (5) The Riemannian attention score replaces the Euclidean dot product with the negative geodesic distance: 
+
+sRiem  
+
+> ij
+
+= − 1
+
+τ d2
+
+> g
+
+(qi, kj ) = − 1
+
+τ (qi − kj )⊤gij (qi − kj ) (6) where τ > 0 is a temperature parameter. 
+
+3.2 The Non-Gram Property: A Structural Observation 
+
+The introduction of per-token Riemannian metrics changes the algebraic structure of the atten-tion scores. We characterize this change precisely. 
+
+Theorem 3.2 (Non-Gram Property of Riemannian Attention) . Consider the Riemannian atten-tion score sRiem  
+
+> ij
+
+given by Equation (6) , where gij depends on both Ui and Uj via Equation (5) .We ask whether there exist fixed functional maps Φ, Ψ—independent of the specific input—such that sRiem  
+
+> ij
+
+= ϕ⊤ 
+
+> i
+
+ψj holds for all inputs, with ϕi = Φ( qi, U i) ∈ Rd′
+
+and ψj = Ψ( kj , U j ) ∈ Rd′
+
+. If the metric map t 7 → Ut is non-constant so that the family {UtU ⊤ 
+
+> t
+
+}t spans a subspace of Sym( d) of 
+
+4dimension at least 2 (in particular, whenever the Ut are not all identical), then no such univer-sal factorization exists with d′ = O(d)—i.e., the same dimensionality as the standard attention factorization SEuc = QK ⊤ with Q, K ∈ RL×d. The minimum factorization dimension satisfies 
+
+d′ ≥ min 
+
+n
+
+dim span {UtU ⊤ 
+
+> t
+
+}t, d(d+1) 2
+
+o
+
+, (7) 
+
+which equals d(d+1) /2 = Ω( d2) whenever the {UtU ⊤ 
+
+> t
+
+}t span the full space of symmetric matrices (e.g., for generic Ut with L ≥ d(d + 1) /2). In particular, SRiem does not admit the O(d)-dimensional factorization SEuc = QK ⊤ that appears in the standard attention mechanism. (For a specific L × L score matrix with fixed inputs, the minimum separable rank is at most L; the 
+
+Ω( d2) lower bound is a statement about the functional form and is meaningful in the regime 
+
+L = Ω( d2). Without the d′ = O(d) constraint the functional statement would be vacuous: the vectorization identity vec( A)⊤ vec( B) separates any bilinear-in-(i, j ) term with d′ = d2.) Proof. We expand the Riemannian score. Substituting Equation (5) into Equation (6): 
+
+sRiem  
+
+> ij
+
+= − 1
+
+τ
+
+"
+
+(qi − kj )⊤ Id + UiU ⊤ 
+
+> i
+
++ Uj U ⊤
+
+> j
+
+2
+
+!
+
+(qi − kj )
+
+#
+
+= − 1
+
+τ
+
+h
+
+∥qi − kj ∥2
+
+| {z }
+
+> Euclidean
+
++ 12 ∥U ⊤ 
+
+> i
+
+(qi − kj )∥2 + 12 ∥U ⊤ 
+
+> j
+
+(qi − kj )∥2
+
+| {z }
+
+> metric corrections
+
+i
+
+(8) Expand the first metric correction term: 
+
+∥U ⊤ 
+
+> i
+
+(qi − kj )∥2 = ∥U ⊤ 
+
+> i
+
+qi∥2 + ∥U ⊤ 
+
+> i
+
+kj ∥2 − 2 ( U ⊤ 
+
+> i
+
+qi)⊤(U ⊤ 
+
+> i
+
+kj ) (9) The cross term (U ⊤ 
+
+> i
+
+qi)⊤(U ⊤ 
+
+> i
+
+kj ) = q⊤ 
+
+> i
+
+UiU ⊤ 
+
+> i
+
+kj depends on Ui (token i’s metric) applied to kj
+
+(token j’s key). Similarly, the second correction yields a cross term q⊤ 
+
+> i
+
+Uj U ⊤ 
+
+> j
+
+kj depending on Uj
+
+(token j’s metric) applied to qi (token i’s query). These two cross terms are in fact separable :
+
+q⊤ 
+
+> i
+
+UiU ⊤ 
+
+> i
+
+kj = ( UiU ⊤ 
+
+> i
+
+qi)⊤kj and q⊤ 
+
+> i
+
+Uj U ⊤ 
+
+> j
+
+kj = q⊤ 
+
+> i
+
+(Uj U ⊤ 
+
+> j
+
+kj ), each splitting into an i-only factor and a j-only factor of dimension d. The genuine obstruction comes from the squared sub-terms, which are quadratic in one token’s vector under the other token’s metric. Suppose for contradiction that sRiem  
+
+> ij
+
+= ϕ⊤ 
+
+> i
+
+ψj with ϕi, ψj ∈ Rd′
+
+, d′ = O(d), where ϕi
+
+depends only on (qi, U i) and ψj depends only on (kj , U j ). Consider the sub-term ∥U ⊤ 
+
+> i
+
+kj ∥2 =
+
+k⊤ 
+
+> j
+
+(UiU ⊤ 
+
+> i
+
+)kj from Equation (9). This is a quadratic form in kj whose matrix Ai := UiU ⊤ 
+
+> i
+
+∈ Rd×d
+
+depends on i (through Ui). To absorb this term into ϕ⊤ 
+
+> i
+
+ψj , the j-factor ψj must encode the 
+
+entire quadratic profile of kj , i.e. all monomials k(a) 
+
+> j
+
+k(b) 
+
+> j
+
+for 1 ≤ a, b ≤ d, while the i-factor ϕi
+
+must encode the corresponding entry [Ai]ab . Although each individual Ai = UiU ⊤ 
+
+> i
+
+has only dr 
+
+free parameters (the entries of Ui), the family {Ai} as Ui ranges over Rd×r (with r ≥ 1) has linear span equal to the full space Sym( d) of symmetric matrices (dimension d(d + 1) /2), since rank-1 symmetric matrices are contained in the image and they span Sym( d). Consequently, any universal separable representation of k⊤ 
+
+> j
+
+Aikj —one that holds for all (Ai, kj ) in the family— requires d′ ≥ d(d+1) /2 = Ω( d2). With d′ = O(d) this is impossible: the d-dimensional factor ψj
+
+can carry at most d degrees of freedom of kj ’s quadratic profile, but the quadratic profile of a d-vector lives in a Θ( d2)-dimensional space. Symmetrically, the sub-term ∥U ⊤ 
+
+> j
+
+qi∥2 = q⊤ 
+
+> i
+
+(Uj U ⊤ 
+
+> j
+
+)qi
+
+is quadratic in qi under Uj ’s metric and imposes the same Ω( d2) lower bound on d′. Since both obstructions vanish only when all Ut are identical (so that Ai is the same for every i and can be absorbed into a global inner product), metric heterogeneity is the source of the non-Gram property. (Equivalently, the vectorization identity k⊤ 
+
+> j
+
+Aikj = vec( Ai)⊤ vec( kj k⊤ 
+
+> j
+
+) does separate the term, but at the cost of d′ = d2—confirming that the Ω( d2) lower bound is tight and that the d′ = O(d) factorization demanded by the theorem statement is impossible.) 5Edge case: When all Ut are identical ( Ui = Uj = U for all i, j ), the metric becomes global: 
+
+gij = I + U U ⊤ =: G for all pairs. The score reduces to sij = −(qi − kj )⊤G(qi − kj )/τ , which 
+
+is a Gram matrix under the modified inner product ⟨· , ·⟩ G. In this degenerate case, the collapse mechanism of Theorem 2.2 applies (with G replacing I). Metric heterogeneity is a prerequisite for any geometric anti-collapse effect: homogeneous metrics simply reparameterize the Euclidean case. 
+
+Corollary 3.3. The attention matrix ARiem = softmax( SRiem ) (recall SRiem already absorbs the 1/τ scaling from Equation (6) ) is not a product of the form softmax( Q′K′⊤ /√d′) for any 
+
+Q′, K ′ with d′ = O(d) when metrics are heterogeneous. However, ARiem remains row-stochastic: each row is a probability distribution. The core collapse mechanism of Theorem 2.2—products of row-stochastic matrices converging to rank-1—does not require the pre-softmax scores to be Gram; it requires only that A(ℓ) is row-stochastic at each layer. The non-Gram property of 
+
+SRiem means that the specific spectral bounds of Dong et al.’s analysis (which exploit the Gram structure of SEuc to bound the convergence rate) do not carry over, but it does not preclude collapse through the same row-stochastic mechanism. Whether Riemannian attention actually resists this contraction is the subject of the perturbation analysis that follows (Section 3.3) and the open conjectures of Section 6. Remark. Theorem 3.2 establishes that Riemannian attention scores have a different algebraic structure than standard attention scores: they cannot be written as QK ⊤ with O(d)-dimensional factors. This is a structural characterization of the architecture, not a claim about rank preser-vation. The argument “the Dong et al. proof assumes a Gram structure; Riemannian scores are non-Gram; therefore the proof does not apply” is correct but limited: it addresses one specific proof, not the underlying collapse phenomenon. The same collapse could occur via the same mechanism (row-stochastic product convergence) or a different one. A full proof of rank preservation—or a proof that collapse still occurs in the Riemannian case—would require analyzing the spectral properties of ARiem , as we begin to do in the next subsection. 
+
+Conjecture 3.4 (Rank Preservation under Heterogeneous Metrics) . There exist conditions on metric diversity—quantified by the cross-token variance of Ut, denoted σ2 
+
+> U
+
+= Var t[∥Ut∥2 
+
+> F
+
+]—and metric rank r, such that for σ2 
+
+> U
+
+> 0 and r ≥ rmin (d, L ), the effective rank of a pure Riemannian attention stack of depth n satisfies 
+
+EffRank( H(n)) ≥ f (r, σ 2 
+
+> U
+
+) > 1 (10) 
+
+for all n, in contrast to the doubly-exponential decay of Theorem 2.2. The function f is increasing in both r and σ2 
+
+> U
+
+.
+
+Supporting argument. The collapse in Theorem 2.2 occurs because the product of row-stochastic attention matrices converges to a rank-1 matrix whose rows are all identical (a com-mon stationary distribution). With heterogeneous metrics, each token pair (i, j ) experiences a 
+
+different effective distance (due to gij varying), so the attention weights ARiem  
+
+> ij
+
+are perturbed by a token-pair-specific amount relative to the homogeneous-metric case. The key question is whether this perturbation is sufficient to prevent the rows from converging to a common sta-tionary distribution—i.e., whether the perturbation breaks the ergodicity of the Markov chain defined by ARiem . The magnitude of the perturbation is controlled by σ2 
+
+> U
+
+(how much metrics vary) and r (how many directions the metric can stretch). A formal proof would proceed by bounding the mixing time or the spectral gap of ARiem as a function of σ2 
+
+> U
+
+and r, which is precisely the open problem identified in Conjecture 3.6. We emphasize that the non-Gram prop-erty (Theorem 3.2) does not address this question: it concerns the algebraic factorization of the pre-softmax scores, not the spectral properties of the post-softmax row-stochastic matrix. 63.3 Perturbation Analysis: Where Current Tools Apply—and Where They Fail 
+
+The non-Gram property (Theorem 3.2) tells us that Riemannian attention scores are structurally different from standard attention scores. It does not tell us whether rank collapse occurs. To approach that question, we analyze the spectral deviation between ARiem and AEuc as ¯U 2 varies. The analysis reveals a fundamental tension: the perturbation bound is informative only when the geometric correction is too weak to prevent collapse ; when the correction is large enough to potentially matter, the bound becomes vacuous and nothing can be concluded. 
+
+Decomposition into Euclidean and metric parts. Write SRiem = SEuc + ∆ S, where 
+
+SEuc  
+
+> ij
+
+= −∥ qi−kj ∥2/τ is the (negative) Euclidean distance and ∆S collects the metric corrections. From Equation (8): 
+
+∆Sij = − 12τ
+
+h
+
+∥U ⊤ 
+
+> i
+
+(qi − kj )∥2 + ∥U ⊤ 
+
+> j
+
+(qi − kj )∥2i
+
+. (11) Each term is non-positive, so ∆S acts as a pairwise penalty : token pairs whose difference lies in the column space of Ui or Uj receive reduced attention scores. Note that ∆S is itself non-separable (it depends on both Ui and Uj for the pair (i, j )), which is the source of the non-Gram property. 
+
+Proposition 3.5 (Frobenius Perturbation Bound) . Let ¯U 2 := max t ∥Ut∥2 
+
+> F
+
+and M := max i,j ∥qi−
+
+kj ∥2 over the sequence. Then 
+
+∥∆S∥F ≤ Lτ ¯U 2 M. (12) 
+
+Consequently, when ¯U 2 = O(τ /L ) (assuming M = O(1) , i.e. normalized query/key vectors), the Riemannian attention matrix is a small perturbation of the Euclidean one and standard perturbation theory applies; when ¯U 2 ≫ τ /L , the perturbation is large and the Euclidean spectral analysis no longer transfers. Proof. For each (i, j ), by sub-multiplicativity and ∥U ⊤ 
+
+> t
+
+v∥2 ≤ ∥ Ut∥2 
+
+> F
+
+∥v∥2 ≤ ¯U 2M :
+
+|∆Sij | ≤ 12τ
+
+  ¯U 2M + ¯U 2M  = ¯U 2Mτ .
+
+Summing over L2 entries gives ∥∆S∥2 
+
+> F
+
+≤ L2( ¯U 2M/τ )2, hence ∥∆S∥F ≤ L ¯U 2M/τ .
+
+Implications for the spectrum of ARiem . Since SRiem already absorbs the 1/τ scaling (Equation (6)), the row-wise softmax Jacobian diag( p) − pp ⊤ is positive semidefinite with spectral norm ≤ max i pi ≤ 1, so softmax is 1-Lipschitz in Frobenius norm: ∥ softmax( S1) −
+
+softmax( S2)∥F ≤ ∥ S1 − S2∥F (each row is independent, and the row-wise ℓ2-Lipschitz constant is ≤ 1). Combining this with ∥ · ∥ op ≤ ∥ · ∥ F and Weyl’s inequality, the singular values of ARiem 
+
+and AEuc satisfy 
+
+σk(ARiem ) − σk(AEuc ) ≤ ∥ ARiem − AEuc ∥op ≤ ∥ ARiem − AEuc ∥F ≤ ∥ ∆S∥F ≤ L ¯U 2 Mτ .
+
+(13) (We use the Frobenius-norm Lipschitz argument rather than a direct operator-norm bound because the row-wise softmax Jacobian does not decompose cleanly under the matrix operator norm; the Frobenius route is standard and suffices for the order-level conclusion.) This bound reveals a self-limiting structure :• Sub-critical regime ( ¯U 2 ≪ τ /L , with M = O(1) ): The spectra of ARiem and AEuc are close, so the near-degenerate spectrum that drives Euclidean collapse is preserved. The geometric correction is provably too weak to keep σ2 bounded away from zero. Rank collapse proceeds essentially as in Theorem 2.2. 7• Super-critical regime ( ¯U 2 ≫ τ /L ): The bound becomes vacuous: ∥∆S∥F can exceed 1 (the scale of the spectrum of a row-stochastic matrix), so Weyl’s inequality yields the trivial bound 
+
+|σk(ARiem ) − σk(AEuc )| ≤ ∥ ∆S∥F = O(L ¯U 2/τ ), which for large ¯U 2 provides no information about the spectrum. Whether σ2(ARiem ) is bounded away from zero in this regime—i.e., whether collapse is actually prevented—is not addressed by this bound. In short, the perturbation bound tells us something only when the answer is negative (collapse still occurs). When the answer might be positive, the bound is silent. This is the central open problem of the framework. 
+
+What a rank-preservation proof would require. Conjecture 3.4 claims that for sufficiently diverse metrics, EffRank( H(n)) > 1 for all n. A direct proof would need to establish: (a) The second-largest singular value σ2(ARiem ) is bounded away from zero by an amount depending on σ2 
+
+> U
+
+and r;(b) This bound propagates through depth: the product Q 
+
+> ℓ
+
+σ2(A(ℓ),Riem ) does not vanish ex-ponentially. The non-Gram property (Theorem 3.2) addresses neither: it concerns the factorization of S,not the spectrum of A. The perturbation bound (Proposition 3.5) addresses (a) only in the regime ¯U 2 = O(τ /L ), where the perturbation is too small to guarantee that σ2 is bounded away from zero. Closing the gap to sufficiency requires controlling the spectrum of ARiem in the 
+
+large-perturbation regime, which we now formalize. 
+
+Conjecture 3.6 (Strengthened Rank Preservation with Critical Regime) . There exists a critical metric strength ¯U 2crit (τ, L, d ), scaling as Θ( τ /L ), such that: 
+
+• Sub-critical regime ( ¯U 2 < ¯U 2crit ): the Riemannian attention behaves as a perturbation of Euclidean attention (Proposition 3.5) and rank collapse proceeds essentially as in Theorem 2.2; 
+
+• Super-critical regime ( ¯U 2 > ¯U 2crit and metric diversity σ2 
+
+> U
+
+> 0): the second singular value of 
+
+ARiem is bounded away from zero , σ2(ARiem ) = Ω( σ2 
+
+> U
+
+· r/τ ), so that ARiem stays bounded away from rank-1 and the attention rows cannot converge to a common stationary distribution; the effective rank of a pure Riemannian attention stack then satisfies EffRank( H(n)) ≥ f (r, σ 2 
+
+> U
+
+) >
+
+1 for all n. (Note: the anti-collapse condition is that σ2 has a lower bound—a large gap σ1 −σ2
+
+would instead mean σ2 ≪ σ1, i.e. proximity to rank-1, which is the collapsed regime.) 
+
+Status of Conjecture 3.6. The sub-critical regime follows directly from Proposition 3.5 and the continuity of the spectrum in the score matrix. The super-critical regime is the genuine open problem: a proof would require analyzing the spectrum of SRiem as a structured random matrix (with entries depending on the learned Ut), possibly via free probability theory or random-matrix universality. We do not prove it; we state it to make explicit what would suffice and where the non-Gram argument stops .
+
+Summary of this subsection. The non-Gram property (Theorem 3.2) is a structural char-acterization of Riemannian attention scores; it does not by itself address whether rank collapse occurs, because the core collapse mechanism (row-stochastic product convergence) does not de-pend on the Gram property. The perturbation analysis (Proposition 3.5) reveals a self-limiting structure: the bound is informative only in the sub-critical regime ¯U 2 < ¯U 2crit = Θ( τ /L ), where it confirms that collapse proceeds as in the Euclidean case; in the super-critical regime ¯U 2 > ¯U 2crit ,where anti-collapse would need to occur, the bound becomes vacuous and standard perturbation tools provide no information. Closing the gap between the sub-critical regime (where collapse is proven) and the super-critical regime (where it is conjectured not to occur) is the central open problem identified by this framework (Open Problem O1). 83.4 Expressivity: Parametric Capacity Analysis 
+
+Proposition 3.7 (Metric Parametric Capacity) . A token representation ht ∈ Rd can modulate its pairwise distances to other tokens in two ways: (a) Vector movement : Changing ht itself provides d real-valued coordinates. (b) Metric modulation : A rank-r Riemannian metric gt = I+UtU ⊤ 
+
+> t
+
+with Ut = MetricNet( ht) ∈
+
+Rd×r is parameterized by a d × r matrix. The metric generator (MetricNet) has O(d2 · r)
+
+trainable parameters (a two-layer MLP), but the per-token metric factor Ut is a deter-ministic function of the d-dimensional input ht—the information bottleneck remains d-dimensional. The additional parametric capacity (the MLP weights) allows the model to learn a mapping from token representations to metric geometries, and the d · r output di-mensions of Ut provide a richer representation of the token’s geometric environment than the d-dimensional hidden state alone. The metric generator provides O(d2r) learnable parameters beyond the standard Transformer, but the information-theoretic degrees of freedom available to a single token are still bounded by the input dimension d. The benefit is architectural: MetricNet learns to allocate geometric capacity (stretching specific directions for specific token types) in a way that a flat Euclidean space cannot express, even though each Ut is a deterministic function of ht.Proof. The metric gt = I + UtU ⊤ 
+
+> t
+
+is a d × d symmetric matrix. The space of d × d symmetric matrices has dimension d(d+1) 2 , and the positive-definite cone has the same dimension. The map 
+
+U 7 → I + U U ⊤ from Rd×r to SPD (d) has image equal to the manifold of rank-≤ r positive-semidefinite perturbations of Id, which has dimension dr − r(r − 1) /2 (the dimension of the rank-r PSD manifold); this is Θ( dr ) for r ≤ d. So the low-rank parameterization can explore a 
+
+dr -dimensional submanifold of SPD( d). However, since Ut = MetricNet( ht), the actual degrees of freedom per token are constrained by the d-dimensional input. The architectural value lies in MetricNet’s ability to map different regions of the d-dimensional hidden space to different metric geometries—a nonlinear mapping that a purely vector-based architecture cannot replicate. 
+
+Remark. The degrees-of-freedom advantage is not merely quantitative—it is qualitative . Vector movement changes all pairwise distances involving ht simultaneously (because moving ht changes 
+
+∥ht − hs∥ for every s). Metric modulation can change the distance to token s independently of the distance to token s′, by stretching more along the direction of ht − hs while stretching less along ht − h′
+
+> s
+
+. (Note: with gt = I + UtU ⊤ 
+
+> t
+
+⪰ Id, the metric can only stretch directions— all eigenvalues are ≥ 1—never compress them below the Euclidean baseline; see the limitation discussed in Section 5.7. The independent modulation comes from stretching different directions by different amounts, not from compression.) This independent modulation is impossible in Euclidean geometry, where all distances are coupled through the single vector ht.
+
+3.5 The Nash Embedding Objection 
+
+A natural objection: the Nash Embedding Theorem [1] proves that any Riemannian manifold can be isometrically embedded in a sufficiently high-dimensional Euclidean space. Could a wide enough Euclidean hidden space subsume any non-Euclidean geometry, rendering explicit metrics unnecessary? He et al. [2] provide a systematic refutation relevant to learned representations: (1) Dimensional blowup. The smooth Nash embedding guarantees an isometric embedding into Rn with n ≤ m(3 m+11) 2 for an m-dimensional manifold. For m ∼ 10 2 (typical per-head dimensions), this already requires n ∼ 10 4—exceeding practical Transformer dimensions and defeating the purpose. 9(2) Insufficient differentiability. The C1 Nash-Kuiper embedding achieves lower target dimensions but is only once differentiable ( C1, not C2), so the curvature tensor is ill-defined and the embedding is too irregular for gradient-based learning that relies on second-order geometric structure. (3) Non-constructivity. The theorem is existential: there is no known training algorithm that causes gradient descent to discover a Nash-style isometric embedding. The Euclidean geometry of Transformer hidden spaces is a genuine structural constraint, not one sur-mountable by adding dimensions. The conclusion is that explicit Riemannian metrics provide geometric expressivity that can-not be replicated by simply widening a Euclidean hidden space. 
+
+3.6 Heterogeneous vs. Constant-Curvature Geometry 
+
+Prior work on non-Euclidean representations has focused on constant-curvature spaces—predominantly hyperbolic spaces with global negative curvature [4, 10]. However, natural language semantics are not uniformly curved. Function words (“the,” “is,” “of”) inhabit nearly flat regions; content words span richer geometries; specialized terminology activates highly curved, context-specific structures. The semantic manifold is heterogeneous : curvature varies continuously by token and context. This motivates our use of learned, per-token Riemannian metrics rather than a global curvature parameter. The low-rank representation gt = I +UtU ⊤ 
+
+> t
+
+allows the curvature at token t, measured by κt = ∥Ut∥2 
+
+> F
+
+, to vary freely across positions—from near-zero (flat, Euclidean-like) to large values (strongly curved). This is the key distinction from hyperbolic approaches, which apply the same curvature to all tokens. 
+
+# 4 Efficient Computation via Low-Rank Factorization 
+
+A full per-token metric gt ∈ Rd×d would require O(d2) storage and O(d3) operations per token— infeasible at scale. The low-rank representation gt = I + UtU ⊤ 
+
+> t
+
+renders all geometric operations tractable. 
+
+4.1 Metric Inversion via the Woodbury Identity 
+
+The metric-preconditioned update in the feed-forward sublayer (Section 5.7) requires g−1 
+
+> t
+
+. The Woodbury identity yields a closed form: 
+
+Proposition 4.1 (Efficient Metric Inversion) . For gt = Id + UtU ⊤ 
+
+> t
+
+with Ut ∈ Rd×r:
+
+g−1 
+
+> t
+
+= Id − Ut(Ir + U ⊤ 
+
+> t
+
+Ut)−1U ⊤ 
+
+> t
+
+(14) 
+
+The inversion reduces from O(d3) (for a general d × d matrix) to O(d · r2 + r3), which is O(d · r2)
+
+when r ≪ d. For d = 4096 , r = 8 : ∼ 2.6 × 10 5 vs. ∼ 6.9 × 10 10 —a ∼ 10 5× speedup. Proof. The Woodbury identity states (A+CBC ⊤)−1 = A−1 −A−1C(B−1 +C⊤A−1C)−1C⊤A−1.Setting A = Id, B = Ir, C = Ut gives the result. The inner matrix Ir + U ⊤ 
+
+> t
+
+Ut ∈ Rr×r is inverted in O(r3); the matrix products are O(d · r2).
+
+4.2 Geodesic Distance Decomposition 
+
+The geodesic distance under the pairwise metric gij decomposes into per-token quantities: 10 Proposition 4.2 (Geodesic Distance Decomposition) . The squared geodesic distance d2
+
+> g
+
+(qi, kj )
+
+under gij = I + UiU ⊤    
+
+> i+UjU⊤
+> j
+> 2
+
+decomposes as: 
+
+d2 
+
+> g
+
+= ∥qi − kj ∥2
+
+| {z }
+
+> Euclidean
+
++ 12 ∥U ⊤ 
+
+> i
+
+(qi − kj )∥2
+
+| {z } 
+
+> metric i
+
++ 12 ∥U ⊤ 
+
+> j
+
+(qi − kj )∥2
+
+| {z } 
+
+> metric j
+
+(15) 
+
+Each metric term further decomposes: 
+
+∥U ⊤ 
+
+> i
+
+(qi − kj )∥2 = ∥U ⊤ 
+
+> i
+
+qi∥2 + ∥U ⊤ 
+
+> i
+
+kj ∥2 − 2 ( U ⊤ 
+
+> i
+
+qi)⊤(U ⊤ 
+
+> i
+
+kj ) (16) 
+
+The per-token quantities ∥U ⊤ 
+
+> i
+
+qi∥2 and U ⊤ 
+
+> i
+
+qi are precomputed once per token in O(d · r). The pairwise term (U ⊤ 
+
+> i
+
+qi)⊤(U ⊤ 
+
+> i
+
+kj ) requires O(r) per pair. 
+
+4.3 Complexity Analysis 
+
+Proposition 4.3 (Computational Complexity of Riemannian Attention) . For a sequence of length L, hidden dimension d, batch size B, and metric rank r:
+
+Operation Standard Attention Riemannian Attention 
+
+Score computation O(BL 2d) O(BL 2d) + O(BL 2r)
+
+Metric generation — O(BLdr )
+
+Metric inversion (per FFN) — O(BLdr 2)
+
+The geometric overhead ratio is O(r/d ), which is negligible for r ≪ d. The full d × d metric matrix gt is never materialized in any operation. Proof. Standard attention: QK ⊤ costs O(BL 2d) (per head, summed over heads gives the same). Riemannian attention: the Euclidean part ∥qi − kj ∥2 costs O(BL 2d); the metric corrections require O(BLdr ) for per-token precomputation ( U ⊤ 
+
+> i
+
+qi, etc.) and O(BL 2r) for the pairwise interaction. The total is O(BL 2d+BL 2r+BLdr ) = O(BL 2d) when r ≪ d, L . Metric generation: MetricNet is an MLP producing Ut ∈ Rd×r from ht ∈ Rd, costing O(BLdr ). Metric inversion: by Proposition 4.1, O(dr 2) per token, so O(BLdr 2) total. 
+
+Remark (Connection to FlashAttention) . The decomposition in Proposition 4.2 is compatible with fused attention kernels (e.g., FlashAttention [13]). The metric correction can be computed as an additive bias to the attention scores, in the same spirit as ALiBi [12] or relative position embeddings, and fused into the softmax without materializing the full L × L score matrix in HBM. This makes Riemannian attention practical within existing efficient attention frameworks. 
+
+# 5 Architecture Design: The Fiber Bundle Transformer 
+
+We now present the Fiber Bundle Transformer , a complete architecture specification grounded in the theory of Sections 3–4. The design is presented as a theoretical proposal with mathematical justification; we do not claim empirical validation. 
+
+5.1 Fiber Bundle Formulation 
+
+Definition 5.1 (Fiber bundle attention model) . Consider the sequence of token positions as a discrete base space B = {1, 2, . . . , L }. At each position t, attach a fiber Ft, which is a copy of the hidden space Rd equipped with its own Riemannian metric gt = I + UtU ⊤ 
+
+> t
+
+.The hidden state ht is a section of this fiber bundle: a choice of one vector from each fiber. In the standard Transformer, all fibers share the Euclidean metric, so a vector v ∈ Rd has the 
+
+11 same meaning in every fiber. In the Fiber Bundle Transformer, the same vector v has different semantic interpretations in different fibers because inner products are metric-dependent: 
+
+⟨v, w ⟩at fiber t = v⊤gt w̸ = ⟨v, w ⟩at fiber s = v⊤gs w (17) The connection on the bundle—the rule for comparing vectors across fibers—is given by a parallel transport operator Ps→t that approximately preserves the metric: 
+
+P ⊤ 
+
+> s→t
+
+gt Ps→t ≈ gs (18) The deviation from exact preservation measures the curvature of the connection; the antisym-metric part of the connection measures torsion .
+
+On the terminology. The name “Fiber Bundle Transformer” is a structural analogy to the differential-geometric notion of a fiber bundle, not a strict construction in the sense of, e.g., Kobayashi–Nomizu. In particular, we do not specify a structure group, transition functions be-tween local trivializations, or a smooth atlas on the base space; the discrete base B = {1, . . . , L }
+
+does not carry a smooth structure. What we retain from the differential-geometric picture is the structural intuition—independent fibers carrying different per-position metrics, with a connec-tion defining cross-fiber transport—and this intuition is accurately captured. The curvature and torsion objects we introduce below (Phases B, C) are correspondingly proxies motivated by their differential-geometric counterparts, not the Riemann and torsion tensors of a true connection on a smooth bundle. A rigorous differential-geometric formulation of the construction (specifying a structure group, e.g. GL( d), and a discrete connection compatible with the per-token metrics) is left as open work (Open Problem O6). Each Fiber Bundle Transformer layer consists of five core phases (A–E), with an optional enhanced projection (Phase A++), operating on the hidden state x ∈ RB×L×d as the persistent residual stream, with geometric data (Ut, P t, T t) generated ephemerally at each layer from x.
+
+5.2 Phase A: Metric Generation (MetricNet) 
+
+Definition 5.2 (MetricNet) . MetricNet is a compact MLP that maps each token’s hidden state to a low-rank metric factor: 
+
+Ut = MetricNet( ht) ∈ Rd×r, gt = Id + UtU ⊤ 
+
+> t
+
+(19) 
+
+The MLP architecture is Linear (d, d · m) → SiLU → Linear (d · m, d · r), where m is an internal expansion ratio (typically m = 1 ) and r is the metric rank (typically r ∈ { 4, 8}). 
+
+Design rationale. MetricNet generates the per-token metric gt from the token’s own hidden state ht, making the geometry content-dependent . A token in a financial context generates a metric that stretches the “money” direction; the same token in a geographical context generates a metric that stretches the “river” direction. This is the mechanism by which the model exploits the O(d · r) degrees of freedom identified in Proposition 3.7. 
+
+Initialization. The final layer of MetricNet should be initialized with small weights (e.g., 
+
+N (0 , σ 2/d ) with moderate σ), so that Ut ≈ 0 at initialization and gt ≈ Id (Euclidean). This en-sures the architecture starts in the Euclidean regime (distance-based attention with g ≈ I, close to a standard Transformer under key-norm normalization; see Section 5.8) and gradually learns non-Euclidean geometry, avoiding training instability from large initial metric perturbations. 12 5.3 Phase A++: Metric-Aware Projection 
+
+In the enhanced variant, Q/K/V projections incorporate metric information directly, making the query/key representations live in a curved coordinate system: 
+
+Qgeo  
+
+> i
+
+= WQhi + γ · 1
+
+√d UiU ⊤ 
+
+> i
+
+(WQhi) (20) where γ = σ(γparam ) is a learned gating parameter initialized small ( γparam = −3 ⇒ γ ≈ 0.047 ). The second term adds the component of WQhi lying in the column space of Ui—the metric’s preferred directions. This is motivated by the fact that the squared geodesic distance under 
+
+gij takes the form d2 
+
+> g
+
+= ( Qi − Kj )⊤gij (Qi − Kj ) = ∥g1/2 
+
+> ij
+
+(Qi − Kj )∥2, and the metric-aware projection approximates the g1/2 
+
+> ij
+
+correction (expanded to first order as g1/2 
+
+> ij
+
+≈ I + 12 UiU ⊤ 
+
+> i
+
+for small Ui) without computing a matrix square root. 
+
+5.4 Phase B: Curvature Proxy 
+
+The curvature of a true fiber-bundle connection measures the path-dependence of parallel trans-port. We do not have a true connection here (see the caveat in Section 5.1); instead, we define a per-token curvature proxy that captures the same intuition—that tokens whose metric deviates strongly from the Euclidean baseline inhabit a more curved region of the representational space: 
+
+Ωt = softplus( β) · ∥ Ut∥2 
+
+> F
+
+(21) where β is a learned scale parameter. 
+
+On the proxy. We are explicit that Ωt is a heuristic scalar and not the Riemannian sectional curvature of the metric gt = I + UtU ⊤ 
+
+> t
+
+. The sectional curvature of such a rank-r perturbation of the Euclidean metric is a tensor-valued quantity depending on Ut and its derivatives with respect to the base coordinate; it does not reduce to a scalar function of ∥Ut∥2 
+
+> F
+
+alone. The proxy is motivated by the qualitative observation that, for metrics of the form g = I + U U ⊤,the magnitude of the metric perturbation (hence the deviation from flatness) is controlled by 
+
+∥U ∥2 
+
+> F
+
+. Since ∥Ut∥2 
+
+> F
+
+≥ 0 already and softplus( β) > 0, the proxy Ωt is non-negative (matching the intuition that curvature magnitude is non-negative); the softplus on β ensures a strictly positive learned scale factor. The dependence on ∥Ut∥2 
+
+> F
+
+means tokens with large metric perturbation receive a stronger curvature penalty in attention (Phase D). A scalar proxy of this form is sufficient for the architectural role we ask it to play (a per-token attention bias in Phase D); replacing it with a tensorial curvature object is left as a refinement (Open Problem O6). 
+
+5.5 Phase C: Torsion Generation (TorsionNet) 
+
+Definition 5.3 (TorsionNet) . TorsionNet generates low-rank factors Lt, R t ∈ Rd×rT from the hidden state via a separate MLP. The per-token torsion tensor is: 
+
+Tt = LtR⊤ 
+
+> t
+
+− RtL⊤ 
+
+> t
+
+∈ so (d), T ⊤ 
+
+> t
+
+= −Tt (22) 
+
+The antisymmetry T ⊤ 
+
+> t
+
+= −Tt is structural: it ensures that the torsion-induced correction to transport is directional , encoding A → B̸ = B → A.
+
+Design rationale. In standard Transformers, attention is symmetric in the sense that the similarity of i to j and j to i are computed by the same dot product (modulo softmax normal-ization). Torsion breaks this symmetry: the transport of information from j to i can differ from 
+
+i to j, reflecting that semantic relationships are inherently directional (“ A causes B” is not the same as “ B causes A”). The antisymmetric construction T = LR ⊤ −RL ⊤ is the canonical way to 13 generate an element of so (d) from low-rank factors, ensuring the torsion never has a symmetric component. 
+
+On the roles of ∆i and Ti. Both the connection correction ∆i = AiB⊤ 
+
+> i
+
+− BiA⊤ 
+
+> i
+
+(Phase D) and the torsion Ti = LtR⊤ 
+
+> t
+
+− RtL⊤ 
+
+> t
+
+(Phase C) are antisymmetric matrices in so (d), and from a purely algebraic standpoint they enter the transport Pi in the same way. Their distinc-tion is functional , not algebraic: ∆i is the default transport correction applied to every token, while Ti is an additional directionality-sensitive correction gated by γT (recommended initial-ized small). In a true differential-geometric connection, torsion is the antisymmetric part of the connection and is structurally distinct from the connection itself; here, where both are heuristic proxies (Section 5.1), the two modules serve as independent learned channels for the transport correction—one content-general ( ∆i) and one directionality-specialized ( Ti). Collapsing them into a single module is a valid simplification; we retain both to make the geometric analogy explicit and to allow the directionality signal to be isolated, probed, and ablated independently. 
+
+5.6 Phase D: Geodesic Attention 
+
+Attention computes geodesic distances with curvature modulation: 
+
+αij = softmax j − d2
+
+> g
+
+(qi, kj ) + Ω i + Ω j
+
+τ
+
+!
+
+(23) where d2 
+
+> g
+
+is given by Equation (15) and Ωt is the curvature proxy from Phase B. The temperature 
+
+τ = pd/h matches standard scaled dot-product attention. The curvature terms Ωi + Ω j act as an attention penalty : tokens in high-curvature regions (semantically complex) require higher raw similarity to attend to each other. This implements the geometric intuition that curved regions of the semantic manifold are “harder to traverse”— information transport across them should be more selective. After aggregation, values are transported via the connection: 
+
+output i = Pi ·
+
+X
+
+> j
+
+αij vj
+
+ (24) The transport operator Pi = Id + ∆ i is generated by a FiberTransport module, where ∆i =
+
+AiB⊤ 
+
+> i
+
+− BiA⊤ 
+
+> i
+
+is antisymmetric. When torsion is active, the transport becomes P ′ 
+
+> i
+
+= Pi + γT · Ti.
+
+Isometry analysis. The antisymmetry ∆⊤ 
+
+> i
+
+= −∆i ensures that Pi is approximately orthogo-nal, but not exactly: 
+
+P ⊤ 
+
+> i
+
+Pi = ( I + ∆ ⊤ 
+
+> i
+
+)( I + ∆ i) = I + ∆ i + ∆ ⊤
+
+> i
+
+| {z }
+
+> = 0
+
++∆ ⊤ 
+
+> i
+
+∆i = I + ∆ ⊤ 
+
+> i
+
+∆i. (25) The error matrix ∆⊤ 
+
+> i
+
+∆i ⪰ 0 has rank at most 2rT (the rank of ∆i) and Frobenius norm 
+
+∥∆⊤ 
+
+> i
+
+∆i∥F = ∥∆i∥2 
+
+> F
+
+. Hence Pi is an isometry up to an additive positive-semidefinite error of spectral norm ∥∆⊤ 
+
+> i
+
+∆i∥op ≤ ∥ ∆i∥2op = O(∥∆i∥2 
+
+> F
+
+). For ∥∆i∥F ≪ 1, Pi is approximately or-thogonal with second-order accuracy; for ∥∆i∥F = O(1) , the deviation from isometry is O(1) 
+
+and the transport cannot be regarded as metric-preserving. A fully isometric transport can be recovered by replacing Pi = I + ∆ i with the Cayley transform Pi = ( I − ∆i/2) −1(I + ∆ i/2) ,which maps antisymmetric matrices into SO( d) exactly at the cost of an O(dr 2 
+
+> T
+
+) matrix solve; we adopt the linear form for simplicity and note the Cayley alternative as a refinement. The tor-sion correction P ′ 
+
+> i
+
+= Pi + γT Ti introduces an additional isometry violation of order O(γ2 
+
+> T
+
+∥Ti∥2 
+
+> F
+
+),which is small when γT is initialized small (as we recommend). 14 5.7 Phase E: Metric-Preconditioned FFN 
+
+The feed-forward sublayer replaces the Euclidean update step with a metric-preconditioned step inspired by the Riemannian-gradient construction: 
+
+ht ← ht + g−1 
+
+> t
+
+· FFN( ht) (26) where g−1 
+
+> t
+
+is computed via the Woodbury identity (Proposition 4.1) in O(d · r2).
+
+Terminology and rationale. Amari’s natural gradient [9] is defined in the parameter space of a statistical model, with the metric given by the Fisher information. The update in Equation (26) is not a natural gradient in this strict sense: it operates in the representation space Rd, with the metric given by the learned gt rather than a Fisher matrix. We therefore refer to it as a 
+
+metric-preconditioned update, or equivalently a Riemannian-gradient-inspired update, following the same geometric intuition: on a Riemannian manifold with metric g, the direction of steepest ascent of a function f is g−1∇f , not ∇f .By applying g−1 
+
+> t
+
+to the FFN output, the update respects the local geometry. We emphasize that with the chosen parameterization gt = Id + UtU ⊤ 
+
+> t
+
+⪰ Id, the metric only stretches directions (all eigenvalues are ≥ 1)—there are no “compressed” directions, so the general Riemannian-gradient intuition (that g−1 amplifies directions with small eigenvalues of g) does not directly apply here. Concretely, directions in the column space of Ut (eigenvalues 1 + σ2 
+
+> i
+
+> 1, stretched by gt) are correspondingly shrunk by g−1 
+
+> t
+
+⪯ Id and receive smaller updates, while directions in the null space of U ⊤ 
+
+> t
+
+(eigenvalue 1, unstretched) receive unchanged updates. The net effect is to down-weight FFN updates along the metric’s preferred (stretched) directions. This is the geometric analogue of adaptive learning rates (cf. Adam’s per-parameter scaling), but operating in the representation space rather than the parameter space . Whether this representation-space preconditioning accelerates training convergence in practice, relative to a Euclidean FFN, is an open empirical question (Open Problem O4). 
+
+5.8 Hybrid Inference Blending 
+
+For practical deployment, the geometric correction can be blended with standard Euclidean attention: 
+
+shybrid  
+
+> ij
+
+= sEuc  
+
+> ij
+
++ α · ∆sgeo  
+
+> ij
+
+(27) where sEuc  
+
+> ij
+
+= q⊤ 
+
+> i
+
+kj /√d is the standard score, ∆sgeo  
+
+> ij
+
+= sRiem  
+
+> ij
+
+− sEuc  
+
+> ij
+
+is the metric correction, and α ∈ [0 , 1] is a blending coefficient. At α = 0 , the model reduces to a standard Transformer; at α = 1 , it is fully Riemannian. This enables a smooth interpolation between Euclidean and Riemannian attention, which is critical for the training/inference consistency analysis in Section 6. 
+
+On the two score parameterizations. The Riemannian score (Equation (6)) is distance-based , sRiem  
+
+> ij
+
+= −d2
+
+> g
+
+(qi, kj )/τ , whereas the Euclidean baseline in the blending formula is dot-product-based , sEuc  
+
+> ij
+
+= q⊤ 
+
+> i
+
+kj /√d. These two parameterizations are not directly comparable : the distance form contains terms −∥ qi∥2/τ and −∥ kj ∥2/τ that have no counterpart in the dot-product form. Specifically, with τ = pd/h (matching standard per-head scaling), 
+
+sRiem  
+
+> ij
+
+− sEuc  
+
+> ij
+
+= − ∥qi∥2
+
+τ| {z } 
+
+> constant in row i
+
+− ∥kj ∥2
+
+τ| {z } 
+
+> key-norm penalty
+
++ 2 q⊤ 
+
+> i
+
+kj
+
+τ − q⊤ 
+
+> i
+
+kj
+
+√d
+
+| {z }
+
+> scaling mismatch
+
++ metric terms | {z } 
+
+> genuine ∆S
+
+. (28) 15 The −∥ kj ∥2/τ term is a key-norm penalty —keys with large norms receive uniformly lower atten-tion scores from all queries, regardless of semantic similarity. This term has nothing to do with Riemannian geometry: it is an artifact of mixing distance-based and dot-product-based param-eterizations. The scaling mismatch term vanishes only when τ = √d (which holds when h = 1 ,i.e., single-head attention; for multi-head attention with h > 1, τ = pd/h ̸ = √d, introducing an additional discrepancy). Consequently, ∆sgeo  
+
+> ij
+
+in Equation (27) conflates three distinct effects: (i) genuine metric corrections, (ii) a key-norm bias, and (iii) a temperature-scaling mismatch. For Proposition 6.2, this means that varying α changes not only the geometric contribution but also the key-norm penalty and the effective temperature—any empirical test of α-consistency must disentangle these effects, e.g., by using key normalization or by defining the Euclidean baseline in distance form sEuc  
+
+> ij
+
+= −∥ qi − kj ∥2/τ to match the Riemannian parameterization. 
+
+# 6 Theoretical Predictions and Open Conjectures 
+
+The architecture of Section 5 gives rise to several formal predictions about the behavior of cor-rectly implemented geometric Transformers. These predictions are mathematical consequences 
+
+of the architecture, not empirical observations, and they identify the specific conditions under which the geometric approach can succeed or fail. 
+
+6.1 Prediction 1: Curvature Heterogeneity as Optimization Consequence 
+
+Conjecture 6.1 (Emergent Curvature Heterogeneity) . When a Fiber Bundle Transformer is trained on natural language data with a cross-entropy objective and the metric diversity regu-larizer of Section 6.4, the learned per-token curvatures κt = ∥Ut∥2 
+
+> F
+
+will be heterogeneous : the distribution of κt across token positions will have non-negligible variance, and this variance will be positively correlated with semantic complexity (as measured by token type, contextual ambi-guity, or information content). 
+
+Theoretical basis. By Theorem 3.2, homogeneous metrics ( κt constant across t) reduce to a global metric, under which the rank collapse mechanism of Dong et al. applies. The cross-entropy objective penalizes rank collapse (collapsed representations have high perplexity), so there exists a weak pressure toward heterogeneous metrics—those that avoid collapse. We emphasize that this pressure is necessary but not sufficient: as Conjecture 6.3 makes explicit, without the geometric regularizers of Section 6.4 the dominant failure mode is metric collapse (Ut → 0), because the standard Euclidean Transformer is itself a global minimizer of cross-entropy and the optimizer can route around the geometric modules entirely. The role of the regularizers is to counteract this collapse pressure and allow the CE-driven heterogeneity pressure to manifest. The specific correlation with semantic complexity then follows from the expressivity argument (Proposition 3.7): semantically complex tokens benefit more from the additional O(d · r) degrees of freedom, so—once collapse is prevented—the optimizer allocates larger κt to them. 
+
+Falsifiable prediction. If one trains a Fiber Bundle Transformer and measures Var t[κt], it should be significantly above zero, and κt should be higher for content words than function words. If Var t[κt] ≈ 0 (homogeneous metrics), the architecture has collapsed to a global-metric Transformer and the geometric advantage is lost. 
+
+6.2 Prediction 2: Train/Inference Consistency Requirement 
+
+We replace what would naively be stated as a global theorem with a local result based on stan-dard parametric-optimization tools. The naive statement—“evaluating at αinfer ̸ = αtrain strictly increases loss”—would require global convexity of L in WQ, which is false for Transformers. 16 The correct statement is relative : training at αinfer would do strictly better than reusing the parameters trained at αtrain .
+
+Proposition 6.2 (Generic Suboptimality Under Blending Mismatch) . Consider the hybrid at-tention score shybrid  
+
+> ij
+
+= sEuc  
+
+> ij
+
++ α · ∆sgeo  
+
+> ij
+
+(Equation (27) ). Let L(WQ, α ) denote the expected loss with query weights WQ and blending α, and let W ∗
+
+> Q
+
+(α) denote any strict local minimizer of 
+
+L(·, α ). Assume: (a1) L(WQ, α ) is twice continuously differentiable in (WQ, α ) in a neighborhood of (W ∗
+
+> Q
+
+(αtrain ), α train );(a2) W ∗ 
+
+> Q
+
+:= W ∗
+
+> Q
+
+(αtrain ) is a strict local minimum of L(·, α train ) with positive-definite Hessian 
+
+H := ∇2 
+
+> WQ
+
+L| (W ∗ 
+
+> Q,α train )
+
+≻ 0;(a3) the cross-derivative c := ∇WQ ∂αL| (W ∗ 
+
+> Q,α train )
+
+is nonzero (i.e., the gradient of the loss with respect to WQ genuinely depends on α). Then there exists ϵ0 > 0 such that for all αinfer with 0 < |αinfer − αtrain | < ϵ 0:
+
+L W ∗
+
+> Q
+
+(αtrain ), α infer 
+
+ > L W ∗
+
+> Q
+
+(αinfer ), α infer 
+
+. (29) 
+
+That is, the parameters optimal for αtrain are strictly suboptimal for αinfer ̸ = αtrain relative to retraining at αinfer . Equivalently, evaluating a model trained at αtrain under a different αinfer is generically worse than retraining at αinfer .Proof. By assumption ( a2), the first-order condition ∇WQ L(W ∗
+
+> Q
+
+, α train ) = 0 holds and the Hes-sian H ≻ 0. By the implicit function theorem applied to the system F (WQ, α ) := ∇WQ L(WQ, α ) = 0 at the point (W ∗
+
+> Q
+
+, α train )—using assumption ( a1) and the invertibility of H = ∂F/∂W Q
+
+from ( a2)—there exist neighborhoods Nα ∋ αtrain and NW ∋ W ∗ 
+
+> Q
+
+and a unique C1 map 
+
+cWQ : Nα → N W such that cWQ(αtrain ) = W ∗ 
+
+> Q
+
+and F (cWQ(α), α ) = 0 for all α ∈ N α. The derivative of this map at αtrain is 
+
+dcWQ
+
+dα αtrain 
+
+= −H−1c. (30) By assumption ( a3), c̸ = 0 , and since H−1 is invertible, dcWQ/dα |αtrain ̸ = 0 . Hence for αinfer in a sufficiently small punctured neighborhood of αtrain , cWQ(αinfer )̸ = W ∗
+
+> Q
+
+.By continuity of the Hessian (assumption ( a1)), cWQ(αinfer ) is a strict local minimizer of 
+
+L(·, α infer ) for αinfer close to αtrain , with positive-definite Hessian H(αinfer ). Strictness of the local minimum gives 
+
+L(W, α infer ) > L(cWQ(αinfer ), α infer ) for all W̸ = cWQ(αinfer ) in NW .
+
+Since W ∗ 
+
+> Q
+
+= cWQ(αtrain )̸ = cWQ(αinfer ) for αinfer ̸ = αtrain sufficiently close, the inequality (29) follows. 
+
+Remark (On the assumptions) . The assumptions are mild and standard in parametric optimiza-tion; none of them require global convexity. (a1) holds for any differentiable attention/loss combination. ( a2) is the standard second-order sufficient condition for a strict local minimum and is the natural notion of “a successfully trained model”—it asserts only that the trained parameters sit at a strict local (not global) minimum, with positive-definite Hessian. ( a3) is a genericity condition: it fails only on a measure-zero set of degenerate problems where the optimal 
+
+WQ is locally independent of α (for instance, when the geometric correction ∆sgeo is identically zero, in which case the architecture has collapsed to a Euclidean Transformer anyway). We emphasize what the proposition does not claim: it does not compare L(W ∗
+
+> Q
+
+(αtrain ), α infer )
+
+with L(W ∗
+
+> Q
+
+(αtrain ), α train ); depending on the loss landscape, evaluating at αinfer may even lower 
+
+the loss. The valid conclusion is the relative one: retraining at αinfer would do strictly better than reusing the αtrain parameters, so a mismatched-α evaluation is confounded. 17 Remark (Practical consequence) . Proposition 6.2 implies that any empirical evaluation of a blended Riemannian attention model must use the same α at inference as was used during train-ing , or alternatively must retrain at the inference α. Evaluating at a different α without retrain-ing produces a confounded result: the model is generically suboptimal at the mismatched α,so performance degradation may reflect the α mismatch rather than a failure of the geometric approach. This is a local-optimality statement, not a global one; it suffices for the experimental-protocol implication. 
+
+6.3 Prediction 3: Metric Collapse as Dominant Failure Mode 
+
+Conjecture 6.3 (Metric Collapse) . When a Fiber Bundle Transformer is trained with standard regularization ( ℓ2 penalties on ∥Ut∥, or no geometric regularization), the dominant failure mode is metric collapse : the learned metric factors satisfy Ut → 0 for all t, reducing gt → Id. In the pure (non-blended) parameterization this yields Euclidean distance-based attention, sij =
+
+−∥ qi − kj ∥2/τ , which coincides with standard dot-product attention only when key norms ∥kj ∥
+
+are approximately constant (see the remark in Section 5.8); in either case the geometric modules become dead parameters and the architectural advantage is lost. 
+
+Theoretical basis. The cross-entropy loss is minimized by a standard Euclidean Transformer (which is a special case of the Fiber Bundle Transformer at Ut = 0 , up to the distance-vs-dot-product discrepancy noted in Section 5.8). Without a force pushing Ut away from zero, gradient descent converges to this trivial solution—the model “routes around” the geometric modules because the Euclidean solution is a local minimum of the loss. This is the geometric analogue of the “lottery ticket” phenomenon: the geometric modules exist but are never activated because the optimizer finds a Euclidean solution first. 
+
+6.4 Regularization Design: Preventing Collapse 
+
+To prevent metric collapse (Conjecture 6.3), the loss function must include terms that push Ut
+
+away from zero and enforce diversity across tokens. We propose three regularizers grounded in the theory: 
+
+(1) Anti-flatness (hard floor on metric norm). 
+
+Lanti = 1
+
+BL 
+
+X
+
+> t
+
+ReLU  κmin − ∥ Ut∥2
+
+> F
+
+ (31) This penalizes tokens whose metric has collapsed below a floor κmin > 0, ensuring the metric remains non-trivial. The ReLU ensures the penalty vanishes once the floor is met, allowing free optimization above it. 
+
+(2) Cross-token metric diversity. 
+
+Ldiv = − 1
+
+|P| 
+
+X
+
+> (i,j )∈P
+
+∥UiU ⊤ 
+
+> i
+
+− Uj U ⊤ 
+
+> j
+
+∥2 
+
+> F
+
+(32) where P is a sampled subset of token pairs. This maximizes the pairwise distance between the d × d metric perturbations UtU ⊤ 
+
+> t
+
+(i.e. between the actual metrics gt = I + UtU ⊤ 
+
+> t
+
+), driving different tokens to develop distinct geometric “fingerprints.” We use UtU ⊤ 
+
+> t
+
+rather than U ⊤ 
+
+> t
+
+Ut
+
+(the r × r column Gram matrix) because U ⊤ 
+
+> i
+
+Ui = U ⊤ 
+
+> j
+
+Uj does not imply gi = gj : two factors with the same singular values but different column spaces yield identical U ⊤U yet different U U ⊤,and it is U U ⊤ that enters the metric. Despite the d × d appearance, the cost is only O(r2d)
+
+18 per pair via the identity ∥UiU ⊤ 
+
+> i
+
+− Uj U ⊤ 
+
+> j
+
+∥2 
+
+> F
+
+= ∥U ⊤ 
+
+> i
+
+Ui∥2 
+
+> F
+
+− 2∥U ⊤ 
+
+> i
+
+Uj ∥2 
+
+> F
+
++ ∥U ⊤ 
+
+> j
+
+Uj ∥2 
+
+> F
+
+, which never materializes the d × d matrices. By Theorem 3.2, homogeneous metrics ( Ui = Uj for all i, j )reduce the architecture to a global-metric Transformer under which the rank collapse mechanism of Theorem 2.2 applies directly; metric heterogeneity is therefore a prerequisite for any geometric anti-collapse effect, and this regularizer enforces that prerequisite. 
+
+(3) Curvature-smoothness (temporal consistency). 
+
+Lsmooth = 1
+
+B(L − 1) 
+
+X
+
+> t
+
+∥UtU ⊤ 
+
+> t
+
+− Ut+1 U ⊤
+
+> t+1
+
+∥2 
+
+> F
+
+(33) This ensures the metric gt = I + UtU ⊤ 
+
+> t
+
+varies smoothly across adjacent positions, preventing the degenerate solution where each token has a random, uncorrelated metric (which would destroy the sequential structure of language). The same O(r2d) identity applies. 
+
+Design principle. These three regularizers encode a tradeoff: anti-flatness prevents collapse 
+
+to zero , diversity prevents collapse to a homogeneous metric , and smoothness prevents collapse 
+
+to noise . Together, they steer the optimizer toward the heterogeneous, structured metric regime predicted by Conjecture 6.1. The regularization weights should be scheduled: strong diversity and anti-flatness during early training (to establish non-trivial geometry), then relaxed to allow task-specific specialization. 
+
+On the missing upper bound. We note that the diversity regularizer Ldiv (which maximizes 
+
+pairwise metric distance) can drive ∥Ut∥2 
+
+> F
+
+to grow without bound, since the anti-flatness term only enforces a floor κmin and provides no ceiling. Unbounded growth of ¯U 2 = max t ∥Ut∥2
+
+> F
+
+pushes the metric into the super-critical regime ¯U 2 ≫ τ /L of Proposition 3.5, where the per-turbation bound becomes vacuous and training may destabilize. In practice, Ldiv should be accompanied by an explicit upper bound—either a soft cap 
+
+Lcap = 1
+
+BL 
+
+X
+
+> t
+
+ReLU  ∥Ut∥2 
+
+> F
+
+− κmax 
+
+ (34) with κmax chosen near the critical threshold ¯U 2crit = Θ( τ /L )—or weight decay on the MetricNet parameters. The precise value of κmax requires empirical calibration; we flag the absence of a principled ceiling as a limitation of the current regularization design. 
+
+6.5 Prediction 4: Scaling with Metric Rank 
+
+Conjecture 6.4 (Rank–Expressivity Tradeoff) . The anti-collapse benefit of Riemannian at-tention, as measured by the deep-layer effective rank, is an increasing function of the metric rank r and the metric diversity σ2 
+
+> U
+
+. Specifically, there exists a threshold rmin (d, L ) below which the geometric correction is too weak to prevent collapse, and above which the effective rank is maintained at Ω( r).
+
+Theoretical basis (qualitative). By Proposition 3.7, the metric provides d · r degrees of freedom for distance modulation. The collapse mechanism of Dong et al. operates through L-dimensional spectral contraction: the rows of A converge to a common stationary distribution. To resist this contraction across L tokens, the metric must provide enough independent pertur-bations to disrupt the convergence. The natural scaling requirement is that r should grow at least logarithmically in L (since each independent metric direction disrupts a one-dimensional contraction mode, and the number of contraction modes grows with L). The dependence on d is more subtle: higher d provides more room per metric direction, but the contraction mechanism is L-dimensional, not d-dimensional, so the d-dependence enters only through the constants. 19 On the precise form of rmin . We deliberately do not state a specific closed form for rmin (d, L )
+
+in terms of log L and log d. A naive dimensional guess might propose rmin = Θ(log L/ log d),but the log d denominator is not justified by any derivation (the dimensional argument above gives at most a log L growth, with no principled log d reduction). We instead leave the precise functional form as an open question. A principled derivation would require the σ2 lower-bound analysis of Conjecture 3.6, which is the open problem this framework identifies. The qualitative prediction—that rmin exists and is sublinear in L—is the testable content of this conjecture. 
+
+6.6 Open Problems 
+
+Several questions remain open and define the theoretical research agenda: 
+
+O1. Formal rank preservation in the super-critical regime. Conjecture 3.6 requires bounding the singular values of the Riemannian attention matrix ARiem away from the degenerate spectrum in the regime ¯U 2 > ¯U 2crit = Θ( τ /L ). A potential approach: model the metric perturbation ∆S as a structured random matrix and use free probability theory or random-matrix universality to bound the expected singular value distribution. The sub-critical regime is already settled by Proposition 3.5. 
+
+O2. Optimization landscape of metric parameters. The loss landscape for Ut is non-convex (due to the UtU ⊤ 
+
+> t
+
+term). Does gradient descent on Ut converge to the heterogeneous regime (Conjecture 6.1), or does it always collapse (Conjecture 6.3) without regularization? A mean-field analysis of the metric dynamics could answer this. 
+
+O3. Torsion–semantics correspondence. Is there a formal correspondence between the torsion tensor Tt and directed semantic relations (causation, hierarchy, entailment)? If so, can torsion be probed from trained models to extract relational structure? 
+
+O4. Convergence of the metric-preconditioned FFN. Does the metric-preconditioned update (Equation (26)) improve optimization convergence relative to the Euclidean FFN? The natural gradient is known to accelerate convergence in parameter space [8, 9]; whether this extends to a representation-space preconditioner with a learned (rather than Fisher) metric is an open question, requiring both theoretical and empirical analysis. 
+
+O5. Metric rank selection. Conjecture 6.4 predicts that a threshold rmin exists and is sub-linear in L, but does not specify its precise form. An information-theoretic bound on the optimal r as a function of d, L, and the semantic complexity of the data would guide architecture design and resolve the question of whether any log d reduction in rmin has a principled basis. 
+
+O6. Rigorous differential-geometric formulation. The “Fiber Bundle Transformer” is cur-rently a structural analogy, not a strict fiber-bundle construction (see Section 5.1). For-malizing it as a true fiber bundle—specifying a structure group (e.g. GL( d) or SO( d)), a discrete connection compatible with the per-token metrics, and the corresponding cur-vature and torsion tensors—would replace the heuristic proxies of Phases B–E with their tensorial counterparts and would clarify the geometric content of the architecture. 
+
+# 7 Related Work 
+
+Rank collapse in Transformers. Dong et al. [3] proved that pure self-attention stacks suffer doubly-exponential rank decay, and showed in the same work that residual connections and FFN sublayers partially mitigate but do not eliminate the collapse pressure. Our work identifies the Euclidean metric as a structural cause of this collapse and proposes per-token Riemannian metrics as a candidate remedy. 20 Hyperbolic embeddings. Nickel & Kiela [4] demonstrated that constant negative curva-ture improves hierarchy modeling in embedding spaces. He et al. [10] extended this to full LLMs with HELM, using Mixture-of-Curvature Experts where each expert has a different fixed 
+
+curvature. Our approach differs fundamentally: we use learned, per-token metrics with contin-uously varying curvature, and we incorporate torsion for directional relations—neither of which constant-curvature approaches support. 
+
+Non-Euclidean foundation models. He et al. [2] argued that foundation models should embrace non-Euclidean geometries and provided the Nash embedding refutation we cite in Sec-tion 3. Our work provides the specific architectural mechanism (low-rank per-token metrics) that makes this practically feasible. 
+
+Manifold-constrained connectivity. Xie et al. [11] proposed manifold-constrained hyper-connections (mHC), constraining inter-layer residual mixing to lie on the manifold of doubly stochastic matrices. mHC addresses inter-layer connection topology; our approach addresses 
+
+intra-layer representational geometry. The two are complementary: mHC stabilizes the residual stream across layers, while Riemannian metrics reshape attention within each layer. 
+
+Riemannian optimization and manifold-valued deep learning. Bonnabel [8] established that stochastic gradient descent extends to Riemannian manifolds. Amari [9] introduced the natural gradient as the direction of steepest ascent on a statistical manifold. Our metric-preconditioned FFN (Section 5.7) is inspired by these ideas but applies the preconditioning in the representation space of a Transformer with a learned (rather than Fisher) metric; we are explicit that this is not a natural gradient in the strict Amari sense. A broader line of work on manifold-valued neural networks—including networks with manifold-constrained parameters or activations on symmetric spaces—develops optimization tools that could be brought to bear on the present framework; we do not survey it in detail but note that the per-token metric 
+
+gt = I + UtU ⊤ 
+
+> t
+
+lives on the SPD manifold, where standard Riemannian optimization techniques apply. 
+
+Anti-rank-collapse methods. Beyond the residual and FFN additions already present in standard Transformers, several architectural interventions have been proposed to combat di-mensional collapse: NormFormer [14] normalizes query/key/value magnitudes; ReZero [15] and related residual-scaling methods modify the strength of the skip connection. These methods address the symptoms (low effective rank) by adding normalization or capacity, whereas our approach targets the geometric origin (the Euclidean Gram structure of attention scores). Asystematic comparison of these approaches against Riemannian attention—in terms of both effective rank and downstream performance—is an important direction for empirical work. 
+
+Adaptive metrics in attention. ALiBi [12] and relative position embeddings add fixed ,content-independent biases to attention scores; the present framework can be viewed as learning content-dependent biases via the metric correction ∆S in Equation (11). Unlike ALiBi, the Riemannian correction depends on both the token’s own state (through Ut) and the token it attends to (through gij ), giving a richer, pair-dependent structure. 
+
+Parameter-efficient adaptation. LoRA [6] and adapters [7] add trainable modules to frozen models. MetricNet can be viewed through this lens—it adds a small module that modifies attention geometry—but differs in that it modifies the metric structure of the computation rather than adding capacity in weight space. 21 8 Discussion and Conclusion 
+
+8.1 Summary of Contributions 
+
+We have presented a theoretical framework for Riemannian attention in Transformers, consisting of: 1. The non-Gram property and perturbation analysis (Theorem 3.2, Proposition 3.5): Per-token heterogeneous Riemannian metrics render the attention score matrix non-Gram— it cannot be factored as QK ⊤ with O(d)-dimensional factors. We are explicit that this is a structural observation, not a proof of rank preservation: the Riemannian attention matrix 
+
+ARiem = softmax( SRiem ) remains row-stochastic, and the core collapse mechanism (products of row-stochastic matrices converging to rank-1) does not depend on the Gram property. The perturbation analysis (Section 3.3) identifies a critical regime ¯U 2crit = Θ( τ /L ): below it, the geometric correction is provably too weak; above it, standard perturbation tools break down. A strengthened conjecture (Conjecture 3.6) makes explicit what a sufficient anti-collapse result would require. 2. The computational feasibility analysis (Propositions 4.1–4.3): The low-rank representa-tion gt = I +UtU ⊤ 
+
+> t
+
+makes all geometric operations tractable—geodesic distance at O(d·r) per token, metric inversion at O(d · r2) via Woodbury, both far below the O(d3) baseline—with total attention overhead O(r/d ) ≪ 1. Riemannian attention is computationally practical at billion-parameter scale. 3. The Fiber Bundle Transformer architecture (Section 5): A complete specification— named by structural analogy to the differential-geometric notion, not a strict fiber-bundle construction—in which token positions are fibers with per-token metrics, attention computes geodesic distances, the connection carries curvature and torsion proxies, and feed-forward layers use metric-preconditioned updates. Each component is mathematically justified, with explicit analysis of the approximation errors introduced at each phase (e.g., the O(∥∆i∥2 
+
+> F
+
+)
+
+isometry violation in Phase D). 4. Formal predictions (Section 6): Curvature heterogeneity should emerge as an optimization consequence (Conjecture 6.1), train/inference blending mismatch is generically suboptimal relative to retraining (Proposition 6.2, proved via the implicit function theorem without convexity assumptions), metric collapse is the dominant failure mode (Conjecture 6.3), and the anti-collapse benefit scales with metric rank (Conjecture 6.4). These predictions identify the conditions under which empirical evaluation can validly test the framework. 
+
+8.2 Predictions to Be Empirically Tested 
+
+This paper is deliberately theoretical. The formal results and conjectures of Sections 3.3–6 generate a set of testable predictions that any future empirical study of this framework should verify. We frame these not as a prescriptive “protocol” but as the natural empirical consequences of the theory—each tied to a specific result above: 
+
+P1. Critical-regime transition (from Conjecture 3.6): Training at metric strengths ¯U 2 near 
+
+Θ( τ /L ) should show a transition from Euclidean-like behavior (sub-critical, collapse pro-ceeds) to geometric behavior (super-critical, collapse resisted). This is the central prediction of the perturbation analysis. 
+
+P2. Train/inference α consistency (from Proposition 6.2): Any blended model should be evaluated at the same α used in training, or retrained at the inference α. Evaluating at a different α without retraining produces a confounded, generically suboptimal result. 22 P3. Metric collapse monitoring (from Conjecture 6.3): Training should monitor ∥Ut∥2 
+
+> F
+
+and cross-token metric variance. If the metric collapses to zero or to a homogeneous solution, the geometric advantage is lost regardless of benchmark performance. 
+
+P4. Curvature heterogeneity verification (from Conjecture 6.1): After training, the distri-bution of κt = ∥Ut∥2 
+
+> F
+
+across tokens should be heterogeneous and correlated with semantic complexity. Homogeneous curvature indicates the architecture has degenerated to a global-metric Transformer. 
+
+P5. Controlled baseline comparison : Effective rank comparisons must be against a full residual Transformer trained under matched conditions, not against the pure-attention asymptotic limit of Dong et al. (which does not represent practical Transformers). 
+
+P6. Metric rank ablation (from Conjecture 6.4): The effective rank and task performance should improve with increasing r; the qualitative prediction is that a sublinear-in-L thresh-old rmin exists, below which the geometric correction is insufficient. We emphasize that prediction P1 is the most directly falsifiable: if the predicted transition at ¯U 2 ≈ Θ( τ /L ) is not observed in experiments, the perturbation analysis (Proposition 3.5) would need to be revisited, since the sub-critical regime there is a theorem, not a conjecture. 
+
+8.3 Limitations of the Current Theory 
+
+We are explicit about what the theory does not prove: • The non-Gram property does not address the core collapse mechanism. Theo-rem 3.2 establishes that SRiem cannot be factorized as QK ⊤ with O(d)-dimensional factors. However, the fundamental collapse mechanism—convergence of products of row-stochastic matrices to rank-1—is driven by the softmax, not by the Gram structure of the pre-softmax scores. The Riemannian attention matrix ARiem = softmax( SRiem ) remains row-stochastic, and the non-Gram property provides no guarantee that the row-stochastic contraction is avoided. The strengthened conjecture (Conjecture 3.6) identifies what a positive result would require, but the super-critical regime—where anti-collapse would need to occur—remains un-proven, and the perturbation analysis (Proposition 3.5) is informative only in the sub-critical regime where collapse is confirmed. • Proposition 6.2 (blending consistency) is a local result: it holds in a neighborhood of αtrain 
+
+under the assumptions stated. It does not compare the absolute loss at αinfer versus αtrain ,only the relative suboptimality versus retraining. • The architecture is specified but not empirically validated. The predictions in Section 6 are consequences of the architecture’s structure, but their magnitude (how much rank is preserved in the super-critical regime, how much task performance improves) requires experimentation. • The regularization design (Section 6.4) is theoretically motivated but not proven optimal. The specific values of κmin , the diversity weight, and the scheduling require empirical calibration. • The torsion–semantics correspondence (Open Problem O3) is conjectural. Whether torsion actually encodes directed relations in trained models is an empirical question. • The “Fiber Bundle Transformer” is named by structural analogy, not a strict differential-geometric construction (Section 5.1). The curvature and torsion objects of Phases B, C are proxies, not the Riemann and torsion tensors of a true connection. A rigorous formulation is left as Open Problem O6. 23 • The metric-preconditioned FFN (Section 5.7) is a Riemannian-gradient-inspired update, not a natural gradient in the strict Amari sense (which would require a Fisher information metric on parameter space). Moreover, with the chosen parameterization gt = I +UtU ⊤ 
+
+> t
+
+⪰ Id, the metric only stretches directions, so g−1 
+
+> t
+
+⪯ Id only down-weights updates along stretched directions— it never amplifies compressed directions as a general Riemannian-gradient step would. Aparameterization admitting eigenvalues below 1 (e.g. gt = I + UtU ⊤ 
+
+> t
+
+− VtV ⊤ 
+
+> t
+
+with a PSD projection to ensure positive-definiteness) would restore the full preconditioning effect but at higher computational cost. Whether the representation-space preconditioning accelerates convergence is open (Open Problem O4). • Theorem 3.2 is a statement about the functional (universal) factorization of the Riemannian score, not about the rank of a specific L × L matrix. For a specific input with L ≤ d, the score matrix has rank ≤ L = O(d) and a d′ = O(d) factorization trivially exists; the Ω( d2)
+
+lower bound is meaningful only in the regime L = Ω( d2) or under the functional interpretation (Equation (7)). • The diversity regularizer Ldiv (Section 6.4) maximizes pairwise metric distance without a principled upper bound on ∥Ut∥2 
+
+> F
+
+; the soft cap Lcap of Equation (34) is a pragmatic patch, and the precise value of κmax relative to the critical threshold ¯U 2crit = Θ( τ /L ) requires empirical calibration. 
+
+8.4 Conclusion 
+
+The flat Euclidean geometry of Transformer attention is a structural constraint with proven consequences: in pure self-attention stacks, representational rank collapses doubly exponentially with depth. The core mechanism is the row-stochasticity of the attention matrix—after softmax, each row is a probability distribution, and products of such matrices converge to rank-1. Per-token Riemannian metrics, represented as low-rank perturbations gt = I + UtU ⊤ 
+
+> t
+
+, change the algebraic structure of the attention scores (Theorem 3.2: they cannot be factored as QK ⊤ with 
+
+O(d)-dimensional factors) but do not alter the row-stochasticity of the post-softmax attention matrix. Whether the heterogeneous metric perturbations are sufficient to prevent the row-stochastic contraction—i.e., whether they create a persistent spectral gap σ2(ARiem ) > c > 0—is the central open problem identified by this framework (Conjecture 3.6). The perturbation analysis (Proposition 3.5) reveals a self-limiting structure: when the met-ric correction is small ( ¯U 2 ≪ τ /L ), the Riemannian attention is a perturbation of Euclidean attention and collapse proceeds as before; when the correction is large ( ¯U 2 ≫ τ /L ), the pertur-bation bound becomes vacuous and standard tools provide no information. The regime where anti-collapse would need to occur is precisely the regime where the current analysis is silent. On the constructive side, we have shown that the low-rank parameterization makes Rieman-nian attention computationally feasible: geodesic distance in O(d · r) per token, metric inversion in O(d·r2) via the Woodbury identity (Proposition 4.1), and total overhead O(r/d ) ≪ 1 (Propo-sition 4.3). The Fiber Bundle Transformer architecture—framed as a structural analogy, with explicit approximation-error analysis at each phase—provides a complete specification. The train/inference consistency result (Proposition 6.2) establishes that empirical evaluation must match training and inference blending coefficients (or retrain), and the metric collapse analysis (Conjecture 6.3) identifies the dominant failure mode requiring architectural countermeasures. We have been deliberately precise about what is proven (the non-Gram structural property, the perturbation bound, the local blending-consistency result, the computational complexity), what is conjectured with explicit conditions (the strengthened rank preservation in the super-critical regime, the critical-regime transition, the metric collapse failure mode), and what remains open (the super-critical spectral analysis, the differential-geometric formalization, the conver-gence of the preconditioned FFN). The central gap—proving or disproving that heterogeneous 24 Riemannian metrics prevent the rank collapse that row-stochastic attention matrices otherwise cause—defines the research agenda that this framework equips future work to address. 
+
+# Acknowledgments 
+
+The author thanks the open-source community for the tools and mathematical resources that made this work possible. 
+
+# References 
+
+[1] J. Nash. The imbedding problem for Riemannian manifolds. Annals of Mathematics ,63(1):20–63, 1956. [2] N. He et al. Beyond Euclidean: Foundation Models Should Embrace Non-Euclidean Ge-ometries. arXiv:2504.08896 , 2025. [3] Y. Dong, J.-B. Cordonnier, and A. Loukas. Attention is Not All You Need: Pure Attention Loses Rank Doubly Exponentially with Depth. In ICML , 2021. [4] M. Nickel and D. Kiela. Poincaré Embeddings for Learning Hierarchical Representations. In NeurIPS , 2017. [5] A. Vaswani et al. Attention Is All You Need. In NeurIPS , 2017. [6] E. J. Hu et al. LoRA: Low-Rank Adaptation of Large Language Models. In ICLR , 2022. [7] N. Houlsby et al. Parameter-Efficient Transfer Learning for NLP. In ICML , 2019. [8] S. Bonnabel. Stochastic Gradient Descent on Riemannian Manifolds. IEEE Transactions on Automatic Control , 58(9):2217–2229, 2013. [9] S. Amari. Natural Gradient Works Efficiently in Learning. Neural Computation , 10(2):251– 276, 1998. [10] N. He, R. Anand, H. Madhu, A. Maatouk, S. Krishnaswamy, L. Tassiulas, M. Yang, and R. Ying. HELM: Hyperbolic Large Language Models via Mixture-of-Curvature Experts. In 
+
+NeurIPS , 39, 2025. arXiv:2505.24722. [11] Z. Xie et al. mHC: Manifold-Constrained Hyper-Connections. arXiv:2512.24880 , 2025. [12] O. Press, N. A. Smith, and M. Lewis. Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation. In ICLR , 2022. [13] T. Dao, D. Y. Fu, S. Ermon, A. Rudra, and C. Ré. FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness. In NeurIPS , 2022. [14] S. Narang, H. W. Chung, Y. Tay, W. Fedus, T. Fevry, M. Matena, K. Malkan, N. Fiedel, N. Shazeer, et al. Do Transformer Modifications Transfer Across Implementations and Applications? In EMNLP , 2021. arXiv:2102.11972. [15] T. Bachlechner, B. P. Majumder, H. H. Mao, G. W. Cottrell, and J. McAuley. ReZero is All You Need: Fast Convergence at Large Depth. In UAI , 2021. arXiv:2003.04887. 25

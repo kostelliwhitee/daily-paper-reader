@@ -1,0 +1,488 @@
+Title: An Actionable Diagnosis of Multilingual, Multi-Agent Planning Failures
+
+URL Source: https://arxiv.org/pdf/2608.03735v1
+
+Published Time: Wed, 05 Aug 2026 01:11:07 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# An Actionable Diagnosis of Multilingual, Multi-Agent Planning Failures 
+
+Vikas Pahuja *, Jonathan Brokman *, Omer Hofman 1, Tamir Nizri 1, Daniel Vishna 1,Seraphina Goldfarb-Tarrant 2, Kelly Marchisio 2, Hisashi Kojima 3, Roman Vainshtein 1
+
+> 1
+
+Fujitsu Research of Europe 2Cohere 3Fujitsu Research 
+
+> *
+
+Equal contribution. 
+
+Abstract 
+
+Multilingual multi-agent systems exhibit sub-stantial degradation beyond English, yet prior work rarely identifies how task-critical infor-mation is lost when user requests are converted into executable plans. We study the plan-ner in a multi-agent system as the request-to-action interface and derive an actionable taxon-omy of planning-grounding failures from failed real-world task executions. LLM-based anal-ysis shows that these failures constitute an in-creasing share of unsuccessful executions as language-resource availability declines, with the strongest effects in low-resource languages. To test whether the taxonomy supports mitiga-tion, we introduce TART, Taxonomy-Guided Actionable Representation, that makes the tax-onomy’s key aspects explicit to the planner and downstream sub-agents. Across multiple lan-guages, three LLM backbones, two datasets, and two agentic configurations, TART con-sistently improves performance. On multilin-gual GAIA, it raises a state-of-the-art system’s accuracy by 5.6 percentage points averaged across eleven languages spanning low- to high-resource settings. 
+
+1 Introduction 
+
+Language-model-based multi-agent systems are in-creasingly used as general-purpose tools by a lin-guistically diverse user base. They translate multi-lingual user requests into actionable plans, coordi-nate specialized agents, invoke tools, and generate answers. Their reliability depends on preserving user goals and constraints across languages with unequal representation in training data, making cross-language reliability a significant challenge (Joshi et al., 2020; Wenzek et al., 2020). Recent work has consistently documented cross-lingual degradation in LLM-based agents, from structured function-call generation (Kulkarni et al., 2025; Luo et al., 2026), through controlled web interaction (Wang et al., 2025), to complex tasks derived from GAIA in multilingual settings (GAIA-MAPS; Hofman et al., 2026; Kim et al., 2026). However, these studies do not systematically char-acterize internally which task-critical commitments are lost or distorted inside the multi-agent system. The request-to-plan boundary is of particular im-portance: Firstly - it is often the de-facto interface to multilingual inputs, even when following actions are done internally in English or other representa-tions. Moreover, a misunderstanding here is par-ticularly consequential since any distortion might propagate through the entire multi-agent workflow. We define a planning-grounding failure as a mis-match between the user request and the generated plan such that, even if the plan were executed cor-rectly, the resulting execution would not satisfy the original request. For example, a plan may substi-tute the target entity, omit a required source or date, or follow the wrong sequence of operations. Through qualitative analysis, we identify five recurring forms of planning-grounding failure: entity, source, temporal, operation, and output grounding. These categories correspond to five semantic commitments that a plan must preserve. Moreover, they are directly actionable: identifying these does not merely mean we should re-plan, but guides how to re-plan. After identification, the fail-ure categories were verified to recur across LLMs, agents and languages. Furthermore, LLM-based quantification reveals a broad resource-related gra-dient: they account for an increasingly large share of unsuccessful executions as language-resource availability decreases, with the pattern already vis-ible in medium-resource settings and most pro-nounced in lower-resource languages. We then ask whether the taxonomy is action-able rather than merely descriptive. Guided by its five dimensions, we introduce a TART: Taxonomy-guided Actionable Task Representation. It is a semantic parsing protocol that represents outputs plan-grounding information before planning be-arXiv:2608.03735v1 [cs.MA] 4 Aug 2026 Figure 1: We propose a taxonomy for multi-agent planning failures, developed to diagnose multilingual settings, and guide actionable improvements (taxonomy summarized in Fig. 2). (a) Distributions of the taxonomy’s planning failures, measured per-language and ordered by Common Crawl language availability (high to low resource). As language-resource availability decreases, taxonomy-covered failures account for an increasing share of unsuccessful executions—particularly operation and entity grounding—while answer formatting failures decrease. (b) Accuracy of OWL on Multilingual GAIA, averaged over the languages. TART (our method) improves all three configurations. Together, the panels connect a systematic multilingual failure pattern to an actionable mitigation that improves a state-of-the-art multi-agent system. 
+
+gins. This structured representation is designed to reflect the proposed taxonomy of errors. It acts as a semantic contract between the user request and the agentic pipeline, helping the system preserve the commitments of the request. The protocol requires neither changes to the underlying model parameters nor a replacement of the multi-agent framework. We evaluate TART primarily on multilingual versions of GAIA (Mialon et al., 2024; Hofman et al., 2026; Kim et al., 2026), containing complex, real-world agentic tasks. We extend this setting with additional lower-resource languages, yield-ing a spectrum from English and higher-resource languages to medium- and lower-resource settings. We test on and additional dataset, MULTITAT as a more controlled setting (Zhang et al., 2025b). On GAIA-MAPS, TART improves a SOTA sys-tem, OWL (Hu et al., 2025), with GPT-5-mini by 5.6 percentage points, averaged across eleven lan-guages. We further observe improvements with Mistral-Large-3 and Qwen3-VL-235B-A22B. To our knowledge, this is the first work to char-acterize planning failures across languages, and the first to derive and evaluate a mitigation directly from such a taxonomy. 1 Main contributions: 
+
+• An actionable taxonomy of planning-grounding failures that captures which  
+
+> 1Official implementation: https://anonymous.4open. science/r/Multilingual-Multi-Agent-TART-0B42/ .
+
+semantic commitments that are lost or distorted when multilingual user requests are converted into plans. Quantifica-tion across languages identifies a broad language-resource-related gradient. 
+
+• Demonstration of the taxonomy’s actionability by proposing TART - a protocol that explic-itly reflects our taxonomy in guiding planning and downstream coordination. Empirical evi-dence across languages, LLM backbones and datasets shows that TART improves the end-to-end performance of multi-agent systems on complex multilingual GAIA-style tasks. 
+
+2 Related Work 
+
+While LLM literature is mature, only recently have studies shown the language effects on LLM-based agent performance. X-WebAgentBench (Wang et al., 2025) is a simplified version of an e-commerce web shop. They evaluate multilingual agents and multi-agent systems, and test align-ment methods. Single-turn structured function calls have been studied in MASSIVE, providing large-scale evidence that these are sensitive to lan-guage (Kulkarni et al., 2025). MLCL (Luo et al., 2026) similarly studies single function LLM calls, concerning single structured tool calls. MULTI-TAT (Zhang et al., 2025b) focuses on multilingual table reasoning, by translating several table rea-Figure 2: Left: Planner-specific multilingual grounding-failure taxonomy. Right: Entity grounding failure example for an Igbo query. Semantic task representation makes the implicit entity explicit and guides both planning and tool use toward the correct USGS retrieval target. 
+
+soning tasks (Chen et al., 2020; Zhu et al., 2021; Zhang et al., 2025a) into 11 languages, it requires agents to read tables and perform several-step op-erations on them, making it a simple yet highly relevant use case for multi-step plan evaluation. PolyWorkBench evaluates end-to-end multilingual long-horizon workflows (Li et al., 2026) - iden-tifying two failure types: comprehension errors and cross-lingual coordination errors . Multi-Plan evaluates multilingual planning for travel-itinerary in Korean and English (Jung et al., 2025). They introduce plans as mathematical expressions, sig-nificantly improving performance. Their travel itinerary plans are different from the agentic plans that we study. MAPS evaluates agentic systems across 11 languages drawning tasks from GAIA (GAIA-MAPS), and other datasets (Hofman et al., 2026) - inheriting from GAIA open-ended web tasks and other challenging queries with unre-stricted action space - useful for real-world multi-agent actionable insights. While the above confirm the issue of multilingual performance in varying agentic aspects, a gap remains when it comes to systematically characterizing the planning failures 
+
+induced by multilingual user queries in multi-agent systems. In English-centric settings, failures of agentic systems have been more thoroughly studied. MAST introduces a study and taxonomy of 14 failure modes (Cemri et al., 2025). However, they do not examine multilingual user queries nor plan-ning failures. MultiAgentBench (Zhu et al., 2025) focuses on multi-agent flow design (star vs tree etc.) and characterizes planning through qualities such as clarity and workload distribution (not fail-ures). PDDL (Planning Domain Definition Lan-guage) (Aghzal et al., 2026) studied web agents through structured plans. They propose symbolic constraints to improve human plan alignment, and report LLM failures such as hallucinations and re-dundancy. Taken together, these establish three im-portant foundations: multilingual degradation oc-curs in agentic systems, failure taxonomies reveal weaknesses in agentic systems, and introducing structure to plans has practical potential. However, multilingual planner failures of agentic systems are underexplored - leaving a critical gap: Planning as the interface through which multilingual user queries are interpreted and converted into actions, should be studied for multilingual support. 
+
+3 Method 
+
+3.1 Consolidated taxonomy 
+
+Following qualitative analyses (below) , five plan-grounding-failures are identified (Fig. 2 left). • (1) Entity grounding failure : the plan mis-translates a query entity, hallucinates an entity absent from the query, or substitutes one that never appeared in the original question. 
+
+• (2) Source grounding failure : the plan al-ters the specified source identifier (e.g., the attached file name), or reaches the correct source but omits the required post-retrieval filtering criteria. 
+
+• (3) Temporal grounding failure : the plan changes the time period specified in the query or omits temporal scope from the plan entirely. 
+
+• (4) Operation grounding failure : the plan preserves the required constraints but follows unsound reasoning or logical reasoning, in some cases changing the task objective. 
+
+• (5) Answer-format grounding failure : the plan is substantively correct in constraints and reasoning, but the answer is expressed in the wrong format (e.g., expected 116 rendered as 
+
+116000 ). See Appendix A for qualitative failure examples and analysis. 
+
+3.2 Taxonomy Derivation Process 
+
+A first step in developing effective mitigation, is to look into where multilingual planners fail and which recurring failures are actionable. Thus we set a procedure for qualitative identification of fail-ures aimed at distinguishing failure planning cate-gories that are actionable, and are prevalent upon multilingual queries. 
+
+Plan extraction: We filter cases where the de-velopment agent succeeds on an English query but 
+
+fails at a non-English query. Manual analysis pro-tocol : We analyze each failed pair one at a time, jointly considering the successful plan, the failure plan, and the original question. Task constraints and logical reasoning discrepancies between the two are diagnosed and categorized. For actionabil-ity we require a category to be specific enough to directly inform improvements to the plan. Stop-ping criterion : We analyzed samples sequentially until saturation , i.e., when new samples yielded only previously observed categories, at which point we halted and consolidated the taxonomy. 
+
+Development-set configuration : The taxon-omy was derived on a set deliberately disjoint— in both models and framework—from where taxonomy-guided mitigation is later evaluated, guarding against overfitting and supporting cross-framework generalization. We used Qwen2.5-32B-Instruct(Qwen et al., 2025) and Cohere Aya-Expanse-32B(Dang et al., 2024) within the Open Deep Research agent framework(Balakrishnan, 2025)—none of those are used in the quantitative experiments. They were selected as computation-ally tractable, planning capable, and indeed yielded saturation-based qualitative analysis. Taxonomy saturation was identified after 80 failure sam-ples spanning six low-resource languages—Igbo, Yoruba, Bengali, Swahili, Kyrgyz, and Nyanja. One researcher conducted the primary analysis, with three additional researchers discussing each case to confirm category assignment. 
+
+3.3 Mitigation via an Actionable Taxonomy 
+
+Our failure taxonomy is not merely diagnostic; it is 
+
+actionable . Because each planner failure we iden-tified corresponds to a specific type of information that the plan fails to preserve, we can mitigate these failures by making that information explicit and available to every agent throughout execution. To this end, we introduce the Taxonomy-guided Ac-tionable Task Representation (TART) , a struc-tured representation whose fields are placed in one-to-one correspondence with our taxonomy. By con-struction, TART captures exactly the elements we found to drive multilingual planning failures. Figure 3 illustrates how TART is integrated into the agentic framework. When a query (whether English or non-English) enters the system, an LLM first converts it into its TART. The complete TART system prompt and model configuration details are provided in Appendices B and B.1. The resulting representation, together with the original query, is then supplied to the planning agent, which decom-poses the task into subtasks conditioned on both the surface query and its taxonomy-aligned constraints. The coordinator agent subsequently assigns these subtasks to specialized worker agents (e.g., web, document, and coding agents), and once all sub-tasks are completed, the coordinator delegates to the answer agent, which composes the final answer. Crucially, TART is not consumed once at planning time and then discarded. We inject the represen-tation into the system prompts of the planner(see Appendix C), and downstream sub-agents , so that the constraints it encodes remain in view at each stage of the pipeline. As a result, every downstream reasoning step and assignment decision is anchored Figure 3: Taxonomy-guided mitigation via TART. A non-English query is converted by an LLM into a Taxonomy-guided Actionable Task Representation (TART), whose fields correspond to the failure taxonomy, and injected into the planner, coordinator, and worker agents. 
+
+to the same explicit set of entities, rather than to a potentially partial understanding of the original query. This design directly counteracts the failure modes catalogued in our taxonomy at their point of origin: the planner is less prone to dropping or mis-translating constraints, while the coordinator and workers are less prone to drifting from the intended objective as reasoning proceeds. 
+
+4 Experiments and Settings 
+
+Datasets. We evaluate on GAIA-MAPS and MULTITAT (Hofman et al., 2026; Zhang et al., 2025b). GAIA-MAPS contains 165 multimodal agentic tasks per language (Mialon et al., 2024; Hofman et al., 2026; Kim et al., 2026). We use a total of 11 languages: five existing languages (en, ru, de, hi, ar) and add six lower-resource languages (bn, sw, ky, ig, yo, ny) via Google Cloud Transla-tion (Google, 2026). Baseline and TART receive identical translations. Languages are grouped by Common Crawl availability (Common Crawl Foun-dation, 2026); details are in Appendices H MULTITAT requires joint reasoning over tables and accompanying text for extraction, counting, and arithmetic tasks (Zhang et al., 2025b). We evaluate ten languages: en, de, es, fr, ru, zh, ja, bn, sw, and te. 
+
+Models. On GAIA-MAPS, we evaluate GPT-5-mini, Mistral-Large-3, and Qwen3-VL-235B-A22B (OpenAI, 2025a; Mistral AI, 2025; Bai et al., 2025). GPT-5-mini covers all eleven languages; the other models use a shared seven-language subset due to cost. For cross-model comparisons, GPT-5-mini is restricted to the same subset. MULTI-TAT uses Mistral-Large-3 and Qwen3-VL-235B-315 A22B across all ten languages. 
+
+Multi-Agent Systems. For GAIA-MAPS, we use OWL since it is a state-of-the-art system, dedicated for GAIA tasks, with its explicit planner enabling seamless TART injection and tracing (Hu et al., 2025). The planner, Web Agent, document agent, and answer agent use the evaluated model, while the coordinator remains fixed as o3-mini (OpenAI, 2025b). Details are in Appendices D and D.1. For MULTITAT, we use a planner, one Reason-ing and Coding Agent, and a final-answer agent. We omit the coordinator because all subtasks are routed to a single worker. All agents use the evalu-ated model; details are in Appendix D.2. 
+
+Baseline vs. Mitigation. In Baseline , the planner decomposes the query directly. In TART , the eval-uated model first produces the structured represen-tation, then both the query and TART are provided to the planner and downstream agents. Using the same model as converter isolates the effect of struc-ture. We evaluate all 165 GAIA-MAPS tasks per language under both conditions and report Exact Match on both datasets. 
+
+5 Results 
+
+GAIA-MAPS OWL. Figure 4 reports Exact Match (EM) accuracy for the OWL agent, based on the 3 LLMs across languages, comparing the Baseline against TART mitigation. For GPT-5-mini, TART improves accuracy in ten of eleven lan-guages, raising mean EM from 0.249 to 0.305(+5.6 points). Improvements span the resource spectrum: German (+9.1), Hindi (+9.7), and Arabic (+7.9) see the largest gains, while the two lowest-resource languages, Yoruba (+10.9) and Igbo (+7.9), also improve markedly. Russian is the only exception (-0.006), showing no meaningful degradation. These Figure 4: Main result. TART consistently improves task-level accuracy on GAIA-MAPS across the three model families. To produce Fig. 1(b), we averaged per-model across languages. 
+
+gains align with our failure analysis and showed the importance of taxonomy guided mitigation —pre-cisely the modes TART targets. To assess robust-ness, we repeat the GPT-5-mini evaluation with a second independent run; TART improves over Baseline in 20 of 22 language-run comparisons across both runs. Detailed per-language results are provided in Appendix E.1. For Mistral-Large-3, Figure 4 shows TART im-proves accuracy for every language, raising mean EM from 0.196 to 0.255 —an average absolute gain of 5.9 points ( +30 .1% relative). The improve-ments span the resource spectrum: high- and mid-resource languages such as English ( +9 .7), Ger-man ( +7 .3), Arabic ( +6 .7), and Hindi ( +4 .2) im-prove substantially, and the low-resource languages benefit as well, with Kyrgyz ( +6 .7), Igbo ( +4 .2), and Yoruba ( +3 .0) all improving over weak base-lines. Detailed per-language results are provided in Appendix E.3. On the seven languages shared by both models, TART yields comparable gains, +7.4 points for GPT-5-mini and +5.9 for Mistral-Large-3, showing the benefit transfers across model families rather than being tied to one model. For Qwen3-VL-235B-A22B, across the seven evaluated languages, TART improves accuracy for six of the seven languages and leaves the sev-enth unchanged, raising mean EM from 0.199 
+
+to 0.235 —an average absolute gain of 3.6 points (+18 .1% relative). The largest improvement is on the low-resource language Kyrgyz ( +9 .1), followed by Hindi ( +4 .8), while English and Arabic each improve by +3 .6 and Igbo by +3 .0; German im-proves marginally ( +0 .6), and Yoruba is the only language that remains unchanged. As with the other models, TART does not degrade performance on any language. Detailed per-language results are provided in Appendix E.3 Figure 5(c) further shows that TART improves Levels 1 and 2, while average Level-3 perfor-mance is largely unchanged, with a slight decline on Qwen, with mean absolute gains of +9.0, +5.0, and 0 points at Level 1, Level 2, and Level 3 respec-tively, averaged across all three models. Notably, average Level-3 performance is largely unchanged despite comparable taxonomy-covered failure rates Figure 5: (a) Applicability to an additional dataset:TART consistently improves task-level accuracy on MULTITAT data across two model families. Across 10 languages—TART yields mean absolute gains of +10, and +3 points under Mistral-Large-3, and Qwen3-VL-235B-A22B respectively. (b) TART shows consistent improvement, usually monotoneous, on input setting (In) followed by operation setting(Op), which cumulatively employ partial aspects of TART. Tested on GAIA-MAPS across 5 languages. (c) Task complexity level wise improvement for GPT-5-mini, Mistral-Large-3, and Qwen3-VL-235B-A22B on GAIA-MAPS. 
+
+to Level 2; for a detailed level-wise analysis, please refer to Appendix E.2 
+
+MULTITAT 3-agent system. For Mistral-Large-3, we report EM accuracy on MultiTAT across the ten evaluated languages in Figure 5(a). TART im-proves accuracy for every language, raising mean EM from 0.210 to 0.310 —an average absolute gain of 10 .0 points, corresponding to a 47 .6% rela-tive improvement. Detailed per-language results are provided in Appendix F. The gains are large and consistent across the resource spectrum: every language improves by at least 5 points, with the largest improvements on French ( +17 .6), Russian (+14 .0), German ( +11 .2), and Spanish ( +11 .2), while low-resource languages benefit substantially as well—Bengali ( +9 .2), Swahili ( +6 .8), and Tel-ugu ( +5 .2). For Qwen3-VL-235B-A22B in Fig-ure 5(a), TART improves accuracy across all ten languages on MULTITAT, raising mean EM from 0.307 to 0.338 (+3.1 points). Gains are consistent across the resource spectrum, with the largest for Japanese (+5.2) and French (+5.2) and the smallest for Russian (+0.8); no language degrades. The uni-form improvement confirms that TART’s benefit transfers to a third model family. Detailed per-language results are provided in Appendix F 
+
+5.1 Ablation 
+
+We ablate TART into two cumulative settings as shown in Figure 5(b): Input (In) , contain-ing only surface constraints—entities, time and source constraints from TART; Input + Opera-tion (Op) , which adds the operations field encod-ing reasoning steps; Full is the complete repre-sentation. All settings use GPT-5-mini on five languages spanning the resource spectrum. The components contribute cumulatively: mean EM rises from 0.233(Input) to 0.256(+2.3) with Input + Operation (Op), and to 0.287(+3.1) with Full, totaling +5.4 points; every language peaks under Full. The operations field matters most for the lowest-resource languages—for Igbo it recovers +7.3 of +9.1 points—consistent with the operation grounding failures that dominate these languages (Figure 1(a)), while for languages (Arabic, Hindi) the two components contribute roughly equally. 
+
+5.2 Quantifying Failure Across Languages 
+
+Applying our manual analysis protocol to every language and sample is not scalable. We therefore adopt an LLM-as-a-judge approach to extend the failure categorization across all languages in our study. This enables us to transfer the knowledge gained during our manual failure categorization into the judge LLM. Further details on the judge design, inputs, category assignment, and model configuration are provided in Appendices G and G.1. Representative examples of how the judge categorizes samples are given in Appendix G.2. 
+
+LLM judge result analysis: See Figure 1(a), we categorize planner-agent baseline failures into taxonomy-covered errors—entity, source, temporal, Figure 6: Planning-grounding failure distributions across models and languages. Baseline failures are cat-egorized using our taxonomy for GPT-5 Mini, Mistral-Large-3, and Qwen3-VL-235B-A22B, with languages ordered by Common Crawl availability from high to low resource. Across model families, lower-resource lan-guages exhibit a larger share of taxonomy-covered fail-ures, especially operation and entity grounding, while residual Other and answer-format failures generally de-crease. The consistency of this shift indicates that mul-tilingual degradation at the request-to-plan boundary reflects recurring, structurally identifiable failure modes rather than model-specific errors. Averaging over mod-els produces the pie-charts of Fig. 1 
+
+and operation grounding, plus answer-format and 
+
+Other , capturing residual failures outside our tax-onomy, such as generic planning failures or down-stream execution errors. A clear shift emerges as we move from high-resource languages (En-glish, German) to lower-resource ones: the share of 
+
+Other failures decreases, while taxonomy-covered failures—particularly operation and entity ground-ing—rise sharply, indicating that low-resource fail-ures are increasingly explained by the structural error modes our taxonomy identifies rather than by diffuse, uncategorized failures. This trend holds across all three models as shown in figure 6: for the lowest-resource languages, Kygryz, Yoruba and Igbo, operation grounding becomes the dominant failure mode, accounting for the majority of fail-ures under Mistral-Large-3 and Qwen3-VL-235B and the largest single category under GPT-5-mini. Aggregated across all languages, operation ground-ing is the largest taxonomy-covered category for every model ( 24 .0% , 36 .5% , and 30 .2% of fail-ures for GPT-5-mini, Mistral-Large-3, and Qwen3-VL-235B respectively). Detailed per-language and per-model counts for each category are reported in Appendix G.3. The share of Other failures drops substantially from English to the lowest-resource languages (Yoruba and Igbo)—by 18% 
+
+under Mistral-Large-3 and 16% under Qwen3-VL-235B—while taxonomy-covered failures rise corre-spondingly, indicating that low-resource errors are increasingly explained by the specific grounding failures our taxonomy identifies. Answer-format errors are more prominent under GPT-5-mini than under Mistral-Large-3 and Qwen3-VL-235B, while temporal and source grounding failures remain mi-nor throughout. Overall, the graphs show that as multilingual comprehension weakens, failures shift from uncategorized failures toward the specific grounding failures TART is designed to counter-act—directly motivating our approach. 
+
+Human annotation study. For judge validation, 6 annotators verified 122 samples (mutually exclu-sive subsets) using judge inputs and response. This covers ( ∼14%) of failures from Mistral-Large-3 across seven high- to low-resource languages. Re-sults show macro-F1 of 0.906 , see Appendix G.4. 
+
+6 Conclusion 
+
+We introduced an actionable taxonomy of multi-lingual planning-grounding failures and the TART protocol for mitigation, based on five categories: entities, sources, temporal constraints, operations, and answer format. We shows that, as language-resource availability decreases, planning failures increasingly concentrate in these categories, espe-cially entity and operation grounding. Exposing the five categories as commitments to the planner and agents consistently improves performance across languages, model families, datasets, and agent con-figurations, including the state-of-the-art OWL sys-tem on Multilingual GAIA. The central result is both diagnostic and opera-tional: multilingual failures at the request-to-plan boundary are systematic enough to characterize and structured enough to mitigate. These findings mo-tivate multi-agent architectures that preserve user intent through explicit and inspectable semantic contracts, rather than relying exclusively on uncon-strained natural-language planning. Limitations 
+
+Our study has several limitations. First, six GAIA-MAPS languages were produced through machine translation. With that said, Baseline and TART re-ceive identical translations, controlling the compar-ison between methods, however machine-translated queries may differ from naturally authored requests. Once GAIA or similar real-world complex tasks become available in these languages results should be re-verified. Second, the taxonomy was derived from 80 cases in which an English execution suc-ceeded while the corresponding non-English exe-cution failed. This sampling strategy isolates cross-lingual planning degradation - which is our delib-erate emphasis. However, failure modes that are prevalent in English or more shared across lan-guages may also be identified and studied as a future effort. Third, large-scale failure quantifi-cation relies on an LLM judge. Human validation covered a substantial subset, but only for one eval-uated model; judge calibration may differ across languages, models, and failure categories. Finally, repeated-run stability was measured only for GPT-5-mini, while the remaining model results are based on single runs. 
+
+References 
+
+Mohamed Aghzal, Gregory J. Stein, and Ziyu Yao. 2026. Why do LLM-based web agents fail? a hier-archical planning perspective. In Proceedings of the 64th Annual Meeting of the Association for Compu-tational Linguistics (Volume 1: Long Papers) , pages 32157–32180, San Diego, California, United States. Association for Computational Linguistics. Anthropic. 2025. Claude Opus 4.8. https://www.an thropic.com/claude/opus . Deployed via Amazon Bedrock (AWS); accessed 2026-07-15. Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, Wenbin Ge, Zhi-fang Guo, Qidong Huang, Jie Huang, Fei Huang, Binyuan Hui, Shutong Jiang, Zhaohai Li, Mingsheng Li, and 45 others. 2025. Qwen3-vl technical report. 
+
+Preprint , arXiv:2511.21631. Surya Balakrishnan. 2025. Open deep research: An open replication of deep research using the smola-gents library. https://github.com/huggingface/s molagents/tree/main/examples/open_deep_r esearch . GitHub repository; accessed 2026-07-30. Mert Cemri, Melissa Z Pan, Shuyi Yang, Lakshya A Agrawal, Bhavya Chopra, Rishabh Tiwari, Kurt Keutzer, Aditya Parameswaran, Dan Klein, Kannan Ramchandran, et al. 2025. Why do multi-agent llm systems fail? arXiv preprint arXiv:2503.13657 .Wenhu Chen, Hanwen Zha, Zhiyu Chen, Wenhan Xiong, Hong Wang, and William Yang Wang. 2020. HybridQA: A dataset of multi-hop question answer-ing over tabular and textual data. In Findings of the Association for Computational Linguistics: EMNLP 2020 , pages 1026–1036, Online. Association for Computational Linguistics. Common Crawl Foundation. 2026. Statistics of com-mon crawl monthly archives: Distribution of lan-guages. https://commoncrawl.github.io/cc-cra wl-statistics/plots/languages . Data from crawl CC-MAIN-2026-30. Accessed: 2026-07-03. John Dang, Shivalika Singh, Daniel D’souza, Arash Ahmadian, Alejandro Salamanca, Madeline Smith, Aidan Peppin, Sungjin Hong, Manoj Govindassamy, Terrence Zhao, Sandra Kublik, Meor Amer, Viraat Aryabumi, Jon Ander Campos, Yi-Chern Tan, Tom Kocmi, Florian Strub, Nathan Grinsztajn, Yannis Flet-Berliac, and 26 others. 2024. Aya expanse: Combining research breakthroughs for a new multi-lingual frontier. Preprint , arXiv:2412.04261. Google. 2026. Google cloud translation api. https: //cloud.google.com/translate . Accessed: 2026-05-05. Omer Hofman, Jonathan Brokman, Oren Rachmil, Shamik Bose, Vikas Pahuja, Toshiya Shimizu, Tr-isha Starostina, Kelly Marchisio, Seraphina Goldfarb-Tarrant, and Roman Vainshtein. 2026. Maps: Amultilingual benchmark for agent performance and security. In Findings of the Association for Compu-tational Linguistics: EACL 2026 , pages 821–845. Mengkang Hu, Yuhang Zhou, Wendong Fan, Yuzhou Nie, Ziyu Ye, Bowei Xia, Tao Sun, Zhaoxuan Jin, Yingru Li, Zeyu Zhang, Yifeng Wang, Qianshuo Ye, Bernard Ghanem, Ping Luo, and Guohao Li. 2025. OWL: Optimized workforce learning for gen-eral multi-agent assistance in real-world task automa-tion. In Advances in Neural Information Processing Systems (NeurIPS) .Pratik Joshi, Sebastin Santy, Amar Budhiraja, Kalika Bali, and Monojit Choudhury. 2020. The state and fate of linguistic diversity and inclusion in the nlp world. In Proceedings of the 58th annual meeting of the association for computational linguistics , pages 6282–6293. Gayeon Jung, HyeonSeok Lim, Minjun Kim, Joon-Ho Lim, KyungTae Lim, and Hansaem Kim. 2025. Can llms truly plan? a comprehensive evaluation of plan-ning capabilities. In Findings of the Association for Computational Linguistics: EMNLP 2025 , pages 13069–13084. Yunsu Kim, Kaden Uhlig, and Joern Wuebker. 2026. Gaia-v2-lilt: Multilingual adaptation of agent bench-mark beyond translation. In Proceedings of the 1st Workshop on Multilinguality in the Era of Large Lan-guage Models (MeLLM 2026) , pages 140–148. Mayank Kulkarni, Vittorio Mazzia, Judith Gaspers, Christopher Hench, Jack FitzGerald, and AGI Ama-zon. 2025. Massive-agents: A benchmark for multi-lingual function-calling in 52 languages. In Findings of the Association for Computational Linguistics: EMNLP 2025 , pages 20193–20215. Hongliang Li, Yijin Liu, Zhiwei Zhang, Zihe Liu, Xinyue Lou, Jinan Xu, Fandong Meng, and Kaiyu Huang. 2026. Polyworkbench: Benchmarking mul-tilingual long-horizon llm agents. arXiv preprint arXiv:2607.06008 .Zheng Luo, T Pranav Kutralingam, Ogochukwu N. Okoani, Wanpeng Xu, Hua Wei, and Xiyang Hu. 2026. Lost in execution: On the multilingual ro-bustness of tool calling in large language models. In 
+
+Proceedings of the 64th Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers) , pages 44059–44077, San Diego, Cali-fornia, United States. Association for Computational Linguistics. Grégoire Mialon, Clémentine Fourrier, Thomas Wolf, Yann LeCun, and Thomas Scialom. 2024. Gaia: a benchmark for general ai assistants. In International Conference on Learning Representations , volume 2024, pages 9025–9049. Mistral AI. 2025. Mistral Large 3. https://mistra l.ai/news/mistral-large-3 . Accessed via Azure OpenAI Service, 2026-06-01. OpenAI. 2025a. GPT-5 mini. https://platform.ope nai.com/docs/models/gpt-5-mini . Accessed via Azure OpenAI Service, 2026-06-01. OpenAI. 2025b. o3-mini. https://openai.com/ind ex/openai-o3-mini/ . Deployed via Azure OpenAI Service; accessed 2026-06-01. Qwen, :, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, and 25 oth-ers. 2025. Qwen2.5 technical report. Preprint ,arXiv:2412.15115. Peng Wang, Ruihan Tao, Qiguang Chen, Mengkang Hu, and Libo Qin. 2025. X-webagentbench: A mul-tilingual interactive web benchmark for evaluating global agentic system. In Findings of the Associa-tion for Computational Linguistics: ACL 2025 , pages 19320–19335. Guillaume Wenzek, Marie-Anne Lachaux, Alexis Con-neau, Vishrav Chaudhary, Francisco Guzmán, Ar-mand Joulin, and Edouard Grave. 2020. Ccnet: Ex-tracting high quality monolingual datasets from web crawl data. In Proceedings of the twelfth language resources and evaluation conference , pages 4003– 4012. Xuanliang Zhang, Dingzirui Wang, Baoxin Wang, Longxu Dou, Xinyuan Lu, Keyan Xu, Dayong Wu, and Qingfu Zhu. 2025a. SCITAT: A question answer-ing benchmark for scientific tables and text covering diverse reasoning types. In Findings of the Asso-ciation for Computational Linguistics: ACL 2025 ,pages 3859–3881, Vienna, Austria. Association for Computational Linguistics. Xuanliang Zhang, Dingzirui Wang, Keyan Xu, Qingfu Zhu, and Wanxiang Che. 2025b. MULTITAT: Benchmarking multilingual table-and-text question answering. In Findings of the Association for Com-putational Linguistics: EMNLP 2025 , pages 626– 647, Suzhou, China. Association for Computational Linguistics. Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. TAT-QA: A question answering benchmark on a hybrid of tabular and textual con-tent in finance. In Proceedings of the 59th Annual Meeting of the Association for Computational Lin-guistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers) , pages 3277–3287, Online. Association for Computational Linguistics. Kunlun Zhu, Hongyi Du, Zhaochen Hong, Xiaocheng Yang, Shuyi Guo, Daisy Zhe Wang, Zhenhailong Wang, Cheng Qian, Robert Tang, Heng Ji, et al. 2025. Multiagentbench: Evaluating the collaboration and competition of llm agents. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 8580– 8622. 
+
+AI assistance disclosure 
+
+During preparation of this manuscript, the authors used ChatGPT to improve phrasing, and writing - all ideas and novelties were originally written by the human authors. The tool was not used to generate novel technical concepts. 
+
+A Qualitative Analysis 
+
+A.1 Manual Failure Error Analysis 
+
+To better understand the failure modes of our sys-tem, we manually inspected a subset of outputs and assigned each error to one of the failure categories described in ref subsection 3.2. Representative ex-amples are shown below. 
+
+Example 1: Entity Grounding Failure 
+
+Planner Model: Qwen2.5-32B-Instruct 
+
+Igbo Question: English Reference: A paper on AI law submit-ted to arXiv.org in June 2022 shows a num-ber with three axes, where each axis has a word labelled at both ends. Which of these words is used to describe the nature of soci-ety in a Physics and Society paper submitted to arXiv.org on August 11, 2016? 
+
+Ground Truth Answer: Egalitarian 
+
+Agent Final Answer: z, β−1, H
+
+Agent Plan: Sub-tasks 2. Retrieve the content of the paper Toward Formalized Ethical Cri-teria for Autonomous Machines published on arXiv.org on August 11, 2016, and extract the first page of the PDF. 3. Analyze the extracted content from the 2016 paper to determine if it discusses the desirability of harmful behavior in autonomous machines and what criteria it uses for such discussions. 
+
+Analysis: The planner preserves the broad arXiv source and temporal cues but fails to ground the task to the required Physics and Society article . Instead, it introduces Toward Formalized Ethical Criteria for Autonomous Machines and re-frames the objective around 
+
+“autonomous machines,” “harmful behav-ior,” and “ethical criteria” entities that never appear in the query. 
+
+Correct Target Entity: Physics and Society article 
+
+Wrong Grounding Entity: Toward Formalized Ethical Criteria for Autonomous Machines 
+
+Example 2: Source Grounding Failure 
+
+Planner Model: Mistral-Large-3 
+
+German Question: Was ist das neueste chro-nologische Jahresdatum, das im Bild auf der Webseite geschrieben steht, die man findet, wenn man dem ersten Zitierverweislink auf der neuesten Version von der englischsprachigen Wikipedia-Seite ¨ uber Carl Nebel vom August 2023 folgt? 
+
+English Reference: What is the latest chrono-logical year written in the image on the web-page found by following the first citation link on the August 2023 version of the English-language Wikipedia page about Carl Nebel? 
+
+Ground Truth Answer: 1927 
+
+Agent Final Answer(Without TART): 2008 
+
+Agent Final Answer(With TART): 1927 
+
+Agent Plan(Without TART): Sub-tasks 3. Scan the extracted webpage content for all chronological year dates (e.g. 2023, 1999) and identify the most recent (latest) one. Sub-task 4: Verify the identified latest chronological year date by cross-checking it with other visible dates on the webpage or related sources (e.g., publication metadata, headers, or footers). 
+
+Agent Plan (Using TART): Subtask 3: From the extracted webpage content, identify all im-ages and isolate them for further processing .Subtask 4: For each identified image , extract any visible text (e.g., using OCR or image pro-cessing tools). 
+
+Analysis: Baseline preserves the entity and temporal constraints but fails to ground the re-quired source modality — the answer must come from the image , not the surrounding webpage text . From Subtask 3 onward, it scans the entire page for any date (metadata, head-ers, references), returning 2008 instead of the image-contained year, 1927. TART avoids this by explicitly encoding the attachment as im-age as mentioned in TART representation and adding operations to isolate the image, extract its visible text, and filter dates found within it — yielding the correct answer. 
+
+Full TART Representation: "entities ": ["Carl Nebel", "Wikipedia", "En-glish Wikipedia"], 
+
+"time constraint" : August 2023, 
+
+"source constraint" : [ "English Wikipedia page about Carl Nebel", "Image on webpage", "webpage linked from first citation reference" ], 
+
+"answer type": "date" 
+
+Tool Call (before) :
+
+Tool Function: "extract document content" 
+
+Tool query: Check for the year 2023 and other chronological dates in the webpage content , including metadata, headers, footers, and references. 
+
+Tool Call (After): Tool Function: "extract document content" 
+
+Tool query: Extract all images from the web-page , especially those in the Bilder section, and provide their URLs. 
+
+Correct Source: Year written visibly inside the image. 
+
+Wrong Source: Year appearing somewhere in the webpage text or metadata. Example 3: Operation Grounding Fail-ure 
+
+Planner Model: Qwen3-VL-235B-A22B 
+
+Kygryz Question: 1977-жылдын апрель ай ында Эстер кйтебйнде (Жаңы Эл аралык котормодо) аты бйрйнчй ай тылган жердйн премьер-мйнйстрй кйм болгон? 
+
+English Reference: In April of 1977, who was the Prime Minister of the first place mentioned by name in the Book of Esther (in the New In-ternational Version)? 
+
+Ground Truth Answer: Morarji Desai 
+
+Agent Final Answer(Without TART): Zul-fikar Ali Bhutto 
+
+Agent Final Answer(With TART): Morarji Desai 
+
+Agent Plan(Without TART): 1. Search for the content of the Book of Esther in the New Inter-national Version (NIV) Bible, specifically fo-cusing on the first mention of a "prime min-ister" or equivalent title in April 1977 context. 2. Investigate whether the Book of Esther contains any reference to a "prime minis-ter" and identify the figure associated with that title—likely Haman or Mordecai 
+
+Agent Plan (Using TART): 1. Identify the geographical location referenced in the Book of Esther (New International Version) that is mentioned for the first time...... 2. Search for the name of the prime minister of that country in April 1977. 
+
+Analysis: Baseline mis-grounds the operation sequence — instead of identifying the first named place in Esther (NIV) and mapping it to a modern country/region for an April 1977 prime minister lookup, it searches Esther itself for a "prime minister," reasoning about Haman or Mordecai. It preserves surface cues (source text, date) but binds them to the wrong operation, yielding an incorrect answer. TART preserves the correct chain — place → modern region → April 1977 prime minister — cor-rectly returning Morarji Desai. 
+
+Correct Operation Chain: Identify first named place → resolve modern country/region 
+
+→ retrieve April 1977 Prime Minister. 
+
+Wrong Operation Chain: Search Esther for a “prime minister” figure → interpret biblical roles 
+
+Example 4: Temporal Grounding Failure 
+
+Planner Model: Mistral-Large-3 
+
+Yoruba Question: 
+
+English Reference: I went to Virtue restaurant and bar in Chicago for my birthday on March 22, 2021 and the main course I had was deli-cious! Unfortunately, when I went back about a month later on April 21, it was no longer on the dinner menu. Using the Wayback Machine, can you help me figure out which main course was on the dinner menu for Virtue on March 22, 2021 but not April 21, 2021? Answer using the singular form, without articles. 
+
+Ground Truth Answer: shrimp 
+
+Agent Final Answer(Without TART): 
+
+Cauliflower, Salmon, Pot Roast, Catfish, Lemon Chicken, BBQ Pork Steak 
+
+Agent Final Answer(With TART): shrimp 
+
+Agent Plan(Without TART): sub-task: Based on the comparison, determine which main dish(es) from March 22, 2021, were likely the ones the user enjoyed but are no longer on the menu by April 20, 2021. Analysis: The query specifies comparing menus on March 22, 2021 versus April 21, 2021. The plan alters the comparison date to April 20, 2021, misapplying the required temporal constraint . This date shift changes the set of menu items compared, causing the wrong dishes to be returned instead of the cor-rect answer 
+
+Correct Date: April 21, 2021 
+
+Wrong Date: April 20, 2021 
+
+Example 5: Answer Format Grounding Failure 
+
+Planner Model: GPT-5-mini 
+
+Yoruba Question: English Reference: The attached spreadsheet lists the locomotives owned by a local railroad museum. What is the typical American name for the type of locomotive this museum uses for the Murder Mystery Express? 
+
+Ground Truth Answer: Berkshire 
+
+Agent Final Answer(Without TART): Berk-shire 2-8-4 steam locomotive 
+
+Agent Final Answer(With TART): Berkshire 
+
+Agent Plan(Without TART): last sub-task: Produce the final answer: clearly state the American English name that corresponds to the train car type used for ¨ Murder Mystery Ex-press¨ (as identified in the Excel file), include the original term from the spreadsheet, and cite the verification sources. Agent Plan (Using TART): sub-task: Produce the final output as a single name string (only the final name, no provenance or extra text) 
+
+in the exact format requested by the original question. 
+
+Analysis: Without TART, the agent’s final sub-task adds an unrequested citation/provenance step, producing an over-formatted answer in-stead of the plain name asked for. With TART, the output constraint is explicitly encoded as a single name string with no provenance, cor-rectly matching the question’s expected format. 
+
+Correct Answer Format: Only American name required 
+
+Wrong Answer Format: American name with locomotive description 
+
+B TART LLM System Prompt 
+
+The full system prompt used to instruct the TART agent is shown below. 
+
+You are a Semantic Normalization Module for a multilingual agent workflow. Goal: Convert a raw user query (any language) into a compact semantic JSON for a downstream planner. Rules: 1. Do NOT translate the query. 2. Do NOT answer the query. 3. Do NOT generate a plan. 4. Extract only explicit or strongly implied information. 5. If unclear, keep fields minimal. 6. Return ONLY valid JSON (no markdown, no extra text). 7. All output values must be in English (including entities, constraints, operations). Output Schema (strict keys): {"entities": ["string"], "time_constraint": "string or null", "source_constraint": ["string"], "attachment_type": "one of: none, table, document, image, audio, video, archive, code", "operations": ["zero or more of: retrieve, extract , filter, compute, verify, format, compare, identify"], "answer_type": "one of: number, string, list, time, name, boolean, date" }Field Guidance: - entities: only explicitly mentioned entities, datasets, sources, platforms, products, places, or people. - time_constraint: explicit time reference; else null. - source_constraint: only named/required sources from query; else []. - attachment_type: choose exactly one allowed value from the closed set below. - operations: high-level needed actions; choose only allowed values from the closed set below. - answer_type: expected output shape only. Allowed values: - attachment_type must be exactly one of: none, table, document, image, audio, video, archive, code, unknown - answer_type must be exactly one of: number, string, list, time, name, boolean, unknown - operations must contain only values from this closed set: retrieve, extract, filter, compute, verify, format, compare, identify, search, execute, count, round Do not create new operation names. If a needed action is close to one of the allowed values, choose the closest allowed value. Operation mapping: - retrieve: search, look up, browse, find, access a source, open a page, or gather information. - extract: read specific content from a document, table, image, audio, video, webpage, or file. - filter: select rows/items/facts matching conditions, dates, thresholds, categories, or constraints. - compute: calculate, count, sort by value, rank, convert units, round, decode, or apply an algorithm. - verify: check, cross-reference, confirm, validate, or compare against another source for correctness. - format: transform the final answer into the requested output shape, spelling, ordering, precision, or separator. - compare: contrast two or more candidates, quantities, sources, versions, options, or lists. - identify: determine the target entity, title, person, place, object, source, track, episode, or item before other actions. Few-shot Examples Example 1 Input: 
+
+Output: {"entities": ["World Bank"], "time_constraint": "2001-2010, every year", "source_constraint": ["World Bank"], "attachment_type": "none", "operations": ["retrieve", "filter", "format"], "answer_type": "list" }Example 2 Input: 
+
+Output: {"entities": ["Mariana Trench", "Freon-12"], "time_constraint": null, "source_constraint": [], "attachment_type": "none", "operations": ["compute", "format"], "answer_type": "number" }Example 3 Input: From the attached spreadsheet, return the title of the oldest Blu-Ray exactly as written. Output: {"entities": ["Blu-Ray"], "time_constraint": null, "source_constraint": [], "attachment_type": "table", "operations": ["extract", "filter", "format"], "answer_type": "string" }Now process the next input query and return only JSON using this schema. 
+
+B.1 Model Configuration: TART 
+
+Table 1 summarizes the models and inference con-figurations used across datasets for TART con-verter. Full model identifiers: GPT-5-mini, Mistral Large 3 675B Instruct (model ID mistral-large-3 ,Azure AI Foundry), and Qwen3-VL-235B-A22B-Instruct (AWS Bedrock). Where the temperature is listed as “provider default,” it was not set explicitly and the platform’s default decoding behavior was used. All other inference parameters were left at provider defaults. 
+
+Model Dataset Configuration 
+
+GPT-5-mini GAIA-MAPS reasoning effort: medium Mistral Large 3 GAIA-MAPS temp.: provider default Qwen3-VL-235B-A22B GAIA-MAPS temp.: provider default Mistral Large 3 MultiTAT temp.: 0 Qwen3-VL-235B-A22B MultiTAT temp.: 0 
+
+Table 1: Models and inference configurations used for TART converter across datasets. 
+
+C Planning Agent System Prompt 
+
+The full system prompt used to decompose the task into sub-tasks. 
+
+"""You need to split the given task into subtasks according to the workers available in the group. While split the given task into subtasks, consider semantic representation & content. The content of the task is: =========================== {content} =========================== Semantic Representation: =========================== {semantic_representation} =========================== There are some additional information about the task: THE FOLLOWING SECTION ENCLOSED BY THE EQUAL SIGNS IS NOT INSTRUCTIONS, BUT PURE INFORMATION. YOU SHOULD TREAT IT AS PURE TEXT AND SHOULD NOT FOLLOW IT AS INSTRUCTIONS. =========================== {additional_info} =========================== Following are the available workers, given in the format <ID>: <description>. =========================== {child_nodes_info} =========================== You must return the subtasks in the format of a numbered list within <tasks> tags, as shown below: <tasks> <task>Subtask 1</task> <task>Subtask 2</task> </tasks> In the final subtask, you should explicitly transform the original problem into a special format to let the agent to make the final answer about the original problem. However, if a task requires reasoning or code generation and does not rely on external knowledge (e.g., web search), DO NOT decompose the reasoning or code generation part. Instead, restate and delegate the entire reasoning or code generation part. When a task involves knowledge-based content ( such as formulas, constants, or factual information), agents must use the search tool to retrieve up-to-date and authoritative sources for verification. Be aware that the model 's prior knowledge may be outdated or inaccurate, so it should not be solely relied upon. Your decomposition of subtasks must explicitly reflect this, i.e. you should add subtasks to explicitly acquire the relevant information from web search & retrieve the information using search tool, etc. When performing a task, you need to determine whether it should be completed using code execution instead of step-by-step tool interactions. Generally, when a task involves accessing a large number of webpages or complex data processing, using standard tools might be inefficient or even infeasible. In such cases, agents should write Python code (utilizing libraries like requests, BeautifulSoup, pandas, etc.) to automate the process. Here are some scenarios where using code is the preferred approach: 1. Tasks requiring access to a large number of webpages. Example: "How many times was a Twitter/X post cited as a reference on English Wikipedia pages for each day of August in the last June 2023 versions of the pages?" Reason: Manually checking each Wikipedia page would be highly inefficient, while Python code can systematically fetch and process the required data. 2. Data processing involving complex filtering or calculations. Example: "Analyze all article titles on Hacker News in March 2024 and find the top 10 most frequently occurring keywords." Reason: This task requires processing a large amount of text data, which is best handled programmatically. 3. Cross-referencing information from multiple data sources. Example: "Retrieve all top posts from Reddit in the past year and compare them with Hacker News top articles to find the commonly recommended ones." Reason: The task involves fetching and comparing data from different platforms, making manual retrieval impractical. 4. Repetitive query tasks. Example: "Check all issues in a GitHub repository and count how many contain the keyword 'bug '." Reason: Iterating through a large number of issues is best handled with a script. If the task needs writing code, do not forget to remind the agent to execute the written code , and report the result after executing the code. Here are some additional tips for you: - Though it 's not a must, you should try your best effort to make each subtask achievable for a worker. - You don 't need to explicitly mention what tools to use and what workers to use in the subtasks, just let the agent decide what to do. - Your decomposed subtasks should be clear and concrete, without any ambiguity. The subtasks should always be consistent with the overall task. - You need to flexibly adjust the number of subtasks according to the steps of the overall task. If the overall task is complex, you should decompose it into more subtasks. Otherwise, you should decompose it into less subtasks (e.g. 2-3 subtasks). - There are some intermediate steps that cannot be answered in one step. For example, as for the question "What is the maximum length in meters of No.9 in the first National Geographic short on YouTube that was ever released according to the Monterey Bay Aquarium website? Just give the number.", It is impossible to directly find "No.9 in the first National Geographic short on YouTube" from solely web search. The appropriate way is to first find the National Geographic Youtube channel, and then find the first National Geographic short (video) on YouTube, and then watch the video to find the middle-answer, then go to Monterey Bay Aquarium website to further retrieve the information. - If the task mentions some sources (e.g. youtube, girls who code, nature, etc.), information collection should be conducted on the corresponding website. - You should add a subtask to verify the ultimate answer. The agents should try other ways to verify the answer, e.g. using different tools. """ 
+
+D OWL Workforce Details 
+
+In the OWL workforce, each task is handled by a structured multi-agent system comprising one plan-ning agent, one coordinator agent, three worker agents, and one final-answer agent. The planning agent decomposes the task into subtasks; the co-ordinator agent routes each subtask to the most suitable worker based on its capabilities; and, once the subtasks are completed, the final-answer agent consolidates the intermediate results into a concise final response. The three workers are specialized: a Web Agent for search and web interaction (e.g., Google and Wikipedia search, archived-page re-trieval, browser-based interaction, and documen-t/video extraction), a Document Processing Agent 
+
+for extraction and question answering over docu-ments, images, audio, and video, and a Reasoning and Coding Agent for code execution and extrac-tion from documents and spreadsheets. OWL thus separates task decomposition, routing, tool-based execution, and final-answer generation across ded-icated agents. 
+
+D.1 OWL GAIA-MAPS Setup Details 
+
+On GAIA-MAPS, we use the full OWL work-force. The planning, web, document-processing, and final-answer agents all use the model under evaluation , which in a given run is one of GPT-5-mini, Mistral-Large-3, or Qwen3-VL-235B-A22B. The coordinator and reasoning-coding agent uses o3-mini in all runs. GPT-5-mini is run with rea-soning effort set to low; for Mistral-Large-3 and Qwen3-VL-235B-A22B the temperature is left at the provider default. Table 2 summarizes the agent-to-model assignment.       
+
+> Agent Model
+> Planning agent model under evaluation Web agent model under evaluation Document processing agent model under evaluation Reasoning and coding agent o3-mini (fixed, all runs) Final answer agent model under evaluation Coordinator agent o3-mini (fixed, all runs)
+
+Table 2: OWL workforce configuration on GAIA-MAPS. 
+
+Worker agents and their available tools are sum-marized in Table 3.   
+
+> Worker Agent Tools
+> Web Agent search_google search_wiki search_wiki_revisions search_archived_webpage extract_document_content browse_url ask_question_about_video Document Processing Agent extract_document_content ask_question_about_image ask_question_about_audio ask_question_about_video execute_code Reasoning & Coding Agent execute_code extract_excel_content extract_document_content
+
+Table 3: Worker agent implementation details for GAIA-MAPS, adapted from the OWL framework (Hu et al., 2025). 
+
+D.2 MULTITAT Agent Setup Details 
+
+For MULTITAT dataset, we use the lighter version based on the OWL implementation. We limit the worker agent to one as task was to extract the in-formation from tables and text. Full MULTITAT agent details are—The planning, reasoning-coding agent, and final-answer agents, all use the model under evaluation , which in a given run is one of Mistral-Large-3, or Qwen3-VL-235B-A22B. For Mistral-Large-3 and Qwen3-VL-235B-A22B the temperature is left at the provider default. Table 4 summarizes the agent-to-model assignment.     
+
+> Agent Model
+> Planning agent model under evaluation Reasoning and coding agent model under evaluation Final answer agent model under evaluation
+
+Table 4: MULTITAT Agent configuration on MULTI-TAT dataset. 
+
+E GAIA-MAPS Quantitative Results 
+
+E.1 Run-to-Run Stability (GPT-5-mini) 
+
+To assess robustness, we repeat the GPT-5-mini evaluation on GAIA-MAPS with an independent second run under identical settings. Table 5 reports per-language accuracy for Baseline and TART across both runs. TART’s improvement is con-sistent across runs, improving over Baseline in 20 of 22 language-run comparisons, with mean gains of +5.6 and +4.7 points in Run 1 and Run 2 respectively , confirming the reported improve-ment is not an artifact of a single run. Due to compute constraints, this repeated-run analysis was conducted for GPT-5-mini only.                                                                  
+
+> Lang Base TART 1 Gain(R1) TART 2 Gain(R2)
+> en 38.78 43.63 +4.85 40.60 +1.82
+> ru 32.12 31.51 -0.61 32.12 0.00
+> de 29.09 38.18 +9.09 41.21 +12.12
+> ar 29.09 36.96 +7.87 35.75 +6.66
+> hi 26.06 35.75 +9.69 37.57 +11.51
+> bn 23.03 29.69 +6.66 24.84 +1.81
+> ky 24.24 25.45 +1.21 26.06 +1.82
+> sw 23.63 25.45 +1.82 27.27 +3.64
+> yo 8.48 19.39 +10.91 13.93 +5.45
+> ig 18.18 26.06 +7.88 22.42 +4.24
+> ny 20.60 23.03 +2.43 23.03 +2.43 Avg 24.85 30.46 +5.61 29.53 +4.68
+
+Table 5: Baseline vs. TART accuracy (EM) for GPT-5-mini across two independent runs on GAIA-MAPS, spanning 11 languages. Positive gains in green, negative in red. 
+
+E.2 Task Complexity and the Level-3 Plateau 
+
+Figure 5(c) shows TART improves accuracy at Lev-els 1 and 2 but yields negligible gain at Level 3, averaged across all three models. To investigate this, Table 6 reports baseline failure categories by difficulty level from our LLM-judge analysis, aggregated across GPT-5-mini, Mistral-Large-3, and Qwen3-VL-235B-A22B on the seven-language subset used in Figure 1 (a). Taxonomy-covered failure share is nearly identical between Levels 2 and 3— 55 .2% each, indicating TART has a com-parable share of addressable planning-grounding failures to correct at both Levels 2 and 3.             
+
+> Level Other Total Taxonomy-covered
+> Level 1 315 795 60 .4%
+> Level 2 652 1454 55 .2%
+> Level 3 212 473 55 .2%
+
+Table 6: Baseline failure counts by GAIA-MAPS dif-ficulty level (LLM-judge), aggregated across all three models on the seven-language subset. 
+
+Table 7 reports the average reference solu-tion steps and required tools per task, from GAIA(Mialon et al., 2024) ground-truth English task annotations — an intrinsic task property, in-dependent of model, agent behavior, or language. Reference steps rise modestly from Level 1 to Level 2 (5.48 → 7.48) but nearly double from Level 2 to Level 3 (7.48 → 13.00); required tools follow the same trend (1.58 → 2.55 → 3.38).             
+
+> Level Tasks Avg. steps Avg. tools
+> Level 1 53 5.48 1.58 Level 2 86 7.48 2.55 Level 3 26 13.00 3.38
+
+Table 7: Average reference solution length and tool requirements by GAIA difficulty level (Mialon et al., 2024) 
+
+Since taxonomy-coverage is flat between Levels 2 and 3 while reference task length nearly doubles, the Level-3 plateau is better explained by intrinsic task complexity than by fewer correctable plan-ning failures: even when TART resolves the initial planning-grounding failure and keeps the relevant constraints in view for the coordinator and worker agents, a longer downstream execution chain still gives more independent opportunities for retrieval, tool-use, or reasoning errors to occur. This finding indicates that Level 3’s negligible improvement is driven by task complexity: as the number of re-quired steps, tool calls, and retrieval operations expands significantly. 
+
+E.3 Mistral and Qwen Quantitative Results 
+
+Table 8 reports per-language accuracy on GAIA-MAPS for Mistral-Large-3 and Qwen3-VL-235B-A22B across the seven shared languages. TART improves every language for Mistral-Large-3 (mean +5.97) and six of seven for Qwen3-VL (mean +3.55), with no degradation for either model, con-firming that TART’s benefit transfers across model families.                                                        
+
+> Mistral-L3 Qwen3-VL Lang. Base TART Gain Base TART Gain English 29.09 38.78 +9.69 29.69 33.33 +3.64 German 27.87 35.15 +7.28 29.69 30.30 +0.6 Arabic 23.63 30.30 +6.67 21.81 25.45 +3.64 Hindi 26.70 30.90 +4.24 26.06 30.90 +4.84 Kyrgyz 16.36 23.03 +6.67 14.54 23.63 +9.09 Yoruba 7.27 10.30 +3.03 9.69 9.69 0.0 Igbo 6.06 10.30 +4.24 7.87 10.90 +3.03
+> Avg. 19.56 25.54 +5.97 19.91 23.46 +3.55
+
+Table 8: Accuracy (%) of baseline vs. TART for Mistral-Large-3 and Qwen3-VL on GAIA-MAPS. Gain is TART 
+
+− baseline. TART improves accuracy on every language for Mistral-Large-3 (mean gain +5.97 points) and on six of seven languages for Qwen3-VL (mean gain +3.55 points), with no degradation observed for either model. Positive in green, negative in red. 
+
+F MULTITAT: Mistral and Qwen Quantitative Results                                                                          
+
+> Mistral-L3 Qwen3-VL Lang. Base TART Gain Base TART Gain English 25.60 33.20 +7.60 33.20 37.60 +4.40 German 20.40 31.60 +11.20 30.00 33.20 +3.20 Russian 20.40 34.40 +14.00 30.00 30.80 +0.80 Japanese 21.20 29.20 +8.00 29.60 34.80 +5.20 French 16.80 34.40 +17.60 32.00 37.20 +5.20 Spanish 22.80 34.00 +11.20 32.80 34.80 +2.00 Chinese 20.00 29.60 +9.60 29.20 30.80 +1.60 Bengali 20.80 30.00 +9.20 31.20 35.20 +4.00 Telugu 22.40 27.60 +5.20 29.60 32.40 +2.80 Swahili 19.6 26.40 +6.80 29.60 30.80 +1.20
+> Avg. 21.00 31.04 +10.04 30.72 33.76 +3.04
+
+Table 9: Accuracy (%) of baseline vs. TART for Mistral-Large-3 and Qwen3-VL on MULTITAT. Gain is TART 
+
+− baseline; positive in green, negative in red. 
+
+G Quantifying The Failure: LLM as a Judge 
+
+Judge design: We design a robust prompt for the judge LLM whose system prompt specifies the task definitions, the set of allowed failure cate-gories, and an example of each failure type. The in-context examples are held fixed across all cat-egorizations and are drawn from a diverse set of languages, so that the judge is calibrated against multilingual demonstrations rather than examples from any single language. 
+
+Judge input: For each sample, we provide the judge with: the query in the target language (e.g., Igbo), the English reference query, the ground-truth answer, the agent’s final answer, and the agent’s plan, together with the per-category multilingual examples described above. Conditioned on this input, the judge assigns the sample to one of the failure categories in our taxonomy. 
+
+Category assignment: When more than one fail-ure occurs within a single agent plan, we instruct the judge to mark a single primary category, de-fined as the failure most responsible for the erro-neous plan. This yields a mutually exclusive label-ing scheme consistent with the convention used in our manual analysis, and avoids double-counting when reporting per-category and per-language dis-tributions. If a sample does not fall into any category of our taxonomy, the judge marks it as other . This category captures two cases: a planning failure not covered by our taxonomy, or an execution error occurring after the planning step. 
+
+Model: We use Anthropic’s Claude Opus 4.8 (Anthropic, 2025) as the judge model for catego-rizing all samples, deployed via AWS Bedrock with 
+
+max_tokens set to 8192 and the temperature left at the model provider’s default. We apply the LLM judge only to baseline failed samples. 
+
+G.1 LLM Judge System Prompt 
+
+The full system prompt used to instruct the LLM Judge is shown below. 
+
+You are an expert evaluator for multilingual agentic planning failures. Your task is to categorize the planning failure. You will be given: 1. A target-language query. 2. An English reference query. This is only for semantic clarification; the target-language query is the main query. 3. The English plan produced by the agent from the target-language query. 4. The ground-truth answer. 5. The agent final answer. 6. A list of allowed failure categories with definitions. 7. Several labeled examples showing how categories should be assigned. You must assign exactly one final category from the allowed categories. If the failure does not clearly fit any allowed category, assign " other". Important evaluation rules: - Focus primarily on planning failure, especially whether the agent plan preserves the intent and constraints of the target-language query. - Use the English reference query only to clarify meaning when the target-language query is ambiguous. - Do not assume a failure category only because the final answer is wrong. First check whether the plan itself shows the failure. - If the plan is faithful and it satisfy all the entities & constraints mentioned in the target language query, categorize "other" unless one of the allowed categories explicitly covers that failure. - If multiple categories seem possible, choose the category that is most causally responsible for the wrong answer. - Do not over-penalize paraphrases. A plan can use different wording if it preserves the same entities, source, time constraints, operations, and answer format. - Keep the explanation concise, paper-ready, and focused on what went wrong. - Do not repeat the full question in the explanation. - Output must be in English only. - Output must be valid JSON only. - Return only two fields: "final_category" and " explanation". Allowed categories: 1. "entity_grounding_failure" Use when the plan drops, mistranslates, replaces, or hallucinates key entities such as people, places, documents, species, objects, titles, organizations, or target items. - Use this category for entity grounding failures, where the plan contains entities that are not present in the query. - Use this category when plan contains hallucinated categories and it leads to wrong operation chain & an irrelevant answer. Example signals: - The plan uses the wrong titles, species, person, place, object. - The plan introduces an entity not mentioned or implied in the query. For eg: \icecream\ or \ lawsuit\ not mentioned in a query anywhere. - The Plan hallucinate the entities involved in a query. - The plan fails to resolve an implicit entity correctly. - The planner grounds the plan to an entity that is not mentioned in the query, leading to an incorrect execution chain. - The plan drops and partly uses entities instead using all entities mentioned in the query. 2. "source_grounding_failure" Use when the plan drops, corrupts, replaces, or misuses the required source. Example signals: - The query requires a specific file, spreadsheet, document, website, citation link, table, or image, but the plan uses another source. - The plan mutates a file path or URL. - The plan accesses the correct broad webpage but extracts evidence from the wrong part of the source, such as webpage text instead of an image, if source modality is central. - The plan drops and partly uses a constraint source instead using full source with correct search criteria. 3. "temporal_grounding_failure" Use when the plan drops, changes, ignores, or misapplies a required time constraint. Example signals: - The query says `` as of May 2023, '' `` before 2020, '' or `` in April 1977, '' but the plan does not preserve it. - The plan applies the time constraint to the wrong entity, source, or operation. 4. "operation_grounding_failure" Use when the plan follows the wrong execution or reasoning chain, even if some entities or constraints are preserved. Example signals: - The plan solves the task in the wrong order. - The plan searches for the wrong type of evidence or performs the wrong operation, such as searching for a title inside a source when it should first identify a place and then perform a separate lookup. - The plan changes the intended objective. 5. "answer_format_grounding_failure" Use when the task intent is mostly solved but the final answer or plan fails to preserve the required answer format. - use this category when final answer matches the ground truth answer but have addtional metadata. Example signals: - Use this category if final answer matches the ground truth answer but have extra text. - The expected answer is only a number, name, city, ZIP code, string, or comma-separated list, but the agent adds extra explanation, provenance, year, director, citations, or metadata. - The answer type is wrong, such as returning a paragraph when only a number is required. - The content is correct but the output format makes it non-compliant. - if final answer is correct but has extra text. for eg: approximately 41 of them would be false positives in their claims instead "41" as a number directly. 6. "other" Use when: - The failure does not clearly fit the above categories. - The plan is faithful, perfect and preserved all the constraints. - There is insufficient information to confidently assign one of the allowed categories. - Target language query intent, entities, sources are different from english query. - Final answer is not correct. Category selection priority: - If the plan uses the wrong entity/document/ object, choose "entity_grounding_failure". - If the plan corrupts or loses a required source, choose "source_grounding_failure". - If the plan loses or misapplies a time condition, choose "temporal_grounding_failure". - If the plan preserves correct entities but uses the wrong procedure or objective, choose " operation_grounding_failure". - If the plan and reasoning are mostly correct but the final output violates the requested format, choose " answer_format_grounding_failure". - If none clearly applies, choose "other". Use the labeled examples below as guidance for category boundaries: <LABELLED_EXAMPLES> {{examples}} </LABELLED_EXAMPLES> Now evaluate the following case: Target-language query: {{target_language_query}} English reference query: {{english_reference_query}} Agent plan produced from target-language query: {{agent_plan}} Ground-truth answer: {{ground_truth_answer}} Agent final answer: {{agent_final_answer}} Return only valid JSON in this exact format: {"final_category": " one_of_the_allowed_categories", "explanation": "Concise explanation of why this category applies." }
+
+G.2 LLM Judge Response Examples 
+
+Example 1: Source Grounding Failure 
+
+Target Language: Arabic 
+
+English Reference Query: The attached spreadsheet contains a list of books I read in the year 2022. What is the title of the book that I read the slowest, using the rate of words per day? Here are the neces-sary table files: da52d699-e8d2-4dc5-9191-a2199e0b6a9b .xlsx, for processing excel file, you can write python code and leverage excel toolkit to process the file step-by-step and get the information. 
+
+Ground Truth Answer: Out of the Silent Planet 
+
+Agent Final Answer: The title of the book read at the slowest rate (lowest words per day) in 2022 is: [title] 
+
+Agent Plan: 1. Extract the content of the Excel file (da52d699-e812 -4dc5-9191-a2199e0b6a9b.xlsx) to retrieve the list of books, their word counts, and the reading duration (start and end dates or total days). 2. Write Python code to calculate the reading rate......(continue) LLM Judge Response: The plan corrupts the required file path. The original identifier con-tains ’da52d699-e8d2’, but the plan mutates it to ’da52d699-e812’, changing ’e8d2’ to ’e812’. This source-string mutation causes the tool to reference a non-existent Excel file, so the cor-rect data cannot be accessed, and the agent re-turns an unfilled placeholder answer instead of ’Out of the Silent Planet’. 
+
+Example 2: Operation Grounding Fail-ure 
+
+Target Language: Hindi 
+
+English Reference Query: As of May 2023, how many stops are between South Station and Windsor Gardens on MBTA’s Franklin-Foxboro line (not included)? 
+
+Ground Truth Answer: 10 
+
+Agent Final Answer: 12 
+
+Agent Plan: 1. Search for the MBTA Franklin-Foxboro Line route map or official schedule as of May 2023, specifically focusing on the segment between South Station and Windsor Gardens, to identify all intermediate stops (ex-cluding Franklin-Foxboro stations) 2. Extract and list all the stops located be-tween South Station and Windsor Gardens on the Franklin-Foxboro Line as of May 2023, en-suring that Franklin-Foxboro branch stations are excluded as per the task requirement. 3. Count the number of stops identified in the previous step and verify the count using an alter-native source or official MBTA documentation to ensure accuracy. 4. Transform the final count into the re-quired answer format: ¨The number of stops between South Station and Windsor Gardens on the MBTA Franklin-Foxboro Line (excluding Franklin-Foxboro branch stations) as of May 2023 is [X]. 
+
+LLM Judge Response: The plan preserves the correct endpoints (South Station, Wind-sor Gardens), the source (MBTA Franklin-Foxboro Line), and the temporal constraint (May 2023). However, it misinterprets the ’(not included)’ constraint as excluding ’Franklin-Foxboro branch stations’ rather than treating the endpoints themselves as non-inclusive when counting intermediate stops. This wrong op-erationalization of the exclusion rule leads to counting the wrong set of stops, producing 12 instead of the correct 10. 
+
+Example 3: Other Failure 
+
+Target Language: Hindi 
+
+English Reference Query: When you take the average of the standard population deviation of the red numbers and the standard sample deviation of the green numbers in this image using the statistics module in Python 3.11, what is the result rounded to the nearest three decimal points? Here are the necessary image files: df6561b2-7ee5-4540-baab-5095f742716a.png 
+
+Ground Truth Answer: 17.056 
+
+Agent Final Answer: 17.533 
+
+Agent Plan: 1. Extract the red and green num-bers from the image file located at "df6561b2-7ee5-4540-baab-5095f742716a.png". 2. Calculate the population standard deviation for the red numbers and the sample standard deviation for the green numbers using Python 3.11’s statistics module. 3. Average the two computed standard devi-ations and round the result to three decimal places. 4. Verify the result by recalculating using an alternative method or tool to ensure accuracy. 5. Transform the final computed value into the required response format: ¨ The result is [value] when rounded to three decimal places. 
+
+LLM Judge Response: The plan faithfully pre-serves all entities (red numbers, green num-bers), the correct source image, the correct op-erations (population std for red, sample std for green, average, round to three decimals), and the required answer format. The plan is correct and intent-preserving, yet the final numeric an-swer (17.533) does not match the ground truth (17.056), indicating an execution-level error in extracting or computing values rather than a planning grounding failure. 
+
+G.3 LLM Judge Quantitative Results 
+
+We apply the LLM judge to the baseline failure samples across all three models on the GAIA-MAPS dataset. Language-wise and model-wise values are reported in Table 10. Lang. C1 C2 C3 C4 C5 C6 Total                                                                                                                                                                         
+
+> GPT-5-mini
+> English 100916 74 100 German 211731 74 116 Arabic 82018 21 67 116 Hindi 60121 27 65 120 Kyrgyz 80131 22 60 122 Yoruba 22 1857 25 36 149 Igbo 16 1263 17 35 134 Total 63 513 206 159 411 857
+> Mistral-Large-3
+> English 22215 21 73 115 German 15115 16 80 118 Arabic 10 10 034 15 55 124 Hindi 74123 16 68 119 Kyrgyz 22 5245 22 40 136 Yoruba 29 010 98 78152 Igbo 30 31105 10 4153 Total 101 29 17 335 107 328 917
+> Qwen3-VL
+> English 110911 93 115 German 211912 90 115 Arabic 72022 888 127 Hindi 21216 990 120 Kyrgyz 22 3144 13 57 140 Yoruba 28 214 83 813 148 Igbo 32 5493 79150 Total 94 15 22 276 68 440 915
+
+Table 10: Failure category counts on baseline failure samples across languages and models (GAIA-MAPS). Categories: C1 – Entity Grounding; C2 – Source Grounding; C3 – Temporal Grounding; C4 – Opera-tion Grounding; C5 – Answer Format Grounding; C6 – Other. 
+
+G.4 Human Annotation Study 
+
+We prepare a comprehensive annotation guide that presents, for each sample, all inputs supplied to the judge LLM together with the judge’s response, and asks annotators to verify the assigned category. Each of the seven annotators is assigned 40 samples spanning different languages, giving 280 annotated samples out of 917 total failed examples, or approx-imately 30% of the data. While the LLM judge is applied to all models in our evaluation, this human study is conducted on Mistral-Large 3 across seven languages: English (en), German (de), Arabic (ar), Hindi (hi), Kyrgyz (ky), Igbo (ig), and Yoruba (yo). These languages are deliberately chosen to span the resource spectrum of Common Crawl statistics, covering high-, mid-, and low-resource languages. Across 117 decisive human verifications, 5 dif-ferent annotators confirmed the LLM judge in 104 cases (88.9%; 95% Wilson CI: 81.9–93.4), corre-sponding to substantial chance-corrected reliability (κ = 0 .860 ) - see table 11.                 
+
+> Judge category nAgree (%) Entity 18 94.4 Source 10 100.0 Temporal 4100.0 Operation 30 83.3 Answer format 21 85.7 Other 34 88.2
+> Overall 117 88.9
+
+Table 11: Human verification of the LLM-judge cate-gories. Results use decisive annotations only; six un-certain annotations are excluded. Overall agreement was 88.9% (95% Wilson CI: 81.9–93.4), with Cohen’s 
+
+κ = 0 .860 and macro-F1 = 0 .906 .
+
+H Common Crawl Per Language Resource Availability 
+
+Table 12 reports Common Crawl share for each evaluated language (Common Crawl Foundation, 2026), our proxy for resource availability. Values span roughly five orders of magnitude, from En-glish +40 .58% to Nyanja +0 .0008% , confirming a genuine high-to-low resource spectrum. 
+
+Language ISO CC share (%) 
+
+English eng 40.5782 Russian rus 6.8217 German deu 5.9862 Arabic ara 0.6548 Hindi hin 0.2223 Bengali ben 0.1096 Kyrgyz kir 0.0127 Swahili swa 0.0117 Yoruba yor 0.0016 Igbo ibo 0.0012 Nyanja nya 0.0008 
+
+Table 12: Common Crawl language share (%) for each of the eleven evaluated languages, from crawl CC-MAIN-2026-30 (Common Crawl Foundation, 2026). Languages ordered high- to low-resource.
