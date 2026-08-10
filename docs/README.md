@@ -6,43 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-09
-- 运行时间：2026-08-09 20:45:25 UTC
+- 最新运行日期：2026-08-10
+- 运行时间：2026-08-10 21:04:09 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：0
-- 速读区：6
+- 本次总论文数：5
+- 精读区：4
+- 速读区：1
 
 ### 今日简报（AI）
-今日共速读6篇论文，聚焦多智能体与LLM结合，暂无精读。
-
-最值得关注：小LLM可直接用作空间多智能体策略，以及PRIMAL3在路径规划中引入LaCAM3的强化与模仿学习。
-
-若想快速上手，建议先从多智能体路径规划方向切入，后续再扩展至人机交互推理。
-- 详情：[/202608/09/README](/202608/09/README)
+- 今日共生成 5 篇推荐（精读 4 篇，速读 1 篇）
+- 精读：《Retrofitting Linear Attention into Diffusion Language Models》（9.0/10）, 《Resilient Consensus-Based Target Tracking under False Data Injection Attacks in Multi-Agent Networks》（8.0/10）
+- 速读：《Autonomy-of-Heads: Data-Free Sparse Attention from Frozen Query-Key Geometry》（6.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
+- 详情：[/202608/10/README](/202608/10/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Retrofitting Linear Attention into Diffusion Language Models](/202608/10/2608.06628v1-retrofitting-linear-attention-into-diffusion-language-models)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：将线性注意力机制改造为块混合注意力
+2. [Resilient Consensus-Based Target Tracking under False Data Injection Attacks in Multi-Agent Networks](/202608/10/2608.01222v1-resilient-consensus-based-target-tracking-under-false-data-injection-attacks-in-multi-agent-networks)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：多智能体网络中弹性共识目标跟踪与攻击对抗
+3. [Why Study Emergent Behavior When You Can Regulate It? Aligning Multi-Agent Systems with Reward Prediction](/202608/10/2608.07280v1-why-study-emergent-behavior-when-you-can-regulate-it-aligning-multi-agent-systems-with-reward-prediction)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：多智能体系统，局部交互涌现动态，奖励建模
+4. [Analyzing the Interaction of Optimal Strategies in Mean-Payoff Bidding Games](/202608/10/2608.07383v1-analyzing-the-interaction-of-optimal-strategies-in-mean-payoff-bidding-games)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：分析多智能体出价博弈中最优策略的交互行为
 
 ### 速读区论文标签
-1. [Training Small LLMs as Spatial Multi-Agent Policies](/202608/09/2608.01425v1-training-small-llms-as-spatial-multi-agent-policies)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：用符号化options训练空间协作游戏中的多智能体策略
-2. [Structured LLM Reasoning for Zero-Shot Human--Robot Coordination Under Hidden Goals](/202608/09/2608.04309v1-structured-llm-reasoning-for-zero-shot-human--robot-coordination-under-hidden-goals)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：隐藏目标下的协作人机协调与心智推断交互
-3. [PRIMAL3: Pathfinding via Reinforcement and Imitation Multi-Agent Learning - Leveraging LaCAM3](/202608/09/2608.04905v1-primal3-pathfinding-via-reinforcement-and-imitation-multi-agent-learning---leveraging-lacam3)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：多智能体路径规划中的拓扑感知通信与交互图
-4. [Token Radius Attention for Efficient Video Generation](/202608/09/2608.02504v1-token-radius-attention-for-efficient-video-generation)  
+1. [Autonomy-of-Heads: Data-Free Sparse Attention from Frozen Query-Key Geometry](/202608/10/2608.06849v1-autonomy-of-heads-data-free-sparse-attention-from-frozen-query-key-geometry)  
    标签：评分：6.0/10、query:ma-la
-   evidence：提出令牌半径注意力降低注意力二次复杂度，可迁移到智能体的可扩展注意力
-5. [EASy: Towards Efficient LLM-Based Agentic System](/202608/09/2608.04588v1-easy-towards-efficient-llm-based-agentic-system)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：通过强化学习编排多个大模型智能体，提升多智能体系统效率
-6. [AI-Farol: Co-Evolutionary Dynamics in a Multi-Agent Two-Sided Learning Framework](/202608/09/2608.05479v1-ai-farol-co-evolutionary-dynamics-in-a-multi-agent-two-sided-learning-framework)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：El Farol博弈中多智能体双边学习的协同演化动力学
+   evidence：注意力效率；面向长上下文推理的稀疏注意力机制
 
 
 <div class="dpr-home-promo-card">
