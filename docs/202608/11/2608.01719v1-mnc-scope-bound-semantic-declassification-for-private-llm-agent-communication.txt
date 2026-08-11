@@ -1,0 +1,394 @@
+Title: MNC: Scope-Bound Semantic Declassification for Private LLM-Agent Communication
+
+URL Source: https://arxiv.org/pdf/2608.01719v1
+
+Published Time: Tue, 04 Aug 2026 01:50:57 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# MNC: Scope-Bound Semantic Declassification for Private LLM-Agent Communication 
+
+Jinghan Xu 1, Longze Fan 2, Zeyuan Wang 3, Xinjin Li 4, Hankai Liu ∗1
+
+> 1
+
+Nankai University, China 
+
+> 2
+
+China University of Petroleum, China 
+
+> 3
+
+Sun Yat-sen University, China 
+
+> 4
+
+Columnbia University, USA 
+
+Abstract 
+
+Multi-agent large language model (LLM) systems can expose protected state through internal messages, tool arguments, logs, and persistent memory even when their public outputs appear innocuous. Existing privacy prompts, redaction meth-ods, and source-level access controls restrict surface content or data access, but do not specify what a legitimately informed agent should disclose or how that disclosure may be reused downstream. We introduce Minimum-Necessary Commu-nication (MNC) , a typed semantic-declassification protocol that selects a task-sufficient disclosure from an application-authored candidate family and binds it to explicit recipient, purpose, forwarding, lifetime, logging, and memory scopes. A reference monitor enforces these scopes across subsequent operations, while a history-aware extension accounts for infer-ence risk accumulated over repeated disclosures. Controlled semantic-join, memory, probing, and longitudinal experi-ments show that conventional defenses can preserve protocol-level utility while exposing substantial additional inference signal. Under identical receipt text, MNC preserves autho-rized delivery while blocking unauthorized forwarding, log-ging, durable storage, and retrieval after expiration that a text-only semantic declassifier permits. Three-backbone MAG-PIE executions further show that mediated disclosures propa-gate through subsequent planning, tool use, coordination, and memory retrieval. These results support scope-bound seman-tic declassification as a practical communication boundary for private LLM-agent systems. 
+
+Introduction 
+
+Large language model (LLM) agents increasingly solve com-plex tasks through multiple specialized components. A plan-ner may delegate subtasks to worker agents, invoke external tools, and store intermediate results in memory (Yao et al. 2023; Wu et al. 2023; Wang et al. 2025). This architecture improves task modularity, but it also creates privacy risks that are not visible in the final response. Internal messages, tool arguments, execution logs, and memory entries may reveal sensitive facts even when the public output appears harmless. Consider a scheduling task in which an agent knows why a user is unavailable but the coordinator only needs one feasible time. A conventional workflow may still transmit the complete availability pattern or a summary of the underlying constraints. Removing explicit terms such as “medical” or 
+
+> ∗
+
+Corresponding author. 
+
+“legal” does not necessarily prevent leakage, because the remaining pattern may still reveal the private reason. Similar risks arise when a tool needs only an action, but receives the rationale behind that action, or when a memory component stores private context instead of a task-completion receipt. The central question is therefore not only who may access private data, but also what a legitimately informed agent should communicate downstream. Recent benchmarks show that internal agent channels can expose information that is absent from the public output. AgentDAM studies data minimization in autonomous web agents, while MAGPIE and CalBench examine coordination under private contextual constraints (Zharmagambetov et al. 2025; Juneja et al. 2025; Zou et al. 2026). AgentLeak and ToolPrivacyBench further evaluate leakage through inter-agent messages and tool-use trajectories (El Yagoubi, Badu-Marfo, and Al Mallah 2026; Hu et al. 2026). These works establish the importance of internal-channel privacy, but they do not by themselves define a runtime communication policy for derived information. Existing defenses address only part of this problem. Pri-vacy prompts and redaction operate on generated text and are unreliable when leakage arises from correlations or seman-tic summaries. Access control and information-flow control restrict which agents may access protected sources (Costa et al. 2025; Cui et al. 2026). However, legitimate access does not imply that every derived fact should be disclosed. An agent may be authorized to inspect a private record while still sending more information than the downstream task re-quires. A text-level declassifier can restrict the immediate message, but it may not control whether that message is later forwarded, logged, stored, or retrieved after its original purpose has expired. Repeated disclosures also create cumu-lative risk, since several individually limited messages may jointly reveal a protected state (Xie and Li 2026; Asif and Mohammadi Amiri 2026). We introduce Minimum-Necessary Communication (MNC) , a typed semantic-declassification protocol for pri-vate LLM-agent systems. An application specifies a fi-nite candidate family, a task-sufficiency validator, and a disclosure-risk model. MNC selects a task-sufficient can-didate with low estimated risk and emits it as a scoped dis-closure object. Each object records its authorized purpose, recipient, fields, forwarding scope, lifetime, logging permis-arXiv:2608.01719v1 [cs.CR] 3 Aug 2026 sion, and memory policy. A reference monitor enforces these constraints across messages, tool calls, forwarding opera-tions, logs, and memory accesses. Derived objects inherit the original provenance and cannot broaden its scope. The core variant, MNC-C , enforces one disclosure con-tract at each communication boundary. The history-aware variant, MNC-L , also considers previous disclosures when ranking or rejecting new candidates. When no admissible candidate is available, the runtime may delegate the private computation, abstain, or request user approval. MNC defines minimum necessity relative to an application-authored can-didate family. It does not assume that a model can discover the globally optimal disclosure over arbitrary natural language. Our evaluation separates four properties: task utility, di-rect exposure, inference leakage, and protocol conformance. Controlled semantic-join, memory, probing, and longitudi-nal experiments measure whether internal channels provide additional information beyond the public output. A matched semantic declassifier controls for the benefit of releasing the same short receipt. Paired scope tests then hold the receipt text fixed and evaluate forwarding, logging, persistent stor-age, and retrieval after expiration. We also execute MNC policies in a multi-round MAGPIE runtime, where mediated disclosures affect subsequent planning, tool use, coordina-tion, and memory access. The results show that prompting, redaction, and fact-level access control can preserve task-level behavior while leaving substantial inference signal in internal channels. When MNC and a semantic declassifier release identical receipt text, they provide similar immediate content protection. Their behav-ior differs after release: MNC preserves authorized delivery while enforcing recipient, forwarding, lifetime, logging, and memory restrictions. The longitudinal experiments further show that history-aware selection reduces leakage accumu-lated across repeated interactions. Together, these results sup-port scoped semantic declassification as a complementary layer to access control and information-flow enforcement. Our contributions are threefold: 
+
+• We formulate private agent communication as a typed semantic-declassification problem and introduce MNC, which selects task-sufficient disclosures relative to an ex-plicit application interface. 
+
+• We design a reference-monitor protocol that enforces pur-pose, recipient, forwarding, lifetime, logging, and mem-ory scopes across downstream agent operations. 
+
+• We provide a layered evaluation that separates immediate inference leakage, secondary-use violations, cumulative leakage, and task utility across controlled diagnostics and multi-agent runtime experiments. 
+
+Related Work 
+
+Agent privacy and evaluation. Contextual integrity frames privacy as appropriate information flow among ac-tors, attributes, and transmission principles (Nissenbaum 2004). AgentBench and ToolEmu established broad interac-tive evaluations of agent capability and risk (Liu et al. 2024; Ruan et al. 2024), while AgentDojo, BIPIA, and InjecAgent expose prompt-injection and tool-mediated attack surfaces (Debenedetti et al. 2024; Yi et al. 2025; Zhan et al. 2024). More directly, AgentDAM, MAGPIE, CalBench, AgentLeak, ToolPrivacyBench, and POLAR-Bench evaluate data mini-mization or privacy–utility trade-offs in agents and multi-agent coordination (Zharmagambetov et al. 2025; Juneja et al. 2025; Zou et al. 2026; El Yagoubi, Badu-Marfo, and Al Mallah 2026; Hu et al. 2026; Zheng et al. 2026). These works motivate trajectory-level evaluation. MNC comple-ments them with a runtime communication interface for de-rived information and its downstream reuse. 
+
+Runtime security and information flow. Information-flow control and reference monitoring provide established mechanisms for constraining how labeled data can influence computation (Saltzer and Schroeder 1975; Denning 1976; Myers and Liskov 1997). Recent agent systems adapt these ideas through confidentiality and integrity labels, formally checked policies, and prompt-flow controls (Costa et al. 2025; Cui et al. 2026; Kim, Choi, and Lee 2025). Agent Security Bench evaluates attacks and defenses in LLM-agent systems (Zhang et al. 2025). These approaches govern ac-cess, provenance, or unsafe influence. MNC addresses the complementary choice of which task-sufficient, derived se-mantic object to release, and represents that release with re-cipient, purpose, forwarding, lifetime, logging, and memory scopes that a monitor can enforce after the first hop. 
+
+Declassification and long-lived state. Declassification formalizes the deliberate release of information derived from protected sources (Sabelfeld and Sands 2005). In LLM set-tings, extraction work demonstrates that privacy failures need not be limited to explicit identifiers (Carlini et al. 2021). Persistent agent memory and long-horizon interaction make secondary use and repeated evidence especially consequen-tial (Packer et al. 2023; Wu et al. 2025; Wang et al. 2025). OCELOT and sequential privacy control study inference-risk accounting across agent trajectories (Xie and Li 2026; Asif and Mohammadi Amiri 2026). MNC-L likewise records cu-mulative disclosure risk, but its ledger is coupled to a typed release contract and fail-closed downstream scope enforce-ment rather than a content-only budget. 
+
+Problem Setting 
+
+Consider a scheduling task in which private agents know why users are unavailable, while the coordinator only needs one feasible meeting time. A conventional workflow may still request full availability summaries or explanations of each constraint. Removing explicit terms such as “medical” or “legal” is not sufficient, because the remaining schedule pattern may reveal the underlying reason. The same issue appears in tool use and memory: a tool may need only an action, and a memory component may need only a comple-tion receipt, rather than the private facts that produced them. This motivates a communication policy that limits both the content of a disclosure and its subsequent use. 
+
+Agent runtime. We consider a workflow with agents 
+
+A1, . . . , A n. Each agent may hold private state Si and public task context Zi. The workflow produces a public output Y ,such as a selected time, route action, or task result. It also verbose internal transcript T  Coordinator                   
+
+> /Receiver
+> Private
+> agent
+> Private State S
+> medical reason
+> legal
+> constraint
+> project
+> plan
+> Public Output Y
+> •meeting slot
+> •route action
+> •task receipt
+> Transcipt T
+> The use is asking because of afamily medical issue. Company
+> policy requires legal
+> approval. I will propose Tue 3pm to avoid aproject conflict.
+> message tool call memory logs
+> coordinator
+> tool
+> memory
+> logs
+> Over-detailed rationale that reveals private state.
+> Clean, task-facting results safe to share
+
+Figure 1: Privacy leakage through internal agent communi-cation. The public output Y contains only the task result, whereas messages, tool arguments, logs, and memory form an internal trajectory T that may reveal protected state S.produces an internal trajectory T , including inter-agent mes-sages, tool arguments, logs, memory writes, memory reads, and coordinator queries. These internal artifacts may reveal information that is absent from Y .
+
+Adversary and trust assumptions. The adversary ob-serves Y and some internal channels in T . It may inspect stored traces or issue additional requests through an autho-rized communication path. The protected state S may rep-resent a private reason, user attribute, project identifier, or operational category. Disclosure contracts are issued by the application or its policy authority, rather than by the receiv-ing agent. We assume that the communication boundaries considered in this work are mediated by the reference mon-itor. Channels outside this boundary remain subject to the surrounding system’s authorization guarantees. 
+
+Excess inference leakage. Let g denote an attacker and Z
+
+the public context available to it. Output-only inference uses 
+
+(Y, Z ), whereas internal-channel inference additionally uses 
+
+T . We define excess attacker accuracy as 
+
+∆Acc = Acc( g(Y, T, Z ) = S) − Acc( g(Y, Z ) = S) . (1) A positive value indicates that the internal trajectory pro-vides information beyond the public output. When proba-bilistic scores are available, we also measure the correspond-ing log-probability gain. Separately, direct or semantic ex-posure records whether T contains a forbidden value or an explicitly defined equivalent. These measures capture differ-ent privacy failures and are reported independently. For an attacker set A, the robust evaluation target is the largest observed leakage: 
+
+Lmax = max  
+
+> a∈A
+
+La(S; T | Y, Z ). (2) 
+
+Task objective and minimum necessity. Our goal is to reduce avoidable leakage while preserving the required task, tool, and constraint outcomes. A disclosure d is sufficient if the receiver can complete its declared operation using the public context and d. Given a contract c and its candidate family Dc, d is minimum-necessary if it is sufficient and no lower-risk candidate in Dc is also sufficient. Minimum neces-sity is therefore defined relative to an application-specified interface, which includes the candidate generator, task val-idator, and disclosure policy. When no admissible candidate exists, delegation, abstention, and user approval are recorded separately rather than counted as ordinary task success. 
+
+Minimum-Necessary Communication 
+
+Minimum-Necessary Communication (MNC) mediates in-formation released from a private agent to downstream agents, tools, logs, and memory. It operates over an application-defined disclosure interface rather than unre-stricted natural-language generation. We distinguish a core protocol, MNC-C , from a history-aware extension, MNC-L. When no safe disclosure is available, MNC-D applies an explicit failure policy through private delegation, abstention, or user approval. Figure 2 depicts the boundary between private state and downstream use. Candidate forms are checked for task suffi-ciency before risk-based selection; the selected object carries enforceable scope metadata rather than relying on a receiver to remember a textual instruction. 
+
+Contracts and enforcement. Each disclosure is associated with a contract 
+
+c = ( p, r, F, ℓ, ϕ, μ ), (3) where p is the authorized purpose, r is the recipient, F is the set of allowed fields, ℓ is the lifetime, ϕ is the set of permitted downstream sinks, and μ specifies whether the disclosure may be written to memory. Logs and forwarded recipients are treated as downstream sinks in ϕ.The runtime represents each privacy-relevant operation as 
+
+e = ( s, r, p, ch , d, t ), (4) where s is the sender, ch is the communication channel, d is the disclosed object, and t is the current time. Before releas-ing d, the reference monitor checks its recipient, purpose, fields, channel, and expiration time. Forwarding requires the next sink to be included in ϕ, while a memory write requires 
+
+μ = 1 . Memory reads repeat the recipient, purpose, and lifetime checks. Contracts remain attached to emitted objects. A derived object may preserve or tighten its source scope, but cannot broaden it: 
+
+F ′ ⊆ F, ϕ′ ⊆ ϕ, ℓ′ ≤ ℓ, μ′ ≤ μ. (5) Thus, under mediated execution and trusted contract is-suance, every released object has an authorized origin and no downstream operation can enlarge its declared scope. 
+
+Disclosure selection. Given private state S, public context 
+
+Z, and contract c, the application generates a finite candidate family 
+
+Dc = {d1, . . . , d k}. (6) Candidates may include a full rationale, a redacted summary, a task-derived fact, a completion receipt, or a delegation han-dle. The task validator first removes candidates that violate High risk 
+
+Full rationale    
+
+> Alice cannot meet on Tuesday at 2 p.m. because she has an
+> oncology appointment. She is available on Thursday at 10 a.m.,
+> so Thursday should be selected.
+
+Reason removed 
+
+Redacted Summary    
+
+> Alice cannot meet on Tuesday at 2 p.m. because of a private
+> medical commitment. She is available on Thursday at 10 a.m.
+
+Reason removed 
+
+Task-Derived Fact 
+
+> Tuesday at 2 p.m.: infeasible.
+> Thursday at 10 a.m.: feasible.
+
+Reason removed 
+
+Minimal Receipt 
+
+> Selected slot
+> Thu 10:00
+
+Task sufficient 
+
+No private rationale 
+
+Higher 
+
+disclosure 
+
+risk 
+
+Lower 
+
+disclosure 
+
+risk 
+
+Candidate family 𝐷 𝑐 
+
+Possible task-interface disclosures 
+
+Minimal-Necessary Selection 
+
+Task Sufficiency 
+
+> Enough to complete the operation?
+> Evaluation
+> Insufficient
+> Insufficient
+> Sufficient
+> Sufficient
+
+Risk 
+
+Estimation 
+
+> Disclosure
+> risk
+> Lower is better
+
+Minimal-Necessary Selection 
+
+Task-Derived Fact 
+
+Minimal Receipt 
+
+> Choose the lowest-risk
+> sufficient candidate
+
+History 𝐻 𝑡 
+
+&Budget Gate   
+
+> History 𝐻 𝑡
+> 𝑡 − 3
+> 𝑡 − 2
+> 𝑡 − 1
+> 𝑡 new
+> MNC-L Budget Gate
+> Safe slice may be risky in combination
+> Lowest-risk candidate that remains task sufficient
+
+Reference Monitor 
+
+> Bind and
+> enforce scopes
+> Receipt
+> Purpose
+> Allowed field
+> Forwarding
+> Lifetime
+> Logging/sink
+> Memory R/W
+
+Scoped disclosure                
+
+> Purpose: schedule meeting
+> Receipt: coordinator
+> Fields: select slot
+> Forwarding: none
+> Lifetime: one turn
+> Memory: deny
+> Downstream enforcement
+> Intended Coordinator
+> allowed
+> Authorized tool
+> allowed
+> External agent
+> blocked by scoepe
+> Log/Memory store
+> blocked by scoepe
+> Expires
+> after one turn MNC-C
+> Contract check
+> (current turn only)
+> MNC-L
+> Contract+history
+> (cumulative risk)
+> Sanitized text
+> Selected slot is 3pm.
+> Let me know if it works.
+> •Easy to copy
+> •Forwardable
+> •Loggable
+> •No authority
+> MNC-D (Failure path)
+> private delegation ablation request user
+> approval
+> Same content,
+> different downstream
+> authority.
+> •Scope attached
+> •Forwarding contolled
+> •No unintended logs
+> •Enforced by monitor
+> •Selected slot=3pm
+> •……
+> •……
+
+Figure 2: MNC compiles private state into a task-sufficient, scoped disclosure. MNC-C selects under the current contract; MNC-L adds a history-aware budget gate; and MNC-D handles no-safe-candidate cases by delegation, abstention, or approval. The reference monitor enforces the emitted object’s scope over subsequent agent, tool, log, and memory operations. the contract or do not support the receiver’s required opera-tion. MNC then selects the lowest-risk admissible candidate: 
+
+d∗
+
+t = arg min 
+
+d∈Dc
+
+R(d; Ht, Z ), (7) subject to 
+
+valid c(d) = 1 , need( d, p, r ) = 1 . (8) Here, valid c checks the contract, while need checks whether the disclosure is sufficient for the declared operation. The risk function R may be implemented using conservative policy rules, disclosure classes, or a learned estimator. The protocol itself does not require access to protected labels at deploy-ment time. MNC-C evaluates each disclosure under its current con-tract. MNC-L additionally conditions the score on the previ-ous transcript Ht and limits both incremental and cumulative risk: 
+
+∆Rt(d) ≤ ϵt,
+
+tX
+
+j=1 
+
+∆Rj (dj ) ≤ B, (9) where ϵt is a per-event threshold and B is the cumulative budget. This prevents a sequence of individually limited dis-closures from gradually revealing the protected state. Let br(H, Z ) denote the calibrated risk assigned to a disclo-sure history. We define the nonnegative charge of appending candidate d as 
+
+∆Rt(d) = max {0, br(Ht ⊕ d, Z ) − br(Ht, Z )} . (10) The ledger records the realized charge of each released dis-closure, rather than the risk of rejected candidates. Calibra-tion parameters and operating thresholds are selected on the development split and then frozen before test evaluation. If no candidate satisfies the utility and risk constraints, MNC-D delegates the private computation to a trusted broker when available. The broker returns only an authorized receipt or failure code. Otherwise, the system abstains or requests user approval. These outcomes are recorded separately from ordinary task success. 
+
+Example. Consider a scheduling worker that knows a user’s private availability and its underlying reason. The coordinator only needs a feasible meeting time. The contract authorizes the purpose schedule_meeting ,names the coordinator as the recipient, and permits only 
+
+slot_feasible and selected_slot . It uses a single-turn lifetime and forbids forwarding and memory writes. The candidate generator may produce the full availability rationale, a redacted summary, a feasibility result, or one selected slot. The validator rejects candidates that omit the required scheduling information or expose forbidden fields. MNC therefore communicates the selected slot or a comple-tion receipt rather than the private rationale that produced it. Experiments 
+
+Evaluation Setup 
+
+The evaluation asks whether MNC limits excess inference from complete agent trajectories while preserving end-to-end task correctness, whether enforceable scope adds value beyond message rewriting, and how cumulative budgets and delegation trade privacy for utility. Each privacy example has paired output-only and internal-channel views. We re-port task correctness separately from privacy, take the max-imum excess leakage over five attackers, and cluster paired uncertainty by scenario template. 
+
+Tasks. Semantic joins span procurement, healthcare refer-ral, and HR staffing. Shared memory varies whether raw facts, summaries, allowed facts, or receipts persist. Runtime traces use local LLMs to generate role messages, tool calls, and memory artifacts. A semantic-gap diagnostic toggles perfect source-field taint; adaptive probing appends coordi-nator questions; and longitudinal scheduling measures ac-cumulation. The end-to-end MAGPIE evaluation runs 200 frozen scenarios on each of Llama-3-8B-Instruct, Mistral-7B-Instruct-v0.2, and Qwen2.5-7B-Instruct. After every pol-icy intervention, agents re-plan, call runtime tools, observe results, write memory, and retrieve it in later rounds. A paired scope benchmark separately tests legal delivery, forwarding, external logging, durable memory, and retrieval after expiry. A 400-case entangled benchmark removes the assumption that every task admits a safe receipt. 
+
+Policies. The end-to-end comparison includes raw sharing, a receipt-only oracle, a matched semantic declassifier, a ref-erence monitor, MNC-C, MNC-L, and MNC-L+D. MNC-C denotes single-contract selection; MNC-L adds a cumulative disclosure ledger; MNC-D invokes a trusted broker. Con-trolled diagnostics additionally compare privacy prompting, redaction, fact ACLs, LLM filters, a source-field taint proxy, a schema-only broker, capability sandboxing, and purpose ACLs. “Minimal,” “purpose-bound,” and “ephemeral” rows are MNC-C interface or memory ablations. 
+
+Attackers. Complete-trajectory privacy uses five comple-mentary attackers: sparse TF–IDF classification, frozen-embedding classification, likelihood scoring, fixed few-shot prediction, and a policy-aware attacker that observes candi-date type, delegation, failure, and budget outcomes. Splits are disjoint by template. The main privacy measure is the largest internal-minus-output accuracy over this ensemble; we also report balanced accuracy, macro-F1, AUC, NLL, calibration, direct exposure, and semantic exposure. Controlled diagnos-tics retain the original cross-family Qwen, Mistral, Gemma, Phi, and Llama auditors in the supplement. All privacy claims remain relative to the evaluated ensemble. 
+
+Baselines and controls. Output-only accuracy is paired with each channel attack, while task and tool correctness are judged independently. The receipt-only oracle isolates the gain from constraining message form; the matched seman-tic declassifier isolates content rewriting without enforce-able scope; MNC-C adds typed contracts and monitored sec-ondary use; MNC-L adds cumulative accounting; and MNC-L+D adds a private failure path. The budget sweep fixes all components except B ∈ { 0.1, 0.2, 0.5, 1.0, 2.0}.
+
+System baseline rules. The source-field taint proxy blocks tagged private fields; its near-oracle form assumes derived facts inherit perfect tags, whereas the semantic-gap form leaves free-form summaries untagged. It is not a reproduc-tion of Fides or another production IFC planner. Schema-only constrains tool arguments, capability sandboxing re-stricts tool and memory effects, and purpose ACL allows task-purpose summaries but has no forwarding, lifetime, or ledger semantics. These attribute-matched proxies isolate mechanisms but do not establish superiority over Fides or Maris. 
+
+Evidence boundary. The adapter, saved-trace replay, 50-case live Qwen stress test, and counterfactual middleware assembly remain diagnostics. The primary MAGPIE results instead use three completed backbones, structured task judg-ments, complete internal trajectories, template-disjoint at-tacker splits, and 10,000 paired cluster-bootstrap resamples. These measurements establish benchmark-relative task and privacy effects, not a universal privacy guarantee. 
+
+Artifacts. The release will include scenario templates, seeds, prompt files, contract schemas, candidate generators, validators, attacker prompts, risk-estimator splits, and eval-uation scripts, excluding credentials, private user data, and executable payloads. 
+
+End-to-End Task Correctness and Trajectory Privacy 
+
+Table 1 reports the three-backbone result over 600 paired MAGPIE trajectories per policy. MNC-C attains task suc-cess 0.567, compared with 0.373 for raw sharing and 0.325 for the matched semantic declassifier. The paired differences are +0 .194 [0.151, 0.236] and +0 .242 [0.198, 0.285], re-spectively, under 10,000 template-cluster bootstrap resam-ples (two-sided permutation p = 0 .0001 for both). MNC-C also reaches the highest aggregate constraint satisfaction, 0.910. The complete internal trajectory is strongly identifying un-der raw sharing: the worst attacker gains 0.326 accuracy be-yond the public output. MNC-C reduces this excess to 0.035, a paired difference of −0.291 [−0.328 , −0.252 ] relative to raw and −0.028 [−0.051 , −0.006 ] relative to the seman-tic declassifier. The receipt-only oracle also reaches 0.035, showing that the constrained interface accounts for much of the first-disclosure privacy gain. MNC-L and MNC-L+D further reduce worst-attacker excess to 0.026 and 0.017, but their task success falls to 0.473 and 0.378. The correspond-ing paired task differences are −0.093 and −0.095 , making the privacy–utility cost visible rather than treating delegation as ordinary success. 
+
+Scopes Add Enforcement Beyond Rewriting 
+
+Table 2 holds the disclosed content fixed and changes only the enforcement mechanism. Text-only semantic declassifi-cation has scope violation 0.999 because it cannot prevent Table 1: Three-backbone end-to-end MAGPIE results, N = 600 paired trajectories per policy. Excess is the maximum internal-minus-output accuracy over five attackers; direct and semantic columns measure exposure. MNC-C gives the strongest task result, while accounting and delegation further reduce leakage at a utility cost.                                                                       
+
+> Policy Task ↑Constr. ↑Tool ↑Excess ↓Direct ↓Semantic ↓Deleg. Abst. Raw 0.373 0.832 0.850 0.326 0.312 0.438 0.000 0.013 Receipt-only oracle 0.528 0.891 0.902 0.035 0.006 0.024 0.000 0.019 Semantic declassifier 0.325 0.805 0.840 0.063 0.009 0.038 0.000 0.022 Reference monitor 0.402 0.848 0.871 0.246 0.282 0.397 0.000 0.013 MNC-C 0.567 0.910 0.917 0.035 0.003 0.018 0.000 0.040 MNC-L 0.473 0.878 0.883 0.026 0.002 0.014 0.000 0.077 MNC-L+D 0.378 0.846 0.960 0.017 0.001 0.009 0.486 0.006
+
+Table 2: Scope enforcement under matched disclosure con-tent. Scope violation and false allow are rates over forbid-den secondary uses; delivery measures authorized Worker-to-Coordinator transmission.                                     
+
+> Policy Viol. ↓F. allow ↓F. block ↓Delivery ↑
+> Raw 0.976 0.976 0.003 0.997 Receipt oracle 0.954 0.954 0.004 0.996 Semantic declass. 0.999 0.999 0.000 1.000 Reference monitor 0.008 0.008 0.008 0.992 MNC-C 0.004 0.004 0.004 0.996
+> MNC-L 0.004 0.004 0.006 0.994 MNC-L+D 0.003 0.003 0.009 0.991
+
+memory, forwarding, or later retrieval. MNC-C lowers vio-lation to 0.004 while retaining 0.996 legitimate delivery suc-cess. MNC-L and MNC-L+D remain at 0.004 and 0.003, re-spectively. The reference monitor also blocks most forbidden operations, but MNC-C has lower violation and false-block rates in this benchmark. Thus identical first-hop privacy does not make the two mechanisms equivalent: MNC’s indepen-dent gain is control over where a disclosure may flow and persist. 
+
+Cumulative Budgets Trace a Privacy–Utility Frontier 
+
+The hard-budget sweep in Table 3 is monotone in the intended direction through B = 1 .0: relaxing the budget raises task success from 0.421 to 0.567 while worst-attacker leakage rises from 0.012 to 0.048 and abstention falls from 0.246 to 0.052. No trajectory exceeds its budget. The frozen operating-point rule selects B = 0 .5 as balanced, with task success 0.548, worst leakage 0.035, semantic exposure 0.017, and abstention 0.094. Increasing B to 2.0 is Pareto dominated: it raises leakage to 0.062 without improving task success over 
+
+B = 1 .0. Figure 3 visualizes this frontier and highlights the frozen operating point alongside two independent robustness checks. 
+
+Delegation Handles Entangled Private Evidence 
+
+The entangled benchmark requires private-derived evidence and therefore does not admit a receipt-only solution for every case. Raw sharing reaches task success 0.865 but exposes for-bidden information in 0.584 of cases. MNC-C and MNC-L reduce exposure to 0.042 and 0.029, at task success 0.684 and 0.641. MNC-L+D recovers task success to 0.804 while low-ering exposure to 0.016; its 0.416 delegation rate reflects the cases routed to the trusted broker. It also achieves 0.951 recall for detecting no-safe-receipt cases and 0.894 safe-abstraction accuracy. This result supports delegation as a failure policy for entangled tasks rather than as a universal substitute for communication. 
+
+Controlled Diagnostics and Public-Benchmark Checks 
+
+Controlled semantic-join, shared-memory, runtime-replay, adaptive-probing, and longitudinal experiments remain use-ful mechanism checks but are secondary to the complete-trajectory evaluation above. They show that redaction and fact ACLs leak through correlated derived facts, durable memory creates a separate exposure path, and history-blind disclosure accumulates evidence across rounds. MNC blocks out-of-contract probes while preserving necessary receipt requests; however, the replay experiments test interface be-havior rather than regenerated downstream plans. Complete tables, cross-family audits, AgentLeak sanity checks, and their evidence boundaries are reported in the supplement. 
+
+Cross-Family and Live Public-Scenario Robustness 
+
+Figure 3 brings two compact supplementary checks into the main evidence chain. In the template-disjoint semantic-join audits, raw internal channels yield excess attacker accuracy of 0.327, 0.673, and 0.542 for Mistral-7B, Gemma-7B, and Phi-3-mini, respectively. Redaction and fact ACL reduce, but do not remove, this signal; the matched MNC-C receipt is at 0.000 for all three auditors (panel b). The plotted intervals are the paired bootstrap intervals reported in the supplement, so this panel is a cross-family robustness check rather than an additional end-to-end benchmark. Panel c reports the 50-scenario live AgentLeak extension. Free-form MNC-C preserves zero matcher-detected internal leakage but reaches 0.640 task-interface success, revealing formatting and value-copying failures. Contract-boundary assembly uses only already-authorized fields and reaches 1.000 task success with zero internal leakage. This diagnos-tic isolates a runtime rendering bottleneck; it does not replace the complete three-backbone MAGPIE evaluation. 0.01 0.03 0.05 0.07 Worst-attacker excess leakage 0.42 0.50 0.58 Task success    
+
+> B=0.1 B=0.2 B=0.5 B=1 B=2
+> Ring: frozen balanced point ( B= 0.5)
+> (a) Budget privacy--utility frontier
+> Mistral-7B Gemma-7B Phi-3 mini
+> 0.0 0.2 0.4 0.6 0.8 Excess attacker accuracy
+> (b) Cross-family likelihood audit
+> Raw Redact Fact ACL MNC-C Raw Prompt Redact P-ACL Taint MNC-F MNC-A
+> 0.0 0.5 1.0 Rate
+> MNC variants
+> (c) Live AgentLeak extension ( N= 50 )
+> Task success Internal leak
+
+Figure 3: Supplementary evidence integrated into the main paper. (a) The MNC-L budget sweep traces the observed privacy– utility frontier; the ring marks the frozen balanced point. (b) Cross-family likelihood audits on semantic joins show excess attacker accuracy with paired bootstrap intervals. (c) In the live AgentLeak extension ( N = 50 ), contract-boundary assembly removes the free-form rendering bottleneck while preserving zero matcher-detected internal leakage. Panels (b–c) are robustness diagnostics, not replacements for the three-backbone end-to-end result. Table 3: MNC-L budget sweep over three models, N = 600 trajectories per budget. Spend never exceeds B; B = 0 .5 is the frozen balanced operating point. 
+
+B Task ↑ Worst leak. ↓ Semantic ↓ Deleg. Abst. Reject Avg. spend 0.1 0.421 0.012 0.006 0.184 0.246 0.312 0.084 0.2 0.492 0.021 0.010 0.132 0.171 0.193 0.163 0.5 0.548 0.035 0.017 0.078 0.094 0.086 0.331 1.0 0.567 0.048 0.024 0.043 0.052 0.036 0.507 2.0 0.565 0.062 0.031 0.038 0.047 0.024 0.563 
+
+Table 4: Entangled/no-safe-receipt benchmark, N = 400 . Necessary measures delivery of required private-derived evidence; forbidden measures unauthorized exposure. 
+
+Policy Task ↑ Necessary ↑ Forbidden ↓ Safe abs. ↑ Unsafe receipt ↓ Deleg. Abst. No-safe recall ↑
+
+Raw 0.865 0.912 0.584 0.438 0.347 0.000 0.015 0.110 Receipt oracle 0.692 0.813 0.126 0.792 0.088 0.000 0.182 0.701 Semantic declass. 0.745 0.842 0.194 0.776 0.118 0.000 0.124 0.638 Reference monitor 0.828 0.887 0.492 0.501 0.288 0.000 0.035 0.242 MNC-C 0.684 0.836 0.042 0.862 0.028 0.000 0.228 0.911 MNC-L 0.641 0.808 0.029 0.878 0.021 0.000 0.283 0.934 MNC-L+D 0.804 0.881 0.016 0.894 0.012 0.416 0.061 0.951 
+
+Efficiency and Failure Modes 
+
+MNC-C averages 200 total tokens per trajectory, 23.1% fewer than raw sharing, and reduces average latency from 0.648 to 0.518 seconds. MNC-L averages 228 tokens and 0.604 sec-onds. Delegation is more expensive: MNC-L+D averages 327 tokens and 0.914 seconds, increases of 25.8% and 41.0% over raw. Failure counts locate the remaining bottleneck. MNC-C has 102 downstream replanning failures, whereas MNC-L+D has 293; successful broker invocation therefore does not en-sure that the public coordinator can integrate the receipt. Candidate-family, validator-error, calibration, per-family, ef-ficiency, and failure tables are reported in the supplement. 
+
+Conclusion 
+
+We studied privacy leakage in multi-agent LLM systems and introduced Minimum-Necessary Communication (MNC), a typed semantic-declassification protocol that binds task-sufficient disclosures to purpose, recipient, forwarding, life-time, logging, and memory scopes. Experiments show that prompting, redaction, and fact-level access control may pre-serve task behavior while leaving substantial inference sig-nal. MNC reduces this leakage, limits memory exposure, and prevents unauthorized reuse of receipt text. History-aware se-lection mitigates leakage across repeated interactions. These results support scoped semantic declassification as a practical complement to access control and information-flow enforce-ment. References 
+
+Asif, S.; and Mohammadi Amiri, M. 2026. Information-Theoretic Privacy Control for Sequential Multi-Agent LLM Systems. arXiv preprint arXiv:2603.05520 .Carlini, N.; Tramèr, F.; Wallace, E.; Jagielski, M.; Herbert-Voss, A.; Lee, K.; Roberts, A.; Brown, T.; Song, D.; Erlings-son, Ú.; Oprea, A.; and Raffel, C. 2021. Extracting Training Data from Large Language Models. In 30th USENIX Security Symposium , 2633–2650. Costa, M.; Köpf, B.; Kolluri, A.; Paverd, A.; Russinovich, M.; Salem, A.; Tople, S.; Wutschitz, L.; and Zanella-Béguelin, S. 2025. Securing AI Agents with Information-Flow Control. 
+
+arXiv preprint arXiv:2505.23643 .Cui, J.; Li, Z.; Xing, L.; and Liao, X. 2026. Maris: A Formally Verifiable Privacy Policy Enforcement Paradigm for Multi-Agent Collaboration Systems. arXiv preprint arXiv:2505.04799 .Debenedetti, E.; Zhang, J.; Balunovic, M.; Beurer-Kellner, L.; Fischer, M.; and Tramèr, F. 2024. AgentDojo: A Dy-namic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents. In The Thirty-eighth Con-ference on Neural Information Processing Systems Datasets and Benchmarks Track .Denning, D. E. 1976. A Lattice Model of Secure Information Flow. Communications of the ACM , 19(5): 236–243. El Yagoubi, F.; Badu-Marfo, G.; and Al Mallah, R. 2026. AgentLeak: A Full-Stack Benchmark for Privacy Leakage in Multi-Agent LLM Systems. arXiv preprint arXiv:2602.11510 .Hu, S.; Liu, L.; Meng, Z.; and Zhao, Z. 2026. ToolPriva-cyBench: Benchmarking Purpose-Bound Privacy in Tool-Using LLM Agents. arXiv preprint arXiv:2606.28061 .Juneja, G.; Pasupulati, J. N. S.; Albalak, A.; Hua, W.; and Wang, W. Y. 2025. MAGPIE: A Benchmark for Multi-AGent Contextual PrIvacy Evaluation. arXiv preprint arXiv:2510.15186 .Kim, J.; Choi, W.; and Lee, B. 2025. Prompt Flow Integrity to Prevent Privilege Escalation in LLM Agents. arXiv preprint arXiv:2503.15547 .Liu, X.; Yu, H.; Zhang, H.; Xu, Y.; Lei, X.; Lai, H.; Gu, Y.; Ding, H.; Men, K.; Yang, K.; Zhang, S.; Deng, X.; Zeng, A.; Du, Z.; Zhang, C.; Shen, S.; Zhang, T.; Su, Y.; Sun, H.; Huang, M.; Dong, Y.; and Tang, J. 2024. AgentBench: Evaluating LLMs as Agents. In International Conference on Learning Representations .Myers, A. C.; and Liskov, B. 1997. A Decentralized Model for Information Flow Control. In Proceedings of the Sixteenth ACM Symposium on Operating Systems Principles , 129–142. Nissenbaum, H. 2004. Privacy as Contextual Integrity. Wash-ington Law Review , 79(1): 119–157. Packer, C.; Wooders, S.; Lin, K.; Fang, V.; Patil, S. G.; Stoica, I.; and Gonzalez, J. E. 2023. MemGPT: Towards LLMs as Operating Systems. arXiv preprint arXiv:2310.08560 .Ruan, Y.; Dong, H.; Wang, A.; Pitis, S.; Zhou, Y.; Ba, J.; Dubois, Y.; Maddison, C.; and Hashimoto, T. 2024. Identify-ing the Risks of LM Agents with an LM-Emulated Sandbox. In International Conference on Learning Representations .Sabelfeld, A.; and Sands, D. 2005. Dimensions and Prin-ciples of Declassification. In 18th IEEE Computer Security Foundations Workshop , 255–269. Saltzer, J. H.; and Schroeder, M. D. 1975. The Protection of Information in Computer Systems. Proceedings of the IEEE ,63(9): 1278–1308. Wang, B.; He, W.; He, P.; Zeng, S.; Xiang, Z.; Xing, Y.; and Tang, J. 2025. Unveiling Privacy Risks in LLM Agent Memory. arXiv preprint arXiv:2502.13172 .Wu, D.; Wang, H.; Yu, W.; Zhang, Y.; Chang, K.-W.; and Yu, D. 2025. LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory. In International Conference on Learning Representations .Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Li, B.; Zhu, E.; Jiang, L.; Zhang, X.; Zhang, S.; Liu, J.; Awadallah, A. H.; White, R. W.; Burger, D.; and Wang, C. 2023. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. 
+
+arXiv preprint arXiv:2308.08155 .Xie, J.; and Li, S. 2026. OCELOT: Inference-Leakage Bud-gets for Privacy-Preserving LLM Agents. arXiv preprint arXiv:2606.12341 .Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In International Conference on Learning Representations .Yi, J.; Xie, Y.; Zhu, B.; Kiciman, E.; Sun, G.; Xie, X.; and Wu, F. 2025. Benchmarking and Defending Against Indirect Prompt Injection Attacks on Large Language Models. arXiv preprint arXiv:2312.14197 .Zhan, Q.; Liang, Z.; Ying, Z.; and Kang, D. 2024. In-jecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents. In Findings of the Association for Computational Linguistics: ACL 2024 ,10471–10506. Zhang, H.; Huang, J.; Mei, K.; Yao, Y.; Wang, Z.; Zhan, C.; Wang, H.; and Zhang, Y. 2025. Agent Security Bench (ASB): Formalizing and Benchmarking Attacks and De-fenses in LLM-Based Agents. In International Conference on Learning Representations .Zharmagambetov, A.; Guo, C.; Evtimov, I.; Pavlova, M.; Salakhutdinov, R.; and Chaudhuri, K. 2025. AgentDAM: Privacy Leakage Evaluation for Autonomous Web Agents. 
+
+arXiv preprint arXiv:2503.09780 .Zheng, Q.; Yang, Y.; Gao, Q.; and Schlag, I. 2026. POLAR-Bench: A Diagnostic Benchmark for Privacy-Utility Trade-offs in LLM Agents. arXiv preprint arXiv:2605.19127 .Zou, C.; Yao, Y.; She, S.; and Hawkins, R. D. 2026. CalBench: Evaluating Coordination-Privacy Trade-offs in Multi-Agent LLMs. arXiv preprint arXiv:2605.09823 .
