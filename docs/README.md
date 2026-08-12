@@ -6,51 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-11
-- 运行时间：2026-08-11 19:58:26 UTC
+- 最新运行日期：2026-08-12
+- 运行时间：2026-08-12 21:10:30 UTC
 - 运行状态：成功
-- 本次总论文数：9
-- 精读区：5
+- 本次总论文数：6
+- 精读区：2
 - 速读区：4
 
 ### 今日简报（AI）
-今日完成9篇论文速览，其中5篇精读、4篇速读，重点聚焦多智能体系统与高效视觉Transformer。
-
-最值得关注的是两篇9分精读：《MNC》探讨私有LLM通信的语义降级边界，《HSMLA》提出分层softmax多尺度线性注意力以加速视觉Transformer。
-
-建议普通读者优先从精读列表入手，理解多智能体通信隐私与计算效率的最新权衡思路。
-- 详情：[/202608/11/README](/202608/11/README)
+今日精读2篇、速读4篇，聚焦多智能体具身模拟与系统共演化。最值得关注的是开放城市多智能体测试床Lingjing，以及智能体系统超越人类设计的自导向演化方向。普通读者可优先从具身环境与自演化机制切入，理解多智能体前沿趋势。
+- 详情：[/202608/12/README](/202608/12/README)
 
 ### 精读区论文标签
-1. [MNC: Scope-Bound Semantic Declassification for Private LLM-Agent Communication](/202608/11/2608.01719v1-mnc-scope-bound-semantic-declassification-for-private-llm-agent-communication)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：为LLM智能体通信设计类型化语义去分类协议
-2. [HSMLA: Hierarchical Softmax Multi-scale Linear Attention for Efficient Vision Transformers](/202608/11/2608.07616v1-hsmla-hierarchical-softmax-multi-scale-linear-attention-for-efficient-vision-transformers)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：直接提出层级softmax多尺度线性注意力
-3. [Linearized 2-Simplicial Attention](/202608/11/2608.09307v1-linearized-2-simplicial-attention)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：将二维单纯形注意力线性化以实现线性成本
-4. [ForestBench: A Unified Graph Framework for Evaluating Multi-Agent Collaboration](/202608/11/2608.08605v1-forestbench-a-unified-graph-framework-for-evaluating-multi-agent-collaboration)  
+1. [Lingjing: A Simulation Testbed for Multi-Agent Embodied Tasks in Open-Ended Cities](/202608/12/2608.08045v1-lingjing-a-simulation-testbed-for-multi-agent-embodied-tasks-in-open-ended-cities)  
    标签：评分：8.0/10、query:ma-la
-   evidence：框架将多智能体系统轨迹映射为统一协作图以进行评估
-5. [MoRSE: Task-Oriented Multi-Agent System with Mixture of Role-Subtask Experts](/202608/11/2608.09251v1-morse-task-oriented-multi-agent-system-with-mixture-of-role-subtask-experts)  
+   evidence：为异构多智能体在城市环境中的协同与交互动态提供仿真测试平台
+2. [Co-Evolution in Agentic Systems: Toward Self-Directed Evolution Beyond Human Design](/202608/12/2608.10299v1-co-evolution-in-agentic-systems-toward-self-directed-evolution-beyond-human-design)  
    标签：评分：8.0/10、query:ma-la
-   evidence：面向复杂任务的多智能体系统，采用角色-子任务专家专业化
+   evidence：综述了多智能体共同演化，涵盖对抗、协作与组织化适应，直接关联多智能体交互动态。
 
 ### 速读区论文标签
-1. [Uplink-Completion-Triggered Edge-GPU Inference for Multi-Agent Cooperative Perception](/202608/11/2608.08330v1-uplink-completion-triggered-edge-gpu-inference-for-multi-agent-cooperative-perception)  
+1. [Stateful Multi-Agent LLMs for Cross-View Interface Alignment in Automotive Model-Based Systems Engineering](/202608/12/2608.08038v1-stateful-multi-agent-llms-for-cross-view-interface-alignment-in-automotive-model-based-systems-engineering)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体协同感知中无线通信与GPU推理的耦合
-2. [Decentralized Multi-Agent Urban Traffic Management via Spatio-Temporal Mobility Profile Planning](/202608/11/2608.08035v1-decentralized-multi-agent-urban-traffic-management-via-spatio-temporal-mobility-profile-planning)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：分散式多智能体通信与交通协调
-3. [LatticeMind: A Conflict-Aware Memory Primitive for Multi-Agent Systems](/202608/11/2608.08236v1-latticemind-a-conflict-aware-memory-primitive-for-multi-agent-systems)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：面向多智能体决策信任的冲突感知记忆
-4. [Population-Scalable Multi-Agent World Modeling](/202608/11/2608.08600v1-population-scalable-multi-agent-world-modeling)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体世界建模，支持任意规模群体扩展
+   evidence：用于汽车MBSE的有状态多智能体验证流水线，通过回溯循环实现确定性接口对齐
+2. [Multi-Agent Reinforcement Learning via Agent-Specific Preference](/202608/12/2608.08604v1-multi-agent-reinforcement-learning-via-agent-specific-preference)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：在多智能体强化学习中引入智能体特定偏好建模，处理异质智能体协作，直接关联多智能体交互与合作。
+3. [Efficient Reinforcement Learning for Long-Horizon Tool-Use Agentic Tasks](/202608/12/2608.10357v1-efficient-reinforcement-learning-for-long-horizon-tool-use-agentic-tasks)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：提出了带有sink感知FlexAttention的SINKFLEX-RL，处理智能体强化学习中的长上下文，直接针对智能体任务的注意力扩展。
+4. [ASCon: A Direction-Aware Reciprocal Agent--Step Contextualization Model for Failure Attribution in Multi-Agent Systems](/202608/12/2608.10646v1-ascon-a-direction-aware-reciprocal-agent--step-contextualization-model-for-failure-attribution-in-multi-agent-systems)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：利用轨迹证据与智能体间交互进行多智能体故障归因
 
 
 <div class="dpr-home-promo-card">

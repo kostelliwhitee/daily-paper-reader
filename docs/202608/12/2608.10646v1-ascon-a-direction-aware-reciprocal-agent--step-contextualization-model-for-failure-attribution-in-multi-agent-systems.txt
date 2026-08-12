@@ -1,0 +1,1255 @@
+Title: ASCon: A Direction-Aware Reciprocal Agent–Step Contextualization Model for Failure Attribution in Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2608.10646v1
+
+Published Time: Wed, 12 Aug 2026 00:47:47 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# ASCon: A Direction-Aware Reciprocal Agent–Step Contextualization Model for Failure Attribution in Multi-Agent Systems 
+
+Shuyu Jiang 1,2, Yue Ran 1, Kaiyu Xu 1, Xingshu Chen 1, Yi Zhang 1, Hao Ren 1, Rui Tang 1, Tianwei Zhang 21Sichuan University, China 2Nanyang Technological University, Singapore 
+
+# Abstract 
+
+Failure attribution in LLM-based multi-agent systems (MAS) aims to answer who caused failures, when they occurred, and why by identifying responsible targets including faulty agents, erroneous steps, and failure modes. Existing meth-ods have primarily focused on developing dedicated models for specific attribution targets, with limited attention to the evidential dependencies among them. Despite these attribu-tion targets are different, they rely on common diagnostic evidence from MAS trajectories, including task constraints, agent roles, behavioral histories and inter-agent interactions. This commonality motivates us to develop a unified repre-sentation model that aggregates the trajectory evidence into individual agent and step representations, which can subse-quently be adapted to different attribution targets. Accord-ingly, we propose ASCon, a direction-aware reciprocal Agent– 
+
+Step Con textualization model for multiple failure attribution targets. ASCon introduces direction-aware graph attention to model execution context, masked step-to-agent attention to construct behavior-aware agent representations, and agent-conditioned step contextualization to incorporate agent con-text back into step representations. The resulting contextual-ized representations enable different attribution targets through lightweight target-specific heads. Experiments show that AS-Con can improve faulty-agent detection by 5.83%+ in micro-accuracy, faulty-step detection by 10.63%+ in micro-accuracy, and failure-mode detection by 14.73%+ in Macro-F1. Mean-while, it can also substantially enhance the LLM-based meth-ods’ attribution capabilities in out-of-domain scenarios. Code is available at: https://github.com/Shuyu-07/ASCon 
+
+# Introduction 
+
+Large language model (LLM)-based multi-agent systems (MAS) have emerged as a promising paradigm for complex problem solving by coordinating agents with specialized roles and tool-use capabilities across tasks such as software devel-opment, information retrieval, and scientific analysis (Four-ney et al., 2024; Ghareeb et al., 2026; Qian et al., 2024). Meanwhile, their growing capabilities are also accompanied by more complex failure modes like inter-agent misalignment, making system debugging and error correction increasingly difficult (Qi et al., 2026; Yu et al., 2025). Diagnosing such failures requires developers to inspect lengthy traces with do-Shared Trajectory Evidence                                                            
+
+> Task Pre steps Fault Post steps Agent role Collab oration
+> When
+> Faulty Step
+> S4
+> Who
+> Faulty Agent
+> Agent B
+> Why
+> Failure Mode
+> Goal conflict
+> (1)Who :agent -level attribution
+> (2)When :step -level attribution
+> (3)Why :failure -mode attribution
+> System Design Issues
+> (b)Failure Attribution via Shared Evidence
+> choose cheapest hotel
+> but ignoring the distance
+> book a cheap hotel in 2km
+> S2
+> rank hotels by distance
+> Go al contradict
+> Collaboration contradict
+> (a)Different Failure
+> Attribution Targets
+> S1S2S3S4…
+> S1S2S3S4…
+> S1
+> a1
+> S2S3S4…
+> Agent A
+> Agent B
+> Agent C
+> Task :Find the cheapest hotel within 1km of the museum .
+> search hotels
+> compare price
+> S1
+> S3S4
+> S5
+> Fault
+> Task Constraints
+> Agent roles
+> Behavioral history
+> Collaboration Context
+> Agent A
+> Agent BAgent C
+> a2a3
+> a1a2a3
+> a1a2a3
+
+Figure 1: (a) MAS failure attribution are commonly formu-lated at separate agent, step, and failure-mode levels. (b) These targets share the same trajectory evidence, which ASCon mod-els for unified attribution across all three levels. main knowledge, often taking several to tens of minutes per in-stance (Cemri et al., 2025; Epperson et al., 2025; Zhang et al., 2025). This substantial diagnostic burden made automated failure attribution increasingly important for scalable MAS debugging, maintenance, and subsequent optimizations (Ma et al., 2026; Wang et al., 2026a; In et al., 2026). As shown in Figure 1, MAS failure attribution refers to the identification of key failure factors from an execution trace, in-cluding: who – the agents responsible for the failure; when –the steps at which the failure occurs or first manifests; and why 
+
+– the corresponding failure modes or error modes (Liu et al., 2026). Existing studies typically develop separate methods for different attribution targets. For step-level attribution, failures are usually located through LLM-based search and ranking, or by modeling anomalous temporal changes in behavioral se-quences (Zhang et al., 2025; Zhu et al., 2026a; Sun et al., 2026). Agent-level methods instead determine responsibility by examining whether an agent’s behavioral history is consis-tent with its intended goal or assigned role (Geng et al., 2026; Wu et al., 2026). Failure-mode attribution methods commonly abstract these anomalous behaviors into predefined error cate-gories through LLM inference (Kong et al., 2026). 1arXiv:2608.10646v1 [cs.MA] 11 Aug 2026 Although agent, step, and failure-mode attribution are of-ten formulated separately in these valuable studies, they draw on closely related evidence from the same execution trajec-tory. For example, whether a candidate step is faulty is de-termined from itself as well as its preceding and subsequent execution actions, the task constraints, and the role of the ex-ecuting agent (Qiao et al., 2026; Chen et al., 2026). Likewise, attributing responsibility to an agent requires aggregating evi-dence from its historical actions and examining whether they remain consistent with its role and the task constraints (Ge et al., 2026). On this basis, failure-mode identification further characterizes how the observed anomalous behavior deviates from the exception (Kong et al., 2026). Therefore, task con-straints, agent role settings, behavioral history, and inter-agent interactions jointly provide the contextual evidence for differ-ent failure attribution targets. Motivated by this observation, we propose ASCon , adirection-aware reciprocal agent-step contextualization model for multi-agent failure attribution, which unifies step-, agent-, and failure-mode attribution within a single framework. AS-Con first introduces a direction-aware graph attention to sepa-rately model the preceding and subsequent execution contexts. It then uses masked step-to-agent attention to aggregate the steps performed by each agent into a behavior-aware agent representation, which is further contextualized over an agent interaction graph to capture cross-agent collaboration. Finally, the agent representations are injected back into their corre-sponding step representations, forming a reciprocal contextu-alization process between steps and agents. Through this re-ciprocal information flow, ASCon integrates task constraints, behavioral context, and collaboration patterns into agent and step representations, thereby enabling flexible adaptation to different supervision schemes through lightweight prediction heads. We evaluate ASCon on TracerTraj and Aegis-Bench, which together cover agent-level, step-level, and failure-mode at-tribution. Experimental results show that ASCon achieves improvements of 5.83%+ in agent-level micro-accuracy, 10.63%+ in step-level micro-accuracy, and 14.73%+ in failure-mode macro-F1. Moreover, when incorporated into LLM-based attribution methods, ASCon improves out-of-domain agent-level micro-accuracy by 8.69%+, step-level micro-accuracy by 12.50%+ and failure-mode-level macro-F1 by 3.15%+. Our main contributions are as follows: • We propose ASCon, a reciprocal agent-step contextu-alization framework for multi-agent failure attribution, which supports agent-, step-, and failure-mode attribution under heterogeneous supervision settings. • We introduce direction-aware graph attention for mod-eling preceding and subsequent step dependencies, and masked step-to-agent attention for selectively aggregat-ing agent-specific behavioral evidence. • Comprehensive experiments indicate that ASCon con-sistently improves performance across attribution targets and effectively enhances out-of-domain generalization. 
+
+# Related Works 
+
+MAS failure attribution aims to identify responsible agents, erroneous steps, or failure modes from execution trajecto-ries (Zhang et al., 2025; Chen et al., 2026; Kong et al., 2026). Existing methods can be broadly divided into prompt-based and learning-based failure attributions. 
+
+Prompt-based methods. Prompt-based methods directly prompt LLMs to inspect execution trajectories and localize suspicious behaviors without training a dedicated attribution model. Specifically, Who&When studies All-at-Once, step-by-step, and binary-search strategies (Zhang et al., 2025); SDBL narrows the candidate scope before localization (Sun et al., 2026); and RAFFLES iteratively refines fault hypotheses through judge-evaluator reasoning (Zhu et al., 2026a). Other studies incorporate counterfactual analysis or causal structures to guide the reasoning process (West et al., 2025; Wang et al., 2026b; Ge et al., 2026). While these methods offer flexible tra-jectory analysis, their attribution quality is largely determined by the reasoning capability of the underlying LLM, especially for long and structurally complex traces. 
+
+Learning-based methods. Learning-based methods con-struct task-specific supervision and learn representations of failed trajectories. For instance, AgentTracer generates anno-tated traces through counterfactual replay and programmed fault injection, and trains a dedicated failure tracer (Zhang et al., 2026). Aegis introduces context-aware error generation and annotations of faulty agents and error modes, supporting supervised fine-tuning and reinforcement learning (Kong et al., 2026). StepFinder models trajectories as temporal semantic se-quences for step-level localization (Zhu et al., 2026b), and re-duces reliance on inference-time reasoning by learning attri-bution patterns directly from execution data. 
+
+# Problem Formulation 
+
+An LLM-based multi-agent system consists of a set of agents 
+
+A = {a1, a 2, . . . , a Na } that collaborate to complete a task. Its execution is recorded as a trajectory τ = {s1, s 2, . . . , s Ns },where each step is represented as st = ( t, ϕ (t), c t). Here, t is the step index, ϕ(t) ∈ { 1, . . . , N a} identifies the agent execut-ing the step, and ct denotes its textual execution record, such as an agent message, intermediate reasoning, tool invocation, or tool feedback. Given a failed trajectory τ , MAS failure attribution aims to determine who is responsible for the failure, when the failure occurs, and why it occurs. Let Y = {m1, m 2, . . . , m M } de-note the set of failure modes. The ground-truth attribution is represented as G(τ ) = {(a∗ 
+
+> i
+
+, S∗ 
+
+> i
+
+, Y∗ 
+
+> i
+
+)}Ki=1 , where a∗ 
+
+> i
+
+∈ A is a faulty agent, S∗ 
+
+> i
+
+⊆ τ contains its faulty steps, and Y∗ 
+
+> i
+
+⊆ Y 
+
+contains the corresponding failure modes. The objective is to learn an attribution function fθ that maps the failed trajectory to a structured prediction: fθ : τ 7 → bG(τ ) ≈ G (τ ). Accord-2.
+
+a₁
+
+a
+
+₂
+
+a₃
+
+a₄
+
+a0
+
+G⁽ˢ⁾
+
+s
+
+₁
+
+s
+
+₂
+
+s
+
+₃ s
+
+₄
+
+s
+
+> ₅
+
+s
+
+₆
+
+> ...
+
+s0
+
+User 
+
+query 
+
+> ...
+
+Qwen Embedding 
+
+X(s) : Step Emb. X(a) :Agent Role Emb. 
+
+(1) Contextualized Step Representation 
+
+G⁽ˢ⁾
+
+H(s) R(a) 
+
+> (a) (a) (a) (a)
+
+MLPLN
+
+H(a-s) 
+
+Prediction 
+
+Layers 
+
+When Who 
+
+Why 
+
+X(s) Downstream 
+
+Tasks 
+
+> ...
+
+G(a) 
+
+> ...
+> (a-s)
+> (a-s)
+> (a-s) (a-s)
+
+Agent-Step Rep. Step Rep. Agent Rep. Proj. 
+
+(3) Target-specific Failure 
+
+Attribution 
+
+H(a-s) 
+
+H(a) 
+
+Ls × DGAT 
+
+𝑛 1
+
+> 𝑖𝑛
+
+𝑛 2
+
+> 𝑖𝑛
+
+…
+
+𝑛 1
+
+> 𝑜𝑢𝑡
+
+𝑛 2
+
+> 𝑜𝑢𝑡
+
+𝑛 𝑘 𝑜𝑢𝑡 
+
+> current node
+> 𝛼 1
+> 𝑖𝑛
+> 𝛼 2
+> 𝑖𝑛
+> 𝛼 𝑚 𝑖𝑛
+> 𝛼 1
+> 𝑜𝑢𝑡
+> 𝛼 2
+> 𝑜𝑢𝑡
+> 𝛼 𝑘 𝑜𝑢𝑡
+> 𝛼 𝑠𝑒𝑙𝑓
+
+…
+
+𝑛 𝑚 𝑖𝑛 
+
+𝑛 𝑚 𝑖𝑛 
+
+Ls × DGAT 
+
+𝑛 1
+
+> 𝑖𝑛
+
+𝑛 2
+
+> 𝑖𝑛
+
+…
+
+𝑛 1
+
+> 𝑜𝑢𝑡
+
+𝑛 2
+
+> 𝑜𝑢𝑡
+
+𝑛 𝑘 𝑜𝑢𝑡 
+
+> current node
+> 𝛼 1
+> 𝑖𝑛
+> 𝛼 2
+> 𝑖𝑛
+> 𝛼 𝑚 𝑖𝑛
+> 𝛼 1
+> 𝑜𝑢𝑡
+> 𝛼 2
+> 𝑜𝑢𝑡
+> 𝛼 𝑘 𝑜𝑢𝑡
+> 𝛼 𝑠𝑒𝑙𝑓
+
+…
+
+𝑛 𝑚 𝑖𝑛 
+
+rNs 
+
+rNs-1 
+
+r1
+
+r0
+
+hNs 
+
+hNs-1 
+
+h1
+
+h0
+
+> (s) (s) (s)
+
+hNs 
+
+> (s)
+> ...
+
+hNs-1 
+
+h1
+
+h0(s) (s) (s) 
+
+hNs 
+
+> (s)
+> ...
+
+hNs-1 
+
+h1
+
+h0
+
+rt(a) 
+
+rt(a) 
+
+agent rep. proj. 
+
+𝛽 
+
+ht(s) 
+
+gk(a) 
+
+behavior-aware agent rep. 
+
+h
+
+> Φ(t)
+
+Mt
+
+local behavioral summary of a t 
+
+> Mt
+
+ht(s) g(s) 
+
+global trajectory rep. 
+
+> ...
+
+0 01 1...  
+
+> ⊙... (s)
+
+h0(s) 
+
+h0
+
+> (s)
+
+h1
+
+> (s)
+
+h1
+
+> (s)
+
+hNs-1 
+
+> (s)
+
+hNs-1 hNs 
+
+> (s)
+
+hNs  
+
+> (s) Mean Mean
+
+(2) Behavior-aware Agent Representation 
+
+KK
+
+> Lin
+> e
+> ar
+
+QQ 𝐴 = 𝑸 ⊤ 𝑲 𝑑 𝑞       
+
+> =𝐴 kt ,𝑀 kt = 1,
+> −∞,= 0. ... ... ... h0(a)
+> h1(a)
+> ... hk(a)
+> hk-1 (a)
+
+H(a)                         
+
+> Linear
+> ... ... ... ... ... ... ... ...
+> 𝑎 00 𝑎 01
+> 𝑎 11 𝑎 12
+> 𝑎 𝑁 𝑎 2𝑎 𝑁 𝑎 𝑁 𝑠
+> 𝑎 02 𝑎 0𝑁 𝑠
+> 𝑎 1𝑁 𝑠
+> 𝑎 10
+> 𝑎 𝑁 𝑎 0𝑎 𝑁 𝑎 1
+> ... ... ... ... ... ... ... ...
+> 𝑎 00 𝑎 01
+> 𝑎 11 𝑎 12
+> 𝑎 𝑁 𝑎 2𝑎 𝑁 𝑎 𝑁 𝑠
+> −∞−∞
+> −∞−∞
+> −∞−∞
+> Soft
+> m
+> ax
+
+𝛽 
+
+Attention 
+
+Score 
+
+et(a) 
+
+ht(s) 
+
+MLPLN
+
+G(a) 
+
+Agent Rep. M: Agent-Step Assignment Mask 
+
+> ...
+
+1 1 0 ... 00 1 1 ... 0    
+
+> ... ... ... ... ...
+
+0 0 1 ... 1       
+
+> 01Na
+> 012... NsStep Step Step Step Agent Agent Agent
+
+La × DGAT 
+
+𝑛 1
+
+> 𝑖𝑛
+
+𝑛 2
+
+> 𝑖𝑛
+
+…
+
+𝑛 1
+
+> 𝑜𝑢𝑡
+
+𝑛 2
+
+> 𝑜𝑢𝑡
+
+𝑛 𝑘 𝑜𝑢𝑡 
+
+> current node
+> 𝛼 1
+> 𝑖𝑛
+> 𝛼 2
+> 𝑖𝑛
+> 𝛼 𝑚 𝑖𝑛
+> 𝛼 1
+> 𝑜𝑢𝑡
+> 𝛼 2
+> 𝑜𝑢𝑡
+> 𝛼 𝑘 𝑜𝑢𝑡
+> 𝛼 𝑠𝑒𝑙𝑓
+
+…
+
+𝑛 𝑚 𝑖𝑛 
+
+𝑛 𝑚 𝑖𝑛 
+
+ht(s) 
+
+> ___
+
+g(s) 
+
+g(s) 
+
+g(s) 
+
+g(s) 
+
+e0(a) 
+
+e1(a) 
+
+eNa 
+
+> (a)
+
+eNa-1 
+
+> (a)
+
+g1(a) 
+
+gNa 
+
+> (a)
+> ... (s)
+
+h0(s) 
+
+h0
+
+> (s)
+
+h1
+
+> (s)
+
+h1
+
+> (s)
+
+hNs-1 
+
+> (s)
+
+hNs-1 hNs 
+
+> (s)
+
+hNs 
+
+> (s)
+
+g2(a) 
+
+> ...
+
+gNa-1 
+
+> (a)
+> 𝑀 kt
+> 𝐴 kt
+> ~
+
+Reciprocal 
+
+｛√Figure 2: The framework of our ASCon model. ingly, the predicted agents, steps, and failure modes constitute the who , when , and why of MAS failures. 
+
+# Methodology 
+
+As illustrated in Figure 2, ASCon learns mutually contextu-alized representations of steps and agents from an MAS ex-ecution trajectory. It first introduces a direction-aware graph attention mechanism that separately captures preceding and succeeding context in both step execution and agent in-teraction structures. Then it contextualizes individual steps along the execution trajectory, aggregates their behavioral ev-idence to construct agent representations, and conditions each step on the representation of its executing agent. Finally, target-specific prediction layers map the resulting agent and agent-conditioned step representations to the required failure-attribution outputs. 
+
+Direction-aware Graph Attention 
+
+To capture the evolving dependencies in MAS execution, where earlier actions influence subsequent decisions and agent behaviors are coordinated through interactions, ASCon mod-els each trajectory as a directed step graph and a directed agent graph. For the step graph, the user query is prepended as step s0 to provide task constraints for evaluating subse-quent behaviors, yielding the augmented execution sequence 
+
+eS = ( s0, s 1, . . . , s Ns ). Each step in eS is treated as a graph node, forming the node set V (s) = {s0, s 1, . . . , s Ns }. Ad-jacent steps in the execution sequence are connected accord-ing to their temporal order, forming the directed step graph 
+
+G(s) = ( V (s), E(s)), where E(s) = {(st, s t+1 ) | 0 ≤ t < N s}.Each directed edge represents a direct execution dependency between consecutive actions, preserving the temporal flow of the trajectory. For the agent graph, ASCon introduces a user node a0 corresponding to s0 with ϕ(0) = 0 . The augmented agent node set is defined as V (a) = eA = {a0, a 1, . . . , a Na }.Agents responsible for adjacent steps are connected follow-ing the same execution direction, yielding the directed agent graph G(a) = ( V (a), E(a)), where E(a) = {(aϕ(t), a ϕ(t+1) ) |
+
+0 ≤ t < N s}.In failure attribution, the preceding and succeeding node neighbors in G(s) and G(a) provide asymmetric evidence: the former provide the context for assessing whether a node is anomalous, whereas the latter reveal its potential downstream effects. Treating both directions identically may therefore blur the distinction between a root failure and its consequences. Thus, ASCon introduces a direction-aware graph attention net-work (DGAT) that separately models incoming, outgoing, and self information. Let G = ( V, E) uniformly denote the constructed G(s) or 
+
+G(a), and ui denote the input feature of node vi. Its incoming and outgoing neighborhoods are defined as Nin (i) = {vj |
+
+(vj , v i) ∈ E} , and Nout (i) = {vj | (vi, v j ) ∈ E} . At the l-th layer, DGAT first computes attention scores for incoming and outgoing edges separately as follows: 
+
+elji, in = LeakyReLU 
+
+
+
+al
+
+in 
+
+⊤ Wl
+
+in uli; Wl
+
+in ulj
+
+
+
+,elij, out = LeakyReLU 
+
+
+
+al
+
+out 
+
+⊤ Wl
+
+out uli; Wl
+
+out ulj
+
+
+
+.
+
+(1) 
+
+Wl
+
+in and Wl
+
+out are learnable direction-specific transformation 3matrices. al 
+
+> in
+
+and al 
+
+> out
+
+are learnable attention vectors. The attention scores are normalized separately along the incoming and outgoing directions, and the direction-specific messages mi are aggregated by taking an attention-weighted sum of the corresponding neighborhoods as follows: 
+
+mli, in = X 
+
+> vj∈N in (i)
+
+αlji, in Wl
+
+> in
+
+ulj ,
+
+mli, out = X 
+
+> vj∈N out (i)
+
+αlij, out Wl
+
+> out
+
+ulj .
+
+(2) 
+
+αlji, in = softmax j∈N in (i)(elji, in ),αlij, out = softmax j∈N out (i)(elij, out ). (3) For the next-layer, the node representation is updated by combining self, incoming, and outgoing information: 
+
+eul+1  
+
+> i
+
+= ELU  Wl 
+
+> self
+
+uli + mli, in + mli, out 
+
+ , (4) where Wl 
+
+> self
+
+is the self-transformation matrix, and ELU (·) is the nonlinear activation function. 
+
+Contextualized Step Representation 
+
+Since the correctness of steps depends not only on its own con-tent but also on its consistency with task constraints and sur-rounding actions, ASCon learns contextualized step represen-tations over the directed step graph G(s), whose edges record inter-step execution dependencies. Each node in eS is first en-coded into a semantic embedding e(s) 
+
+> t
+
+= fLM (ct), where fLM 
+
+denotes a pretrained text encoder and ct is the step content. Then, ASCon applies Ls DGAT layers to G(s) and its step embeddings X(s) = [ e(s)0 ; e(s)1 ; . . . ; e(s) 
+
+> Ns
+
+] to get the contextu-alized step representation H(s) as follows: 
+
+H(s) = DGAT (s)
+
+> Ls
+
+
+
+X(s), G (s)
+
+, (5) where h(s) 
+
+> t
+
+is the contextualized representation of step st.
+
+Agent-conditioned step representation. Beyond the task constraints and surrounding actions encoded above, the cor-rectness of a step also depends on its consistency with the set-ting of the executing agent. Therefore, ASCon constructs an agent-conditioned step representation by incorporating the be-havioral state of the responsible agent. For step st, let aϕ(t) be the agent associated with this step. The behavior-aware agent representation h(a)
+
+> ϕ(t)
+
+, computed in the next subsection, is pro-jected into the step representation space: 
+
+r(a) 
+
+> t
+
+= Wa2sh(a)
+
+> ϕ(t)
+
+. (6) The agent-conditioned step representation is computed as 
+
+h(a−s) 
+
+> t
+
+= LayerNorm 
+
+
+
+MLP 
+
+h 
+
+h(s) 
+
+> t
+
+; h(s) 
+
+> t
+
+⊙ r(a)
+
+> t
+
+i 
+
+, (7) where ⊙ denotes element-wise multiplication. 
+
+Behavior-aware Agent Representation 
+
+After step-level encoding, ASCon lifts behavioral evidence from steps to agents. Since an agent is characterized by its executed steps and different steps contribute unequally to fault diagnosis, we introduce masked step-to-agent attention to re-strict aggregation to the agent’s own steps and emphasize the most informative ones. 
+
+Masked step-to-agent attention. To incorporate the task constraint into the agent aggregation, we introduce a user agent 
+
+a0 associated only with step s0. The augmented agent node set is eA = {a0, a 1, . . . , a Na }. Let e(a) 
+
+> k
+
+denote the role embedding of agent ak, where 0 ≤ k ≤ Na. We define an agent-step as-signment matrix M ∈ { 0, 1}(Na+1) ×(Ns+1) , where Mkt = 1 
+
+if step st is associated with agent ak, and Mkt = 0 otherwise. For each agent ak, ASCon first computes a local behavioral summary from its associated steps: 
+
+¯h(s) 
+
+> k
+
+=
+
+PNs 
+
+> t=0
+
+Mkt h(s)
+
+> t
+
+PNs 
+
+> t=0
+
+Mkt 
+
+. (8) This summary provides an agent-specific context for con-structing the pooling query. Then, the query for step-to-agent attention ak is generated as qk = Wq [e(a) 
+
+> k
+
+; ¯h(s) 
+
+> k
+
+], while each step representation is projected into a key vector kt =
+
+WK h(s) 
+
+> t
+
+. The agent-step relevance is then measured by scaled dot-product attention as Akt = q⊤ 
+
+> k
+
+kt/pdq .The assignment mask further restricts each agent only atten-tion to its own steps as follows: 
+
+βkt = softmax t( eAkt ), eAkt =
+
+(
+
+Akt , Mkt = 1 ,
+
+−∞ , Mkt = 0 , (9) where βkt is the attention score. The behavior-aware represen-tation of agent k is then obtained by aggregating its step-level evidence: g(a) 
+
+> k
+
+= PNs 
+
+> t=0
+
+βkt h(s) 
+
+> t
+
+.
+
+Agent graph contextualization. To complement agent-specific evidence with the overall task context, ASCon fur-ther computes a global trajectory representation g(s) by mean-pooling all step representations. The initial agent representa-tions are formed by combining agent role, behavior-aware ev-idence, and global trajectory context: 
+
+z(a) 
+
+> k
+
+= LayerNorm 
+
+
+
+MLP 
+
+
+
+[e(a) 
+
+> k
+
+; g(a) 
+
+> k
+
+; g(s)]
+
+ 
+
+. (10) Similarly, ASCon applies La DGAT layers on the agent graph 
+
+G(a) to learn the final agent representation H(a), as follows: 
+
+H(a) = DGAT (a)
+
+> La
+
+
+
+Z(a), G (a)
+
+, (11) where Z(a) = [ z(a)0 ; z(a)1 ; . . . ; z(a) 
+
+> Na
+
+], and h(a) 
+
+> k
+
+∈ H(a) serves as a contextual anchor for the failure attribution task. 4Method Code Math Agentic Micro-Accuracy Macro-Accuracy Agent Step Agent Step Agent Step Agent Step Agent Step 
+
+DeepSeek-V4-Pro 33.07 11.81 53.97 25.40 58.83 37.83 54.30 32.66 48.62 25.01 Gemini-3.1-Flash 74.80 24.41 50.79 42.86 60.50 21.00 62.03 23.29 62.03 29.42 All-at-Once 66.14 7.87 34.92 30.16 61.00 22.17 59.75 20.51 54.02 20.07 Step-by-Step 65.35 10.24 57.14 36.51 69.67 23.50 67.98 22.41 64.05 23.42 Binary Search 48.82 2.36 42.86 28.57 53.00 20.50 51.52 18.23 48.23 17.14 SDBL (EASD) 70.08 7.09 44.44 38.10 64.83 35.67 64.05 31.27 59.78 26.95 Qwen-SFT 44.09 5.51 49.21 22.22 61.33 38.00 57.59 31.52 51.54 21.91 AgentTracer 83.46 7.09 36.51 42.86 61.00 23.50 62.66 22.41 60.32 24.48 StepFinder 81.89 41.73 79.37 74.60 73.33 52.67 75.18 52.66 78.20 56.33 
+
+ASCon 85.04 52.76 79.37 74.60 80.33 64.33 81.01 63.29 81.58 63.90 
+
+Table 1: Agent- and step-level attribution accuracy (%) on the root-fault attribution task. Best results are in bold , with best base-lines underlined. Columns 2 ∼7 report detailed sub-test set results and the last four columns report overall average accuracies. 
+
+Target-specific Failure Attribution 
+
+The contextualized step and agent representations learned above provide a common basis for identifying faulty agents (who ), faulty steps ( when ), and failure modes ( why ). Specif-ically, agent representations support faulty agent and fail-ure mode identification, agent-conditioned step representa-tions support faulty step localization. Generally, existing MAS failure-attribution studies primarily instantiate these targets in two representative forms: (a) root-fault attribution, which iden-tifies one root responsible agent and one key failure step, and (b) failure-mode attribution, which identifies faulty agents and their corresponding failure modes. Accordingly, ASCon em-ploys the following two prediction heads for these two settings. 
+
+Root-fault attribution. For root-fault attribution, ASCon independently predicts whether each agent and step is faulty using two binary classification heads. The fault probabili-ties are computed as ˆy(a) 
+
+> k
+
+= σ(MLP a(h(a) 
+
+> k
+
+)) and ˆy(s) 
+
+> t
+
+=
+
+σ(MLP s(h(a−s) 
+
+> t
+
+)) , where σ(·) denotes the sigmoid function. Let ˆy(a) and ˆy(s) collect the predicted probabilities of all agents and steps, with y(a) and y(s) denoting their binary la-bels. The training objective is 
+
+Lr = X 
+
+> q∈{ a,s }
+
+BCE 
+
+
+
+ˆy(q), y(q)
+
+. (12) During inference, the highest-probability agent and step are selected as the attribution result. 
+
+Failure-mode attribution. As the relevant diagnostic ev-idence of an agent’s failure mode is distributed across its steps, ASCon combines each contextualized agent represen-tation with associated steps. For agent ak, the step-level ev-idence is pooled as ¯h(a−s) 
+
+> k
+
+= PNs 
+
+> t=1
+
+Mkt h(a−s) 
+
+> t
+
+/ PNs 
+
+> t=1
+
+Mkt 
+
+and fused with its agent representation: 
+
+o(a) 
+
+> k
+
+= LayerNorm(MLP f ([ h(a) 
+
+> k
+
+; ¯h(a−s) 
+
+> k
+
+])) . (13) ASCon then predicts the faulty-agent probability ˆy(a) 
+
+> k
+
+=
+
+σ(MLP a(o(a) 
+
+> k
+
+)) and failure-mode distribution ˆb(m) 
+
+> k
+
+=softmax(MLP m(o(a) 
+
+> k
+
+)) . Let ˆy(a) denote the faulty-agent probabilities and y(a) binary labels, while ˆB(m) 
+
+> F
+
+and b(m) 
+
+> F
+
+de-note the predicted distributions and labels of the faulty agents in set F = {k | y(a) 
+
+> k
+
+= 1 }. The training objective is 
+
+Lm = BCE 
+
+
+
+ˆy(a), y(a)
+
++ CE 
+
+ ˆB(m) 
+
+> F
+
+, b(m)
+
+> F
+
+
+
+. (14) 
+
+# Experiments and Analysis 
+
+Experimental Settings 
+
+Datasets. For root-fault and failure-mode attributions, we select TracerTraj (Zhang et al., 2026) and Aegis-Bench (Kong et al., 2026) as the corresponding evaluation benchmarks. TracerTraj contains trajectories generated by six MASs across coding, mathematical reasoning, and general agentic tasks. We use its extended version as the benchmark, which comprises 3,208 training and 790 test trajectories (127 code, 63 math, and 600 agentic test instances). Aegis-Bench contains over 9K trajectories collected from six MASs and covers 14 failure modes, with each trajectory potentially in-volving multiple faulty agents and failure modes. Following its default setup, we use 600 trajectories for testing and split the remainder 8:2 into training and validation sets. 
+
+Baselines. We compare ASCon with several advanced prompt-based and learning-based failure attribution methods. For root-fault attribution , the prompt-based baselines in-clude All-at-Once, Step-by-Step, and Binary Search (Zhang et al., 2025), as well as SDBL (EASD) (Sun et al., 2026), all in-stantiated with GPT-4o-mini following their original settings. We additionally evaluate DeepSeek-V4-Pro and Gemini-3.1-Flash-lite with the All-at-Once prompt. The learning-based baselines include StepFinder (Zhu et al., 2026b), Agent-Tracer (Zhang et al., 2026), and Qwen-SFT, fine-tuned from Qwen2.5-14B. For failure-mode attribution where related baselines remain limited, we evaluate the same commercial LLMs using the prompt template from Aegis (Kong et al., 2026), and include Aegis-SFT (fine-tuned with LoRA), as 5Model Pair Agent Error 
+
+μF1 MF1 μF1 MF1 μF1 MF1 DeepSeek-V4-Pro 10.70 4.70 73.40 46.78 22.04 16.19 Gemini-3.1-Flash 12.67 5.97 71.76 43.65 23.34 17.11 GPT-4o-mini 9.86 3.14 65.28 27.72 20.81 16.32 Qwen3.5-Flash 11.49 4.70 67.69 40.50 23.61 16.35 Aegis-SFT 17.85 9.89 86.58 68.21 26.08 22.96 
+
+Our Method 31.80 20.98 86.48 71.31 38.27 37.69 
+
+Table 2: Results for the failure-mode attribution task on the Aegis-Bench. the learning-based baseline. All prompt templates used in our evaluation are provided in Appendix A. 
+
+Metrics. Following prior studies (Kong et al., 2026; Zhu et al., 2026b), we evaluate root-fault attribution using agent-and step-level accuracies, which measures whether the top-ranked prediction matches the ground-truth. For failure-mode attribution, we report Micro-F1( μF1) and Macro-F1(MF1). 
+
+μF1 reflects overall performance across all instances, whereas MF1 computes the F1-score for each class independently and then takes the unweighted average. 
+
+Parameters. We set Ls and La to 2, the step and agent rep-resentation dimensions to 256, the attention dimension to 128, and the dropout rate to 0.1. Qwen3-Embedding-0.6B is used to encode steps and agent roles. All models are trained for 12 epochs with AdamW, using a learning rate of 5 × 10 −5 and a weight decay of 10 −5. The ASCon model is implemented in PyTorch and runs on an Intel Core Ultra 7 265KF CPU with an NVIDIA GeForce RTX 5060 GPU. 
+
+Main Results 
+
+Performance on root-fault attribution. 
+
+Table 1 shows that ASCon achieves the best overall perfor-mance, with macro-accuracies of 81.58% for faulty agent attri-bution and 63.90% for faulty step attribution. Compared with StepFinder, the strongest baseline, ASCon improves the two metrics by 3.38% and 7.57%, respectively. Across different task domains, ASCon achieves the best results on code and agentic tasks and matches StepFinder on math, with partic-ularly large step-level gains of 11.03% on code and 11.66% on agentic tasks. The consistently lower step-level scores than agent-level scores indicate that locating the exact faulty action is more challenging than identifying the responsible agent. Across the baselines, the agent-step macro-accuracy gap ranges from 21.87% to 40.63%, whereas ASCon reduces it to 17.68%. This is mostly because ASCon incorporates direction-aware step context and agent-level behavioral con-text into each step representation, thereby providing stronger evidence for fine-grained fault localization. 
+
+Root-fault attribution Model Agent μAccAgent MAccStep μAcc Step Acc 
+
+Lightweight models (< 10 M) StepFinder 42.93 42.52 19.02 15.28 ASCon 45.65 46.36 20.10 17.94 
+
+LLM-based Models (≥8B) DeepSeek-V4-Pro 58.70 55.42 22.28 17.20 +ASCon 67.39 66.89 43.48 40.59 
+
+Gemini-3.1-Flash 53.80 49.99 22.83 18.06 +ASCon 60.87 57.94 36.41 31.24 SDBL (EASD) 57.07 56.09 30.98 27.27 +ASCon 57.07 60.28 34.24 31.05 Qwen-SFT 50.00 49.07 27.17 25.42 +ASCon 53.80 52.78 32.07 29.93 AgentTracer 50.00 43.95 26.63 21.77 +ASCon 55.43 51.64 30.43 26.41 
+
+Failure-mode attribution 
+
+Model Agent μF1 Agent MF1 Error μF1 Error MF1 
+
+ASCon 44.76 26.43 7.37 5.95 Deepseek-V4-pro 48.10 29.60 12.64 7.57 +ASCon 51.14 38.23 13.82 7.76 Gemini-3.1-Flash 50.63 34.47 14.13 8.09 +ASCon 53.23 35.08 15.61 11.21 
+
+GPT-4o-mini 49.34 31.61 6.99 5.16 +ASCon 53.90 38.74 10.33 8.71 Qwen3.5-Flash 46.04 28.97 9.22 6.46 +ASCon 52.52 31.85 11.89 9.34 Aegis-SFT 31.78 16.48 5.39 2.85 +ASCon 42.73 27.09 9.28 6.43 Table 3: Out-of-domain evaluation results on Who&When dataset.“+ASCon” denotes the use of ASCon predictions as auxiliary attribution evidence. μAcc and MAcc represent micro-accuracy and macro-accuracy, respectively. 
+
+Performance on failure-mode attribution 
+
+We evaluate failure-mode attribution at three levels: Agent ,which identifies faulty agents while ignoring failure modes; 
+
+Error , which identifies failure modes while ignoring agents; and Pair , which requires the correct agent-error association. Table 2 shows that ASCon achieves the best overall perfor-mance at all level attributions. Compared with Aegis-SFT, the strongest baseline, ASCon improves pair-level μF1 and MF1 by 13.95% and 11.09%, respectively, while increasing error-level μF1 and MF1 by 12.19% and 14.73%. At the agent level, ASCon improves MF1 by 3.10% while maintaining compara-ble μF1, with a difference of only 0.10%. These results indi-cate that ASCon is more effective at jointly identifying faulty agents and their associated error types, while the consistent MF1 gains suggest improved performance across less frequent classes rather than only on dominant categories. 
+
+Generalization to Out-of-Domain Scenarios 
+
+To evaluate out-of-domain generalization, we test ASCon on Who&When benchmark without further training. Beyond de-6Setting Root-Fault Attribution Failure-Mode Attribution Step Agent Agent Error Pair 
+
+μAcc MAcc μAcc MAcc μF1 MF1 μF1 MF1 μF1 MF1 ASCon 66.20 +0 .00 64.50 +0 .00 82.41 +0 .00 86.60 +0 .00 86.48 +0 .00 71.31 +0 .00 38.27 +0 .00 37.69 +0 .00 31.80 +0 .00 20.98 +0 .00 
+
+DGAT →GAT 61.14 −5.06 59.81 −4.69 79.37 −3.04 82.24 −4.36 83.10 −3.38 66.08 −5.23 33.67 −4.60 32.49 −5.20 26.06 −5.74 18.28 −2.70 
+
+DGAT →BiGRU 64.94 −1.26 58.57 −5.93 81.27 −1.14 84.42 −2.18 82.65 −3.84 62.17 −9.14 32.70 −5.57 31.98 −5.71 24.90 −6.90 15.87 −5.11 
+
+w/o MSTAA 62.03 −4.17 61.68 −2.82 76.84 −5.57 82.87 −3.74 85.13 −1.35 68.88 −2.43 36.94 −1.33 35.70 −1.99 29.12 −2.68 18.54 −2.44 
+
+MSTAA →Mean 61.39 −4.81 64.17 −0.33 80.76 −1.65 85.67 −0.93 85.98 −0.50 68.49 −2.82 34.79 −3.48 34.38 −3.31 27.82 −3.98 17.89 −3.09 
+
+w/o ACSR 61.14 −5.06 62.62 −1.88 82.03 −0.38 86.92 +0 .32 85.69 −0.79 62.58 −8.73 36.73 −1.54 35.50 −2.19 29.16 −2.64 18.66 −2.32 
+
+Table 4: Ablation results of ASCon. Subscripts denote changes relative to the full model. Underlined values indicate the largest degradation for each metric. fault baselines, we incorporate ASCon predictions into several strong LLM-based attribution methods to examine whether its fault evidence can complement their reasoning under distribu-tion shift. Specifically, for SDBL, we replace its original fault-range prediction with the candidates ranked highest by AS-Con, selecting the top-3 agents and the top-5/10 steps for the Algorithm-Generated/Handcrafted subset, while retaining its subsequent reasoning process. For other LLM-based baselines, ASCon predictions are appended to the input. Root-fault attri-bution uses step and agent fault probabilities, while failure-mode attribution uses agent-level fault probabilities and top-five candidate fault types. Detailed formats, settings, and re-sults are provided in Appendix B. As shown in Table 3, ASCon outperforms StepFinder on all agent- and step-level metrics, indicating stronger out-of-domain transfer among lightweight attribution models. Some LLM-based methods achieve higher performance, which is expected given their substantially larger model capacity and broad pretrained knowledge. Nevertheless, incorporating AS-Con predictions further improves these methods on all granu-larity metrics. These results show that ASCon captures trans-ferable fine-grained fault evidence that effectively comple-ments LLM-based reasoning in unseen scenarios. 
+
+Ablations 
+
+To assess the contribution of each component in ASCon, we construct the following five variants. DGAT →GAT and 
+
+DGAT →BiGRU replace DGAT with a standard GAT and a bidirectional GRU, respectively, to evaluate the neces-sity of direction-aware relational modeling. w/o MSTAA and 
+
+MSTAA →Mean remove masked step-to-agent attention and replace its learned weighting with mean pooling over agent-owned steps, respectively, to examine the importance of se-lective behavioral aggregation. Finally, w/o ACSR removes the agent-conditioned step representation to assess the contribu-tion of agent context to step-level attribution. As shown in Table 4, all variants exhibit overall perfor-mance degradation, confirming that the three components pro-vide complementary attribution evidence. Replacing DGAT consistently reduces performance, while BiGRU causes the largest degradation on most failure-mode metrics, including a 9.14% drop in Agent MF1 and a 6.90% drop in Pair MF1. This suggests that sequential encoding alone is insufficient, and that explicitly modeling directional relations among steps provides more discriminative structural evidence. The degra-dation of the MSTAA variants shows that learned step-to-agent attention is more effective than simple averaging, as differ-ent steps contribute unequally and irrelevant or propagated be-haviors should be suppressed. Removing ACSR substantially reduces root-fault Step micro-accuracy by 5.06% and consis-tently harms Error and Pair attribution, showing that condition-ing individual steps on their responsible agents improves fine-grained agent–error association. Overall, the ablation results support the complementary roles of directional step model-ing, selective step-to-agent aggregation, and agent-conditioned step refinement. 
+
+Can ASCon Capture Potential Dependencies? Step (Code) Agent (Code) Step (Math) Agent (Math) Step (Agentic) Agent (Agentic)              
+
+> 40 50 60 70 80 90
+> Accuracy score (%)
+> 52.76 85.04 74.60 79.37 64.33 80.33 46.46 88.19 68.25 79.37 64.83 80.83
+> Δ=-6.30 Δ=+3.15 Δ=-6.35 Δ=+0.00 Δ=+0.50 Δ=+0.50
+> (a) Root-Fault Attribution
+> Vanilla graph LLM-inferred graph
+> Agent μF1 Agent MF1 Error μF1 Error MF1 Pair μF1 Pair MF1
+> 20 30 40 50 60 70 80 90
+> F1 score (%)
+> 86.48 71.31 38.27 37.69 31.80 20.98 86.10 68.22 36.97 36.22 29.62 19.49
+> Δ=-0.39 Δ=-3.09 Δ=-1.31 Δ=-1.46 Δ=-2.18 Δ=-1.49
+> (b) Multi-Fault Attribution
+> Vanilla graph LLM-inferred graph
+
+Figure 3: Performance comparison between vanilla graphs and LLM-inferred graphs. To assess whether ASCon can implicitly learn useful inter-step and inter-agent dependencies from the vanilla graph, we replace its original edges with dependencies inferred by Deepseek-V4-pro with the prompt in Appendeix A.7. As 7shown in Figure 3, the LLM-inferred graph provides no con-sistent advantage. In root-fault attribution, it improves code agent accuracy by 3.15% and yields marginal gains on agen-tic tasks, but reduces step accuracy by 6.30% on code and 6.35% on math. In failure-mode attribution, the two graph con-structions perform comparably, with the LLM-inferred graph only slightly lower. These results suggest that ASCon can al-ready capture attribution-relevant dependencies through super-vised representation learning and directional graph aggrega-tion. In contrast, LLM-inferred edges may introduce noisy or overly broad connections, which are particularly harmful to fine-grained step localization and failure-mode discrimination. Therefore, the simpler vanilla graph in ASCon is both suffi-cient and more reliable. 
+
+# Conclusion 
+
+This paper presented ASCon, a direction-aware reciprocal agent-step contextualization model for MAS failure attribu-tion. By jointly modeling directional action context, agent behavioral histories, and inter-agent interactions, ASCon learns contextualized representations that support faulty-agent, faulty-step, and failure-mode attribution. Experiments demon-strate ASCon made consistent improvements over strong base-lines, and can also enhance existing attribution methods in out-of-domain scenarios. These findings highlight ASCon can learn effective agent and step contextualization representations for fine-grained and transferable MAS failure diagnosis. 
+
+# References 
+
+Mert Cemri, Melissa Z. Pan, Shuyi Yang, Lakshya A. Agrawal, Bhavya Chopra, Rishabh Tiwari, Kurt Keutzer, Aditya Parameswaran, Dan Klein, Kannan Ramchandran, Matei A. Zaharia, Joseph E. Gonzalez, and Ion Stoica. Why do multi-agent LLM systems fail? In Advances in Neural Information Processing Systems , volume 38, 2025. URL https://proceedings.neurips.cc/paper files/paper/2025/hash/ b1041e52d3be19f0a9bc491657488e4a-Abstract-Datasets and Benchmarks Track.html. Mengzhuo Chen, Junjie Wang, Fangwen Mu, Yawen Wang, Zhe Liu, Huanxiang Feng, and Qing Wang. Seeing the whole elephant: A benchmark for failure attribution in llm-based multi-agent systems. In Proceedings of the 64th An-nual Meeting of the Association for Computational Linguis-tics (Volume 1: Long Papers) , pages 19888–19905, 2026. Will Epperson, Gagan Bansal, Victor C Dibia, Adam Fourney, Jack Gerrits, Erkang Zhu, and Saleema Amershi. Interactive debugging and steering of multi-agent ai systems. In Pro-ceedings of the 2025 CHI Conference on Human Factors in Computing Systems , pages 1–15, 2025. Adam Fourney, Gagan Bansal, Hussein Mozannar, Cheng Tan, Eduardo Salinas, Erkang Zhu, Friederike Niedtner, Grace Proebsting, Griffin Bassman, Jack Gerrits, Jacob Alber, Pe-ter Chang, Ricky Loynd, Robert West, Victor Dibia, Ahmed Awadallah, Ece Kamar, Rafah Hosn, and Saleema Amer-shi. Magentic-one: A generalist multi-agent system for solv-ing complex tasks, 2024. URL https://arxiv.org/abs/2411. 04468. Yu Ge, Linna Xie, Zhong Li, Yu Pei, and Tian Zhang. Spectrum-based failure attribution for multi-agent systems. In Proceedings of the ACM on Software Engineering , vol-ume 3, pages 1888–1909. ACM New York, NY, USA, 2026. Mingyang Geng, Shanzhi Gu, Zhipeng Liu, Chuanfu Xu, Zhaoyang Qu, and Haotian Wang. Failure localization in multi-agent code generation via knowledge-guided and transferable reasoning. In Proceedings of the AAAI Confer-ence on Artificial Intelligence , volume 40, pages 318–326, 2026. Ali Essam Ghareeb, Benjamin Chang, Ludovico Mitch-ener, Angela Yiu, Caralyn J Szostkiewicz, Dmytro Shved, Gavin J Gyimesi, Jon M Laurent, Samantha M Wright, Muhammed T Razzak, et al. A multi-agent system for au-tomating scientific discovery. Nature , pages 1–3, 2026. Yeonjun In, Mehrab Tanjim, Jayakumar Subramanian, Sungchul Kim, Uttaran Bhattacharya, Wonjoong Kim, Sangwu Park, Somdeb Sarkhel, and Chanyoung Park. Re-thinking failure attribution in multi-agent systems: A multi-perspective benchmark and evaluation. In Workshop on Failure Modes of Agentic AI at ICML 2026 , 2026. Fanqi Kong, Ruijie Zhang, Huaxiao Yin, Guibin Zhang, Xi-aofei Zhang, Ziang Chen, Zhaowei Zhang, Xiaoyuan Zhang, Song-Chun Zhu, and Xue Feng. Aegis: Automated er-ror generation and attribution for multi-agent systems. In 
+
+The Fourteenth International Conference on Learning Rep-resentations , 2026. URL https://openreview.net/forum?id= zqcYoxXiN3. Jiale Liu, Huajun Xi, Shaokun Zhang, Yifan Zeng, Tianwei Yue, Chi Wang, Jian Kang, Qingyun Wu, and Huazheng Wang. Who&when pro: Can llms really attribute failures in ai agents?, 2026. Ming Ma, Jue Zhang, Fangkai Yang, Yu Kang, Qingwei Lin, Saravan Rajmohan, and Dongmei Zhang. Dover: Intervention-driven auto debugging for LLM multi-agent systems. In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview. net/forum?id=mrEK16Jy6h. Shihao Qi, Jie Ma, Rui Xing, Wei Guo, Xiao Huang, Zhi-tao Gao, Jianhao Deng, Jun Liu, Lingling Zhang, Bifan Wei, Boqian Yang, Pinghui Wang, Jianwen Sun, Jing Tao, Yaqiang Wu, Hui Liu, Yu Yao, and Tongliang Liu. Beyond individual intelligence: Surveying collaboration, failure at-tribution, and self-evolution in LLM-based multi-agent sys-tems, 2026. URL https://arxiv.org/abs/2605.14892. 8Chen Qian, Wei Liu, Hongzhang Liu, Nuo Chen, Yufan Dang, Jiahao Li, Cheng Yang, Weize Chen, Yusheng Su, Xin Cong, Juyuan Xu, Dahai Li, Zhiyuan Liu, and Maosong Sun. ChatDev: Communicative agents for software devel-opment. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 15174–15186, 2024. doi: 10.18653/v1/2024. acl-long.810. URL https://aclanthology.org/2024.acl-long. 810/. Hezhe Qiao, Hanghang Tong, Ee-Peng Lim, Bing Liu, and Guansong Pang. Verifymas: Hypothesis verification for fail-ure attribution in LLM multi-agent systems, 2026. URL https://arxiv.org/abs/2605.17467. Kai Sun, Wenqiang Li, Bo Dong, Yuxin Lin, Jingyao Zhang, and Bin Shi. Scope delineation before localization: A two-stage framework for enhancing failure attribution in multi-agent systems. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 33108–33116, 2026. Xinru Wang, Ming Yin, Eunyee Koh, and Mustafa Doga Do-gan. Xagen: An explainability tool for identifying and cor-recting failures in multi-agent workflows. In Proceedings of the Extended Abstracts of the 2026 CHI Conference on Human Factors in Computing Systems , pages 1–11, 2026a. Yawen Wang, Wenjie Wu, Junjie Wang, and Qing Wang. From flat logs to causal graphs: Hierarchical failure attribution for LLM-based multi-agent systems, 2026b. URL https://arxiv. org/abs/2602.23701. Alva West, Yixuan Weng, Minjun Zhu, Zhen Lin, and Yue Zhang. Abduct, act, predict: Scaffolding causal inference for automated failure attribution in multi-agent systems, 2025. URL https://arxiv.org/abs/2509.10401. Hua Wu, Wanhao Zheng, Minghao Zhang, Xiaojing Bai, Mengyang Pu, Li Sun, Junchen Liu, and Yuhan Xu. Intention-behavior consistency-based automated failure at-tribution for llm-driven multi-agent systems. Expert Sys-tems with Applications , page 133044, 2026. Miao Yu, Shilong Wang, Guibin Zhang, Junyuan Mao, Chen-long Yin, Qijiong Liu, Kun Wang, Qingsong Wen, and Yang Wang. NetSafe: Exploring the topological safety of multi-agent system. In Wanxiang Che, Joyce Nabende, Ekate-rina Shutova, and Mohammad Taher Pilehvar, editors, Find-ings of the Association for Computational Linguistics: ACL 2025 , pages 2905–2938, Vienna, Austria, July 2025. Asso-ciation for Computational Linguistics. ISBN 979-8-89176-256-5. doi: 10.18653/v1/2025.findings-acl.150. URL https: //aclanthology.org/2025.findings-acl.150/. Guibin Zhang, Junhao Wang, Junjie Chen, Wangchunshu Zhou, Kun Wang, and Shuicheng YAN. Agentracer: Who is inducing failure in the LLM agentic systems? In The Fourteenth International Conference on Learning Repre-sentations , 2026. URL https://openreview.net/forum?id= l05DseqvuD. Shaokun Zhang, Ming Yin, Jieyu Zhang, Jiale Liu, Zhiguang Han, Jingyang Zhang, Beibin Li, Chi Wang, Huazheng Wang, Yiran Chen, et al. Which agent causes task failures and when? on automated failure attribution of llm multi-agent systems. In International Conference on Machine Learning , pages 76583–76599. PMLR, 2025. Chenyang Zhu, Spencer Hong, Jingyu Wu, Kushal Chawla, Yuhui Tang, Youbing Yin, Nathan Wolfe, Erin Babinsky, and Daben Liu. RAFFLES: Reasoning-based attribution of faults for LLM systems. In Proceedings of the 19th Confer-ence of the European Chapter of the Association for Compu-tational Linguistics (Volume 1: Long Papers) , pages 7659– 7688, 2026a. doi: 10.18653/v1/2026.eacl-long.359. URL https://aclanthology.org/2026.eacl-long.359/. Taiyu Zhu, Yifan Wu, Weilin Jin, Ying Li, and Gang Huang. Stepfinder: A temporal semantic framework for failure attri-bution in multi-agent systems. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2026b. doi: 10.1145/3770855.3817991. URL https://arxiv.org/abs/2606.03467. 9Appendix 
+
+# A. Prompt Templates Used in This Paper 
+
+A.1 All-at-Once Attribution Prompt Template for Root-Fault Attribution 
+
+This prompt template comes frome the All-at-Once baseline (Zhang et al., 2025), and is also used by Qwen-SFT and the LLM-based baselines for root-fault attribution. 
+
+You are an AI assistant tasked with analyzing a multi-agent conversation history when solving a real-world problem. The problem is: {problem }.Identify which agent made an error, at which step, and explain the reason for the error. Here is the conversation: {chat content }
+
+Based on this conversation, please predict the following: 1. The name of the agent who made a mistake and should be directly responsible for the incorrect solution to the real-world problem. If no agent makes an obvious mistake, select the single most likely responsible agent. Directly output the name of the agent. 2. The step at which the responsible agent first made a mistake. For example, consider the following conversation: 
+
+{“agent a”: “xx”, “agent b”: “xxxx”, “agent c”: “xxxxx”, “agent a”: “xxxxxxx” }.
+
+Each entry represents one step in which an agent provides an output. If the mistake occurs in agent c’s output, the step number is 2. If it occurs in the second output of agent a, the step number is 3. 3. The reason for your prediction. Please answer in valid JSON format as follows:          
+
+> {"agent_name": "Your predicted root-cause faulty agent name", "step_number": 1, "reason_for_mistake": "Your reason" }
+
+A.2 Prompt of AgentTracer 
+
+You are AgentTracer, a failure attribution model for LLM-based agentic systems. Given a failed multi-agent trajectory, identify the earliest decisive error: the first step whose correction would be sufficient to avoid the final failure. Return exactly the following format:   
+
+> {<think>brief evidence-based reasoning</think> <answer>agent_name|step_number</answer>}
+
+The agent name must match one of the agents in the trajectory, and step number must be an integer step ID. 
+
+A.3 Prompt of ASCon-Enhanced SDBL Method 
+
+You are an AI assistant tasked with analyzing a multi-agent conversation history when solving a real-world problem. The problem is: {problem }.Identify which agent made an error, at which step, and explain the reason for the error. Here is the conversation: 
+
+10 {chat content }
+
+The following agents and steps are flagged for special attention. These are the candidates identified by our automated proce-dure as the most likely fault locations. Please focus on these high-confidence candidates and prioritize them when locating the root cause: 
+
+{reference content }
+
+Based on this conversation, please predict the following: 1. The name of the agent directly responsible for the incorrect solution. If no agent makes an obvious mistake, select the single most likely responsible agent and output its name. 2. The step at which the responsible agent first made a mistake. For example, in the conversation 
+
+{“agent a”: “xx”, “agent b”: “xxxx”, “agent c”: “xxxxx”, “agent a”: “xxxxxxx” },
+
+each entry represents one step. If the mistake occurs in agent c’s output, the step number is 2. If it occurs in the second output of agent a, the step number is 3. 3. The reason for your prediction. Please answer in valid JSON format as follows:          
+
+> {"agent_name": "Your predicted root-cause faulty agent name", "step_number": 1, "reason_for_mistake": "Your reason" }
+
+A.4 Prompt of ASCon-Enhanced LLM-Based Attribution Methods 
+
+You are an AI assistant tasked with analyzing a multi-agent conversation history when solving a real-world problem. The problem is: {problem }.Identify which agent made an error, at which step, and explain the reason for the error. Here is the conversation: 
+
+{chat content }
+
+Based on this conversation, please predict the following: 1. Each step is associated with an auxiliary fault probability. First examine the high-probability steps and their neighboring context to determine whether they contain the root-cause mistake. 
+
+2. The name of the agent directly responsible for the incorrect solution. If no agent makes an obvious mistake, select the single most likely responsible agent and output its name. 3. The step at which the responsible agent first made a mistake. For example, in the conversation 
+
+{“agent a”: “xx”, “agent b”: “xxxx”, “agent c”: “xxxxx”, “agent a”: “xxxxxxx” },
+
+each entry represents one step. If the mistake occurs in agent c’s output, the step number is 2. If it occurs in the second output of agent a, the step number is 3. 4. The reason for your prediction. Please answer in valid JSON format as follows:          
+
+> {"agent_name": "Your predicted root-cause faulty agent name", "step_number": 1, "reason_for_mistake": "Your reason" }
+
+A.5 Prompt Template for Failure-Mode Attribution 
+
+11 ## ROLE AND GOAL You are a meticulous Multi-Agent System (MAS) Quality Assurance analyst. Your sole purpose is to analyze conversation logs to identify and categorize agent errors based on a strict set of definitions. ## ERROR DEFINITIONS WITH EXAMPLES You MUST use the exact error codes provided below. ### Functional Mistakes (FM-1.x - Task Execution Errors): - FM-1.1: **Task specification deviation** - Agent deviates from specified task requirements (e.g., was asked to write code in Python, but used JavaScript). - FM-1.2: **Role specification deviation** - Agent acts outside its designated role (e.g., a ’CodeWriter’ agent starts criticizing other agents’ work, which is the ’Critic’s’ role). - FM-1.3: **Add redundant steps** - Agent adds unnecessary or duplicate steps (e.g., imports a library that was already imported in a previous step). - FM-1.4: **Remove conversation history** - Agent ignores or removes important context from previous turns (e.g., ignores a user’s correction from the previous message). - FM-1.5: **Remove termination conditions** - Agent fails to define proper stopping criteria, leading to loops or unfinished tasks (e.g., writes a recursive function with no base case). ### Functional Mistakes (FM-2.x - Communication & Coordination Errors): - FM-2.1: **Repeat handled tasks** - Agent redundantly handles already completed tasks (e.g., re-writes a piece of code that was already finalized and approved). - FM-2.2: **Make request ambiguous** - Agent provides unclear or confusing instructions to other agents (e.g., asks another agent to ”handle the data” without specifying how). - FM-2.3: **Deviate from main goal** - Agent pursues objectives unrelated to the main task (e.g., starts discussing the history of programming languages in the middle of a coding task). - FM-2.4: **Hide important information** - Agent withholds crucial information needed by other agents (e.g., knows a library has a bug but doesn’t mention it). - FM-2.5: **Ignore other agents** - Agent fails to consider input, corrections, or questions from other agents. - FM-2.6: **Inconsistent reasoning** - Agent’s logic contradicts its own previous statements (e.g., in step 2 agent says ’option A is best’, but in step 4 says ’option A is a bad choice’ without new information). ### Functional Mistakes (FM-3.x - Quality & Verification Errors): - FM-3.1: **Premature termination** - Agent stops or declares the task complete before all requirements are met. - FM-3.2: **Remove verification steps** - Agent skips necessary validation or testing steps (e.g., writes code but doesn’t write any unit tests for it). - FM-3.3: **Incorrect verification** - Agent performs flawed or wrong verification (e.g., writes a test that doesn’t actually check for the correct condition). ## ANALYSIS WORKFLOW Please follow these steps carefully: ### Step 1: Agent Summary First, analyze and summarize what each agent has done throughout the conversation: - List each agent that appears in the conversation - For each agent, summarize their main actions, decisions, and contributions - Note any patterns or recurring behaviors ### Step 2: Error Analysis For each agent identified in Step 1: - Carefully examine their actions against each error definition - Look for violations of task requirements, role boundaries, communication issues, or quality problems - Note any potential errors with specific reasoning ### Step 3: Final Judgment Based on your analysis in Steps 1 and 2: - Determine which agents (if any) committed errors - Assign the appropriate error code(s) to each faulty agent - Ensure agent names match exactly as they appear in the conversation log ## REQUIRED OUTPUT FORMAT Your response must contain: 1. **Agent Summary**: A brief analysis of what each agent did 2. **Error Analysis**: Your reasoning for identifying errors 3. **Final Answer**: A valid JSON object with your conclusions **JSON Format:** ”faulty agents”: [”agent name”: ”XXX”, ”error type”: ”FM-X.X”] **Examples:** - Multiple Errors: ”faulty agents”: [”agent name”: ”XXX1”, ”error type”: ”FM-1.1”, ”agent name”: ”XXX2”, ”er-ror type”: ”FM-3.2”, ”agent name”: ”XXX3”, ”error type”: ”FM-2.5”] - No Errors: ”faulty agents”: [] **Important:** Make sure the agent names you output exactly match those in the conversation log. Do not fabricate names. ## CONVERSATION TO ANALYZE: {conversation text }
+
+12 ## YOUR ANALYSIS: 
+
+A.6 Prompt Template for ASCon-enhaced Failure-Mode Attribution 
+
+## ROLE AND GOAL You are a meticulous Multi-Agent System (MAS) Quality Assurance analyst. Your sole purpose is to analyze conversation logs to identify and categorize agent errors based on a strict set of definitions. ## ERROR DEFINITIONS WITH EXAMPLES You MUST use the exact error codes provided below. ### Functional Mistakes (FM-1.x - Task Execution Errors): - FM-1.1: **Task specification deviation** - Agent deviates from specified task requirements (e.g., was asked to write code in Python, but used JavaScript). - FM-1.2: **Role specification deviation** - Agent acts outside its designated role (e.g., a ’CodeWriter’ agent starts criticizing other agents’ work, which is the ’Critic’s’ role). - FM-1.3: **Add redundant steps** - Agent adds unnecessary or duplicate steps (e.g., imports a library that was already imported in a previous step). - FM-1.4: **Remove conversation history** - Agent ignores or removes important context from previous turns (e.g., ignores a user’s correction from the previous message). - FM-1.5: **Remove termination conditions** - Agent fails to define proper stopping criteria, leading to loops or unfinished tasks (e.g., writes a recursive function with no base case). ### Functional Mistakes (FM-2.x - Communication & Coordination Errors): - FM-2.1: **Repeat handled tasks** - Agent redundantly handles already completed tasks (e.g., re-writes a piece of code that was already finalized and approved). - FM-2.2: **Make request ambiguous** - Agent provides unclear or confusing instructions to other agents (e.g., asks another agent to ”handle the data” without specifying how). - FM-2.3: **Deviate from main goal** - Agent pursues objectives unrelated to the main task (e.g., starts discussing the history of programming languages in the middle of a coding task). - FM-2.4: **Hide important information** - Agent withholds crucial information needed by other agents (e.g., knows a library has a bug but doesn’t mention it). - FM-2.5: **Ignore other agents** - Agent fails to consider input, corrections, or questions from other agents. - FM-2.6: **Inconsistent reasoning** - Agent’s logic contradicts its own previous statements (e.g., in step 2 agent says ’option A is best’, but in step 4 says ’option A is a bad choice’ without new information). ### Functional Mistakes (FM-3.x - Quality & Verification Errors): - FM-3.1: **Premature termination** - Agent stops or declares the task complete before all requirements are met. - FM-3.2: **Remove verification steps** - Agent skips necessary validation or testing steps (e.g., writes code but doesn’t write any unit tests for it). - FM-3.3: **Incorrect verification** - Agent performs flawed or wrong verification (e.g., writes a test that doesn’t actually check for the correct condition). ## ANALYSIS WORKFLOW Please follow these steps carefully: ### Step 1: Agent Summary First, analyze and summarize what each agent has done throughout the conversation: - List each agent that appears in the conversation - For each agent, summarize their main actions, decisions, and contributions - Note any patterns or recurring behaviors ### Step 2: Error Analysis For each agent identified in Step 1: - Carefully examine their actions against each error definition - Look for violations of task requirements, role boundaries, communication issues, or quality problems - Note any potential errors with specific reasoning ### Step 3: Final Judgment Based on your analysis in Steps 1 and 2: - Determine which agents (if any) committed errors - Assign the appropriate error code(s) to each faulty agent - Ensure agent names match exactly as they appear in the conversation log 
+
+### AUXILIARY AGENT FAULT PROFILE Each conversation will be followed by an auxiliary fault profile for every agent, including: 
+
+13 - auxiliary fault probability: the probability that the agent is faulty in this task; - top 5 likely fault types: the five most likely fault types predicted for that agent. Please use this auxiliary information to assist your judgment of faulty agents and fault types. 
+
+## REQUIRED OUTPUT FORMAT Your response must contain: 1. **Agent Summary**: A brief analysis of what each agent did 2. **Error Analysis**: Your reasoning for identifying errors 3. **Final Answer**: A valid JSON object with your conclusions **JSON Format:** ”faulty agents”: [”agent name”: ”XXX”, ”error type”: ”FM-X.X”] **Examples:** - Multiple Errors: ”faulty agents”: [”agent name”: ”XXX1”, ”error type”: ”FM-1.1”, ”agent name”: ”XXX2”, ”er-ror type”: ”FM-3.2”, ”agent name”: ”XXX3”, ”error type”: ”FM-2.5”] - No Errors: ”faulty agents”: [] **Important:** Make sure the agent names you output exactly match those in the conversation log. Do not fabricate names. ## CONVERSATION TO ANALYZE: {conversation text }
+
+## YOUR ANALYSIS: 
+
+A.7 Prompt of LLM-Based Agent/Step Graph Inference 
+
+You are an expert in Multi-Agent System behavior analysis. I will provide you with a trajectory of agent behaviors consisting of multiple numbered steps. Each step contains information such as the executing agent, actions, and dialogues. You need to complete two tasks and output the results strictly in the specified format. 
+
+Task 1: Construct the Step Dependency Graph 
+
+Nodes are step numbers, i.e., Step 1, Step 2, . . . . For any two steps Si and Sj , typically with i < j , establish a directed edge Si → Sj
+
+if any of the following conditions is satisfied: 1. Content Dependency: The output of Sj retains, integrates, references, or is directly derived from the concrete output of Si.This includes data, instructions, assumptions, intermediate conclusions, code snippets, or task descriptions. 2. Goal/Context Dependency: Step Si establishes the problem definition, task goal, execution context, role assignment, or oper-ational constraints used by Sj .3. Feedback Dependency: Step Sj explicitly responds to, evaluates, or revises the output of step Si.
+
+Important notes for Task 1: 
+
+• Add only one edge when the same pair satisfies multiple conditions. • A step may depend on multiple preceding steps. • Do not omit dependencies originating from initialization, problem-definition, or task-assignment steps. • Use the step numbers exactly as they appear in the trajectory. 
+
+Task 2: Construct the Agent Interaction Graph 
+
+Nodes are agent names. Add a directed edge between two agents when: • information, messages, tasks, requests, feedback, or intermediate conclusions are transmitted between them; • one message or task explicitly targets multiple agents, in which case an edge is added from the sender to each recipient; • a step dependency Si → Sj exists, where Si is performed by agent A and Sj by agent B, with A̸ = B.Do not add duplicate edges. 
+
+Output Format 
+
+Output only a valid JSON object. Agent names must be copied from the name attribute of the corresponding history steps.       
+
+> {"agent_interactions": [{"from": "<Agent name>", "to": "<Agent name>" }], "step_causalities": [
+
+14 {"from": <step_number>, "to": <step_number> }]}
+
+Here is the agent behavior trace to be analyzed: 
+
+{trajectory }
+
+A.8 Real-Time Failure Detection Prompt 
+
+You are a real-time failure detector for a multi-agent system. We will provide you with the original user task and the execution trajectory observed so far. Your task is to determine, based on the observed agent actions and intermediate states, whether a failure has occurred. A failure occurs when an observed action or intermediate result is inconsistent with the user task, established task constraints, valid prior information, or the requirements of the current execution step. Do not report a failure solely because the task is unfinished or the trajectory contains exploration, uncertainty, or a later correction. Return only:                        
+
+> {{"fault\_detected": true or false, "fault\_step": the earliest identifiable faulty step ID or null, "fault\_agent": the responsible agent or null, "reason": "A brief explanation based on the observed trajectory." }}
+
+Here is the user task and the execution trajectory. [USER TASK] task [OBSERVED TRAJECTORY] trajectory 
+
+# B. Detailed Generalization Performance Comparison Results 
+
+Out-of-Domain Evaluation Setup. We evaluate the out-of-domain generalization of ASCon on the Who&When bench-mark without any further training or parameter updates. The root-fault attribution test set follows the original Who&When dataset (Zhang et al., 2025). The failure-mode attribution test set is adopted from (Kong et al., 2026), which extends the same Who&When trajectories with additional failure-type annotations. In addition to evaluating ASCon directly, we incorporate its predictions into several strong LLM-based attribution methods to examine whether the learned fault evidence can complement LLM reasoning under distribution shift. For root-fault attribution, we replace SDBL’s original first-stage fault-range prediction with the candidates ranked highest by ASCon, while retaining its subsequent reasoning procedure. Specifically, we select the top-3 agents together with the top-5 and top-10 steps for the Algorithm-Generated (AG) and Handcrafted (HC) subsets, re-spectively. For the remaining LLM-based baselines, the predicted fault probability predicted by ASCon is attached to each step using the following format to enhance the root-fault attribution task: {step id: xxx, content: xxx, fault probability: xxx }. The augmented trajectory is then provided to the prompt templates in Appendices A.3 and A.4. For failure-mode attribution, ASCon evidence is appended after the complete conversation history. Each agent is associ-ated with its predicted fault probability and five most likely failure modes using the following format: {agent name: xxx, fault probability: xxx, top5 likely failure modes: xxx }. The resulting input is evaluated using the prompt template in Ap-pendix A.6. 
+
+Out-of-Domain Results. Tables 5 and 6 report the out-of-domain results for root-fault and failure-mode attribution. On root-fault attribution, ASCon consistently outperforms StepFinder and substantially improves most enhanced baselines, especially for step localization. With ASCon assistance, DeepSeek-V4-Pro gains 21.20 and 23.39 percentage points in step-level micro-and macro-accuracy, respectively, and achieves the best results on seven of the eight metrics. These gains indicate that ASCon provides transferable fault evidence that helps LLMs identify where failures emerge under distribution shift. For failure-mode attribution, LLMs assisted by ASCon achieve the best agent- and error-level results. Specifically, GPT-4o-mini with ASCon obtains the highest agent-level scores, while Gemini-3.1-Flash with ASCon achieves the best error-level performance. Aegis-SFT also receives the largest agent-level gains, improving by 10.95 and 10.61 percentage points in micro-15 Model HC AG Micro-Accuracy Macro-Accuracy Agent Step Agent Step Agent Step Agent Step 
+
+Lightweight models (< 10 M) StepFinder 41.38 5.17 43.65 25.40 42.93 19.02 42.52 15.28 ASCon 48.28 12.07 44.44 23.81 45.65 20.11 46.36 17.94 
+
+LLM-based models (≥ 8B) Gemini-3.1-Flash 39.66 5.17 60.32 30.95 53.80 22.83 49.99 18.06 GPT-4o-mini 58.62 6.90 53.97 11.90 55.44 10.32 56.30 9.40 Step-by-Step 31.03 12.07 24.60 14.29 26.63 13.59 27.82 13.18 Binary Search 20.17 10.17 27.78 10.32 25.38 10.27 23.98 10.25 DeepSeek-V4-Pro 46.55 3.45 64.29 30.95 58.70 22.28 55.42 17.20 +ASCon 65.52 +18 .97 32.76 +29 .31 68.25 +3 .96 48.41 +17 .46 67.39 +8 .69 43.48 +21 .20 66.89 +11 .47 40.59 +23 .39 
+
+Gemini-3.1-Flash 39.66 5.17 60.32 13.49 53.80 10.87 49.99 9.33 +ASCon 50.00 +10 .34 17.24 +12 .07 65.87 +5 .55 45.24 +31 .75 60.87 +7 .07 36.41 +25 .54 57.94 +7 .95 31.24 +21 .91 
+
+SDBL (EASD) 53.45 17.24 58.73 37.30 57.07 30.98 56.09 27.27 +ASCon 68.97 +15 .52 22.41 +5 .17 51.59 −7.14 39.68 +2 .38 57.07 +0 .00 34.24 +3 .26 60.28 +4 .19 31.05 +3 .78 
+
+Qwen-SFT 46.55 20.69 51.59 30.16 50.00 27.17 49.07 25.02 +ASCon 50.00 +3 .45 24.14 +3 .45 55.56 +3 .97 35.71 +5 .55 53.80 +3 .80 32.07 +4 .90 52.78 +3 .71 29.93 +4 .91 
+
+AgentTracer 27.59 8.62 60.32 34.92 50.00 26.63 43.95 21.77 +ASCon 41.38 +13 .79 15.52 +6 .90 61.90 +1 .58 37.30 +2 .38 55.43 +5 .43 30.43 +3 .80 51.64 +7 .69 26.41 +4 .64 
+
+Table 5: Detailed results on the out-of-domain root-fault attribution task. Micro-accuracy is weighted by the HC and AG test-set sizes, whereas macro-accuracy assigns equal weight to both test sets. Subscripts in the “+ASCon” rows denote absolute percentage-point changes from the corresponding base methods. The best result in each column is shown in bold .and macro-F1. Overall, ASCon generalizes beyond its training distribution and effectively complements existing attribution methods. 
+
+# C. Can ASCon Perform Real-time Fault Detection? 
+
+To evaluate fault detection capabilities in an online setting, we construct a real-time detection experiment on the TracerTraj test set. Each trajectory is truncated at its first annotated faulty step, and only the user query and the interaction history observed up to that point are provided as input. We compare ASCon with four LLM-based reasoning baselines, including GPT-4o-mini, DeepSeek-V4-Pro, Gemini-3.1-Flash, and Qwen3.5-Flash, using the prompt provided in Appendix A.8. A detection is considered as a correct alert only when the predicted faulty position exactly matches the ground-truth faulty position; both premature detection and missed detection are counted as errors. Figure 4 shows that ASCon achieves the highest correct alert rate of 58.23%, outperforming Qwen3.5-Flash by 1.27% and Gemini-3.1-Flash by 5.57%. This result indicates that ASCon can identify the first faulty action from partial trajectories without relying on future observations. 0 10 20 30 40 50 60 
+
+> Alert accuracy(%)
+> GPT-4o-mini DeepSeek-V4-Pro Gemini-3.1-Flash Qwen3.5-Flash ASR-Net 45.82 35.70 52.66 56.96 58.23
+
+Figure 4: Performance comparison on the alert accuracy (%). 16 Model Agent μF1 Agent MF1 Error μF1 Error MF1 Pair μF1 Pair MF1 
+
+Lightweight models (< 10 M) ASCon 44.76 26.43 7.37 5.95 1.87 1.12 
+
+LLM-based models (≥ 8B) DeepSeek-V4-Pro 48.10 29.60 12.64 7.57 7.05 3.16 +ASCon 51.14 +3 .04 38.23 +8 .63 13.82 +1 .18 7.76 +0 .19 8.24 +1 .19 4.85 +1 .69 
+
+Gemini-3.1-Flash 50.63 34.47 14.13 8.09 8.41 4.85 
+
++ASCon 53.23 +2 .60 35.08 +0 .61 15.61 +1 .48 11.21 +3 .12 7.64 −0.77 3.15 −1.70 
+
+GPT-4o-mini 49.34 31.61 6.99 5.16 3.40 1.70 +ASCon 53.90 +4 .56 38.74 +7 .13 10.33 +3 .34 8.71 +3 .55 4.19 +0 .79 2.51 +0 .81 
+
+Qwen3.5-Flash 46.04 28.97 9.22 6.46 6.42 3.06 +ASCon 52.52 +6 .48 31.85 +2 .88 11.89 +2 .67 9.34 +2 .88 6.69 +0 .27 3.23 +0 .17 
+
+Aegis-SFT 31.78 16.48 5.39 2.85 2.34 1.19 +ASCon 42.73 +10 .95 27.09 +10 .61 9.28 +3 .89 6.43 +3 .58 3.96 +1 .62 1.98 +0 .79 
+
+Table 6: Detailed results on the out-of-domain failure-mode attribution task. 17

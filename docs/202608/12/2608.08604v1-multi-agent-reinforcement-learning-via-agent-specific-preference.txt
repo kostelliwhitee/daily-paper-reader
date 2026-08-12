@@ -1,0 +1,1645 @@
+Title: Multi-Agent Reinforcement Learning via Agent-Specific Preference
+
+URL Source: https://arxiv.org/pdf/2608.08604v1
+
+Published Time: Tue, 11 Aug 2026 01:13:55 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# Multi-Agent Reinforcement Learning via Agent-Specific Preference 
+
+Ni Mu ∗, Yao Luan ∗, Yiqin Yang †, Qing-Shan Jia †
+
+Abstract —Multi-agent reinforcement learning (MARL) is a powerful framework for solving complex collaborative tasks, but it relies heavily on well-defined global reward functions. Designing such rewards is challenging, especially in systems with heterogeneous agents, where a single scalar objective may fail to capture diverse behaviors. In this paper, we introduce Multi-AGent Preference-Integrated lEarning (MAGPIE), which addresses these challenges through agent-specific preference mod-eling. Each agent is evaluated by a dedicated expert through preference signals, eliminating the need for global evaluation. We theoretically prove that optimizing these decentralized pref-erences converges to a Nash equilibrium policy. To integrate local preferences into a coherent global objective, we construct agent-specific reward models from preference data and combine them via a monotonic aggregation mechanism. We further prove that optimizing this aggregate reward model is equivalent to training the Nash equilibrium policy. Extensive experiments on benchmark multi-agent tasks and a sequential production line task show that MAGPIE achieves performance comparable to reward-engineered baselines, demonstrating its potential to facilitate policy learning in scenarios where precise reward engineering is impractical. 
+
+Note to Practitioners —Multi-agent systems are widely used in modern engineering applications. For example, autonomous ve-hicle fleets coordinate to prevent collisions while maintaining effi-ciency, and industrial manufacturing lines work together to meet production targets without causing buffer overflows. Multi-agent reinforcement learning (MARL) provides a powerful framework for enabling such collaboration, but its success depends heavily on well-designed reward functions. Designing these rewards is often challenging, especially when agents play distinct roles, as it is difficult to translate complex interactions and diverse agent behaviors into precise numerical signals. In contrast, providing comparative feedback on preferred behaviors is often more intuitive than specifying explicit mathematical rewards. In this paper, we introduce Multi-AGent Preference-Integrated lEarning (MAGPIE), a framework that leverages agent-specific preference signals in the multi-agent learning process. MAGPIE learns agent-specific reward models and combines them into a unified global objective using monotonic aggregation. By optimizing this objective, we can derive Nash equilibrium solutions. Importantly, preferences can be provided by lightweight automated rules or domain-specific heuristics, eliminating the need for costly human annotators. MAGPIE is effective, easy to implement, and particularly suitable for complex systems where traditional reward design is impractical. 
+
+Index Terms —Reinforcement learning, Multi-agent system, Preference-based optimization, Nash equilibrium. 
+
+Ni Mu, Yao Luan and Qing-Shan Jia are with CFINS, Department of Automation, BNRist, Beijing Key Laboratory of Embodied Intelligence Sys-tems, Institute for Embodied Intelligence and Robotics, Tsinghua Univer-sity, Beijing 100084, China, {mn23@mails., luany23@mails., jiaqs@ } tsinghua.edu.cn . Yiqin Yang is with the Institute of Automation, Chinese Academy of Sciences, Beijing 100190, China, 
+
+yiqin.yang@ia.ac.cn . ∗Equal contribution. †Corresponding author. 
+
+I. I NTRODUCTION 
+
+Multi-agent systems are increasingly deployed in real-world scenarios, such as autonomous vehicle fleets navigating urban areas [1], dynamic user scheduling in wireless networks [2], and teams of agents in strategic games [3]. These systems require multiple heterogeneous agents to collaborate effec-tively while adapting to dynamic environments. Multi-agent reinforcement learning (MARL) has proven effective in these coordination scenarios [4]. However, its success typically relies on a well-designed global reward function, which quan-tifies the benefits of joint actions [5], [6]. In complex scenarios, where agents are heterogeneous, i.e., agents have diverse roles and objectives [7], designing such a single reward function can be both difficult and infeasible [8]. This challenge motivates the exploration of alternative methods that are more intuitive and human-centric to guide policy learning. Preference-based reinforcement learning (PbRL) [9]–[13] emerges as a promising solution, which utilizes human com-parisons of trajectory segments to guide policy learning, bypassing the challenges of complex reward engineering. PbRL has shown effectiveness in single-agent domains, such as robotics [14], large language model alignment [15], and energy optimization [16], all without explicit rewards [17]. However, directly extending PbRL to multi-agent settings introduces unique challenges. First, humans may struggle to evaluate collective team behavior, especially as team size and agent heterogeneity increase. Existing methods [18]– [20] often require experts to assess entire team trajectories, which involve diverse agents. This can produce noisy and inconsistent preference signals [10]. Also, current approaches [21], [22] struggle to accommodate heterogeneous agents, as they assess agents’ policies by comparing behaviors across different agents, which implicitly assumes agent homogeneity and comparability. This assumption fails in systems where agents have distinct roles, capabilities, and objectives. To the best of our knowledge, no existing method addresses these challenges while eliminating the need for reward engineering. This demonstrates the need for a novel approach to preference-driven multi-agent coordination. In this paper, we introduce Multi-AG ent Preference-
+
+Integrated l Earning (MAGPIE), a framework that addresses the above gap. As illustrated in Figure 1, MAGPIE decom-poses the complex global evaluation into a set of feasible, specialized local evaluations, and then integrates them with theoretical guarantees. Specifically, each agent is assigned a dedicated expert, who provides agent-specific preferences by evaluating the behavior of their assigned agent. Each dedicated arXiv:2608.08604v1 [cs.LG] 9 Aug 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2Joint Policy  
+
+> 𝜋 𝐴 𝑠
+> 𝜋 𝑛 (𝑎 𝑛 |𝑜 𝑛 )
+> 𝜋 2(𝑎 2|𝑜 2)
+> 𝜋 1(𝑎 1|𝑜 1)
+> …… Environment
+> Teacher 1
+> Teacher 2
+> Teacher n
+> ……
+> Ƹ𝑟 𝑛
+> Ƹ𝑟 2
+> Ƹ𝑟 1
+> Aggregated Reward Model
+
+Ƹ𝑟(𝑠, 𝐴)           
+
+> Agent-Specific Reward Model
+> Action 𝐴
+> State 𝑠 (Preference)
+> Segment (𝑠, 𝐴, 𝑠, 𝐴, ⋯ , 𝑠, 𝐴)
+> 𝜎 (0) ≻𝟏 𝜎 (1)
+> 𝜎 (0) ≺𝟐 𝜎 (1)
+> 𝜎 (0) ≻𝒏 𝜎 (1)
+
+𝜎 (0)
+
+𝜎 (1)   
+
+> Agents
+> Fig. 1. An overview of MAGPIE. The agent interacts with the environment and learns a multi-agent policy, without a predefined reward function. Instead,
+> nexternal experts act as teachers provide agent-specific preferences between trajectory segment pairs, which are used to train decentralized reward models
+> ˆri. These local models are aggregated via a monotonic function into a global reward ˆr, enabling standard MARL algorithms to optimize the policy.
+
+expert only focuses on the agent’s individual contribution and collaborative effectiveness, which reduces cognitive load and naturally supports heterogeneous agents. We theoretically show that, conceptually, using agent-specific preferences to iteratively improve each agent’s policy leads to a Nash equi-librium policy (Theorem 1). To connect local preferences with practical policy optimization, we train independent re-ward models for each agent using preference data, and then propose a monotonic aggregation mechanism to aggregate these local rewards into a coherent global reward. We prove that maximizing this aggregated reward guarantees a joint Nash equilibrium policy (Theorem 2, 4). These theories allow standard MARL algorithms to integrate seamlessly with our framework by replacing their reward signal with the learned aggregated reward. To demonstrate the effectiveness of MAGPIE, we conduct experiments on several benchmark MARL tasks with het-erogeneous agent roles and coordination challenges. Results show that MAGPIE achieves performance comparable to the “oracle” reward engineering baseline, which uses ground-truth rewards to learn the policy. Additionally, we evaluate MAGPIE on a custom sequential mobile phone production line task. In this task, MAGPIE similarly matches the oracle’s performance, demonstrating its potential for practical deploy-ment in complex, real-world scenarios. Through this work, we aim to provide a preference-driven optimization framework for heterogeneous multi-agent collaboration, facilitating the broader application of MARL in complex tasks, where reward engineering is prohibitive. The main contributions of this paper are as follows:  
+
+> •
+
+We establish a theoretical framework for preference-based MARL with agent-specific preference evaluation, proving that the n-to-n expert-agent preference mech-anism can guide the learning toward Nash equilibrium multi-agent policies (Theorems 1, 2, 4).  
+
+> •
+
+We propose MAGPIE, which implements this framework. By constructing Bradley-Terry models and optimizing the cross-entropy loss function, MAGPIE learns local reward models aligned with agent-specific preferences (Theorem 3). Using additive monotonic aggregation and a regu-larization mechanism, MAGPIE integrates with standard MARL algorithms to optimize multi-agent policies.  
+
+> •
+
+We conduct extensive experiments to evaluate MAG-PIE on multiple benchmark tasks and a custom smart manufacturing task. Results show that MAGPIE achieves performance comparable to oracle methods using only decentralized preference signals, validating its potential for real-world applications. The remaining sections are organized as follows. Section II reviews the related work. Section III introduces prelimi-naries and the problem formulation. Section IV presents the theoretical guarantees and the MAGPIE algorithm. Section V describes the experimental setting and discusses the results. Section VI concludes the paper. II. R ELATED WORK 
+
+A. Multi-Agent Reinforcement Learning 
+
+Reinforcement learning (RL) has achieved remarkable suc-cess in single-agent decision-making tasks, such as game-playing [3], [23], robotic control [24], and data center cooling management [25], [26]. Building on this success, RL has been extended to multi-agent systems, leading to the development of multi-agent reinforcement learning (MARL) [7], [27]– [29]. As a powerful framework, MARL enables coordination among agents and solves complex tasks, including autonomous vehicle coordination [1], distributed resource allocation [30], and multi-robot collaboration [31]. The centralized training with decentralized execution (CTDE) framework is commonly used in MARL, which enables distributed execution while ensuring effective global performance through centralized training. Notable methods include value decomposition networks (VDN) [5] and QMIX [6], which learn decomposed agent-specific value functions, and then combine them monotonically into a global value function. More recently, multi-agent proximal policy optimiza-tion (MAPPO) [4] has emerged as a strong on-policy policy gradient method. Despite these advancements, the effectiveness of coopera-tive MARL algorithms heavily relies on a well-defined global reward function r(s, A ), which accurately captures the imme-diate contribution of joint actions A in state s. Designing such a function is often challenging or impractical, causing a “re-ward engineering“ challenge. The challenges can be classified into three key aspects. First, a sparse reward function provides limited feedback in complex tasks, where agents only receive JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+rewards after achieving milestones, such as task completion. This lack of intermediate guidance reduces sample efficiency and hinders exploration [32]. Second, designing reward func-tions to provide dense signals often requires extensive domain knowledge [33], especially in heterogeneous systems, where agents with distinct roles and capabilities must coordinate [34]. For example, in cooperative exploration tasks, balancing rewards for mobile robots that explore terrain, and stationary robots that guard key locations, can lead to fragile or sub-optimal designs. Third, many desirable real-world behaviors, such as “fluid teamwork” or “graceful motion”, are difficult to define mathematically [35]. This makes it challenging to align human intent with numerical rewards through manual reward engineering. In summary, these challenges illustrate the limitations of traditional MARL in real-world settings, motivating more natural, human-centric supervision signals. 
+
+B. Preference-based Guidance for MARL 
+
+Preference-based RL (PbRL) has proven effective and is now widely applied across various domains, as it avoids complex reward engineering through the use of pairwise comparisons, i.e., “trajectory A is preferred over trajectory B”, rather than absolute reward values [9], [11], [36], [37]. Its applications range from robotic control [14] to fine-tuning large language models (LLMs) [15]. Building on this success, recent studies have explored how to apply preference-based supervisory signals to guide policy learning in multi-agent systems [18]–[22], [38]. However, multi-agent settings introduce unique challenges that naive extensions fail to address, resulting in three key limitations in the current literature. The first limitation arises from global preference evaluation. As team size and agent diversity increase, evaluating en-tire multi-agent trajectories becomes impractical. Prior works [18]–[20] directly extend single-agent PbRL by evaluating multi-agent trajectories as a whole. While conceptually valid, this is cognitively overwhelming and error-prone in complex scenarios. For example, in MOBA games, human evaluators must assess attackers, defenders, and supporters collectively, despite their differing roles and contributions. This often leads to cognitive overload and evaluation errors [3], [10]. The second limitation is the assumption of agent homo-geneity. To address the coarseness of global evaluations as mentioned above, some methods [21], [38] compare individual agents’ behaviors within the same trajectory, i.e., “Agent i contributed more than Agent j”. However, this implicitly assumes that agents have similar roles and behaviors, which is incompatible with heterogeneous multi-agent systems, where agents differ in observation spaces, action spaces, and role-specific objectives. In such cases, direct comparisons are either meaningless or misleading. The third limitation is partial reliance on ground-truth rewards. Some methods [38] incorporate ground-truth rewards as auxiliary supervision during training, This contradicts the core goal of PbRL, which is to eliminate reward engineering. As a result, these methods become inapplicable when ground-truth rewards are unavailable. In summary, to our best knowledge, current research lacks a framework that simultaneously avoids complex global eval-uations, supports heterogeneous agents, and eliminates reward engineering. To address these gaps, we propose a framework, MAGPIE, which uses local preferences to evaluate individ-ual agent contributions, coupled with a provably monotonic aggregation mechanism to combine these local assessments into a coherent global objective. MAGPIE overcomes all three limitations: it avoids the complexity of global evaluations, supports agent heterogeneity through localized assessments, and relies solely on preference data without requiring ground-truth rewards. III. P ROBLEM FORMULATION 
+
+In this section, we first present the multi-agent MDP set-tings and the centralized training with decentralized execution (CTDE) framework, which is commonly used in MARL [5]. Then, we provide the preference formulation in our settings. 
+
+A. The Multi-Agent MDP Definition and CTDE Framework 
+
+In single-agent settings, a Markov Decision Process (MDP) is represented as a tuple (S, A, P, r, γ ), where S and A denote the state and action spaces, respectively. The state transition probability is defined as P (s′|s, a ) : S ×A×S → [0 , 1] , while the immediate reward is r(s, a ) : S × A → R. The discount factor γ ∈ (0 , 1) balances short-term and long-term rewards. The target is to learn a policy π that maximizes the expected total discounted reward J(π) = Eπ,s 0 [P∞ 
+
+> t=0
+
+γtr(st, a t)] .Decentralized partially observable Markov decision pro-cesses (Dec-POMDP) extend the MDP framework to coopera-tive multi-agent systems, where multiple agents work together to achieve a common goal. Formally, A Dec-POMDP with 
+
+n agents is defined as a tuple (S, A, O, r, P, n, γ ), where S
+
+represents the global state space, and A is the global action space, with each agent i selecting an action ai, composing the joint global action A = ( a1, . . . , a n) ∈ A . Agents have limited access to the global state s, while making local observations 
+
+oi = O(s, i ) from the global state, drawn from the observation space O. The shared reward function r(s, A ) depends on the global state s and the joint action A. The policy for each agent i is represented as πi(ai|oi), conditioned on its local observation. The agents’ objective in a Dec-POMDP is to maximize the expected discounted return: 
+
+max J(θ) = E(At,s t)
+
+"X
+
+> t
+
+γtr(st, A t)
+
+#
+
+(1) To achieve this, agents must collaboratively select their actions to optimize the joint reward. Centralized training for decentralized execution (CTDE) is a widely adopted framework for solving Dec-POMDPs. In CTDE, agents are trained with global information, such as the global state s and the joint action A. During exe-cution, however, each agent acts independently based on its local observation oi. This approach enables efficient training through access to global dynamics, while allowing for flexible decentralized execution. In this work, we employ the CTDE framework for agent training. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4
+
+Algorithm 1 Nash equilibrium policy via iterative local pref-erence optimization  
+
+> 1:
+
+Initialize joint policy π = ( π1, . . . , π n) 
+
+> 2:
+
+Initialize a boolean flag updated ← true  
+
+> 3:
+
+while updated = true do  
+
+> 4:
+
+Set the boolean flag updated ← false  
+
+> 5:
+
+for each agent i ∈ { 1, . . . , n } do  
+
+> 6:
+
+Let Πi be the set of possible policies for agent i 
+
+> 7:
+
+for each candidate policy πi′ ∈ Πi do  
+
+> 8:
+
+Generate segments σ, σ ′ from π, (πi′, π −i) 
+
+> 9:
+
+if the teacher for agent i judges σ′ ≻i σ then  
+
+> 10:
+
+πi ← πi′, updated ← true  
+
+> 11:
+
+break (inner for loop)  
+
+> 12:
+
+end if  
+
+> 13:
+
+end for  
+
+> 14:
+
+end for  
+
+> 15:
+
+end while  
+
+> 16:
+
+return π∗ = ( π1, . . . , π n)
+
+B. Preference Formulation in Multi-Agent Settings 
+
+In single-agent settings, following prior work [36], [39], preferences can be defined as a tuple (σ(0) , σ (1) , p ). Here, 
+
+σ(i) (i ∈ {0, 1}) represents an observation-action se-quence, also referred to as a segment, expressed as 
+
+{sk, a k, . . . , s k+H−1, a k+H−1} and share the same fixed length H. p ∈ { 0, 0.5, 1} denotes the preference, indicating which of the two segments is preferred. Specifically, p = 0 
+
+indicates that σ(0) is preferred over σ(1) (denoted as σ(0) ≻
+
+σ(1) ), while p = 1 indicates the opposite ( σ(1) ≻ σ(0) ). 
+
+p = 0 .5 indicates indifference, meaning neither segment is preferred over the other. In multi-agent settings, we define the preference of agent 
+
+i as a tuple (σ(0) , σ (1) , p i), where pi is a binary indicator of the preferred segment for agent i. We denote pi = 0 as 
+
+σ(0) ≻i σ(1) . This preference for agent i is provided by a designated expert (also referred to as the teacher in this paper), as evaluating the joint behavior of multiple agents can be challenging for humans. Instead, these teachers can provide insights on an individual agent’s performance by evaluating its adherence to the agent’s role, collaboration with other agents, and contributions to the global objective. To align the problem formulation with the MARL frame-work, we define a global reward model ˆr : S × A → R.Our algorithm aims to find a policy πi(ai|oi) for each agent 
+
+i that maximizes the discounted return of the reward model 
+
+ˆr. However, a gap remains between the global reward model and each agent’s preference, which we will address in the subsequent section with our proposed method. IV. MAGPIE: A P REFERENCE -BASED MARL M ETHOD WITH AGENT -S PECIFIC PREFERENCE 
+
+A. Theoretical Analysis 
+
+In this subsection, we establish the theoretical foundations of the MAGPIE framework, demonstrating how our approach 1. Foundational Assumptions     
+
+> 2. Core Theoretical Results
+> 3. Practical Theoretical Results
+> 4. Practical Algorithm
+> A2 A3
+> Th1, Alg1
+> C1
+> A4 A6 A5
+> L1
+> Th2
+> Th3
+> A7
+> Th4
+> A1
+> Alg2
+> Fig. 2. Dependency graph of assumptions (A), lemmas (L), theorems (Th), corollaries (C), and algorithms (Alg) in Section IV.
+
+ensures convergence to a Nash equilibrium policy. Figure 2 illustrates the logical progression of our analysis. First, we assume the presence of preferences over pairs of trajectory segments for each agent. Specifically, for each agent i, there exists a teacher 1 who can compare any two trajectory segments of arbitrary finite length H and judge which one better reflects the agent’s individual contribution to the collective goal. To formalize this, we introduce the following assumption. 
+
+Assumption 1. For each agent i, there exists a well-defined preference pi ∈ {0, 0.5, 1} over any pair of equal-length trajectory segments (σ0, σ 1) for any finite segment length 
+
+H. These preferences satisfy the properties of symmetry ,
+
+consistency , and transitivity , which are defined as follows. 
+
+Definition 1 (Symmetry) . Symmetry means that if trajectory segment σ0 is preferred over σ1 for agent i, then the opposite relation also holds. Formally, 
+
+σ0 ≻i σ1 =⇒ σ1 ≺i σ0. (2) 
+
+This ensures that preferences are reversible. 
+
+Definition 2 (Consistency) . Consistency requires that the pref-erence between two fixed state–action sequences is invariant to their starting time. Formally, if σt0 
+
+> 0
+
+≻i σt0 
+
+> 1
+
+, then for all 
+
+t > 0, σt 
+
+> 0
+
+≻i σt
+
+> 1
+
+, where σt denotes a segment starting at time t, and σt0 
+
+> i
+
+, σ ti (i = 0 , 1) are with identical state-action sequence (s, A, s ′, · · · ).
+
+Definition 3 (Transitivity) . Transitivity guarantees logical coherence across multiple comparisons. Formally, if σ0 ≻i σ1
+
+and σ1 ≻i σ2, then σ0 ≻i σ2. This ensures that the teacher’s feedback does not contradict itself when extended to multiple comparisons. 
+
+The above decentralized design, where each agent has its own evaluator, avoids the need for a single expert to assess the joint behavior of all agents. This makes the proposed framework applicable to heterogeneous multi-agent systems.  
+
+> 1The term “teacher” in this paper does not strictly imply a human eval-uator. In practice, teachers can be automated evaluation scripts or heuristic rules, making the framework scalable without requiring continuous human intervention. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5
+
+We further assume that a reliable teacher is available for each agent to provide such feedback. 
+
+Assumption 2. For each agent i, there exists a teacher that can provide the preference feedback specified in Assumption 1. 
+
+Assumptions 1 and 2 assume that each agent’s preferences are well-defined, consistent, and readily accessible. This im-plies the teacher’s feedback is based on stable criteria related to the task objectives. It is therefore reasonable to postulate that the task has an underlying true reward function, which reflects the global objective. We formalize it in Assumption 3. 
+
+Assumption 3. For the multi-agent task under consideration, there exists a true global reward function r(s, A ). Further-more, its absolute value is bounded by a constant rmax , i.e., 
+
+|r(s, A )| ≤ rmax for all state-action pairs. 
+
+The bounded reward in Assumption 3 is a common and practical condition, which prevents divergence in learning and supports theoretical analysis [40]–[42]. Then, we establish the connection between the agent’s local preferences and the global objective through the following assumption. 
+
+Assumption 4. For any agent i, consider a joint policy 
+
+π = ( πi, π −i) and an alternative policy πi′ for agent i with 
+
+π−i fixed. Let σ and σ′ be trajectory segments generated by π
+
+and (πi′, π −i), respectively. The local preference aligns with the global return such that σ′ ≻i σ if and only if the expected global return under (πi′, π −i) is strictly greater than that under π. Formally, 
+
+Eτ ∼(πi′ ,π −i)
+
+"X
+
+> t
+
+γtr(st, A t)
+
+#
+
+>
+
+Eτ ∼(πi,π −i)
+
+"X
+
+> t
+
+γtr(st, A t)
+
+#
+
+⇐⇒ σ′ ≻i σ. 
+
+(3) Assumption 4 establishes that an agent policy’s update favored by the agent’s teacher, i.e., leading to a locally pre-ferred trajectory, corresponds strictly to an improvement in the true global objective. Intuitively, this means a teacher’s local approval of an agent’s behavior never contradicts the global team objective. This alignment ensures that optimizing agent-specific preferences will drive the system toward globally optimal joint policies, thereby enabling the convergence results presented as follows. Under Assumptions 1, 2, 3 and 4, we now prove that a straightforward iterative algorithm converges to a Nash equilibrium joint policy. Algorithm 1 formalizes this process, which systematically examines each agent’s policy space while holding the remaining agents fixed, and updates agent policies based exclusively on agent-specific preferences. 
+
+Theorem 1. We consider the case where state and action spaces are finite and countable. Under Assumptions 1, 2, 3, and 4, the joint policy π∗ = ( π1∗, . . . , π n∗) returned by Algorithm 1 constitutes a Nash equilibrium when the trajectory segment length H → ∞ . Specifically, for any agent i and any alternative policy πi′ ∈ Πi,
+
+Eτ ∼(πi∗,π −i∗)
+
+" ∞X
+
+> t=0
+
+γtr(st, A t)
+
+#
+
+≥
+
+Eτ ∼(πi′,π −i∗)
+
+" ∞X
+
+> t=0
+
+γtr(st, A t)
+
+#
+
+.
+
+(4) 
+
+Proof. We first show that Algorithm 1 terminates under the given condition. Since we consider finite state and action spaces, the existence of at least one Nash equilibrium is guaranteed by Nash’s theorem [43]. Also, the finiteness of state and action spaces implies that each agent’s policy space and the joint policy space are finite. In each iteration, Algorithm 1 checks each agent i and updates its policy if an alternative policy πi′
+
+exists such that the teacher prefers segments generated by (πi′
+
+, π −i) over those generated by the current policy. By Assumption 4, such an update strictly increases the expected global return. Since the global return is bounded above (Assumption 3) and the joint policy space is finite, the algorithm cannot update indefinitely without repeating a policy. Furthermore, because each update increases the global return, it cannot cycle. Therefore, Algorithm 1 terminates after a finite number of iterations. Suppose Algorithm 1 returns a joint policy π∗. We prove that π∗ constitutes a Nash equilibrium by contradiction. As-sume π∗ is not a Nash equilibrium. Then, there exists an agent 
+
+i and an alternative policy πi′ ∈ Πi such that, while keeping the policies of other agents π−i∗ fixed, the expected global return under the altered joint policy (πi′, π −i∗) is strictly greater than that under π∗. Formally,      
+
+> Eτ′∼(πi′,π −i∗)
+> "∞X
+> t=0
+> γtr(st, A t)
+> #
+> >Eτ∼π∗
+> "∞X
+> t=0
+> γtr(st, A t)
+> #
+> .
+> (5)
+
+By Assumption 4, the inequality in global return implies a corresponding preference from the agent i’s teacher. Let σ∗
+
+and σ′ be trajectory segments of length H sampled from the infinite trajectories τ and τ ′ generated by π∗ and (πi′, π −i∗),respectively. For sufficiently long H, the difference in their truncated returns will reflect the difference in their infinite-horizon returns. More precisely, due to the bounded reward (Assumption 3), the tail contribution of the return beyond time H is bounded: 
+
+> ∞
+
+X
+
+> t=H
+
+γtr(st, A t) ≤ γH
+
+1 − γ rmax . (6) Let RH (σ) = PH−1 
+
+> t=0
+
+γtr(st, A t) denote the discounted return over a segment σ of length H. The difference in infinite-horizon returns can be expressed as: 
+
+∆R∞ = E
+
+" ∞X
+
+> t=0
+
+γtr(s′
+
+> t
+
+, A ′
+
+> t
+
+) −
+
+> ∞
+
+X
+
+> t=0
+
+γtr(s∗ 
+
+> t
+
+, A ∗ 
+
+> t
+
+)
+
+#
+
+= E [RH (σ′) − RH (σ∗)] 
+
+| {z }
+
+> ∆RH
+
++ E
+
+" ∞X
+
+> t=H
+
+γt (r(s′
+
+> t
+
+, A ′
+
+> t
+
+) − r(s∗ 
+
+> t
+
+, A ∗ 
+
+> t
+
+)) 
+
+#| {z }
+
+> ∆Rtail
+
+.
+
+(7) JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 6
+
+From Eq. 5, we have ∆R∞ > 0. The tail difference ∆Rtail 
+
+is bounded by 2 γH 
+
+> 1−γ
+
+rmax due to Eq. 6. Therefore, for the inequality ∆R∞ > 0 to hold, the segment return difference 
+
+∆RH should be positive and sufficiently large to overcome the maximum possible negative contribution from the tails. Specifically, a sufficient condition is: 
+
+∆RH > 2 γH
+
+1 − γ rmax . (8) As H → ∞ , the right-hand side of Eq. 8 converges to zero. This implies that for any ∆R∞ > 0, there exists a finite 
+
+H0 such that for all H ≥ H0, the generated segments σ′
+
+and σ∗ will satisfy ∆RH > 0. According to Assumption 4, this strictly positive difference in segment returns implies the teacher’s preference σ′ ≻i σ∗.However, Algorithm 1 terminates only when no agent i can find a policy πi′, such that the newly generated segment is preferred by its teacher over the segment from the current policy πi. The existence of such a policy πi′ for agent i, as established above, contradicts the termination condition of the algorithm. Thus, our initial assumption must be false, and the joint policy π∗ must be a Nash equilibrium. This completes the proof. 
+
+Remark. Theorem 1 provides a theoretical existence proof. It shows that, in principle, optimizing decentralized, agent-specific preferences can lead the system to a global Nash equilibrium. However, its assumptions are idealized and com-putationally impractical, such as infinite trajectory lengths and querying teachers for every policy update, and Algorithm 1 serves primarily as a conceptual framework. The practical implementation of our approach, which employs learned re-ward models under finite preference data, is detailed in Section IV-B, IV-C and supported by Theorems 2, 4. 
+
+Theorem 1 states that, if agents keep upgrading based on their own teacher’s feedback, the team eventually reaches a joint policy where no one can unilaterally improve, and each agent finds their best role in the team. The proof establishes that under infinite segment length, local preferences perfectly reflect global return improvements, ensuring Algorithm 1terminates only when no beneficial unilateral deviation exists. In practical implementations, we typically select pairs of seg-ments with distinctly different behaviors for comparison [10], [11], aiming to facilitate reliable teacher judgments. Therefore, it is reasonable to assume a minimum return difference δ > 0
+
+between any two segments that the teacher can distinguish, that is, ∃δ ≥ 0 such that |RH (σ0) − RH (σ1)| ≥ δ > 0,where RH (σ) = PH−1 
+
+> t=0
+
+γtr(st, A t) denote the discounted return over a segment σ of length H. Under this assumption, the following corollary provides a sufficient condition on 
+
+H to guarantee correctness when trajectory segments exhibit sufficient discriminability. 
+
+Corollary 1. If all segment pairs are sufficiently distinct, i.e. 
+
+∃δ > 0 with |RH (σ0) − RH (σ1)| ≥ δ for any σ0, σ 1, then the policy π∗ returned by Algorithm 1 is a Nash equilibrium when the segment length satisfies H ≥ log γδ(1 −γ)2rmax .
+
+This corollary follows directly from the proof of Theorem 1, which ensures that the finite-horizon, sufficiently long segment captures enough of the return difference to dominate the infinite tail bound. Notably, our algorithm does not require a fixed H for policy convergence. Its effectiveness, established in Theorem 2 and 4, depends on learned reward models aligned with teachers’ preferences, as guaranteed by Theorem 3, without imposing constraints on the segment length. Building on the convergence guarantee in Theorem 1, we formalize the connection between agent-specific preferences and the reward modeling in MAGPIE. To achieve this, we assume the existence of local reward functions that reflect each agent’s preferences. Given that teacher feedback is stable and consistent (Assumption 1), it is reasonable to assume that each agent has a well-defined task objective, and its behavior can be evaluated by a corresponding reward function. Specifically, in Assumption 5, we posit that each agent i has a latent local reward function ri(s, A ) that quantifies the agent’s individual contribution to the global task. This local reward is defined over the global state and joint action, as an agent’s contribution depends on the context of the overall system. 
+
+Assumption 5. For each agent i, there exists a local reward function ri(s, A ) such that the teacher’s preference over trajectory segments is consistent with the discounted sum of this reward. Formally, for any two segments σ(0) and σ(1) of equal length H,
+
+σ(1) ≻i σ(0) ⇐⇒ Ri(σ(1) ) > R i(σ(0) ), (9) 
+
+where Ri(σ) = P 
+
+> (st,A t)∈σ
+
+γtri(st, A t) denotes the dis-counted local return for agent i over segment σ.
+
+This assumption states that preferences provided by the teacher for agent i are consistent with an implicit local reward signal. Such an assumption is reasonable, since it has been widely used in single-agent preference-based RL [9], [44], where preferences are often assumed to correspond to an implicit reward model. Furthermore, we assume the global reward function can be expressed as a function of these local rewards. This captures that the team’s overall performance arises from the contributions of individual agents. 
+
+Assumption 6. The true global reward function r(s, A ) can be expressed as a function F of the local rewards: 
+
+r(s, A ) = F  r1(s, A ), . . . , r n(s, A ) , (10) 
+
+where F : Rn → R is a continuously differentiable function. 
+
+While the exact form of F does not need to be known a priori, it satisfies certain properties. Specifically, Assumption 4 requires that an improvement in any agent’s local reward does not reduce the global return. A sufficient condition to satisfy this requirement is that F is monotonically increasing with respect to each local reward, as formalized below. 
+
+Lemma 1. If the function F is strictly increasing in each argument (i.e., ∂F/∂r i > 0 for all i ∈ { 1, . . . , n }), then under Assumptions 4, 5 and 6, any trajectory segment σ′ that is locally preferred over σ yields a higher expected global return. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 7
+
+Proof. Consider a joint policy π = ( πi, π −i) and an alternative policy πi′
+
+for agent i. Let σ and σ′ be segments generated by π and (πi′
+
+, π −i), respectively. If the update leads to a locally preferred segment, i.e., σ′ ≻i σ, then Assumption 5 implies an increase in the local return: Ri(σ′) > R i(σ), where 
+
+Ri(σ), R i(σ′) is the discounted local return of agent i for seg-ments σ and σ′. Because F is strictly increasing in each argu-ment, a higher local return Ri(σ′) contributes positively to the global return R(σ′) = P 
+
+> t
+
+γtF  r1(st, A t), . . . , r n(st, A t).Under the continuity and differentiability of F (Assumption 6), this guarantees that the expected global return under 
+
+(πi′
+
+, π −i) is strictly greater than under π, which is exactly the Assumption 4. Thus, monotonicity of F is a sufficient condition to align local preferences with the global objective, which completes the proof. Lemma 1 supports using a monotonic function to ag-gregate local rewards into a global reward signal, which aligns naturally with fully cooperative settings where the global reward should increase as local contributions improve. Intuitively, Lemma 1 means that as long as the team per-formance increases whenever any individual contribution in-creases, chasing individual improvement automatically chases team success. While Lemma 1 characterizes the structure of F , estimating F directly remains challenging. We make a practical simplification by considering the additive compo-sition F (r1, . . . , r n) = Pni=1 ri, which naturally satisfies the monotonicity condition. Importantly, this additive aggregation is a practical instantiation of the general function F in As-sumption 6 and thus preserves all theoretical properties. To guarantee that optimizing the sum of local rewards leads to a Nash equilibrium, we assume that the negative impact on other agents does not overwhelm the positive gain of the improving agent, as formalized below. 
+
+Assumption 7. Consider a joint policy π = ( πi, π −i) and an alternative policy πi′ for agent i that yields a locally preferred segment σ′ ≻i σ and improves the local return Ri(σ′) >Ri(σ). The resulting change in the sum of local rewards for all other agents is bounded from below: 
+
+R−i(σ′) − R−i(σ) > − Ri(σ′) − Ri(σ) , (11) 
+
+where R−i(σ) = P  
+
+> j̸=i
+
+Rj (σ). This implies the aggregate local return for all agents does not decrease: Pnj=1 Rj (σ′) >
+
+Pnj=1 Rj (σ).
+
+Assumption 7 guarantees that any locally preferred policy update for one agent will not degrade the team’s overall objective. This is a reasonable condition for cooperative settings, where agents work toward a shared goal. In this case, actions that significantly harm teammates are unlikely to be preferred by specialized teachers that value collaboration. In our practical algorithm, we incorporate a regularization term to encourage consistency between local and aggregated global preferences, which promotes this condition. The implementa-tion details are discussed in Section IV-B. Based on the assumptions above, we now present the theo-retical result that connects the practical algorithm, which sums the learned local reward models, to the theoretical guarantee of achieving a Nash equilibrium. 
+
+Theorem 2. Consider a multi-agent system satisfying Assump-tions 1 to 7. Suppose we learn local reward functions ˆri(s, A )
+
+that are perfectly aligned with the teachers’ preferences, i.e., satisfy Assumption 5. Let the estimated global reward be the sum of local rewards: ˆr(s, A ) = Pni=1 ˆri(s, A ). Then, any joint policy π∗ that maximizes the expected discounted return under ˆr, i.e., 
+
+π∗ ∈ arg max  
+
+> π
+
+Eτ ∼π
+
+" ∞X
+
+> t=0
+
+γt ˆr(st, A t)
+
+#
+
+, (12) 
+
+constitutes a Nash equilibrium for the true global reward 
+
+r(s, A ).Proof. We prove by contradiction. Assume π∗ is not a Nash equilibrium. Then, there exists an agent i and an alternative policy πi′ such that, holding π−i∗ fixed, the altered joint policy 
+
+π′ = ( πi′, π −i∗) achieves a strictly higher expected global return under the true reward r:
+
+Eτ ′∼π′
+
+"X
+
+> t
+
+γtr(st, A t)
+
+#
+
+> Eτ ∼π∗
+
+"X
+
+> t
+
+γtr(st, A t)
+
+#
+
+. (13) By Assumption 4, this improvement in global return implies that for trajectory segments σ∗ and σ′ generated by π∗ and π′
+
+respectively, we have σ′ ≻i σ∗. According to Assumption 5, this preference implies an improvement in the local return for agent i: Ri(σ′) > R i(σ∗).Now, consider the estimated global reward ˆr = P 
+
+> j
+
+ˆrj .The expected return under ˆr for policy π′ and π∗ can be expressed in terms of their local returns. From Assumption 7, the improvement in agent i’s local return, combined with the bounded negative impact on others, guarantees that the sum of local returns increases: 
+
+> n
+
+X
+
+> j=1
+
+Rj (σ′) >
+
+> n
+
+X
+
+> j=1
+
+Rj (σ∗). (14) Since the local reward models ˆrj perfectly reflect the teachers’ preferences, the discounted sum of ˆrj over a segment equals 
+
+Rj (σ) for that segment. Therefore, the inequality above im-plies that for the segments σ′ and σ∗, we have: 
+
+X
+
+> t
+
+γt ˆr(s′
+
+> t
+
+, A ′
+
+> t
+
+) > X
+
+> t
+
+γt ˆr(s∗ 
+
+> t
+
+, A ∗ 
+
+> t
+
+). (15) Taking expectation over time steps, we obtain the correspond-ing inequality for the infinite-horizon expected return: 
+
+Eτ ′∼π′
+
+"X
+
+> t
+
+γt ˆr(st, A t)
+
+#
+
+> Eτ ∼π∗
+
+"X
+
+> t
+
+γt ˆr(st, A t)
+
+#
+
+. (16) This contradicts the premise that π∗ maximizes the expected return under ˆr. Hence, π∗ must be a Nash equilibrium, which completes the proof. Theorem 2 provides the theoretical foundation for the MAG-PIE algorithm. It establishes that under mild assumptions, maximizing the global reward, which is computed by summing all the perfectly learned local reward models, is equivalent to JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 8
+
+finding a Nash equilibrium policy. This result bridges our practical algorithm with the game-theoretic solution concept, ensuring the effectiveness of our preference-based optimiza-tion with decentralized feedback. Based on these results, we will describe the detailed MAGPIE algorithm in the next subsection, showing how this framework can be applied to optimize multi-agent policies in practical scenarios. 
+
+B. Multi-Agent Reward Modeling 
+
+Based on the theoretical foundations established in the pre-vious section, we now focus on the practical implementation of the MAGPIE framework. In particular, we construct an agent-specific reward model for each agent that aligns with the preferences provided by its dedicated teacher, and then aggregate these decentralized, agent-wise reward models into a global signal suitable for centralized training. Inspired by prior work in single-agent PbRL [36], we define a preference predictor for each agent i, denoted as 
+
+Pψ [σ(0) ≻i σ(1) ], which predicts the probability that segment 
+
+σ(1) is preferred over σ(0) by the teacher of agent i. This predictor is parameterized by ψ and is trained by minimizing the cross-entropy loss: 
+
+Li 
+
+> pref
+
+= −E(σ(0) ,σ (1) ,p i)∼D 
+
+h
+
+pi(0) log Pψ [σ(0) ≻i σ(1) ]+ pi(1) log Pψ [σ(1) ≻i σ(0) ]
+
+i
+
+,
+
+(17) 
+
+where pi(0) and pi(1) are indicator functions for the pref-erence label. Using the Bradley-Terry model [36], [45], we formulate preference probability based on the agent-specific reward model ˆriψ . For a segment pair (σ(0) , σ (1) ), where 
+
+σ(j) = {s(j)0 , A (j)0 , . . . , s (j)
+
+> H−1
+
+, A (j)
+
+> H−1
+
+} with j ∈ { 0, 1}, the probability that segment σ(1) is preferred over σ(0) by the teacher assigned to agent i is expressed as: 
+
+Pψ [σ(1) ≻i σ(0) ] = exp 
+
+P 
+
+> t
+
+γt ˆriψ (s(1)  
+
+> t
+
+, A (1)  
+
+> t
+
+)
+
+P 
+
+> j∈{ 0,1}
+
+exp 
+
+P 
+
+> t
+
+γt ˆriψ (s(j) 
+
+> t
+
+, A (j) 
+
+> t
+
+)
+
+ . (18) 
+
+This equation establishes a probabilistic relationship where the preference probability is exponentially related to the dis-counted sum of the learned reward over the segment. The reward model ˆriψ is trained to maximize the likelihood of the observed preferences, thereby aligning it with the teacher’s judgments. We provide a theoretical guarantee that under sufficient preference data with adequate coverage, optimizing the cross-entropy loss in Eq. 17 yields a reward model ˆriψ that aligns with the underlying teacher preferences. This result formalizes the sample complexity requirement for reward learning in MAGPIE. 
+
+Theorem 3. Let Assumption 5 hold, i.e., there exists atrue local reward function ri(s, A ) that reflects the teacher’s preferences for agent i. Consider a preference dataset Di =
+
+{(σ(0)  
+
+> k
+
+, σ (1)  
+
+> k
+
+, p ik)}Nk=1 sampled independently from a distri-bution μ over segment pairs, where μ has full support on the relevant state-action subspace Ωi ⊆ S × A . Let F be the function class of reward models ˆriψ with bounded norm 
+
+∥ˆriψ ∥∞ ≤ rmax , and assume ri ∈ F . Define the empirical risk minimizer: 
+
+ˆriψ∗ ∈ arg min  
+
+> ˆriψ∈F
+
+Li
+
+> pref
+
+(ˆ riψ ; Di). (19) 
+
+Then, as the dataset size N → ∞ , ˆriψ∗ converges uniformly to ri on Ωi up to an affine transformation. Specifically, for any ϵ > 0,        
+
+> lim
+> N→∞ Pr
+> 
+> inf
+> α> 0,β ∈Rsup
+> (s,A )∈Ωi
+> ˆriψ∗(s, A )−(αr i(s, A ) + β)> ϵ
+> 
+> = 0 .
+> (20)
+
+Furthermore, for finite N , with probability at least 1 − δ,the estimation error is bounded by: 
+
+∥ˆriψ∗ − ri∥2 
+
+> L2(μ)
+
+≤ O RN (F) + 
+
+r log(1 /δ )
+
+N
+
+!
+
+, (21) 
+
+where RN (F) denotes the Rademacher complexity of F.Proof. First, we show that with infinite data, ri is identifiable up to an affine transformation. Define the expected cross-entropy loss under μ:
+
+Lμ(ˆ r) = E(σ(0) ,σ (1) ,p i)∼μ
+
+
+
+− pi(1) log Pˆr [σ(1) ≻i σ(0) ]
+
+− pi(0) log Pˆr [σ(0) ≻i σ(1) ]
+
+
+
+,
+
+(22) 
+
+where Pˆr uses ˆr in Eq. 18. Let σ(j)0: H−1 denote the segment 
+
+{s(j) 
+
+> t
+
+, A (j) 
+
+> t
+
+}H−1 
+
+> t=0
+
+. Using the Bradley-Terry model, we have: 
+
+Pˆr [σ(1) ≻i σ(0) ] = exp( Ri(σ(1) )) exp( Ri(σ(0) )) + exp( Ri(σ(1) )) , (23) with Ri(σ) = PH−1 
+
+> t=0
+
+γt ˆr(st, A t). Under Assumption 5, the true preference probability is: 
+
+Pri [σ(1) ≻i σ(0) ] = exp( R∗ 
+
+> i
+
+(σ(1) )) exp( R∗ 
+
+> i
+
+(σ(0) )) + exp( R∗ 
+
+> i
+
+(σ(1) )) , (24) where R∗ 
+
+> i
+
+uses ri. The cross-entropy loss is strictly proper [45], that is: 
+
+Lμ(ˆ r) ≥ L μ(ri), ∀ˆr ∈ F , (25) with equality if and only if Pˆr = Pri almost surely. Since the logistic function is strictly monotonic, Pˆr = Pri implies 
+
+Ri(σ) = R∗ 
+
+> i
+
+(σ) + C(σ) for some constant C(σ) independent of σ’s content, which reduces to ˆr(s, A ) = αr i(s, A ) + β for some α > 0, β ∈ R. Thus, the minimizer of Lμ is unique up to an affine transformation. Then, we prove the convergence of the loss minimizer. The empirical loss Li
+
+> pref
+
+(ˆ r; Di) is the sample average of i.i.d. terms. By the uniform law of large numbers [46], since F is uniformly bounded and μ has full support, we have: 
+
+sup 
+
+> ˆr∈F
+
+Li
+
+> pref
+
+(ˆ r; Di) − L μ(ˆ r) p
+
+−→ 0 as N → ∞ . (26) Let ˆriψ∗ be the empirical minimizer and r∗ 
+
+> i
+
+be any minimizer of Lμ (i.e., r∗ 
+
+> i
+
+= αr i + β). Using the standard inequality: 
+
+Lμ(ˆ riψ∗ ) − L μ(r∗ 
+
+> i
+
+) ≤ 2 sup 
+
+> ˆr∈F
+
+Li
+
+> pref
+
+(ˆ r; Di) − L μ(ˆ r) , (27) the uniform convergence implies Lμ(ˆ riψ∗ ) → Lμ(r∗ 
+
+> i
+
+) in probability. By the strict properness established above, this yields the uniform convergence of ˆriψ∗ to r∗ 
+
+> i
+
+on Ωi.JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 9
+
+Finally, we prove that the reward estimation error is bounded. For any ˆr ∈ F , define the loss difference class 
+
+G = {gˆr = ℓˆr − ℓr∗ 
+
+> i
+
+: ˆ r ∈ F} , where ℓˆr is the per-sample loss. Each gˆr is bounded in [0 , 2rmax ]. By standard symmetrization [46]: 
+
+E
+
+h
+
+sup 
+
+> ˆr∈F
+
+Li
+
+> pref
+
+(ˆ r; Di) − L μ(ˆ r)
+
+i
+
+≤ 2RN (G). (28) Since G is a linear shift of F, RN (G) = RN (F). Applying McDiarmid’s inequality (due to bounded differences) yields with probability 1 − δ, we have: 
+
+sup 
+
+> ˆr∈F
+
+Li
+
+> pref
+
+(ˆ r; Di) − L μ(ˆ r) ≤ R N (F) + 
+
+r 2 log(2 /δ )
+
+N . (29) Combining this with the strong convexity of Lμ in a neigh-borhood of r∗ 
+
+> i
+
+, which is implied by the logistic loss, and the boundedness of rewards gives the L2-error bound, we have: 
+
+∥ˆriψ∗ − r∗ 
+
+> i
+
+∥2 
+
+> L2(μ)
+
+≤ 4rmax 
+
+
+
+RN (F) + 
+
+r 2 log(2 /δ )
+
+N
+
+
+
+. (30) Since r∗ 
+
+> i
+
+differs from ri only by an affine transformation, this completes the proof. 
+
+Remark. The condition that μ has full support on Ωi ensures that the preference data covers all state-action regions relevant to agent i’s role. While it is an idealized theoretical condition, this motivates the use of continuous preference collection in practice (detailed in Section IV-C). By collecting preferences using segments generated by the current policy, the data adapts to regions frequently visited under evolving policies. 
+
+Theorem 3 states that given enough preference comparisons, the reward model converges to the teacher’s true judgment criteria. While Theorem 3 shows convergence under infinite preference data, data is finite in practical scenarios. We there-fore analyze how a reward model trained on a finite sample size N affects the equilibrium. 
+
+Theorem 4. Let N be the sample size of preference data used for reward modeling. Following Theorem 3, with prob-ability at least 1 − δ, there exists a uniform error bound 
+
+ϵr (N ) = O(1 /√N ) between the learned reward model ˆriψ
+
+and the affine-transformed true latent reward ri for each agent 
+
+i. That is, for all (s, A ) ∈ S × A :
+
+|ˆriψ (s, A ) − (αr i(s, A ) + β)| ≤ ϵr (N ), (31) 
+
+where α > 0 and β are scalar constants. Let π∗ =(π1∗, . . . , π n∗) be a Nash equilibrium policy under the ag-gregated learned reward ˆr(s, A ) = Pni=1 ˆriψ (s, A ). Then, 
+
+π∗ constitutes an ϵ-Nash equilibrium under the global re-ward objective reflecting the true preferences, denoted as 
+
+Rtrue (s, A ) = α Pni=1 ri(s, A ) + nβ , where: 
+
+ϵ = 2nϵ r (N )1 − γ . (32) 
+
+This implies that as the sample size N → ∞ , ϵ → 0, and the policy π∗ converges to an exact Nash equilibrium. Proof. Let ˜ri(s, A ) = αr i(s, A ) + β denote the proxy of the ground-truth reward targeted by the learning process, and let 
+
+˜r(s, A ) = Pni=1 ˜ri(s, A ) be the corresponding global reward. We aim to prove that π∗ is an ϵ-Nash equilibrium under ˜r.Based on Theorem 3, the approximation error for a single agent’s reward is bounded by ϵr (N ). Since the global reward is the sum of local rewards, its error bound is derived as: 
+
+|ˆr(s, A ) − ˜r(s, A )| =
+
+> n
+
+X
+
+> i=1
+
+ˆriψ (s, A ) −
+
+> n
+
+X
+
+> i=1
+
+˜ri(s, A )
+
+≤
+
+> n
+
+X
+
+> i=1
+
+ˆriψ (s, A ) − ˜ri(s, A )
+
+≤ nϵ r (N ).
+
+(33) Then, let Jπr denote the expected discounted return of a joint policy π under a reward function r. The error in the reward function propagates to the value function, scaled by a horizon multiplier 11−γ . For any joint policy π, we have: 
+
+|Jπ 
+
+> ˆr
+
+− Jπ 
+
+> ˜r
+
+| ≤ 
+
+> ∞
+
+X
+
+> t=0
+
+γt max  
+
+> s,A
+
+|ˆr(s, A ) − ˜r(s, A )| ≤ nϵ r (N )1 − γ .
+
+(34) Since π∗ is an exact Nash equilibrium under the learned reward ˆr, which is proved in Theorem 2, by definition, no agent i can improve its return under ˆr by changing its own policy to any π′i:
+
+J(π′i,π −i∗)ˆr − Jπ∗ 
+
+> ˆr
+
+≤ 0. (35) We now evaluate the potential gain for agent i, when changing its policy to π′i under the true target reward ˜r. By applying the triangle inequality and the established value function error bound, we obtain:                                      
+
+> J(π′i,π −i∗)˜r−Jπ∗
+> ˜r=J(π′i,π −i∗)˜r−J(π′i,π −i∗)ˆr+J(π′i,π −i∗)ˆr−Jπ∗
+> ˆr
+> +Jπ∗
+> ˆr−Jπ∗
+> ˜r
+> ≤J(π′i,π −i∗)˜r−J(π′i,π −i∗)ˆr+ 0 + Jπ∗
+> ˆr−Jπ∗
+> ˜r
+> ≤nϵ r(N)1−γ+nϵ r(N)1−γ= 2nϵ r(N)1−γ.
+> (36)
+
+Let ϵ = 2nϵ r (N )1−γ . We have shown that for any agent i and any alternative policy π′i, the improvement in return is bounded by ϵ. Therefore, π∗ is an ϵ-Nash equilibrium under the true preference objective, which completes the proof. Theorem 4 establishes that the policy learned from ag-gregated rewards approximates the true Nash equilibrium. However, the effectiveness of the additive aggregation also relies on Assumption 7, which ensures that local improvements do not negatively impact the global objective. To support this assumption, we introduce a regularization term, which encourages consistency between the local preference and the aggregated global preference derived from the sum of local rewards. Formally, we define an auxiliary loss: 
+
+Li 
+
+> reg
+
+=E(σ(0) ,σ (1) ,p i)
+
+
+
+max 
+
+
+
+0,
+
+I[σ(1) ≻i σ(0) ] ·
+
+ ˆR(σ(0) ) − ˆR(σ(1) )
+
+ 
+
+,
+
+(37) where ˆR(σ) = P
+
+> i
+
+P 
+
+> t
+
+γt ˆriψ (st, A t) is the estimated dis-counted return of the segment for all agents, and I[·] is an JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 10 
+
+Algorithm 2 MAGPIE Algorithm using the QMIX method 
+
+Input: Preference feedback frequency K, number of segment pairs per agent per feedback session M
+
+Output: Agent-specific reward models ˆriψ (i = 1 , · · · , n ),local Q-functions Qiθ (i = 1 , · · · , n ), monotonic mixing network gϕ 
+
+> 1:
+
+Initialize parameters ψ, θ, ϕ , replay buffer D, preference buffers Dip for i = 1 , . . . , n  
+
+> 2:
+
+Initialize feedback counter C ← 0 
+
+> 3:
+
+for each iteration do  
+
+> 4:
+
+for each environment step t do  
+
+> 5:
+
+Observe global state st 
+
+> 6:
+
+Each agent selects action ait based on Qiθ (oit, ·) using 
+
+ϵ-greedy exploration  
+
+> 7:
+
+Execute joint action At = ( a1 
+
+> t
+
+, . . . , a nt ), observe next state st+1  
+
+> 8:
+
+Compute global reward ˆr(st, A t) = Pni=1 ˆriψ (st, A t) 
+
+> 9:
+
+Store transition (st, A t, s t+1 , ˆr(st, A t)) in D 
+
+> 10:
+
+end for  
+
+> 11:
+
+if iteration mod K = 0 then  
+
+> 12:
+
+for each agent i do  
+
+> 13:
+
+Sample M segment pairs (σ(0) , σ (1) ) from D 
+
+> 14:
+
+Query teacher i for preferences pi on these pairs  
+
+> 15:
+
+Store (σ(0) , σ (1) , p i) in Dip 
+
+> 16:
+
+Update reward model ˆriψ by minimizing Li (Eq. 38) using Dip 
+
+> 17:
+
+end for  
+
+> 18:
+
+Update the global reward function ˆr(s, A ) =P 
+
+> i
+
+ˆriψ (s, A ) 
+
+> 19:
+
+Relabel all rewards in D using the updated ˆr 
+
+> 20:
+
+Update C ← C + M · n 
+
+> 21:
+
+end if  
+
+> 22:
+
+for each gradient step do  
+
+> 23:
+
+Sample a minibatch of transitions from D 
+
+> 24:
+
+Update local Q-functions Qiθ and mixing network gϕ
+
+using QMIX’s loss function  
+
+> 25:
+
+end for  
+
+> 26:
+
+end for 
+
+indicator function. This regularization penalizes the case where an agent’s locally preferred segment leads to a decrease in the estimated return of all agents, thereby preserving robustness against occasional violations of Assumption 7 caused by complex scenarios or severe partial observability. The total loss for agent i’s reward model is then: 
+
+Li = Li 
+
+> pref
+
++ λLi
+
+> reg
+
+, (38) where λ is a hyperparameter balancing the two terms. 
+
+C. MARL with Learned Reward Models 
+
+Having constructed the agent-specific reward models ˆriψ , we now integrate them into a cooperative MARL algorithm. We aggregate the local rewards into a global reward signal via summation 2 as justified by Lemma 1 and Theorem 2, 4: 
+
+ˆr(s, A ) = 
+
+> n
+
+X
+
+> i=1
+
+ˆriψ (s, A ). (39) This additive formulation satisfies the monotonicity require-ment ∂ˆrψ /∂ ˆriψ > 0 and forms a coherent reward signal. We use this reward estimation to replace the environment’s pre-defined global reward. This allows any MARL algorithm that operates on centralized rewards during training to be applied. In this work, we adopt QMIX [6] for policy optimization, while other CTDE methods, such as VDN [5] or MAPPO [4] can also be used. Specifically, we employ two practical techniques to enhance sample efficiency and performance:  
+
+> •
+
+Continuous preference collection: Instead of collecting a fixed batch of preference data before training, we periodically collect preferences using the newly gener-ated trajectories during policy learning [9]. This enriches the preference dataset with trajectories generated by the current policy, and improves the reward model’s accuracy in regions of the state-action space relevant to the latest policy.  
+
+> •
+
+Experience relabeling: After each update of the reward models, we relabel the rewards in the replay buffer using the updated global reward estimation. This allows historical transitions to be reused with the most recent reward estimates, increasing the sample efficiency of both the preference data and the environment interactions [9]. Algorithm 2 outlines the complete MAGPIE procedure, which uses QMIX [6] for policy optimization. Specifically, in lines 4-10, agents interact with the environment using the cur-rent policy, and transitions are stored with rewards computed by the current global reward model. Lines 12-22 indicate the periodic preference collection and reward model updates. Each agent’s reward model is trained on its respective preference buffer. After updating the reward models, the global reward is recomputed, and the replay buffer is relabeled. Finally, lines 24-27 perform policy improvement using QMIX, which learns a centralized but factorized Q-function that respects the monotonic constraint. This iterative process allows MAGPIE to simultaneously refine reward models and policy, As more preference feedback is collected, coordination progressively improves. V. E XPERIMENTAL RESULTS 
+
+A. Setups 
+
+In this section, we evaluate the effectiveness of MAGPIE through experiments. We test MAGPIE on benchmark multi-agent tasks [47], [48] to compare it fairly with other methods. We also tried it on a custom mobile phone production task, which shows its potential for real-world industrial applications.                                        
+
+> 2While the additive form resembles Value Decomposition Networks (VDN) [5], the motivation and scope are distinct. VDN decomposes a known global Q-function for credit assignment under a given global reward, while MAGPIE aggregates learned local reward models to construct a global reward signal from decentralized preferences. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 11
+> TABLE I HYPERPARAMETER SETTINGS FOR MAGPIE.
+> Hyperparameter Value
+> Preference collection frequency K500 Segment pairs per collection M300 Reward-model hidden layers 2Hidden units per layer 128 Reward-model learning rate 3×10 −4
+> Regularization coefficient λ2×10 −2
+> Discount factor γ0.99 Batch size 256 Policy learning rate 7×10 −4
+> Q-target soft-update rate τ1×10 −4
+> Mixer hidden dimension 32 Optimizer Adam Total environment steps 1×10 6/3×10 6
+> Segment length H3 / 5 / 10 / 20 Replay buffer size 5000
+> ϵ-greedy start/finish 1.0 / 0.05
+
+Baselines. We compare MAGPIE with QMIX [6] with predefined task rewards. This baseline serves as an upper-bound oracle, since it optimizes the true reward function provided by environment developers, representing the best possible performance achievable through explicit reward en-gineering. As a widely used multi-agent MARL baseline, QMIX employs a monotonic value decomposition architecture that is compatible with our reward aggregation mechanism, which ensures a fair comparison between preference-based and reward-based optimization. This design validates our central claim that preferences can effectively guide multi-agent policy learning compared to engineered rewards. 
+
+Experimental details. We implement MAGPIE using the CTDE framework, which is introduced in III-A. For policy optimization, we base it on QMIX [6]. To generate prefer-ences (Line 14 of Algorithm 2), we simulate teachers using simple role-specific rules. Each agent’s preferences come from comparing trajectory segments. The comparison follows hand-made metrics that consider the agent’s role, individual effort, and teamwork. The details of these rules are explained in the following subsections for each task. All hyperparameters for MAGPIE are listed in Table I, and the source code is released 3.
+
+B. Experimental Results on Multi-Agent Benchmark Tasks 
+
+Task Description. We evaluate MAGPIE on three benchmark tasks from the Multi-Agent Particle Environment (MPE) [47], [48]: Simple-Spread, Simple-Speaker-Listener, and Simple-Reference. These tasks progressively increase in heterogeneity and coordination difficulty, providing a suitable testbed for validating whether a preference-driven framework can align decentralized feedback with global teamwork.  
+
+> •
+
+Simple-Spread involves three homogeneous agents that must cover three distinct landmarks while avoiding colli-sions. Each agent observes only local velocity and relative position observations, and receives a global reward based on the minimum distance to landmarks, with collision 
+
+> 3Code: https://github.com/MoonOutCloudBack/MAGPIE PbRL
+
+penalties. This task reflects the credit-assignment chal-lenge in cooperative MARL, where a single scalar reward must be distributed among agents with identical roles.  
+
+> •
+
+Simple-Speaker-Listener introduces role heterogeneity: a stationary speaker that broadcasts a discrete landmark ID and a mobile listener that navigates to the correct land-mark. The two agents have disjoint observation spaces; the speaker observes only the target ID, while the listener observes velocities, landmark positions, and communica-tion signals. They execute fundamentally different action types, i.e., communication vs. movement. This setting directly tests a method’s ability to integrate agent-specific preferences into a coherent policy when agents are not directly comparable.  
+
+> •
+
+Simple-Reference further raises the asymmetric partial observability: two agents know only their own target landmarks and must cooperate to reach both. Each agent observes only a subset of landmark information, and the reward combines local proximity measures with a global coordination objective. The task examines whether decentralized, role-aware preferences can guide agents to implicitly coordinate under limited information. In all tasks, we utilize discrete action spaces, including move-ment directions for mobile agents and communication signals for speakers. 
+
+Preference generation. Following previous works [9], [11], we generate preference signals through role-specific heuristic rules aligned with each agent’s observation and task responsibilities. For Simple-Spread, each agent’s preferences are derived from its navigation efficiency to assigned land-marks, measured by the minimized distance to all targets while penalizing collisions with peer agents. In Simple-Speaker-Listener, the speaker’s preferences prioritize accurate commu-nication consistency between transmitted and target landmark IDs, while the listener’s preferences emphasize navigation precision to landmarks identified through received signals. For Simple-Reference, agents develop preferences based on their distinct partial observations: each agent evaluates trajectory segments through localized target proximity metrics while implicitly coordinating to satisfy global constraints. These role-aware heuristics produce interpretable, actionable pref-erence labels for each agent. Preferences are automatically generated by comparing the cumulative heuristic scores of two trajectory segments. 
+
+Selection of segment length H. We evaluate MAGPIE with segment lengths H = 3 , 5, 10 across three MPE tasks to account for different temporal granularities in multi-agent behaviors. Specifically, H = 3 captures short-term interac-tions, H = 5 reflects medium-term coordination, and H = 10 
+
+represents long-term strategic planning. The results confirm that MAGPIE achieves robust learning across diverse segment lengths, enabling it to integrate agent-specific preferences without requiring precise hyperparameter tuning, which is crit-ical for real-world scenarios with unknown optimal horizons. 
+
+Experimental results. As shown in Fig. 3, MAGPIE demonstrates performance comparable to the baseline. Specif-ically, in Simple-Spread, MAGPIE converges slightly slower and attains a marginally lower final return than the oracle. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 12 0 1 2 3×10 6                                              
+
+> −250 −200 −150 −125 Episode Return
+> Simple-Spread (H= 3)
+> 0123×10 6
+> −250 −200 −150 −125
+> Simple-Spread (H= 5)
+> 0123×10 6
+> −250 −200 −150 −125
+> Simple-Spread (H= 10)
+> 0.0 0.5 1.0 ×10 6
+> −250 −150 −50 0
+> Simple-Reference (H= 3)
+> 0.0 0.5 1.0 ×10 6
+> −250 −150 −50 0
+> Simple-Reference (H= 5)
+> 0.0 0.5 1.0 ×10 6
+> −250 −150 −50 0
+> Simple-Reference (H= 10)
+> 0.0 0.5 1.0
+> Timesteps ×10 6
+> −150 −100 −50 0Episode Return Simple-Speaker-Listener (H= 3) 0.0 0.5 1.0
+> Timesteps ×10 6
+> −150 −100 −50 0Simple-Speaker-Listener (H= 5) 0.0 0.5 1.0
+> Timesteps ×10 6
+> −150 −100 −50 0Simple-Speaker-Listener (H= 10) 0123
+> Timesteps ×10 6
+> −400 −200 0200
+> Mobile (H= 5)
+> 0123
+> Timesteps ×10 6
+> −400 −200 0200
+> Mobile (H= 10)
+> 0123
+> Timesteps ×10 6
+> −400 −200 0200
+> Mobile (H= 20)
+> QMIX with task reward (oracle) MAGPIE
+
+Fig. 3. The training curves for the episode return of the two methods. Blue: the oracle method (QMIX). Red: our method (MAGPIE). Results are averaged over 5 random seeds, with shaded areas indicating standard error. MAGPIE achieves comparable performance with QMIX using the true task reward in various tasks. This result validates MAGPIE’s effectiveness in utilizing decentralized preferences to guide policy learning in multi-agent scenarios. 
+
+This result is expected, as MAGPIE first learns a reward model from preferences before conducting policy learning. In Simple-Reference, MAGPIE exhibits a rapid initial learning phase followed by steady improvement similar to the baseline, indicating efficient reward-model acquisition prior to policy refinement. In Simple-Speaker-Listener, the learning trajectory closely matches the oracle, demonstrating MAGPIE’s capabil-ity to handle heterogeneous agents effectively. These results validate MAGPIE’s ability to coordinate multi-agent behavior using only decentralized, role-specific preferences without relying on predefined rewards. The proposed monotonic ag-gregation mechanism effectively aligns local preferences with the global objective, while continuous reward-model updates enable efficient policy optimization. By leveraging preference-driven coordination, MAGPIE offers a promising alternative to traditional reward engineering in complex multi-agent rein-forcement learning systems. 
+
+C. Experimental Results on a Mobile Phone Production Task 
+
+Task Description. To evaluate MAGPIE in a real-world industrial setting, we design a custom multi-agent environment that simulates a sequential mobile phone production line with three main stages: Surface Mount Technology (SMT) [49], Assembly [50], and Test [51]. Each stage is managed by one agent. Tasks randomly arrive at the first stage and move step by step through each stage until they are finished. Each agent handles scheduling for its stage. They choose processing speeds that trade off throughput against energy consumption. All agents work cooperatively. The total reward for the system depends on production efficiency, buffer management, and energy usage.  
+
+> •
+
+State space : The state includes the maximum buffer ca-pacities and current buffer occupancies of all three stages. All agents receive the same state as global observation to enable centralized training, while execution remains decentralized. Formally, the state vector is defined as: 
+
+s = [ BSMT max , B Asm max , B Test max , B SMT cur , B Asm cur , B Test cur ],
+
+where Bi 
+
+> max
+
+is the maximum capacity of stage i, and Bi
+
+> cur
+
+denotes the current number of tasks queued at that stage.  
+
+> •
+
+Action space : The action of each agent i is discrete, denoted as ai ∈ {0, 1, 2}, representing a processing speed level: low, medium, or high. The corresponding processing rate pi(ai) and energy cost ei(ai) vary by stage, which reflects the physical and operational dif-ferences among SMT, Assembly, and Test equipment. Higher speed levels increase throughput but lead to higher energy consumption, which creates a non-linear trade-off between efficiency and energy use. The specific actions for each stage show the heterogeneity of agents. This also makes it hard to decentralized coordination, as each agent must balance its local productivity with its impact on downstream stages and overall system energy consumption.  
+
+> •
+
+Transition : At each timestep, new tasks arrive at the SMT stage following a Poisson distribution. Each agent 
+
+i can process up to pi(ai) tasks from its own buffer. Completed tasks are passed to the next stage, except at the final Test stage, where they are considered finished. Buffer overflows are truncated and penalized. The buffer dynamics for stage i are: 
+
+Bi 
+
+> cur ,t +1
+
+= min 
+
+
+
+Bi
+
+> max
+
+, max  0, B i
+
+> cur ,t
+
+−pi(ai)+inflow it
+
+
+
+,
+
+where inflow it is the number of tasks arriving from the previous stage, or, for SMT, from the external arrival process. The stochastic arrivals and coupled buffer dy-namics create a challenging coordination problem under uncertainty. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 13  
+
+> •
+
+Reward function : The shared reward combines three ob-jectives: encouraging task completion, penalizing buffer overflows, and discouraging high energy consumption. At each timestep, 
+
+r(st, a t) = α · ncomplete − β ·
+
+> 3
+
+X
+
+> i=1
+
+oit − γ ·
+
+> 3
+
+X
+
+> i=1
+
+ei(ai),
+
+where ncomplete is the number of tasks finished at the Test stage, oit = max(0 , B i 
+
+> cur ,t
+
+− Bi
+
+> max
+
+) denotes overflow at stage i, and hyperparameters are set to α = 0 .5, β = 1 .0,and γ = 0 .02 after scaling. The task is episodic with a horizon of 250 timesteps, and the cumulative reward over an episode reflects the overall coordination effectiveness of the agent team. 
+
+Preference generation. We follow the method used in the MPE experiments. Preference signals are created using simple rules for each role. For the SMT agent (first stage), preferences prioritize balanced throughput, considering both its local processing efficiency and the overall assembly-line completion rate. Penalties are applied for buffer overflows at the station or in the Assembly stage, weighted by their respective energy costs. For the Assembly agent (middle stage), preferences emphasize contributions to local efficiency and final task completion. Penalties are incurred for buffer overflows at the station or in the Test stage, with weights based on corresponding energy costs. For the Test agent (final stage), preferences focus on terminal task completion, penalizing violations of local buffer constraints, as this stage directly determines the finished output. Preferences are then automatically produced by comparing cumulative heuristic scores of trajectory segment pairs. 
+
+Selection of segment length H. Similar to the MPE ex-periments, we evaluate MAGPIE using segment lengths H =5, 10 , 20 , which represent short-term operational decisions, medium-term workflow coordination, and long-term produc-tion planning, respectively. This range enables an analysis of MAGPIE’s ability to extract meaningful local preferences from trajectory segments with different temporal granularities. The consistent performance across all H values highlights MAGPIE’s robustness in incorporating role-specific feedback. 
+
+Experimental Results. Figure 3 presents the learning curves of MAGPIE and the baseline for the mobile phone production task. Across all configurations, MAGPIE achieves final performances comparable to the oracle. The results also reveal the possible impact of segment length H on learning: while all variants converge to similar returns, larger H values slightly accelerate learning, which supports the intuition that longer horizons provide more reliable signals for policy com-parison. This aligns with Theorem 1, which states that suffi-ciently long segments ensure finite-horizon return differences reflect infinite-horizon improvements. In summary, Sections V-B and V-C demonstrate that MAGPIE achieves oracle-level performance, effectively handles complex industrial tasks, and maintains stability across design choices, which shows its potential for real-world deployment in reward-free multi-agent systems. 
+
+D. More Experimental Results                                
+
+> TABLE II TRAINING TIME (HOURS )OF MAGPIE AND QMIX. Task MAGPIE QMIX Simple-Reference 13.6247 ±0.0133 13.4809 ±0.0302 Simple-Speaker-Listener 9.6424 ±0.0166 9.5467 ±0.0103 Simple-Spread 15.4434 ±0.0537 15.3773 ±0.0200 Mobile 37.3630 ±0.0019 37.3621 ±0.0002
+
+Comparison to more preference-based methods. To better show the advantages of MAGPIE, we add comparisons with MAPT [20] and a standard PbRL baseline that learns a single global reward model (Global-PbRL) [19]. All methods use the same rule-based preference generation procedure de-scribed in Sections V-B and V-C. To simulate human cognitive overload [3], [10], we assign a random global preference label when individual agent preferences within a team conflict. Figure 4(a, b) shows that MAGPIE consistently outperforms both baselines across tasks. These results demonstrate the effectiveness of the agent-specific preference decomposition and monotonic aggregation mechanisms in MAGPIE. 
+
+Comparison to more reward-engineered methods. We compare MAGPIE with MATD3 [52] using ground-truth re-ward signals. Figure 5(a, b) shows that MAGPIE achieves comparable performance to MATD3, although MATD3 obtains lower final results in some tasks. 
+
+Evaluation with more agents. To demonstrate the feasibility of applying MAGPIE in large-scale scenarios, we conducted experiments on the Simple-Spread task with 3∼6 agents. Figure 5(c ∼f) shows that MAGPIE consistently achieves performance comparable to the oracle QMIX base-line, which provides evidence that MAGPIE scales to larger-scale scenarios. 
+
+Complexity analysis. Compared to standard QMIX, the extra training complexity of MAGPIE is O(n). Specifically, during reward model training, MAGPIE trains one reward model ˆriψ per agent independently, which has computational complexity O(n · N · H), with n being the number of agents, 
+
+N the preference data size per agent, and H the segment length. During policy training, MAGPIE uses standard QMIX and only replaces the environment reward with the sum of learned reward models. The extra overhead per transition only involves n forward passes of the reward models and one summation operation. Let Cmodel be the cost of a single reward model forward pass; then, the extra complexity of reward computation is O(n · Cmodel ), and the summation is 
+
+O(n). Additionally, we compared the practical training time of MAGPIE against standard QMIX in Table II. The training time of MAGPIE is only marginally higher than QMIX, confirming that MAGPIE avoids significant runtime overhead. 
+
+Ablation studies. We conduct ablation studies on four key components of MAGPIE: (1) the preference-based re-ward learning module, (2) the regularization term enforc-ing Assumption 7, (3) the additive monotonic aggregation mechanism (we replace it with multiplicative aggregation), and (4) the continuous preference collection and experience JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 14 0 1 2 3Timesteps ×10 6                     
+
+> −250 −200 −150 Episode Return
+> Simple-Spread (H=5)
+> MAGPIE (ours) Global-PbRL MAPT
+> 0123Timesteps ×10 6
+> −400 −200 0200
+> Mobile (H=20)
+> MAGPIE (ours) Global-PbRL MAPT
+> 0123Timesteps ×10 6
+> −250 −200 −150
+> Ablation (Simple-Spread, H=5)
+> MAGPIE (ours) w/o Preference w/o Regularization w/o Mono. Agg. w/o Relabeling w/o Cont. Collection
+> −1.0 −0.5 0.0 0.5 1.0 X−1.0 −0.5 0.0 0.5 1.0 Y
+> LM0 ML12LM
+> Agent Trajectories
+> Agent 0 Agent 1 Agent 2
+> −1.0 −0.5 0.0 0.5 1.0 X−1.0 −0.5 0.0 0.5 1.0 Y
+> Reward Heatmap
+> −1.0 −0.5 0.0 0.5 1.0
+> (a) (b) (c) (d) (e)
+
+Fig. 4. (a, b) Performance comparison of MAGPIE and preference-based baselines on the Simple-Spread ( H = 5 ) and Mobile task ( H = 20 ). (c) Ablation results on the Simple-Spread task ( H = 5). (d, e) Visualizations of MAGPIE’s policy behavior and reward model heatmap on the Simple-Spread task. 0.0 0.5 1.0 Timesteps ×10 6                      
+
+> −150 −100 −50 0Episode Return Simple-Speaker-Listener 0.0 0.5 1.0 Timesteps ×10 6
+> −250 −150 −50 0Simple-Reference 0123Timesteps ×10 6
+> −300 −250 −200 −150 Simple-Spread ( n=3) 0123Timesteps ×10 6
+> −600 −500 −400 −300 Simple-Spread ( n=4) 0123Timesteps ×10 6
+> −800 −700 −600 −500 −400 Simple-Spread ( n=5) 0123Timesteps ×10 6
+> −800 −600 Simple-Spread ( n=6)
+> MAGPIE (ours) QMIX with task reward (oracle) MATD3 with task reward (oracle)
+
+Fig. 5. (a, b) Performance comparison of MAGPIE and reward-engineered MARL baselines on the Simple-Speaker-Listener task ( H = 5 ) and the Simple-Reference task ( H = 20 ). (c, d, e, f) Performance comparison of MAGPIE and QMIX on the Simple-Spread task ( H = 5) with various numbers of agents. 
+
+relabeling techniques. Figure 4(c) shows that the preference module, monotonic aggregation, and both training techniques are essential for successful learning. Also, removing the regu-larization term maintains comparable overall performance but causes slight instability during the late stages of training. This occurs because our expert design explicitly evaluates each agent’s contribution to the team objective, making violations of Assumption 7 naturally rare in fully cooperative tasks. Nevertheless, the regularization term provides an additional safety guarantee against potential negative externalities. There-fore, we recommend keeping this regularization term to ensure robustness and training stability in more general scenarios. 
+
+Visualizations. Figure 4(d) visualizes the learned policies of MAGPIE in the Simple-Spread environment, which shows three agents successfully covering distinct landmarks without collisions. Furthermore, Figure 4(e) displays the learned re-ward heatmap, which shows that the reward of each agent peaks near unoccupied landmarks when the positions of other agents are fixed. This intuitive pattern confirms the effective-ness of the learned reward model. VI. C ONCLUSION 
+
+This paper proposes MAGPIE, a multi-agent reinforcement learning method that replaces traditional reward engineering with agent-specific preferences. Instead of using complex global reward functions, MAGPIE relies on local preference feedback, which provides an intuitive way to train diverse agents in collaborative settings. Our theoretical analysis shows that optimizing decentralized preferences can achieve a Nash equilibrium, and the proposed monotonic aggregation mech-anism ensures that local improvements contribute to global performance. Experimental results across various benchmark tasks and a sequential production line task show that MAG-PIE is competitive with reward-engineering baselines, which proves its effectiveness and potential for practical applications. This paper offers a practical solution for solving multi-agent cooperation tasks in complex scenarios, where defining precise reward signals is challenging. ACKNOWLEDGMENT 
+
+This work is supported by the Beijing Natural Science Foundation (L233005), the National Key Research and De-velopment Program of China (2022YFA1004600), NSFC (No. 62125304, 62192751), the Fundamental and Interdis-ciplinary Disciplines Breakthrough Plan of the Ministry of Education of China (JYB2025XDXM312), the 111 Interna-tional Collaboration Project (B25027), and the BNRist project (BNR2024TD03003). The author would like to express grat-itude to Xun Wang and Haixuan Tong for the illuminating discussions during the preliminary stages of this work. APPENDIX AFURTHER ANALYSIS OF ALGORITHM CONVERGENCE 
+
+In the main text, Theorem 4 guarantees that a joint policy maximizing the aggregated reward ˆr results in an ϵ-Nash equilibrium for the original problem. This result assumes that we can solve the optimization problem perfectly, while in real-world scenarios, the policy optimization is supported by randomly sampled training data, which often leads to errors. In this appendix, we further investigate the theoretical properties of the proposed algorithm. We prove that the learning process converges under non-idealized, stochastic conditions. To make the theoretical analysis feasible, we examine a linear implementation of the monotonic mixing network in QMIX [5], [6]. Specifically, we analyze the case where the global Q-value can be decomposed into the sum of local Q-values, which are calculated on agents’ local observations JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 15 
+
+and actions, i.e., Qtot (s, A ) = Pni=1 Qi(oi, a i). In the next subsection, we model the policy update process as a stochastic approximation algorithm and analyze its convergence using the Ordinary Differential Equation (ODE) method proposed in [53]. 
+
+A. Problem Setup and Definitions 
+
+Let S denote the global state space and A = Qni=1 Ai de-note the joint action space. We define Q = {Q : S × A → R}
+
+as the space of all possible global Q-functions. The infinity norm of this space is denoted by ∥Q∥∞ = max s,A |Q(s, A )|.We define the decomposable subspace of the Q-function space Qd ⊂ Q as follows: 
+
+Qd =
+
+(
+
+Q ∈ Q | ∃{ Qi}ni=1 , Q (s, A ) = 
+
+> n
+
+X
+
+> i=1
+
+Qi(si, a i)
+
+)
+
+,
+
+(40) where Qi represents the local utility function of agent i. Then, we define the optimal Bellman operator T : Q → Q as: 
+
+(T Q )( s, A ) = E
+
+
+
+ˆr(s, A ) + γ max  
+
+> A′
+
+Q(s′, A ′) | s, A 
+
+
+
+. (41) As proved in [54], the optimal Bellman operator T is a γ-contraction mapping under the infinity norm, i.e., ∥T Q −
+
+T Q ′∥∞ ≤ γ∥Q − Q′∥∞.To update the Q function, the target global Q-value T Q 
+
+should be projected back into the decomposable subspace Qd.We define Π : Q → Q d as the projection operator. Then, the iterative update of the algorithm can be written in the standard stochastic approximation form: 
+
+Qk+1 = Qk + αk [Π( T Q k + Mk+1 ) − Qk] , (42) where αk is the step size sequence and Mk+1 is the noise term arising from sampling. Since the projection operator Π
+
+is linear and Qk is already in Qd, we have ΠQk = Qk. Thus, we can rewrite the update as: 
+
+Qk+1 = Qk + αk [(Π T Q k − Qk) + Π Mk+1 ] , (43) where αk is the step size of the k-th iteration. This update can be associated with the following ODE: 
+
+˙Q(t) = h(Q(t)) = Π T Q (t) − Q(t). (44) To establish the theoretical results of convergence, we in-troduce the following assumptions regarding the environment and the projection operator: 1) The state space and action space are discrete and finite. 2) The global optimal Q-function Q∗ under the aggregated reward ˆr lies within the decomposable subspace Qd.This implies that there exist local functions Q∗ 
+
+> i
+
+such that their sum exactly represents the global optimal value. 3) The projection operator Π is non-expansive under the infinity norm. That is, for any Q, Q ′ ∈ Q , the inequality 
+
+∥ΠQ − ΠQ′∥∞ ≤ ∥ Q − Q′∥∞ holds. 4) The step size sequence {αk} satisfies the Robbins-Monro conditions [55]: P αk = ∞ and P α2 
+
+> k
+
+< ∞.
+
+B. Convergence Result 
+
+Based on these assumptions, we provide the following theorem to establish a convergence analysis. 
+
+Theorem 5. Q∗ is the unique globally asymptotically stable equilibrium point of the associated ODE in Eq. 44 . Fur-thermore, the sequence {Qk} generated by the algorithm converges almost surely to the global optimal Q-function Q∗.Proof. We use the ODE method proposed by [53]. First, we define the composite operator G = Π T , and analyze the ODE 
+
+˙Q = G(Q) − Q. We show that G is a contraction mapping under the infinity norm. Specifically, for any Q1, Q 2 ∈ Q , we have: 
+
+∥G(Q1) − G(Q2)∥∞ = ∥ΠT Q 1 − ΠT Q 2∥∞
+
+≤ ∥ T Q 1 − T Q 2∥∞
+
+≤ γ∥Q1 − Q2∥∞.
+
+(45) The first inequality follows from the non-expansiveness of 
+
+Π, and the second inequality follows from the contraction property of T . Thus, G is a contraction mapping with γ < 1.We assume in the previous subsection that the optimal value function Q∗ belongs to Qd and satisfies T Q ∗ = Q∗. Since 
+
+Q∗ ∈ Q d, we have ΠQ∗ = Q∗. Therefore, 
+
+G(Q∗) = Π T Q ∗ = Π Q∗ = Q∗. (46) This implies that Q∗ is the unique fixed point of the map G.Consequently, Q∗ is the unique equilibrium point of the ODE in Eq. 44, as h(Q∗) = 0 .We construct a Lyapunov function V (Q) = ∥Q − Q∗∥∞,and analyze the derivative of V (Q(t)) along the trajectory of the ODE. For a small time step η > 0, we can approximate the trajectory as: 
+
+Q(t + η) ≈ Q(t) + η(Π T Q (t) − Q(t)) = (1 − η)Q(t) + ηG (Q(t)) . (47) We subtract Q∗ from both sides. Note that Q∗ = (1 − η)Q∗ +
+
+ηQ ∗ because G(Q∗) = Q∗, we get: 
+
+∥Q(t + η) − Q∗∥∞
+
+≤ (1 − η)∥Q(t) − Q∗∥∞ + η∥G(Q(t)) − Q∗∥∞
+
+≤ (1 − η)∥Q(t) − Q∗∥∞ + ηγ ∥Q(t) − Q∗∥∞
+
+= (1 − (1 − γ)η)∥Q(t) − Q∗∥∞.
+
+(48) Dividing by η and letting η → 0+, we obtain the upper right derivative: 
+
+d+
+
+dt V (Q(t)) ≤ − (1 − γ)V (Q(t)) . (49) This inequality shows that the error V (Q(t)) decays to zero at an exponential rate of 1 − γ. Therefore, Q∗ is the globally asymptotically stable equilibrium of the ODE. Next, we verify the noise condition with random sampling. The term Mk+1 represents the standard Q-learning noise, which is a martingale difference sequence with respect to the history [53]. Since Π is a linear operator, the projected noise ΠMk+1 remains a martingale difference sequence, i.e., 
+
+E[Π Mk+1 | F k] = 0 . Furthermore, since the rewards are bounded and the state-action space is finite, the variance of JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 16 
+
+the noise is bounded by a quadratic function of the current Q-values. Specifically, there exists a constant C0 such that 
+
+E[∥Mk+1 ∥2 
+
+> ∞
+
+| F k] ≤ C0(1 + ∥Qk∥2
+
+> ∞
+
+). This satisfies the standard assumption for stability. Therefore, the ODE in Eq. 44 has a unique globally asymp-totically stable equilibrium Q∗, and the noise satisfies the martingale difference condition. According to Theorem 2.2 in [53], the sequence {Qk} converges almost surely to Q∗. This completes the proof. 
+
+Remark. Theorem 5 establishes that the algorithm converges to the global optimal policy π∗ for the learned reward model ˆr.We combine this with Theorem 4, which states that the optimal policy for ˆr corresponds to an ϵ-Nash equilibrium of the true underlying preferences. Therefore, we conclude that under the above assumptions, the proposed method converges to an ϵ-Nash equilibrium policy using decentralized preference feed-back. This provides a theoretical foundation for preference-based multi-agent learning in stochastic environments. 
+
+REFERENCES [1] C. Yu, X. Wang, X. Xu, M. Zhang, H. Ge, J. Ren, L. Sun, B. Chen, and G. Tan, “Distributed multiagent coordinated learning for autonomous driving in highways based on dynamic coordination graphs,” IEEE Transactions on Intelligent Transportation Systems , vol. 21, no. 2, pp. 735–748, 2020. [2] X. Wang, Z. Li, and L. Huang, “Beyond static populations: Efficient delay-constrained scheduling for dynamic users via deep reinforcement learning,” in Proceedings of the Twenty-sixth International Symposium on Theory, Algorithmic Foundations, and Protocol Design for Mobile Networks and Mobile Computing , 2025, pp. 151–160. [3] C. Berner, G. Brockman, B. Chan, V. Cheung, P. Debiak, C. Dennison, D. Farhi, Q. Fischer, S. Hashme, C. Hesse et al. , “Dota 2 with large scale deep reinforcement learning,” arXiv preprint arXiv:1912.06680 ,2019. [4] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of ppo in cooperative multi-agent games,” 
+
+Advances in neural information processing systems , vol. 35, pp. 24 611– 24 624, 2022. [5] P. Sunehag, G. Lever, A. Gruslys, W. M. Czarnecki, V. Zambaldi, M. Jaderberg, M. Lanctot, N. Sonnerat, J. Z. Leibo, K. Tuyls et al. ,“Value-decomposition networks for cooperative multi-agent learning based on team reward,” in Proceedings of the 17th International Confer-ence on Autonomous Agents and MultiAgent Systems , 2018, pp. 2085– 2087. [6] T. Rashid, M. Samvelyan, C. S. de Witt, G. Farquhar, J. Foerster, and S. Whiteson, “Qmix: Monotonic value function factorisation for deep multi-agent reinforcement learning,” 2018. [7] X. Wang, Z. Li, H. Zhong, and L. Huang, “Beyond shallow behavior: Task-efficient value-based multi-task offline marl via skill discovery,” 
+
+arXiv preprint arXiv:2502.08985 , 2025. [8] B. Ibarz, J. Leike, T. Pohlen, G. Irving, S. Legg, and D. Amodei, “Reward learning from human preferences and demonstrations in atari,” 
+
+Advances in neural information processing systems , vol. 31, 2018. [9] K. Lee, L. M. Smith, and P. Abbeel, “Pebble: Feedback-efficient interactive reinforcement learning via relabeling experience and unsuper-vised pre-training,” in International Conference on Machine Learning .PMLR, 2021, pp. 6152–6163. [10] N. Mu, Y. Luan, Y. Yang, B. Xu, and Q.-s. Jia, “S-EPOA: Overcoming the Indistinguishability of Segments with Skill-Driven Preference-Based Reinforcement Learning,” in Proceedings of the Thirty-Fourth Interna-tional Joint Conference on Artificial Intelligence , 2025. [11] N. Mu, H. Hu, X. Hu, Y. Yang, B. XU, and Q.-S. Jia, “CLARIFY: Contrastive Preference Reinforcement Learning for Untangling Ambigu-ous Queries,” in Forty-second International Conference on Machine Learning , 2025. [12] Y. Luan, N. Mu, Y. Yang, B. XU, and Q.-S. Jia, “STAIR: Addressing stage misalignment through temporal-aligned preference reinforcement learning,” in The Thirty-ninth Annual Conference on Neural Information Processing Systems , 2025. [13] N. Mu, Y. Luan, and Q.-S. Jia, “MAGPIE: Utilizing Agent-Specific Preferences for Multi-Agent Reinforcement Learning,” in 2025 China Automation Congress (CAC) . IEEE, 2025. [14] H. Ni, T. Lu, H. Hu, Y. Cai, and S. Wang, “Senior: Efficient query selection and preference-guided exploration in preference-based rein-forcement learning,” 2025. [15] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. Wainwright, P. Mishkin, C. Zhang, S. Agarwal, K. Slama, A. Ray et al. , “Training language models to follow instructions with human feedback,” Advances in Neural Information Processing Systems , 2022. [16] N. Mu, Y. Luan, and Q.-S. Jia, “Preference-based Multi-Objective Reinforcement Learning,” IEEE Transactions on Automation Science and Engineering , vol. 22, pp. 18 737–18 749, 2025. [17] Y. Luan, N. Mu, H. Ge, Y. Yang, B. Xu, and Q.-S. Jia, “COLLIE: Guiding Skill Discovery in Semantically Coherent Latent Space,” in 
+
+Forty-third International Conference on Machine Learning , 2026. [18] Q. Kou, M. Li, Z. Liu, L. Qian, Z. Chen, L. Wan, X. Chen, and X. Lan, “Offline multi-agent preference-based reinforcement learning with agent-aware direct preference optimization,” in Proceedings of the 24th International Conference on Autonomous Agents and Multiagent Systems , 2025, pp. 1181–1190. [19] T. V. Bui, T. A. Mai, and T. H. Nguyen, “O-MAPL: Offline multi-agent preference learning,” in Forty-second International Conference on Machine Learning , 2025. [20] T. Zhu, Y. Qiu, H. Zhou, and J. Li, “Decoding global preferences: Tem-poral and cooperative dependency modeling in multi-agent preference-based reinforcement learning,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 38, no. 15, 2024, pp. 17 202–17 210. [21] S. Kang, Y. Lee, M. Kim, J. Oh, S. Chong, and S.-Y. Yun, “DPM: Dual preferences-based multi-agent reinforcement learning,” 2025. [Online]. Available: https://openreview.net/forum?id=VzuPnoSKQ1 [22] N. Zhang, X. Wang, Q. Cui, R. Zhou, S. M. Kakade, and S. S. Du, “Multi-agent reinforcement learning from human feedback: Data coverage and algorithmic techniques,” 2025. [Online]. Available: https://openreview.net/forum?id=4vPC6Aj6N7 [23] D. Silver, J. Schrittwieser, K. Simonyan, I. Antonoglou, A. Huang, A. Guez, T. Hubert, L. Baker, M. Lai, A. Bolton et al. , “Mastering the game of go without human knowledge,” Nature , vol. 550, no. 7676, pp. 354–359, 2017. [24] R. Liu, F. Nageotte, P. Zanne, M. de Mathelin, and B. Dresp-Langley, “Deep reinforcement learning for the control of robotic manipulation: a focussed mini-review,” Robotics , vol. 10, no. 1, p. 22, 2021. [25] N. Mu, X. Hu, and Q.-S. Jia, “Integrating Mechanism and Data: Reinforcement Learning Based on Multi-fidelity Model for Data Center Cooling Control,” in 2023 China Automation Congress (CAC) . IEEE, 2023, pp. 5283–5288. [26] N. Mu, X. Hu, Q.-S. Jia, X. Zhu, and X. He, “Large-scale Data Center Cooling Control via Sample-efficient Reinforcement Learning,” in 2024 IEEE 20th International Conference on Automation Science and Engineering (CASE) . IEEE, 2024, pp. 2780–2785. [27] C. Chang, N. Mu, J. Wu, L. Pan, and H. Xu, “E-mapp: Efficient Multi-Agent Reinforcement Learning with Parallel Program Guidance,” Ad-vances in Neural Information Processing Systems , vol. 35, pp. 12 154– 12 168, 2022. [28] X. Wang, Z. Li, Y. Lin, H. Zhong, and L. Huang, “From solo to symphony: Orchestrating multi-agent collaboration with single-agent demos,” arXiv preprint arXiv:2511.02762 , 2025. [29] Y. Yang, X. Yang, Y. Jiang, N. Mu, H. Hu, R. Xie, Z. Zhang, S. Li, Y.-H. Ni, Q. Zhao et al. , “GlobeDiff: State Diffusion Process for Partial Ob-servability in Multi-Agent Systems,” arXiv preprint arXiv:2602.15776 ,2026. [30] M. A. Hady, S. Hu, M. Pratama, Z. Cao, and R. Kowalczyk, “Multi-agent reinforcement learning for resources allocation optimization: a survey,” 
+
+Artificial Intelligence Review , vol. 58, no. 11, p. 354, 2025. [31] A. Oroojlooy and D. Hajinezhad, “A review of cooperative multiagent deep reinforcement learning,” Applied Intelligence , vol. 53, no. 11, pp. 13 677–13 722, 2023. [32] D. Rengarajan, G. Vaidya, A. Sarvesh, D. Kalathil, and S. Shakkottai, “Reinforcement learning with sparse rewards using guidance from offline demonstration,” in International Conference on Learning Rep-resentations , 2022. [33] J. Eschmann, “Reward function design in reinforcement learning,” 
+
+Reinforcement learning algorithms: Analysis and Applications , pp. 25– 33, 2021. [34] Y. Du, L. Han, M. Fang, J. Liu, T. Dai, and D. Tao, “Liir: Learning indi-vidual intrinsic reward in multi-agent reinforcement learning,” Advances in neural information processing systems , vol. 32, 2019. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 17 
+
+[35] R. Rekik, S. Wuhrer, L. Hoyet, K. Zibrek, and A.-H. Olivier, “Quality assessment of 3d human animation: Subjective and objective evaluation,” 
+
+IEEE Transactions on Visualization and Computer Graphics , p. 1–12, 2025. [36] P. F. Christiano, J. Leike, T. Brown, M. Martic, S. Legg, and D. Amodei, “Deep reinforcement learning from human preferences,” Advances in neural information processing systems , vol. 30, 2017. [37] N. Mu, Y. Luan, and Q.-S. Jia, “Preference-Based Multi-Objective Reinforcement Learning with Explicit Reward Modeling,” in 2024 China Automation Congress (CAC) . IEEE, 2024, pp. 4874–4879. [38] H. Kim, K. Lee, J. Park, J. Li, and J. Park, “Human implicit preference-based policy fine-tuning for multi-agent reinforcement learning in usv swarm,” arXiv preprint arXiv:2503.03796 , 2025. [39] A. Wilson, A. Fern, and P. Tadepalli, “A bayesian approach for policy learning from trajectory preference queries,” Advances in neural infor-mation processing systems , vol. 25, 2012. [40] F. S. Melo, “Convergence of q-learning: A simple proof,” Institute Of Systems and Robotics, Tech. Rep , pp. 1–4, 2001. [41] K. Li and Q.-S. Jia, “Decentralized multi-agent reinforcement learning: An off-policy method,” 2021. [42] K. Li, X. Jin, Q.-S. Jia, D. Ren, and H. Xia, “An ocba-based method for efficient sample collection in reinforcement learning,” IEEE Trans-actions on Automation Science and Engineering , vol. 21, no. 3, pp. 3615–3626, 2024. [43] J. F. Nash, “Equilibrium points in n-person games,” Proceedings of the National Academy of Sciences , vol. 36, no. 1, pp. 48–49, 1950. [44] J. Park, Y. Seo, J. Shin, H. Lee, P. Abbeel, and K. Lee, “Surf: Semi-supervised reward learning with data augmentation for feedback-efficient preference-based reinforcement learning,” in International Conference on Learning Representations , 2022. [45] R. A. Bradley and M. E. Terry, “Rank analysis of incomplete block designs: I. the method of paired comparisons,” Biometrika , vol. 39, no. 3/4, pp. 324–345, 1952. [46] P. L. Bartlett and S. Mendelson, “Rademacher and gaussian complex-ities: Risk bounds and structural results,” Journal of machine learning research , vol. 3, no. Nov, pp. 463–482, 2002. [47] I. Mordatch and P. Abbeel, “Emergence of grounded compositional language in multi-agent populations,” arXiv preprint arXiv:1703.04908 ,2017. [48] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environments,” Neu-ral Information Processing Systems (NIPS) , 2017. [49] T. Sawik, “Balancing and scheduling of surface mount technology lines,” 
+
+International Journal of Production Research , vol. 40, no. 9, pp. 1973– 1991, 2002. [50] G. Komaki, S. Sheikh, and B. Malakooti, “Flow shop scheduling prob-lems with assembly operations: a review and new trends,” International Journal of Production Research , vol. 57, no. 10, pp. 2926–2955, 2019. [51] J.-Z. Wu and C.-F. Chien, “Modeling semiconductor testing job schedul-ing and dynamic testing machine configuration,” Expert Systems with Applications , vol. 35, no. 1-2, pp. 485–496, 2008. [52] J. Ackermann, V. Gabler, T. Osa, and M. Sugiyama, “Reducing overes-timation bias in multi-agent domains using double centralized critics,” 
+
+arXiv preprint arXiv:1910.01465 , 2019. [53] V. S. Borkar and S. P. Meyn, “The o.d.e. method for convergence of stochastic approximation and reinforcement learning,” SIAM Journal on Control and Optimization , vol. 38, no. 2, pp. 447–469, 2000. [54] R. S. Sutton, A. G. Barto et al. , Reinforcement learning: An introduction .MIT press Cambridge, 1998, vol. 1, no. 1. [55] H. Robbins and S. Monro, “A stochastic approximation method,” The annals of mathematical statistics , pp. 400–407, 1951.
