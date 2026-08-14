@@ -1,0 +1,268 @@
+Title: Hybrid Gated Attention
+
+URL Source: https://arxiv.org/pdf/2608.11805v1
+
+Published Time: Thu, 13 Aug 2026 00:49:27 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Hybrid Gated Attention 
+
+# Zekun Zhou 1,2, Ruobing Xie 1∗, Lanrui Wang 1, Weixuan Sun 1
+
+> 1
+
+Tencent Hunyuan 
+
+> 2
+
+Peking University 
+
+Abstract 
+
+Gated attention is an effective approach to mitigate attention sinks and enhance the representational capacity of attention. To further extend its effectiveness-efficiency Pareto frontier, we propose a Hybrid Gated Attention (HyGA) framework that contains three types of gating strategies. Specifically, these gates leverage diverse information from multiple stages of attention, and collaboratively build element-wise/head-wise gating from multiple perspectives, capturing intra-head and cross-head information interactions. Through our hybrid gat-ing components, HyGA could provide multi-source modula-tion signals, enabling more comprehensive control over infor-mation flow and improving the representational capacity of attention. We also introduce low-rank matrix decomposition and learnable attention sink to further enhance training effi-ciency and stability. In experiments, we evaluate HyGA on widely-used benchmarks based on different backbones. The experimental results show that our HyGA comprehensively improves both training loss and various downstream perfor-mances compared with Gated attention. HyGA has also been verified to achieve the best performance at different compu-tation costs, with comprehensive model analyses for better understanding. The proposed HyGA sheds light on a more effective, efficient, and stable attention mechanism. 
+
+# 1 Introduction 
+
+Multi-head attention (Vaswani et al. 2017) has become a core component of LLMs for contextual information interaction. Consequently, the information-processing capability of at-tention directly affects an LLM’s contextual understanding and information integration ability, and thus plays a critical role in determining the model’s representational capacity. In recent years, a growing body of work has sought to improve the attention mechanism. One major research di-rection focuses on enhancing the efficiency of attention and reducing the KV-cache overhead, leading to representative approaches such as linear attention (Yang et al. 2023; Yang, Kautz, and Hatamizadeh 2025), SSMs (Dao and Gu 2024), sparse attention (Liu et al. 2025; Xu et al. 2026; Yuan et al. 2025), and KV-sharing or compression mechanisms such as GQA (Ainslie et al. 2023) and MLA (Liu et al. 2024). Another important direction aims to address the perfor-mance and stability issues associated with attention, among 
+
+> ∗
+
+Corresponding author. X-gate    
+
+> input: raw input before
+> the attention layer X
+> output:element-wise
+> H-gate
+> input:head-specific
+> SDPA output H i
+> output:element-wise
+> C-gate
+> input:concatenated
+> SDPA output H i
+> output:head-wise
+> Low-rank matrix decomposition for efficiency
+> Learnable attention sink for stable training
+> HyGA
+
+Figure 1: We propose HyGA with three gates, i.e., X-gate, H-gate, and C-gate, to enhance the attention’s gating strategy with more informative inputs and diverse control. It further incorporates low-rank matrix decomposition and learnable attention sinks for more efficient and stable training. which the attention-sink phenomenon has been extensively studied. Attention sink (Xiao et al. 2024; Gu et al. 2025; Bar-bero et al. 2025; Su et al. 2026; Sun et al. 2026) refers to the phenomenon in which an attention module assigns a dispro-portionately large amount of attention mass to a small number of tokens with limited semantic relevance, such as the BOS token. These tokens act as attention sinks by absorbing ex-cess attention, effectively allowing certain attention heads to approximate a no-op operation. However, excessively con-centrated attention may reduce the effective utilization of contextual information, which should be considered. Gated attention is a representative approach for mitigat-ing attention sinks and improving attention ability (Qiu et al. 2026b). It applies element-wise gating to Scaled Dot-Product Attention (SDPA) output, introducing non-linearity and spar-sity to alleviate attention sinks and enhance model expres-siveness. Nevertheless, several limitations still remain: (a) the original gated attention relies on the raw input X for gat-ing, ignoring other information that is a good supplement to the current gating strategy. (b) Element-wise gating intro-duces considerable additional parameters and computational overhead, leaving substantial room for improving gating ef-ficiency. And (c) existing gated attention still exhibits a non-negligible BOS-token sink ratio, motivating us to further mitigate the attention-sink phenomenon for stable training. arXiv:2608.11805v1 [cs.CL] 12 Aug 2026 Motivated by the above observations, we substantially ex-tend gated attention and propose our Hybrid Gated Atten-tion (HyGA) . Specifically, our HyGA contains three well-coordinated attention gates to smartly adjust the output vol-ume of SDPA from diverse aspects. Besides the classical attention gate controlled by the input X ( X-gate ), we first in-troduce an element-wise attention gate that takes the SDPA outputs Hi as the head-specific gate controller, noted as the 
+
+H-gate , which contains richer contextual information after attention and thereby provides additional information gains. Since the two gates are conditioned on representations from different stages of attention, they can provide complemen-tary modulation signals, enabling more comprehensive con-trol over information flow and consequently improving the representational capacity of attention. To achieve a favor-able effectiveness–efficiency Pareto frontier, we apply low-rank matrix factorization to the projections of both gates. In this case, HyGA could achieve comparable training loss and downstream performance with substantially fewer attention parameters than classical Gated attention. Besides the H-gate that focus on the intra-head interactions to generate element-wise gating scores, we further design the cross-head gate ( C-gate ) to capture inter-head correlations. It jointly adopts all heads’ SDPA outputs to calculate head-wise gating scores, which functions as a good supplement to the above fine-grained element-wise gating. All three gates cooperate well with each other, enriching the attention gating strategy with more comprehensive considerations on diverse features. To prevent potential training instability and output vanishing caused by the stacked multiplication of three gates, we adopt a gate fusion strategy. We also find that HyGA could be more stable armed with learnable attention sink (Agarwal et al. 2025), which seems to have potential functional overlap with gated attention. In experiments, we evaluate HyGA across different models on widely-used benchmarks, where the results demonstrate that HyGA consistently outperforms the original Gated at-tention. Through appropriate low-rank compression settings, HyGA could achieve slightly better performance with only 
+
+26% of Gated attention’s gating computation cost. The con-tributions are summarized as follows: 
+
+• We propose HyGA, which jointly adopts three hybrid gat-ing strategies to provide both head-wise and element-wise gate scoring calculated from different factors. Equipped with learnable sink, HyGA achieves more stable training. 
+
+• We explore different low-rank matrix factorization settings in our hybrid gates to extend the effectiveness-efficiency Pareto frontier of Gated attention methods. 
+
+• Overall, HyGA achieves significant improvement com-pared to baselines with different backbones and model settings, shedding light on more effective, efficient, and stable gated attention modules in practice. 
+
+# 2 Preliminary 
+
+In this section, we first give a brief introduction and formu-lation on classical attention mechanisms used in this work. 
+
+Grouped-Query Attention (GQA). GQA is widely-used in popular LLMs. Conventional multi-head attention mecha-nisms adopt query (Q), key (K), and value (V) to compute contextualized token representations, where each query head attends to its corresponding key-value head independently. GQA allows the queries from multiple attention heads to share a common set of key-value projections. Let Hi denote the attention output of the i-th head, the formulas are: 
+
+Hi = Softmax QiK⊤
+
+> g(i)
+
+√dh
+
+!
+
+Vg(i), (1) where g(i) maps the i-th query head to its corresponding key-value group. Query heads within the same group share the same key and value representations, thereby substantially reducing the memory footprint of the KV cache while pre-serving most of the model’s inference capability. 
+
+Multi-latent Attention (MLA). MLA improves GQA by compressing K and V into a low-dimensional latent space through down-projection. Only the low-dimensional latent representation is cached in the KV cache, and the com-plete K and V matrices are up-projected during atten-tion computation. The specific formulas are as follows: 
+
+cKV t = W DKV ht, kCt = W U K cKV t , vCt = W U V cKV t ,where W DKV is the down-projection matrix and cKV t is the compressed latent vector shared by keys and values. Compared with GQA, MLA achieves stronger KV cache compression and can save more memory in long-context in-ference. 
+
+Gated Attention. Gated Attention (Qiu et al. 2026b) refers to applying an element-wise gating operation to the output matrix after the original per-head attention. The typical gated attention function is adopted after SDPA output: 
+
+H′ 
+
+> i
+
+= Hi ⊙ σ(XW i), O = H′WO , Wi ∈ Rdmodel ×d.
+
+(2) where d is the head dimension, dmodel is the model dimen-sion, X is the input matrix and H′ is the gated output before 
+
+WO . Wi represents the projection matrix for the i-th head, providing element-wise gating for d dimensions. It simul-taneously provides nonlinear expressiveness and suppresses attention sink and massive activation, and thus could further improve the performance of both GQA and MLA. 
+
+# 3 Method 
+
+In this work, we propose Hybrid Gated Attention, which attempts to further optimize the effectiveness, efficiency, and training stability of gated attention. 
+
+3.1 Overall Framework 
+
+As shown in Fig. 2, HyGA mainly extends the original Gated attention with three gating mechanisms: (a) the original gate that takes the raw input X before the attention layer as input (X-gate), (b) the proposed gate that takes the output H af-ter SDPA as input (H-gate), and (c) the proposed cross-head gate (C-gate), which captures the inter-head connections and provides head-level reweighting. We find that these three at-tention gates could cooperate well and jointly improve the performance. Next, we adopt a gate fusion strategy to get our final hybrid gated attention output, avoiding undesired Silu    
+
+> Raw Input X
+> Scaled Dot-Product Attention (SDPA) LS
+> H1H2Hh
+> X-gate
+> Wid
+> SiLU
+> Wiu
+> H-gate
+> Wiu
+> Wid
+> SiLU
+> SDPA Output H
+> C-gate
+> Wc
+> GiHGiX
+> GC
+
+# +
+
+> WO
+> O
+
+# ·
+
+> Concat
+> H
+
+Figure 2: Overview of the proposed HyGA, which contains three gates: X-gate ( GX ), H-gate ( GH ), and C-gate ( GC ), armed with low-rank matrix decomposition (in H-gate and X-gate) and learnable attention sink (LS in SDPA). dominating gates to ensure smooth training. Besides, to im-prove training stability, we implement HyGA with learnable attention sink to provide a double guarantee for training sta-bility. Based on the above mechanisms, our HyGA effectively improves both model capability and training stability. 
+
+3.2 Hybrid Gating Strategy 
+
+Hybrid Gating Inputs and Functions The original gated attention adopts the raw input X to control the element-wise gate as stated in Eq. (2). Through an analysis of the original gated attention, we observe that the output H contains richer token-interaction information after attention, maybe provid-ing additional information gain besides X. Motivated by this observation, we propose to use the output after SDPA H as the input to control the attention gate as a supplement of X.We have: 
+
+H′ 
+
+> i
+
+= Hi ⊙ σ(XW i + SiLU (HiW di )W ui ). (3) For the newly added H-gate, we adopt a 2-layer MLP form with SiLU (Elfwing, Uchibe, and Doya 2018) to en-hance nonlinear modulation. This is because the above form can more conveniently perform low-rank parameter com-pression by adjusting the intermediate dimension, prepar-ing for the efficiency improvements discussed below. Here, 
+
+W di ∈ Rd×dint and W ui ∈ Rdint ×d are the down-projection and up-projection gating matrices for the i-th head, respec-tively, where dint denotes the intermediate dimension that controls the bottleneck of the down-then-up projection. As can be seen from the above formulation, the original X-gate based on X and the added H-gate based on H exhibit strong functional complementarity. The former mainly cap-tures the intrinsic features of input tokens before attention, while the latter mainly captures the features after contex-tual interaction through attention. Therefore, the information modeled by the two gates is different to some extent, and the two gates modulate information at different positions. Their joint effect can thus provide a more comprehensive capture and modeling of the information in attention output, enabling the model to better control the information flow through element-wise gating. 
+
+Fused or separate X-/H- gates. Different from the fused form in Eq. (3), the hybrid X-/H- gates can also be separate: 
+
+H′ 
+
+> i
+
+= Hi ⊙ σ(XW i) ⊙ σ(SiLU (HiW di )W ui ), (4) However, we choose the additive coupling form in Eq. (3) rather than that in Eq. (4). This is because the multiplicative coupling form in Eq. (4) multiplies two gates together. Since the sigmoid activation function has a value range of (0 , 1) ,each gate generally acts as a suppressive modulator of the information flow. Multiplying too many gates may therefore lead to overly strong suppression, which may weaken gra-dient propagation and limit effective representation learning (especially with the cross-head gate in Sec. 3.3). In contrast, the fused gate in Eq. (3) first adds the pre-activation gate logits and then applies the activation function, allowing dif-ferent factors to jointly control the information flow rather than to independently modulate it. This could lead to a more stable information flow and stronger expressive capacity. 
+
+Approaching the Effectiveness-Efficiency Pareto Frontier 
+
+While pursuing improved model expressiveness, we also at-tempt to minimize the computation cost to extend the Pareto frontier between effectiveness and efficiency. Although the two gate mechanisms described above could cooperate well, there may still exist partial functional overlap between them, enabling them to withstand greater information compression. Therefore, we can use low-rank factorization to reduce com-putation and parameter cost while preserving most of the expressive capacity. Specifically, we further decompose the X-based gate us-ing the same low-rank matrix factorization adopted for our H-gate, also with a SiLU activation function in the middle to provide nonlinearity. By adjusting the intermediate dimen-sion of W d/W u in the two gates, we can control the max-imum ranks of the two projections to balance effectiveness and efficiency. The formulation is given as follows: 
+
+H′ 
+
+> i
+
+= Hi ⊙ σ(SiLU (X ¯W di ) ¯W ui + SiLU (HiW di )W ui ),
+
+(5) where W di , W ui and ¯W di , ¯W ui are different groups of weighting matrices. The maximum rank of each gating ma-trix can be controlled by adjusting the intermediate dimen-sion. We find that appropriately reducing the ranks of both groups of matrices could better reduce the number of pa-rameters and computational cost while largely preserving representational capacity, compared to the original gated at-tention. The resulting effectiveness-efficiency Pareto frontier is reported in the detailed experimental results in Section 4.4. 
+
+3.3 Cross-Head Gating Strategy 
+
+The H-gate introduced above mainly works together with the original X-gate to regulate the element-wise information flow more finely and improve expressiveness. Although it enables a more fine-grained, hybrid, and efficient attention gating, the gating strategy still depends on the intra-head el-ement interactions for each head’s output separately, while inter-heads mutual interactions are relatively neglected. In multi-head attention, different heads do not express infor-mation completely independently. Instead, information from different heads can interact with each other and be expressed collaboratively. Therefore, we hypothesize that the gating score of one head should also consider the opinions of other heads for reference. Based on this hypothesis, we further propose the cross-head gating module (i.e., C-gate). Specifically, we have the concatenated attention outputs of all heads H = concat {H1, H2, ..., Hh}. We use H as the input and apply a matrix transformation to obtain our head-wise gating as a supplement, formulated as: 
+
+H′ 
+
+> i
+
+= Hi ⊙ σ(SiLU (X ¯W di ) ¯W ui + SiLU (HiW di )W ui )
+
+⊙ σ (Broadcast(( HW c)i)) .
+
+(6) Here, Wc ∈ Rhd ×h denotes the transformation matrix for computing the cross-head gate for h heads based on all heads’ elements. Note that HW c is an h-dimensional vector, and 
+
+Broadcast(( HW c)i) denotes broadcasting its i-th dimen-sion to the shape of Hi, indicating that this gate provides one gate score for all elements of one head. The reasons are: a) the C-gate is supplementary to the above element-wise X-gate and H-gate and thus should not bring in much additional computation, and b) the cross-head interactions are supposed to provide coarse-grained inter-head reweighting. The cross-head gating strategy integrates information across heads and performs head-wise gating based on the in-tegrated input. Since it can perceive the global head state dur-ing gating, it can dynamically adjust the relative contributions of different heads and encourage collaborative information modeling across heads. Specifically, this cross-head mecha-nism may suppress heads with lower contribution under the current input, emphasize more important heads, and dynam-ically allocate information flow across heads according to the current context. In conclusion, our C-gate mainly reg-ulates coarse-grained head-wise information across heads, while the X-/H- gates mainly capture fine-grained element-wise information within each head from different aspects. In conclusion, all hybrid gates capture distinct modulation sig-nals and exhibit limited functional overlap. Our experiments show that the cross-head gate can achieve further better per-formance. 
+
+3.4 HyGA with Learnable Attention Sink 
+
+The above methods improve the expressiveness of the gated attention module through the combination of multiple mech-anisms. However, beyond representational expressiveness, training stability is also a critical concern in industrial-scale training of large language models. Attention sinks (Xiao et al. 2024) and massive activations are important factors that af-fect training stability. In the original work on Gated attention, the authors also mention that the head-specific gating mech-anism of gated attention can introduce sparsity and mitigate attention sinks and massive activations. However, our experimental results show that, when us-ing gated attention alone, its mitigation of the sink ratio is still not perfect, and massive activations occasional occur in production-scale training. Therefore, inspired by GPT-OSS (Agarwal et al. 2025), we implement HyGA with learnable attention sinks to provide an additional safeguard for training stability. Through experiments, we find that adding learnable attention sinks on top of HyGA can further reduce the sink ratio and effectively alleviate massive activations, even with slight loss advantages. In our observations, the hidden states become significantly smoother, and massive activations are substantially reduced. 
+
+# 4 Experiments 
+
+In this section, we conduct a series of experiments to verify the effectiveness of our HyGA with three research questions: (RQ1) Does HyGA outperform the original gated attention on different backbones and benchmarks (in Sec.4.2)? (RQ2) Are all components of HyGA effective (in Sec.4.3)? (RQ3) Can HyGA achieve the effectiveness-efficiency Pareto fron-tier with stable training (in Sec.4.4 and 4.5)? 
+
+4.1 Experimental Setups 
+
+Datasets. We evaluate models on 14 popular benchmarks, including CEval (Huang et al. 2023), CMMLU (Li et al. 2024), MMLU (Hendrycks et al. 2020), AGIEval (Zhong et al. 2024), ARC (Clark et al. 2018), GPQA-Diamond (Rein et al. 2023), GSM8K (Cobbe et al. 2021), MATH (Hendrycks et al. 2021), MBPP+ (Austin et al. 2021; Liu et al. 2023), HellaSwag (Zellers et al. 2019), PIQA (Bisk et al. 2020), SIQA (Sap et al. 2019), Natural Questions (Kwiatkowski et al. 2019), and TriviaQA (Joshi et al. 2017). Model CEval CMMLU MMLU AGIEval ARC GPQA-D GSM8K Gated attention 50.33 50.44 50.82 30.33 53.34 13.08 28.51 HyGA 51.57 50.58 51.64 31.13 57.53 14.87 29.87 
+
+Model MATH MBPP+ HellaSwag PIQA SIQA NQ TriviaQA Average 
+
+Gated attention 14.95 35.19 62.47 73.94 53.99 14.27 38.19 40.70 HyGA 17.20 40.21 62.73 75.24 54.40 15.43 38.89 42.23 
+
+Table 1: Results on 14 widely-used benchmarks of MoE-5B (MLA) trained on around 500B tokens. 
+
+Figure 3: Training loss trends of the original Gated attention and our HyGA of MoE-5B trained on 500B token. 
+
+Model Settings and Competitors. We mainly conduct ex-periments on an MoE (Jiang et al. 2024) model with nearly 1B activated parameters and 5B total parameters (noted as MoE-5B). The model adopts classical Transformer structure with MLA (Liu et al. 2024) used in the attention module, in-corporating element-wise gated attention (Qiu et al. 2026b). It has 64 experts and 4 activated experts, armed with the Muon optimizer (Jordan et al. 2024) and trained on 500B tokens. Besides, we also adopt another backbone of Qwen3-0.6B (Yang et al. 2025), which is a dense model with GQA (Ainslie et al. 2023). It is trained with around 200B tokens via AdamW (Loshchilov and Hutter 2017). We implement gated attention and our HyGA on it for further comparisons on different LLM structures. 
+
+4.2 Main Results (RQ1) 
+
+The experimental results of MoE-5B are shown in Table 1, with the training loss trends of MoE-5B variants given in Figure 3. The results of Qwen3-0.6B are illustrated in Table 2. From these results, we can observe that: (a) As evidenced by the evaluation results and loss curves of MoE-5B, our HyGA achieves consistently improvements over Gated attention across most metrics and training steps, and the overall improvement is significant. Note that we do not apply low-rank compression for effectiveness in the main experiments. For the loss trend in Fig. 3, HyGA consistently maintains a lower loss throughout training, with the gap grad-ually widening (the loss advantage is approximately 0.012 at 60k step). These indicate the effectiveness of HyGA on MoE or MLA structures. (b) For Qwen3-0.6B, its relatively small model size and trained token size make the results on some of the aforemen-tioned fourteen benchmarks less reliable. We therefore select six relatively reliable benchmarks and report the performance gaps. We can also find that HyGA achieves the overall better performance compared to gated attention based on GQA and dense model. Besides, after training on 200B tokens, HyGA attains a training loss approximately 0.008 lower than that of Gated GQA. Taken together, these results show that HyGA remains effective when applied to different backbones and model settings, implying the generalization ability of HyGA. 
+
+4.3 Ablation Study (RQ2) 
+
+To demonstrate that each module in HyGA makes a distinct contribution and is not fully functionally redundant with oth-ers modules, we conduct ablation studies on essential com-ponents with the same settings in the main experiment (i.e., MoE-5B, MLA, 500B trained tokens). The detailed results of ablation versions on 14 benchmarks are in Figure 4. 
+
+Effectiveness of H-gate and Learnable Attention Sink 
+
+We first conduct an ablation study on the H-based gating module: the gated attention baseline versus the gated atten-tion with H-gate. The results show that introducing H-gate yields clear improvements in most benchmarks covering dif-ferent capabilities, achieving significantly better average per-formance. It suggests that the proposed H-gate could provide additional information from Hi that is not captured by the original Gated attention, which merely contains the original raw input X. As discussed in Section 3.2, compared with 
+
+X, the post-attention output Hi contains richer contextual interaction information. Consequently, H-gate can provide a different view to control the element-wise gating, cooperat-ing well with the original X-gate in gated attention. Besides, we also find that the cooperation with learnable attention sink could also bring in a slight improvement on the aver-age score. In-depth analysis on the stability advantages of learnable sink will be discussed in Sec. 4.5. 
+
+Effectiveness of Cross-head Gate with Gate Fusion 
+
+Next, we validate the effectiveness of C-gate with the help of gate fusion. We find that adding C-gate based on X+H gates further reduces the final training loss by 0.004. How-ever, we discover that multiplicatively applying three gates will excessively suppress the output activations, as stated in Sec. 3.2. Therefore, we include the gate fusion strategy as the final HyGA version, achieving a more numeric-healthy gating mechanism. Comparing HyGA with HyGA (learnable sink+H-gate), we know that HyGA consistently outperforms (a) (b) (c) (d) 
+
+Figure 4: Ablation results for different variants of HyGA. Adding learnable sink, H-gate, C-gate and gate fusion sequentially does bring in benefits on 14 benchmarks (average performance gains: +0.24% →+1.21% →+1.53%). Model HellaSwag ARC PIQA TriviaQA NQ MBPP+ Average 
+
+original GQA 43.93 25.08 68.39 13.19 6.93 7.67 27.53 Gated attention + GQA 45.40 29.43 68.99 14.72 7.78 10.32 29.44 HyGA + GQA 45.93 32.44 68.72 15.56 8.25 12.43 30.56 
+
+Table 2: Results on 6 widely-used benchmarks of Qwen3-0.6B (GQA) trained on 200B tokens. the H-gate variant on most downstream benchmarks, and its lower final training loss further supports this result. These findings suggest that jointly applying our C-gate and the gate-fusion mechanism improves HyGA’s performance. 
+
+4.4 Balancing Effectiveness and Efficiency (RQ3) 
+
+In this subsection, we discuss the balance between effec-tiveness and efficiency of HyGA, which could be flexi-bly adjusted by the low-rank matrix decomposition tech-nique introduced in Sec. 3.2. Specifically, we implement HyGA with different intermediate dimension sizes dint of X-gate and H-gate (i.e., controlling the output dimensions of 
+
+W di , ¯W di ∈ Rd×dint , so as to constrain the maximum rank of the projection of both gating). Taking the H-gate σ(SiLU (HiW di )W ui ) of MoE-5B as an example, in the main experiments, we set dint = d = 192 
+
+to maximize model capacity, resulting in a full-width gating structure. In this experiment, we evaluate three reduced di-mensions, dint ∈ { 16 , 32 , 64 }, and apply the same low-rank compression scheme to the X-gate. To assess computational efficiency and identify the effectiveness–efficiency Pareto frontier, we calculate the computation costs of attention gat-ing modules under different dint . Since the C-gate provides head-wise gating, its does not bring in many additional pa-rameters (nearly 3%). Hence, we remove the C-gate in the following experiments to more explicitly show the impact of low-rank compression on H-gate and X-gate. We adopt the same training and evaluation settings as in the main experi-ments, and report the results in Fig. 5. We can observe that: HyGA achieves lower losses with larger dint (indicating less compression rates and more com-putation costs). When dint = 32 , HyGA utilizes only approx-imately 26% of the gating parameters required by the original Gated attention baseline, while achieving slightly better per-formance on training loss. Moreover, we verify that HyGA 
+
+Figure 5: HyGA’s variants with different low-rank com-pressed matrices in H-gate and X-gate could extend the effectiveness-efficiency Pareto frontier of gated attention. with low-rank matrix factorization ( dint = 32 ) also achieves better overall performance on downstream tasks. It demon-strates that HyGA does extend the effectiveness-efficiency Pareto frontier of the original gated attention. We also at-tempt to set different dint for X-gate and H-gate, which sel-dom brings in further loss advantages. In practice, we could flexibly set appropriate intermediate dimensions according to the computation constraints. 
+
+4.5 Training Stability (RQ3) 
+
+Although gated attention can largely alleviate the attention-sink phenomenon, we find that its attention score assigned to the BOS token still remains relatively high compared to other tokens, indicating that attention sinks still persist. Mo-tivated by this observation, we introduce learnable attention sinks into gated attention to further reduce sink ratios and (a) Layer-wise average BOS token scores. 
+
+> (b) Layer-wise ratios of BOS token scores greater than 0.3.
+
+Figure 6: Layer-wise BOS tokens’ attention score statistics of MoE-5B models: (a) average BOS token scores and (b) ratios of BOS token scores greater than 0.3. improve training stability. As shown in Figure 6, HyGA with learnable sink substantially reduces the BOS-token’s atten-tion score (especially in the last few layers). We also observe a marked reduction in massive activations, suggesting that the learnable attention sink further improves training stability. Therefore, we incorporate the learnable sink into all sub-sequent HyGA experiments. We further compare the BOS-token attention scores of gated attention + learnable attention sink and HyGA. HyGA achieves consistently low attention sink ratios in all layers, indicating that other components of HyGA further contribute to the training stability. For Qwen3, as in Figure 7, both the baseline and Gated attention exhibit obvious loss spikes in training, whereas HyGA does not under the same recommended learning rate. These observations suggest that HyGA is more robust to larger learning rates and provides more stable optimization. 
+
+# 5 Related Works 
+
+Gating Method in Neural Networks Gating is a long-standing method for controlling information flow in neu-ral networks. Early models such as LSTMs (Hochreiter and Schmidhuber 1997) and GRUs(Cho et al. 2014) use gates to regulate memory updates, while later works such as GLU (Dauphin et al. 2017)and SwiGLU (Shazeer 2020) further introduce gating into feed-forward activations. Gating also plays an important role in modern recurrent and state-space 
+
+Figure 7: Training loss curves of the Qwen3 baseline, Gated GQA, and HyGA during the early stage of training. HyGA ex-hibits more stable optimization without apparent loss spikes. models, including S4, Mamba, and Mamba-2 (Gu, Goel, and Ré 2021; Gu and Dao 2023; Dao and Gu 2024), where it controls state updates and memory retention. These exam-ples suggest that gating is not merely an auxiliary technique, but a general architectural principle for improving selectivity and expressive capacity. 
+
+Gated Attention and Its Variants Gated attention (Qiu et al. 2026b) introduces a head-specific sigmoid gate after the scaled dot-product attention output, showing that this simple modification improves performance and training sta-bility. This work provides the foundation for studying gating as a structural enhancement to attention rather than as a pe-ripheral fusion module. Since Gated attention, some related studies have explored several directions related to gated at-tention. Some works place gates at different locations in the attention computation, such as applying a forget gate to un-normalized attention scores (Lin et al. 2025) or computing gates from value states to mitigate extreme-token phenom-ena (Bu et al. 2025). Another significant direction is low-rank gate, such as gated norm (Qiu et al. 2026a). While these stud-ies demonstrate the usefulness and generality of gating, they typically investigate individual design dimensions, such as gate placement or low-rank parameterization. In contrast, our work focuses on the architecture of the gate itself by jointly considering its conditioning pathways, coupling mechanism, parameterization, and cross-head interaction, aiming to im-prove the model performance and training stability. 
+
+# 6 Conclusion and Future Work 
+
+In this work, we introduced HyGA with three gates depend on different inputs and granularities: X-gate, H-gate, and C-gate. Besides, we also adopt low-rank matrix decomposi-tion and learnable sink for efficiency and training stability. Through more comprehensive information interaction capa-bility, HyGA achieves improved performance. In the future, we plan to scale HyGA to larger models and evaluate its effectiveness at greater scales. We will also investigate its generalizability across different attention back-bones, such as linear/sparse attention architectures. References 
+
+Agarwal, S.; Ahmad, L.; Ai, J.; Altman, S.; Applebaum, A.; Arbus, E.; Arora, R. K.; Bai, Y.; Baker, B.; Bao, H.; et al. 2025. gpt-oss-120b & gpt-oss-20b model card. arXiv preprint arXiv:2508.10925 .Ainslie, J.; Lee-Thorp, J.; De Jong, M.; Zemlyanskiy, Y.; Lebrón, F.; and Sanghai, S. 2023. Gqa: Training general-ized multi-query transformer models from multi-head check-points. In Proceedings of EMNLP .Austin, J.; Odena, A.; Nye, M.; Bosma, M.; Michalewski, H.; Dohan, D.; Jiang, E.; Cai, C.; Terry, M.; Le, Q.; et al. 2021. Program synthesis with large language models. arXiv preprint arXiv:2108.07732 .Barbero, F.; Arroyo, A.; Gu, X.; Perivolaropoulos, C.; Bron-stein, M.; Veličković, P.; and Pascanu, R. 2025. Why do LLMs attend to the first token? arXiv preprint arXiv:2504.02732 .Bisk, Y.; Zellers, R.; Gao, J.; Choi, Y.; et al. 2020. Piqa: Reasoning about physical commonsense in natural language. In Proceedings of AAAI .Bu, R.; Zhong, H.; Chen, W.; and Li, Y. 2025. Value-State Gated Attention for Mitigating Extreme-Token Phenomena in Transformers. arXiv preprint arXiv:2510.09017 .Cho, K.; Van Merriënboer, B.; Gulçehre, Ç.; Bahdanau, D.; Bougares, F.; Schwenk, H.; and Bengio, Y. 2014. Learn-ing phrase representations using RNN encoder–decoder for statistical machine translation. In Proceedings of EMNLP .Clark, P.; Cowhey, I.; Etzioni, O.; Khot, T.; Sabharwal, A.; Schoenick, C.; and Tafjord, O. 2018. Think you have solved question answering? try arc, the ai2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 .Cobbe, K.; Kosaraju, V.; Bavarian, M.; Chen, M.; Jun, H.; Kaiser, L.; Plappert, M.; Tworek, J.; Hilton, J.; Nakano, R.; et al. 2021. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 .Dao, T.; and Gu, A. 2024. Transformers are ssms: General-ized models and efficient algorithms through structured state space duality. arXiv preprint arXiv:2405.21060 .Dauphin, Y. N.; Fan, A.; Auli, M.; and Grangier, D. 2017. Language modeling with gated convolutional networks. In 
+
+ICML .Elfwing, S.; Uchibe, E.; and Doya, K. 2018. Sigmoid-weighted linear units for neural network function approxi-mation in reinforcement learning. Neural networks .Gu, A.; and Dao, T. 2023. Mamba: Linear-time se-quence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 .Gu, A.; Goel, K.; and Ré, C. 2021. Efficiently modeling long sequences with structured state spaces. arXiv preprint arXiv:2111.00396 .Gu, X.; Pang, T.; Du, C.; Liu, Q.; Zhang, F.; Du, C.; Wang, Y.; and Lin, M. 2025. When attention sink emerges in language models: An empirical view. In ICLR .Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2020. Measuring mas-sive multitask language understanding. arXiv preprint arXiv:2009.03300 .Hendrycks, D.; Burns, C.; Kadavath, S.; Arora, A.; Basart, S.; Tang, E.; Song, D.; and Steinhardt, J. 2021. Measuring mathematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Hochreiter, S.; and Schmidhuber, J. 1997. Long short-term memory. Neural computation .Huang, Y.; Bai, Y.; Zhu, Z.; Zhang, J.; Zhang, J.; Su, T.; Liu, J.; Lv, C.; Zhang, Y.; Fu, Y.; et al. 2023. C-eval: A multi-level multi-discipline chinese evaluation suite for foundation models. Advances in NIPS .Jiang, A. Q.; Sablayrolles, A.; Roux, A.; Mensch, A.; Savary, B.; Bamford, C.; Chaplot, D. S.; Casas, D. d. l.; Hanna, E. B.; Bressand, F.; et al. 2024. Mixtral of experts. arXiv preprint arXiv:2401.04088 .Jordan, K.; Jin, Y.; Boza, V.; You, J.; Cesista, F.; Newhouse, L.; and Bernstein, J. 2024. Muon: An Optimizer for Hidden Layers in Neural Networks. Joshi, M.; Choi, E.; Weld, D. S.; and Zettlemoyer, L. 2017. Triviaqa: A large scale distantly supervised challenge dataset for reading comprehension. In Proceedings of ACL .Kwiatkowski, T.; Palomaki, J.; Redfield, O.; Collins, M.; Parikh, A.; Alberti, C.; Epstein, D.; Polosukhin, I.; Devlin, J.; Lee, K.; et al. 2019. Natural questions: a benchmark for question answering research. Transactions of the ACL .Li, H.; Zhang, Y.; Koto, F.; Yang, Y.; Zhao, H.; Gong, Y.; Duan, N.; and Baldwin, T. 2024. Cmmlu: Measuring massive multitask language understanding in chinese. In Findings of ACL .Lin, Z.; Nikishin, E.; He, X.; and Courville, A. 2025. For-getting transformer: Softmax attention with a forget gate. In 
+
+ICLR .Liu, A.; Feng, B.; Wang, B.; Wang, B.; Liu, B.; Zhao, C.; Dengr, C.; Ruan, C.; Dai, D.; Guo, D.; et al. 2024. Deepseek-v2: A strong, economical, and efficient mixture-of-experts language model. arXiv preprint arXiv:2405.04434 .Liu, A.; Mei, A.; Lin, B.; Xue, B.; Wang, B.; Xu, B.; Wu, B.; Zhang, B.; Lin, C.; Dong, C.; et al. 2025. Deepseek-v3. 2: Pushing the frontier of open large language models. arXiv preprint arXiv:2512.02556 .Liu, J.; Xia, C. S.; Wang, Y.; and Zhang, L. 2023. Is your code generated by chatgpt really correct? rigorous evaluation of large language models for code generation. Advances in NIPS .Loshchilov, I.; and Hutter, F. 2017. Decoupled weight decay regularization. arXiv preprint arXiv:1711.05101 .Qiu, Z.; Huang, Z.; Wen, K.; Jin, P.; Zheng, B.; Zhou, Y.; Huang, H.; Wang, Z.; Li, X.; Zhang, H.; et al. 2026a. A Uni-fied View of Attention and Residual Sinks: Outlier-Driven Rescaling is Essential for Transformer Training. arXiv preprint arXiv:2601.22966 .Qiu, Z.; Wang, Z.; Zheng, B.; Huang, Z.; Wen, K.; Yang, S.; Men, R.; Yu, L.; Huang, F.; Huang, S.; et al. 2026b. Gated attention for large language models: Non-linearity, sparsity, and attention-sink-free. Advances in NIPS .Rein, D.; Hou, B. L.; Stickland, A. C.; Petty, J.; Pang, R. Y.; Dirani, J.; Michael, J.; and Bowman, S. R. 2023. Gpqa: A graduate-level google-proof q&a benchmark. arXiv preprint arXiv:2311.12022 .Sap, M.; Rashkin, H.; Chen, D.; Le Bras, R.; and Choi, Y. 2019. Social IQa: Commonsense reasoning about social interactions. In Proceedings of EMNLP-IJCNLP .Shazeer, N. 2020. Glu variants improve transformer. arXiv preprint arXiv:2002.05202 .Su, Z.; Zhang, H.; Wu, W.; Zhang, Y.; Liu, Y.; Xiao, H.; Yang, Q.; Sun, Y.; Yang, R.; Zhang, C.; et al. 2026. Attention sink in transformers: A survey on utilization, interpretation, and mitigation. arXiv preprint arXiv:2604.10098 .Sun, S.; Canziani, A.; LeCun, Y.; and Zhu, J. 2026. The spike, the sparse and the sink: Anatomy of massive activations and attention sinks. arXiv preprint arXiv:2603.05498 .Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. Attention is all you need. Advances in NIPS .Xiao, G.; Tian, Y.; Chen, B.; Han, S.; and Lewis, M. 2024. Efficient streaming language models with attention sinks. In 
+
+Proceedings of ICLR .Xu, A.; Lin, B.; Xue, B.; Wang, B.; Xu, B.; Wu, B.; Zhang, B.; Lin, C.; Dong, C.; Ling, C.; et al. 2026. Deepseek-v4: Towards highly efficient million-token context intelligence. 
+
+arXiv preprint arXiv:2606.19348 .Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yang, S.; Kautz, J.; and Hatamizadeh, A. 2025. Gated delta networks: Improving mamba2 with delta rule. In ICLR .Yang, S.; Wang, B.; Shen, Y.; Panda, R.; and Kim, Y. 2023. Gated linear attention transformers with hardware-efficient training. arXiv preprint arXiv:2312.06635 .Yuan, J.; Gao, H.; Dai, D.; Luo, J.; Zhao, L.; Zhang, Z.; Xie, Z.; Wei, Y.; Wang, L.; Xiao, Z.; et al. 2025. Native sparse attention: Hardware-aligned and natively trainable sparse at-tention. In Proceedings of ACL .Zellers, R.; Holtzman, A.; Bisk, Y.; Farhadi, A.; and Choi, Y. 2019. Hellaswag: Can a machine really finish your sentence? In Proceedings of ACL .Zhong, W.; Cui, R.; Guo, Y.; Liang, Y.; Lu, S.; Wang, Y.; Saied, A.; Chen, W.; and Duan, N. 2024. Agieval: A human-centric benchmark for evaluating foundation models. In 
+
+Findings of NAACL .

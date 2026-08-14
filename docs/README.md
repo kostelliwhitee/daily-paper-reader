@@ -6,38 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-13
-- 运行时间：2026-08-13 21:21:50 UTC
+- 最新运行日期：2026-08-14
+- 运行时间：2026-08-14 21:18:18 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
+- 本次总论文数：5
+- 精读区：2
 - 速读区：3
 
 ### 今日简报（AI）
-今日精读6篇论文，聚焦异构大模型通信与混合线性注意力机制，其中《XBridge》与《Massive Activations》均获9.0高分。最值得关注的是XBridge实现异构LLM间实体级潜桥通信，以及混合线性注意力模型中存在的前注意尖峰与平台期现象。普通读者可顺带浏览速读中关于多智能体协作与注意力秩的论文，以拓宽对模型效率与行为信号的理解。
-- 详情：[/202608/13/README](/202608/13/README)
+今日精读2篇、速读3篇，重点聚焦LLM多智能体的潜在通信与拓扑优化。最值得关注StateBridge（9.0）的无训练隐状态对齐方案，以及用因果推断发现高效可解释通信拓扑的研究。建议优先精读这两篇，后续可留意可执行角色与多目标策略方向。
+- 详情：[/202608/14/README](/202608/14/README)
 
 ### 精读区论文标签
-1. [XBridge: Entity-Grounded Latent Bridge for Heterogeneous LLM Communication](/202608/13/2608.11676v1-xbridge-entity-grounded-latent-bridge-for-heterogeneous-llm-communication)  
+1. [StateBridge: Training-free Hidden-state Alignment for Latent Communication in LLM Multi-Agent Systems](/202608/14/2608.13317v1-statebridge-training-free-hidden-state-alignment-for-latent-communication-in-llm-multi-agent-systems)  
    标签：评分：9.0/10、query:ma-la
-   evidence：通过潜在交叉注意力桥接实现多智能体通信
-2. [Massive Activations in Hybrid Linear Attention Large Language Models: Pre-Attention Spikes and Inter-Spike Plateaus](/202608/13/2608.12149v1-massive-activations-in-hybrid-linear-attention-large-language-models-pre-attention-spikes-and-inter-spike-plateaus)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：对混合线性注意力大语言模型中大规模激活的系统研究
-3. [FLARE++: Low-rank attention with dynamic attention routing](/202608/13/2608.11519v1-flare-low-rank-attention-with-dynamic-attention-routing)  
+   evidence：大模型多智能体系统中基于隐藏状态对齐的潜在通信方法
+2. [Discovering Efficient and Explainable Communication Topologies for LLM-based Multi-Agent Systems via Causal Inference](/202608/14/2608.12921v1-discovering-efficient-and-explainable-communication-topologies-for-llm-based-multi-agent-systems-via-causal-inference)  
    标签：评分：8.0/10、query:ma-la
-   evidence：低秩注意力与动态路由，与高效/线性注意力机制直接相关
+   evidence：基于因果推断的可解释LLM多智能体通信拓扑发现
 
 ### 速读区论文标签
-1. [DCM Bandits: Multiplayer Information Asymmetric Cascading Bandits for Multiple Clicks](/202608/13/2608.11873v1-dcm-bandits-multiplayer-information-asymmetric-cascading-bandits-for-multiple-clicks)  
+1. [ExRole: From Team Trajectories to Executable Roles in Multi-Agent Language Models](/202608/14/2608.11949v1-exrole-from-team-trajectories-to-executable-roles-in-multi-agent-language-models)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多玩家非对称交互Bandits
-2. [Three Tokens Force Exponential Feature Rank in Nonnegative Kernel Attention](/202608/13/2608.11427v1-three-tokens-force-exponential-feature-rank-in-nonnegative-kernel-attention)  
+   evidence：从多智能体语言模型的团队轨迹中学习可执行角色原型，直接涉及多智能体交互动态。
+2. [Hybrid Gated Attention](/202608/14/2608.11805v1-hybrid-gated-attention)  
    标签：评分：6.0/10、query:ma-la
-   evidence：核注意力表达力的理论分析，与线性注意力相关
-3. [Do LLMs Take Care of Their Own? Similarity Signals Can Induce Cooperation](/202608/13/2608.12125v1-do-llms-take-care-of-their-own-similarity-signals-can-induce-cooperation)  
+   evidence：通过低秩分解和门控增强注意力机制
+3. [Entropy-Augmented Multi-Objective Policy Optimization in Multiagent Systems](/202608/14/2608.12534v1-entropy-augmented-multi-objective-policy-optimization-in-multiagent-systems)  
    标签：评分：6.0/10、query:ma-la
-   evidence：研究LLM智能体在战略性互动中基于相似性信号产生合作行为
+   evidence：面向多智能体协调的熵增强策略优化
 
 
 <div class="dpr-home-promo-card">
