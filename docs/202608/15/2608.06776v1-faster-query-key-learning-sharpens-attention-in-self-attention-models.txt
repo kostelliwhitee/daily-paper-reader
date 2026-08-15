@@ -1,0 +1,3747 @@
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Rahul Vashisht 1 Harish G. Ramaswamy 1 2
+Abstract
+A standard self-attention layer consists of two
+interacting circuits: the query-key circuit that gov-
+erns attention allocation, and the output-value cir-
+cuit that maps attended representations to predic-
+tions. Collapsed and factorized parameterizations
+of the query-key and output-value circuits lead
+to qualitatively different attention patterns. In
+particular, some parameterizations give sharper
+attention to task-relevant tokens, at a similar train-
+ing loss. We analyze how the parameterizations of
+these circuits shape the parameter trajectories in
+single-layer self-attention models trained on next-
+token prediction. Through gradient-flow analysis,
+we show that factorization induces implicit rescal-
+ing of the two circuits’ learning rates. We derive
+closed-form dynamics showing that output-value
+and query-key parameters move along a line, with
+relative speeds determined by their learning rates.
+Faster query-key learning relative to output-value
+learning thus produces sharper attention, as the
+model compensates for slower output-value learn-
+ing by increasing attention mass on relevant to-
+kens. Experiments show that differences in the
+relative learning rates of the two circuits govern
+attention concentration. This improves attention
+interpretability proxies while maintaining compa-
+rable predictive performance.
+1. Introduction
+Transformer models (Vaswani et al., 2017) are now standard
+across language (Brown et al., 2020), vision (Dosovitskiy
+et al., 2020), and speech (Latif et al., 2023). Their suc-
+cess is driven by self-attention, which produces contextual
+representations and is typically trained using next-token pre-
+diction. Empirical studies have shown that trained models
+1Department of CSE, IIT Madras, India
+2Department
+of DSAI, IIT Madras, India.
+Correspondence to:
+Rahul
+Vashisht <rahul@cse.iitm.ac.in>, Harish G. Ramaswamy <harig-
+uru@cse.iitm.ac.in>.
+Proceedings of the 43 rd International Conference on Machine
+Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026
+by the author(s).
+with similar predictive performance can exhibit a wide range
+of attention patterns (Jain & Wallace, 2019; Wiegreffe &
+Pinter, 2019; Serrano & Smith, 2019). Prior work has also
+studied formal settings in which attention weights may or
+may not align with attention-based explanations (Pandey
+et al., 2023). However, the role of architectural and pa-
+rameterization choices in the emergence of such attention
+patterns remains unclear.
+Existing theoretical works have established that transform-
+ers are highly expressive, including universality and Turing
+completeness under suitable parameter settings (Yun et al.,
+2019; Bhattamishra et al., 2020a;b; Dehghani et al., 2018;
+P´erez et al., 2021). These results, however, rely on idealized
+parameter constructions and therefore do not explain how
+attention structure arises under standard gradient-based op-
+timization. As a result, expressivity alone provides limited
+insight into how attention mechanisms and prediction layers
+co-evolve during training.
+In this work, we analyze the training dynamics of a single-
+layer transformer trained for next-token prediction (Radford
+et al., 2018). The model decomposes naturally into two
+interacting linear circuits (Elhage et al., 2021; Olsson et al.,
+2022; Bietti et al., 2023):
+• the query-key circuit (WKW ⊤
+Q ), which determines
+the attention pattern, and
+• the output-value circuit (WOWV ), which maps at-
+tended representations to predictions.
+We show that the relative optimization speeds of these two
+circuits play a central role in shaping attention structure.
+Varying the learning rates of the query-key and output-value
+parameters leads to qualitatively different attention patterns,
+even when predictive performance remains similar. In partic-
+ular, faster learning of the query-key circuit leads to sharper
+attention on task-relevant tokens.
+A key focus of this paper is the role of parameterization.
+We compare factorized and collapsed parameterizations of
+both the query-key and output-value circuits and show that
+factorization induces a state-dependent rescaling of gradient
+updates in the corresponding collapsed parameter space.
+As a result, factorized and collapsed models can follow
+different optimization trajectories, even when they achieve
+1
+arXiv:2608.06776v1  [cs.LG]  7 Aug 2026
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+next token
+Self-Attention Layer
+Unembedding & Softmax
+query token
+contextual tokens
+(a) Single Layer Self-Attention Model Illustration
+Class 1
+Contextual tokens
+Distinct tokens
+Common tokens
+The  sat   ate    on
+cat    mat
+Class 2
+Class 3
+dog    rug
+bird    branch
+(b) Synthetic Data Illustration
+Figure 1. Overall Setting: (a) A sequence X with contextual tokens and query token{x1, x2, . . . , xT −1, xT } is fed into 1−layer
+transformer to predict the next token y = xT +1 (b) Synthetic data illustration, For each sequence class there exists a set of tokens specific
+to that class, called distinct tokens and a set of tokens common to all sequence classes called common tokens. For example ‘the’ ‘sat’ ‘ate’
+and ‘on’ are the common tokens, and ‘cat’ ‘mat’ are tokens distinct to class 1
+comparable losses.
+We then characterize the training dynamics under collapsed
+parameterizations in a controlled synthetic setting. Under
+orthogonality and symmetry assumptions, we derive closed-
+form population gradient-flow dynamics for both circuits
+and show that their effective parameters evolve at different
+rates. In particular, the output-value scalar grows on the
+order of log(t), while the query-key scalar grows on the
+order of log2(t), with constants controlled by the learning-
+rate ratio ηQK/ηOV . Because the query-key circuit affects
+attention through a saturating nonlinearity, this difference in
+growth provides a mechanistic explanation for how relative
+learning speeds shape attention sharpening during training.
+We support the theory with experiments on synthetic data
+and real-world datasets with token-level relevance annota-
+tions, including HateXplain (Mathew et al., 2020), subject-
+verb agreement (Linzen et al., 2016), and SQuAD (Ra-
+jpurkar et al., 2016).
+Across settings, we observe that
+changes in relative optimization speed and parameteriza-
+tion alter attention structure in ways predicted by the theory,
+while predictive performance remains largely unchanged.
+2. Related Works
+Many recent works have studied the optimization dynamics
+of attention and self-attention-based models, particularly
+in simplified or single-layer settings (Tian et al., 2023; De-
+ora et al., 2024a; Lu et al., 2021; Vashisht & Ramaswamy,
+2023). Tian et al. (2023) analyze attention dynamics under
+the assumption that output–value parameters learn faster
+than query–key parameters. Deora et al. (2024a) study the
+optimization and generalization properties of multi-head
+self-attention models under realizability assumptions on the
+data. Across these analyses, optimization dynamics are typ-
+ically examined under fixed or implicit assumptions about
+the relative learning behavior of attention components. In
+contrast, we vary the relative learning rates of the query–key
+and output–value circuits and show that faster learning of
+query–key parameters sharpens attention. While prior work
+often focuses on single-sample or batch-size-one regimes
+for analytical tractability, we analyze full-batch training dy-
+namics that more closely reflect modern practice. Moreover,
+we extend the analysis beyond the attention mechanism to
+the final prediction layer, providing a unified view of how
+interacting circuits shape the training trajectory.
+A related line of work adopts a mechanistic perspective on
+transformer models. The transformer circuits framework of
+Elhage et al. (2021) provides a systematic decomposition
+of attention layers into interacting components, which has
+motivated subsequent analyses of how structure emerges in
+trained models, including clustering behavior in attention
+patterns (Geshkovski et al., 2023; Karagodin et al., 2024),
+memory-like mechanisms (Bietti et al., 2023), and the emer-
+gence of topic structure (Li et al., 2023). These works
+offer valuable insight into the functional roles of attention
+heads and learned representations after training. However,
+they primarily characterize attention structure post hoc and
+do not analyze how optimization dynamics shape the rela-
+tive evolution of interacting circuits during training. Our
+work instead focuses on how the training trajectories of
+the query–key and output–value circuits jointly determine
+attention sharpening under gradient-based optimization.
+3. Problem Setting
+We study a single-layer self-attention model trained for next-
+token prediction. Let X = [x1, . . . , xT ]⊤∈RT ×d denote
+2
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.4
+82.2
+17.4
+0.0
+0.0
+(a) FAFO
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+5.8
+94.2
+(b) FACO
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.1
+73.0
+26.9
+0.0
+0.0
+(c) CAFO
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+6.3
+83.3
+10.4
+0.0
+(d) CACO
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+6.3
+83.3
+10.3
+0.0
+(e) FAFO, QK learning rate in-
+creased 10×
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+13.7
+85.9
+0.4
+(f) FAFO, QK learning rate in-
+creasing linearly 1 −20×
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.2
+0.0
+0.0
+0.0
+0.0
+0.0
+2.3
+76.8
+20.8
+(g) CACO, QK learning rate
+increased 5×
+0.2
+0.4
+0.6
+0.8
+1.0
+Distinct Token Attention
+0.2
+0.4
+0.6
+0.8
+1.0
+True Token Probability
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.2
+0.0
+0.0
+0.0
+0.0
+0.0
+2.6
+86.9
+10.5
+(h) CACO, QK learning rate
+increasing linearly 1 −10×
+Figure 2. Distinct Token Attention-Prediction heat map of test data for different parameterizations under SGD with same learning rates
+(Top-Row) and Faster Learning for Query-Key (Bottom-Row). All models are trained until the negative log-likelihood is close to zero
+(≤0.001). Here, we train the model for 5 random seeds and report the average, refer to appendix for standard deviation in the heatmaps.
+an input sequence, where xT is the query token. The model
+parameters are WQ, WK, WV ∈Rd×d and WO ∈RM×d,
+where M is the vocabulary size.
+Given a sequence X, the model output is
+f(X) = WOWV X⊤S
+ XWKW ⊤
+Q xT
+
+,
+(1)
+where S(·) denotes the softmax operator.
+Figure 1a il-
+lustrates this computation for a single-layer self-attention
+model.
+The model decomposes naturally into two linear circuits.
+The query-key circuit WKW ⊤
+Q determines the attention
+distribution over tokens, while the output-value circuit
+WOWV maps the attended representation to prediction log-
+its. We study four parameterizations that differ in whether
+these circuits are factorized or collapsed:
+• FAFO: factorized attention and factorized output-
+value.
+• CAFO: collapsed attention (WQK = WKW ⊤
+Q ) and
+factorized output-value.
+• FACO: factorized attention and collapsed output-value
+(WOV = WOWV ).
+• CACO: collapsed attention and collapsed output-
+value.
+Let E = [e1, . . . , eM]⊤∈RM×d denote the embedding
+matrix. Given a sequence X with next-token label y ∈
+[M], the training objective is to minimize the negative log-
+likelihood
+L = −log Sy(f(X)).
+(2)
+To analyze attention behavior in a controlled setting, we
+adopt a synthetic data construction based on Tian et al.
+(2023). Each sequence class is associated with a fixed query
+and next-token pair (q, n), where the next token n uniquely
+identifies the class. Context tokens preceding the query are
+sampled from a mixture of class-specific distinct tokens and
+class-agnostic common tokens, as illustrated in Figure 1b.
+For example, consider three sequence classes:
+• Class 1: “cat sat on the mat”, “cat ate on the mat”,
+• Class 2: “dog sat on the rug”, “dog ate on the rug”,
+• Class 3: “bird sat on the branch”, “bird ate on the
+branch”.
+Here, tokens such as “sat”, “ate”, and “on” appear across all
+classes and are common, while tokens such as “cat”, “mat”,
+“dog”, and “rug” are class-specific and distinct.
+Formally, define Ω(l) = {n : P(l | n) > 0}. Tokens with
+|Ω(l)| = 1 are distinct, while tokens with |Ω(l)| > 1 are
+3
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+common. Context tokens are sampled according to
+P(l | n) =
+
+
+
+
+
+γ/C,
+|Ω(l)| = 1,
+(1 −γ)/D,
+|Ω(l)| > 1,
+0,
+otherwise,
+where C and D denote the number of distinct and com-
+mon tokens, and γ ∈(0, 1) controls the mixture weight.
+This construction separates informative and non-informative
+tokens and enables precise analysis of how attention and
+prediction evolve under different parameterizations and op-
+timization speeds.
+4. Self-Attention Analysis under Different
+Parameterizations
+We identify an empirical phenomenon that motivates our
+theory. Different self-attention parameterizations exhibit
+qualitatively different attention patterns even when trained
+under identical optimization settings and achieving compa-
+rable predictive performance.
+We consider a synthetic next-token prediction task with four
+sequence classes. Each sequence contains m class-specific
+tokens, which are informative for prediction, n common
+tokens have no class information, and a query token.
+To assess alignment between attention and prediction, we
+introduce the Distinct Token Attention–Prediction (DTAP)
+heatmap. DTAP is a two-dimensional histogram in which
+the x-axis represents the fraction of attention assigned to
+class-specific tokens and the y-axis represents the predicted
+probability of the correct class. Each bin reports the fraction
+of examples that fall within the corresponding attention and
+confidence ranges. An ideal model concentrates most mass
+in the top-right corner, indicating both strong attention on
+informative tokens and high prediction confidence.
+We compare four parameterizations:
+factorized at-
+tention–factorized
+output
+(FAFO),
+collapsed
+atten-
+tion–collapsed
+output
+(CACO),
+collapsed
+atten-
+tion–factorized output (CAFO), and factorized atten-
+tion–collapsed output (FACO). Figure 2(a–d) shows that all
+parameterizations achieve high prediction confidence, yet
+their attention distributions differ substantially.
+• Parameterizations with collapsed output–value struc-
+ture (CACO and FACO) concentrate mass near the
+top-right region of the DTAP heatmap.
+• The factorized output–value parameterization (FAFO)
+places substantial mass in the top-left region, corre-
+sponding to correct predictions made with weak atten-
+tion on informative tokens.
+• Increasing the learning rate of the query–key parame-
+ters shifts mass toward the top-right region across all
+parameterizations.
+As shown in Figure 2(e–h), accelerating query–key learning
+causes the attention patterns of FAFO and CACO to resem-
+ble those of FACO. In particular, attention mass shifts to-
+ward distinct tokens without degrading prediction accuracy.
+This behavior is observed under both fixed and gradually
+increasing query–key learning rates, indicating that rela-
+tive optimization speed governs attention alignment beyond
+parameterization alone. These observations motivate the
+optimization analysis in Section 6.
+The dataset for this task was generated as follows. We
+consider 4 sequence classes, with 4 query and corresponding
+next tokens. For each query token, we define a set of 10
+distinct tokens. We also have a set of common tokens with
+cardinality 10. Note that the position (or index) of the
+distinct and common tokens can be arbitrary. We sample
+multiple such triples (context tokens, query token, next
+token), train a single-layer self-attention model on a subset
+of this dataset, and evaluate it on the remaining data. The
+vocabulary size is 50 tokens and sequence length is 64. We
+train the model with 200 batches with batch size 32 using
+stochastic gradient descent.
+5. Isolating Output–Value Dynamics by Fixing
+Attention
+The experiments in Section 4 show that both parameteriza-
+tion and relative learning rates influence attention allocation.
+To isolate the source of this effect, we analyze the learning
+dynamics of the output–value circuit while holding attention
+over distinct tokens fixed.
+We consider a query–key circuit that assigns a total attention
+mass α ∈[0, 1] to the distinct tokens, distributed uniformly
+among them, with the remaining mass assigned uniformly
+to the common tokens. Although fixing attention in this
+manner is not a realistic training regime, it serves as a diag-
+nostic intervention that isolates the optimization behavior
+of the output–value circuit.
+Under fixed α, training the output–value parameters reduces
+to a multi-class classification problem with an effective input
+representation
+L(α) = −log
+
+softmaxy
+ WOWV ex
+
+,
+where
+ex = α
+m
+X
+j∈Sdistinct
+xj + 1 −α
+n
+X
+j∈Scommon
+xj.
+As α increases, the effective input ex becomes more infor-
+mative, simplifying the optimization problem faced by the
+4
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+0
+100
+200
+300
+400
+500
+Epochs
+3
+2
+1
+0
+Lt( )
+(a) Factorized Output-Value
+0
+100
+200
+300
+400
+500
+Epochs
+3
+2
+1
+0
+Lt(α)
+(b) Collapsed Output-Value
+0
+100
+200
+300
+400
+500
+Epochs
+3
+2
+1
+0
+Lt( )
+Lt(
+′)
+(c) Factorized Output-Value
+0
+100
+200
+300
+400
+500
+Epochs
+3
+2
+1
+0
+Lt(α) −Lt(α0)
+δ
+α = 0.2
+α = 0.4
+α = 0.6
+α = 0.8
+α = 1
+(d) Collapsed Output-Value
+Figure 3. (a) and (b) Evolution of the training loss for fixed values of α under gradient descent. (c) and (d) show improvement incentive
+curves, measuring the change in loss resulting from a small increase δ = 0.005 in α.
+output–value circuit. We define the fixed-attention loss
+curve as the training loss evaluated under gradient descent
+while holding the attention mass α fixed for distinct to-
+kens. To quantify the incentive for attention sharpening,
+we measure the change in loss induced by a small increase
+in attention mass, δ = 0.005, evaluated at a fixed training
+time.
+Under the factorized output-value parameterization, the loss
+reaches near-zero at α = 0.2 (blue curve in Figure 3a). The
+improvement incentive curve in Figure 3c shows a positive
+incentive for attention sharpening for up to 100 epochs,
+allowing α to increase to 0.4. However, for α ≥0.4 (orange
+curve), the incentive rapidly diminishes. As a consequence,
+attention tends to stabilize at values such as α = 0.4.
+In contrast, under the collapsed output-value parameteri-
+zation, the loss does not decrease to zero as quickly for
+α ≥0.2 and α ≤0.8 (blue, orange, green, and red curves
+in Figure 3b). As a result, the incentive for increasing α
+remains high over a wider range, allowing attention to con-
+tinue sharpening.
+Taken together, the experiments in Sections 4 and 5 reveal
+an empirical pattern. Architectural parameterization shapes
+the relative learning dynamics of the query–key and out-
+put–value circuits, which in turn determines whether atten-
+tion continues to sharpen or stabilizes early. These effects
+cannot be explained by predictive performance alone and
+persist across learning-rate interventions.
+In the next section, we develop a theoretical framework
+that explains the observations by analyzing how different
+parameterizations induce distinct optimization trajectories
+under gradient flow.
+6. Optimization Trajectories under Different
+Parameterization
+Theoretical analyses of self-attention often simplify opti-
+mization dynamics (Deora et al., 2024b; Li et al., 2024; Bao
+et al., 2024) by working with collapsed parameter matrices,
+rather than explicitly modeling the factorized query–key
+and output–value parameters (Elhage et al., 2021; Olsson
+et al., 2022). This simplification enables tractable analysis,
+but it is not a priori clear whether it faithfully reflects the
+training dynamics of factorized models. Empirically, as
+shown in Section 4, factorized and collapsed parameteriza-
+tions can achieve comparable predictive performance while
+exhibiting qualitatively different attention behaviors.
+In a single-layer self-attention model, each circuit consists
+of a composition of linear transformations with no interven-
+ing nonlinearity. Thus, the optimization dynamics of the
+query-key and output-value circuits fall within the class of
+homogeneous linear models for which conservation laws un-
+der gradient flow hold (Arora et al., 2018; Du et al., 2018).
+Building on results from deep linear network theory, we
+show that factorized training induces a well-defined dynam-
+ics on the collapsed parameters, differing from collapsed
+training only through a state-dependent preconditioning op-
+erator.
+Let z
+=
+WOV X⊤a and
+ez
+=
+WOWV X⊤a.
+We
+define
+the
+loss
+functions
+L1(WOV )
+=
+−log Sy(z),
+L2(WO, WV )
+=
+−log Sy(ez), where
+the attention weights are given by a = S
+ XWKW ⊤
+Q xT
+
+.
+We now relate the gradient flow dynamics of the factor-
+ized model to those of the collapsed parameterization. Let
+WO(t) and WV (t) denote the gradient flow trajectories
+under L2, and define the effective matrix f
+WOV (t) =
+WO(t)WV (t).
+The proposition 1 is a direct application of the chain rule.
+Proposition 1. Let C = AB, where A,B, and C are matri-
+ces of shape M × d, d × d and M × d.
+Then the gradients satisfy
+∇WOL2
+(A,B) = ∇WOV L1
+C B⊤,
+∇WV L2
+(A,B) = A⊤∇WOV L1
+C.
+(3)
+5
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+0 1
+10
+102
+103
+104
+105
+106
+Normalized time t
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50
+Loss
+(a) Log-Loss Curves
+10
+4
+10
+3
+10
+2
+10
+1
+100
+Stopping loss threshold
+0
+10
+20
+30
+40
+50
+60
+70
+80
+OV
+(b) µOV (t) evolution
+10
+4
+10
+3
+10
+2
+10
+1
+100
+Stopping loss threshold
+0
+1
+2
+3
+4
+5
+6
+7
+QK
+(c) µQK(t) evolution
+10
+4
+10
+3
+10
+2
+10
+1
+100
+Stopping loss threshold
+0.2
+0.4
+0.6
+0.8
+1.0
+( )
+r = 0.01
+r = 0.1
+r = 1
+r = 10
+r = 100
+(d) α(t) evolution
+Figure 4. Population gradient-flow simulations for the orthogonal synthetic setting of Theorem 1 with m = 5, n = 50, b = 50, M = 5,
+varying the ratio r = ηQK/ηOV . (a) Training loss vs. normalized time, (b) µOV (t) at matched stopping loss, (d) µQK(t) at matched
+stopping loss, and attention mass α(t) evaluated at matched stopping losses.
+The gradient identities in Proposition 1 do not by themselves
+imply a closed evolution for the effective matrix f
+WOV =
+WOWV , since the dynamics of WO and WV may depend
+on their relative scaling. We therefore next characterize a
+structural condition under which factorized gradient flow
+admits a well-defined induced dynamics on the effective
+parameters.
+Lemma 1. Let WO(t) and WV (t) denote the gradient
+flow trajectories with loss L2.
+Let WO(0)⊤WO(0)
+=
+WV (0)WV (0)⊤,
+Then
+WO(t)⊤WO(t)
+= WV (t)WV (t)⊤
+Lemma 1 ensures that the evolution of the effective matrix
+does not depend on arbitrary rescalings of the factorized
+parameters. Under this condition, the factorized gradient
+flow induces a closed evolution for the effective matrix that
+depends only on the collapsed loss.
+Lemma
+2.
+Let
+WO(t)
+and
+WV (t)
+follow
+gradi-
+ent
+flow
+on
+L2,
+and
+define
+the
+effective
+matrix
+f
+WOV (t) = WO(t)WV (t). Assume WO(0)⊤WO(0) =
+WV (0)WV (0)⊤. Then f
+WOV (t) evolves according to the
+preconditioned gradient flow for L1
+d
+dt vec(f
+WOV (t)) = −Ω(f
+WOV (t)) vec
+
+∇L1(f
+WOV (t))
+
+,
+where Ω(C) = (C⊤C)1/2 ⊕(CC⊤)1/2,
+Ω(C) a mapping from RM×d →RMd×Md is a degree
+1-homogeneous map. ⊕denotes the Kronecker sum.
+Lemma 2 shows that, under the balancedness condition, the
+evolution of the effective matrix f
+WOV (t) induced by fac-
+torized training is fully determined by the collapsed loss L1,
+up to the application of a state-dependent preconditioning
+operator. In contrast to collapsed training, which follows
+standard gradient flow on L1, factorized training follows a
+preconditioned gradient flow in the same parameter space.
+Ωbeing a homogeneous map implies that using factorized
+parameterization is closely approximated by collapsed fac-
+torization with a learning rate that increases over time.
+The same argument applies to the query-key factorization
+f
+WQK = WKW ⊤
+Q . Its gradient flow admits an analogous
+preconditioned representation of the collapsed query-key
+dynamics. We provide the full derivation in Appendix D.
+Together, these results justify analyzing optimization tra-
+jectories in the collapsed parameter space for both circuits,
+provided the induced preconditioning is taken into account.
+6.1. Synthetic Orthogonal Data Setting
+This section isolates the mechanism by which relative learn-
+ing rates between the query-key and output-value circuits
+shape attention during training. We introduce a simplified
+synthetic setting that enables a transparent, closed-form
+characterization of how attention sharpening emerges under
+gradient flow. To enable such a characterization, we make
+the following assumptions on the data distribution.
+Assumption 1. For each class y ∈[M], the class-specific
+token distribution is supported on b distinct tokens,Dy =
+1
+b
+Pb
+τ=1 δ(sτ
+y), where for each τ
+∈
+[b], the vectors
+sτ
+1, sτ
+2, . . . , sτ
+M ∈Rd are mutually orthogonal.
+Assumption 2. The background token distribution D0 has
+zero mean.
+Assumption 3. The support of D0 is orthogonal to all class-
+specific token vectors {sτ
+y}y∈[M], τ∈[b].
+Together, these assumptions eliminate cross-token interac-
+tions, reducing training to a low-dimensional system in
+which the coupling between attention learning and output
+learning can be analyzed explicitly.
+Each training sequence consists of m class-specific token
+positions (sampled with replacement from the b tokens of
+the corresponding class), n background token positions, and
+a final query token, giving total length T = m + n + 1.
+The attention vector is α = softmax(XWQKxT ), and
+6
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+we denote by α(t) := P
+j∈D
+αj the total attention mass on
+class-specific token positions (relevant token for a class).
+The following theorem shows that, under Assumptions 1-3,
+training dynamics collapse to two coupled scalar trajectories
+governing output-value learning and attention sharpening.
+Theorem 1. Under the orthogonal full-data setting and
+initialization WOV (0) = WQK(0) = 0, the output-value
+and query-key parameters evolve under population gradient
+flow with learning rates ηOV and ηQK as
+W (k,:)
+OV (t) = µOV (t)
+" b
+X
+τ=1
+sτ
+k −1
+M
+M
+X
+y=1
+b
+X
+τ=1
+sτ
+y
+#
+,
+W (k,:)
+QK (t) = µQK(t)
+M
+X
+y=1
+ b
+X
+τ=1
+sτ
+y
+! 
+b
+X
+τ ′=1
+sτ ′,k
+y
+!
+,
+where the scalar coefficients satisfy
+dµOV (t)
+dt
+=
+ηOV α(t)
+b
+ exp(α(t)µOV (t)) + M −1
+,
+dµQK(t)
+dt
+= ηQK (M −1)
+ α(t) −α(t)2
+µOV (t)
+Mb2 exp(α(t)µOV (t)) + M −1
+ ,
+with
+α(t) =
+m exp(µQK(t))
+m exp(µQK(t)) + n.
+In particular, both parameter matrices evolve along fixed
+data-dependent directions, with all learning dynamics cap-
+tured by the scalar coefficients µOV (t) and µQK(t).
+Lemma 3 (Relative growth rates (pre-saturation regime)).
+Under the population gradient-flow dynamics of Theorem 1,
+assume that the attention mass satisfies α(t) ≤1 −δ for
+some δ > 0 over a time interval [0, T]. Then for all t ∈
+[0, T],
+µOV (t) = Θ
+ ln(1+t)
+
+, µQK(t) = Θ
+ηQK
+ηOV
+(ln(1 + t))2
+
+.
+Lemma 3 formalizes the core mechanism: the output-value
+scale grows logarithmically in time, while the growth of
+the query-key scale that governs attention concentration is
+controlled by the learning-rate ratio r = ηQK/ηOV through
+a log-squared dependence. When output learning is slowed
+relative to attention learning (ηQK > ηOV ), optimization
+compensates by increasing the magnitude of the query-key
+parameters, thereby concentrating attention mass on class-
+relevant tokens.
+Figure 4a shows that the training loss converges to zero
+for all values of the ratio r = ηQK/ηOV , indicating that
+final predictive accuracy alone does not distinguish between
+learning regimes. Figure 4b shows the evolution of µOV
+evaluated at matched stopping losses varying values of r.
+Figures 4c and d similarly show the evolution of µQK and
+the attention mass α at matched stopping loss thresholds.
+To understand the differing attention behaviors, we examine
+the intermediate dynamics in Fig. 4b–c. Figure 4b shows
+the evolution of µOV (t), which serves as a proxy for logit
+growth and directly governs loss decay, while Fig. 4c shows
+the evolution of µQK(t), which acts as a proxy for growth
+of attention on relevant tokens.
+For all values of r, µOV (t) increases sufficiently to drive the
+loss to zero, explaining the similar convergence behavior ob-
+served in Fig. 4a. In contrast, µQK(t) depends strongly on r:
+for large ratios (e.g., r = 100), µQK(t) grows rapidly, lead-
+ing to attention mass on relevant tokens close to 1, whereas
+for small ratios (e.g., r = 0.01), µQK(t) remains small,
+resulting in attention close to uniform despite loss becoming
+zero. This decoupling between logit growth and attention
+sharpening shows that selective attention emerges from the
+relative optimization dynamics of the QK and OV rather
+than from improved prediction.
+7. Experiments
+The goal of our experiments is to test qualitative predictions
+of the theory developed in Section 6. We do not aim to
+optimize task performance or explore architectural design
+choices. Instead, we evaluate whether changing the relative
+learning rates of the query-key and output-value circuits
+produces the attention behavior predicted by the theory.
+The theory makes two core predictions. First, increasing
+the ratio r = ηQK
+ηOV
+should lead to sharper attention. Sec-
+ond, this attention sharpening should occur while predictive
+performance remains comparable. All experiments in this
+section are designed as controlled interventions on this learn-
+ing rate ratio.
+We compare a baseline transformer to a variant trained in a
+higher query-key learning-rate regime. In this variant, we
+increase the learning rate of the query-key parameters while
+keeping all other settings fixed. This directly increases
+the ratio r. This intervention corresponds directly to the
+mechanism analyzed in Lemma 3.
+We evaluate three datasets with token-level relevance anno-
+tations: SQuAD, HateXplain, and subject-verb agreement
+(SVA). For SQuAD, we use a 6-layer GPT-style model. For
+HateXplain and SVA, we use 1-layer models to match the
+theoretical setting. Additional multi-layer results are pro-
+vided in the Appendix D.5. Here, predictive performance
+7
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Table 1. Train and test performance together with attention-based interpretability metrics on real-world datasets. ↑indicates higher is
+better, while ↓indicates lower is better. All results are reported as average over 5 runs. We report 95% confidence intervals over five
+random seeds in Table 4.
+Dataset
+Setting
+Train
+Performance ↑
+Test
+Performance ↑
+AC ↑
+ACMC ↑
+MRTA
+(Rollout) ↑
+Suff. ↓
+Compre. ↑
+SQuAD QA
+Baseline
+70.30
+56.11
+12.65
+12.6
+0.06
+0.69
+0.38
+Faster QK
+70.81
+56.86
+42.95
+41.48
+0.1
+0.59
+0.53
+SVA
+Baseline
+95.02
+92.434
+41.67
+40.4
+0.1
+0.24
+0.24
+Faster QK
+95.938
+93.412
+76.85
+74.47
+0.19
+0.15
+0.30
+HateXplain
+Baseline
+88.75
+55.74
+0.00
+0.00
+0.027
+0.41
+0.40
+Faster QK
+89.72
+56.90
+43.5
+30.29
+0.31
+0.32
+0.48
+refers to the standard task metric for each dataset: F1 score
+for SQuAD and classification accuracy for HateXplain and
+SVA.
+All models are trained with AdamW. We first tune a single
+base learning rate using validation performance. This rate is
+shared across all parameters in the baseline model. In the
+increased r regime, we multiply the query-key learning rate
+by a fixed factor while keeping the output-value learning
+rate unchanged. We emphasize that adaptive optimization
+alone does not induce this behavior, as adaptive optimizers
+treat all parameter groups equally. We tune the query–key
+multiplier using validation performance to ensure stable
+training and comparable predictive accuracy across settings.
+Importantly, this tuning is not used to optimize attention
+metrics. For concreteness, we use base learning rates of 5 ×
+10−5, 5×10−5, and 1×10−5 for SQuAD, HateXplain, and
+SVA respectively, and increase the query-key learning rate
+by fixed multipliers of 20×, 30×, and 100× while keeping
+the output-value learning rate unchanged. Hyperparameter
+details are in Appendix A.2.
+We also report attention-based metrics that directly test the
+theoretical predictions. We measure mean relevant token at-
+tention (MRTA) and use attention rollout (Abnar & Zuidema,
+2020) to aggregate the scores across layers.
+We report sufficiency and comprehensiveness scores as faith-
+fulness metrics (DeYoung et al., 2020). Sufficiency mea-
+sures if important tokens are enough to retain the original
+prediction (lower is better), while comprehensiveness mea-
+sures the change in probability of the predicted class after
+removing important tokens (higher is better).
+Finally, we use DTAP-based summary metrics. Attention
+Confidence (AC) measures the percentage of instances in
+which a large fraction of attention mass is assigned to task-
+relevant tokens. Attention Confidence & Model Confidence
+(ACMC) measures the percentage of confidently correct in-
+stances that also exhibit high attention concentration. These
+metrics are designed to capture the increase in attention
+mass α(t) predicted by the theory. We discuss these metrics
+in detail in Appendix D.6.
+Table 1 summarizes the results across all datasets. Predictive
+performance remains stable across tasks. Increasing r does
+not degrade test performance, and in some cases yields small
+improvements. This confirms that attention sharpening is
+not driven by improved prediction alone.
+At the same time, attention becomes substantially sharper.
+Both AC and ACMC increase by large margins across all
+datasets. Sufficiency decreases and comprehensiveness in-
+creases in all settings, indicating more faithful attention.
+These effects are consistent across datasets and persist in
+deeper models. They match the qualitative behavior pre-
+dicted by the optimization dynamics in Section 6.
+Overall, the results support the theoretical mechanism pro-
+posed in this work. When output-value learning is slower,
+optimization increases the query-key scale. This concen-
+trates attention through the softmax nonlinearity. The model
+compensates for slower output learning by attending more
+strongly to informative tokens. Importantly, this effect does
+not require larger output weights or improved predictive
+performance. It arises from relative optimization speeds
+alone.
+8. Conclusion
+In this work, we study how optimization dynamics shape
+attention structure in self-attention models. By analyzing
+the interaction between the query-key and output-value cir-
+cuits, we showed that attention sharpening is controlled
+by the relative learning speeds of these components rather
+than by predictive performance alone. In particular, faster
+learning of the query-key circuit leads to sharper attention,
+even when performance is comparable. Our theoretical anal-
+ysis provides a mechanistic explanation for this behavior,
+which is supported by experiments on synthetic data and
+real-world benchmarks. These results highlight the impor-
+tance of parameterization and learning-rate choices. These
+factors are often treated as implementation details but play
+a central role in shaping attention behavior. Our findings
+suggest that attention interpretability can be systematically
+influenced through optimization dynamics, without requir-
+ing architectural changes.
+8
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+9. Limitations
+The theoretical analysis in the paper focuses on a single-
+layer attention-only transformer. Although our empirical re-
+sults suggest that the core findings extend to standard multi-
+layer transformers, additional components such as layer
+normalization and feedforward networks may introduce dy-
+namics that require further theoretical study. Our conclu-
+sions are also tied to the simplifying assumptions used in
+the theory and experiments. Sharper attention or improved
+alignment with annotation-based metrics does not neces-
+sarily imply a fully trustworthy explanation of the model’s
+reasoning, especially in high-stakes settings. The learning-
+rate intervention should be viewed as one concrete probe of
+relative QK-OV optimization dynamics rather than as the
+only possible causal mechanism. Other circuit-specific inter-
+ventions, such as initialization imbalance, weight decay, or
+gradient normalization, are left for future work. We do not
+claim that sharper attention directly improves downstream
+task performance. Our results show that attention structure
+can be controlled, with improvements on attention-based
+interpretability proxies.
+Impact Statement
+This work studies how optimization dynamics influence
+attention patterns in self-attention models. A potential pos-
+itive impact is improved understanding of internal model
+behavior for interpretability and downstream performance.
+However, sharper attention or improved alignment with
+annotation-based metrics does not necessarily imply faithful
+explanation, and should not be used on its own in high-
+stakes settings.
+Acknowledgements
+We thank the Department of Computer Science and Engi-
+neering at IIT Madras for providing travel support through
+the Kris Gopalakrishnan Endowment Fund.
+References
+Abnar, S. and Zuidema, W. Quantifying attention flow in
+transformers. In Jurafsky, D., Chai, J., Schluter, N., and
+Tetreault, J. (eds.), Proceedings of the 58th Annual Meet-
+ing of the Association for Computational Linguistics, pp.
+4190–4197, Online, July 2020. Association for Compu-
+tational Linguistics. doi: 10.18653/v1/2020.acl-main.
+385. URL https://aclanthology.org/2020.
+acl-main.385/.
+Arora, S., Cohen, N., and Hazan, E.
+On the op-
+timization of deep networks:
+Implicit acceleration
+by overparameterization.
+ArXiv,
+abs/1802.06509,
+2018.
+URL https://api.semanticscholar.
+org/CorpusID:3331630.
+Bao, H., Hataya, R., and Karakida, R. Self-attention net-
+works localize when qk-eigenspectrum concentrates. In
+Proceedings of the 41st International Conference on Ma-
+chine Learning, ICML’24. JMLR.org, 2024.
+Bhattamishra, S., Ahuja, K., and Goyal, N. On the Ability
+and Limitations of Transformers to Recognize Formal
+Languages. In Webber, B., Cohn, T., He, Y., and Liu, Y.
+(eds.), Proceedings of the 2020 Conference on Empiri-
+cal Methods in Natural Language Processing (EMNLP),
+pp. 7096–7116, Online, November 2020a. Association
+for Computational Linguistics. doi: 10.18653/v1/2020.
+emnlp-main.576.
+URL https://aclanthology.
+org/2020.emnlp-main.576/.
+Bhattamishra, S., Patel, A., and Goyal, N.
+On the
+computational power of transformers and its implica-
+tions in sequence modeling.
+In Fern´andez, R. and
+Linzen, T. (eds.), Proceedings of the 24th Conference
+on Computational Natural Language Learning, pp. 455–
+475, Online, November 2020b. Association for Com-
+putational Linguistics. doi: 10.18653/v1/2020.conll-1.
+37.
+URL https://aclanthology.org/2020.
+conll-1.37/.
+Bietti, A., Cabannes, V., Bouchacourt, D., J´egou, H., and
+Bottou, L. Birth of a transformer: a memory viewpoint.
+In Proceedings of the 37th International Conference on
+Neural Information Processing Systems, NIPS ’23, Red
+Hook, NY, USA, 2023. Curran Associates Inc.
+Brown, T. B., Mann, B., Ryder, N., Subbiah, M., Kaplan,
+J., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G.,
+Askell, A., Agarwal, S., Herbert-Voss, A., Krueger, G.,
+Henighan, T., Child, R., Ramesh, A., Ziegler, D. M.,
+Wu, J., Winter, C., Hesse, C., Chen, M., Sigler, E.,
+Litwin, M., Gray, S., Chess, B., Clark, J., Berner,
+C., McCandlish, S., Radford, A., Sutskever, I., and
+Amodei, D. Language Models are Few-Shot Learners,
+July 2020. URL http://arxiv.org/abs/2005.
+14165. arXiv:2005.14165 [cs].
+Dehghani,
+M.,
+Gouws,
+S.,
+Vinyals,
+O.,
+Uszkor-
+eit,
+J.,
+and Kaiser,
+L.
+Universal transformers.
+ArXiv, abs/1807.03819, 2018.
+URL https://api.
+semanticscholar.org/CorpusID:49667762.
+Deora, P., Ghaderi, R., Taheri, H., and Thrampoulidis,
+C.
+On the optimization and generalization of multi-
+head attention. Transactions on Machine Learning Re-
+search, 2024a.
+ISSN 2835-8856.
+URL https://
+openreview.net/forum?id=wTGjn7JvYK.
+Deora, P., Ghaderi, R., Taheri, H., and Thrampoulidis, C.
+On the optimization and generalization of multi-head
+9
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+attention, 2024b. URL https://arxiv.org/abs/
+2310.12680.
+DeYoung, J., Jain, S., Rajani, N. F., Lehman, E., Xiong,
+C., Socher, R., and Wallace, B. C. ERASER: A bench-
+mark to evaluate rationalized NLP models.
+In Juraf-
+sky, D., Chai, J., Schluter, N., and Tetreault, J. (eds.),
+Proceedings of the 58th Annual Meeting of the Associa-
+tion for Computational Linguistics, pp. 4443–4458, On-
+line, July 2020. Association for Computational Linguis-
+tics. doi: 10.18653/v1/2020.acl-main.408. URL https:
+//aclanthology.org/2020.acl-main.408/.
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn,
+D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer,
+M., Heigold, G., Gelly, S., Uszkoreit, J., and Houlsby,
+N.
+An image is worth 16x16 words: Transformers
+for image recognition at scale. ArXiv, abs/2010.11929,
+2020.
+URL https://api.semanticscholar.
+org/CorpusID:225039882.
+Du, S. S., Hu, W., and Lee, J. D. Algorithmic regulariza-
+tion in learning deep homogeneous models: layers are
+automatically balanced. In Proceedings of the 32nd Inter-
+national Conference on Neural Information Processing
+Systems, NIPS’18, pp. 382–393, Red Hook, NY, USA,
+2018. Curran Associates Inc.
+Elhage, N., Nanda, N., Olsson, C., Henighan, T., Joseph,
+N., Mann, B., Askell, A., Bai, Y., Chen, A., Conerly,
+T., DasSarma, N., Drain, D., Ganguli, D., Hatfield-
+Dodds, Z., Hernandez, D., Jones, A., Kernion, J., Lovitt,
+L., Ndousse, K., Amodei, D., Brown, T., Clark, J.,
+Kaplan, J., McCandlish, S., and Olah, C.
+A math-
+ematical framework for transformer circuits.
+Trans-
+former Circuits Thread, 2021.
+https://transformer-
+circuits.pub/2021/framework/index.html.
+Geshkovski, B., Letrouit, C., Polyanskiy, Y., and Rigollet,
+P. The emergence of clusters in self-attention dynamics.
+In Proceedings of the 37th International Conference on
+Neural Information Processing Systems, NIPS ’23, Red
+Hook, NY, USA, 2023. Curran Associates Inc.
+Jain, S. and Wallace, B. C.
+Attention is not explana-
+tion. In North American Chapter of the Association for
+Computational Linguistics, 2019. URL https://api.
+semanticscholar.org/CorpusID:67855860.
+Karagodin, N., Polyanskiy, Y., and Rigollet, P. Clustering in
+causal attention masking. In Proceedings of the 38th Inter-
+national Conference on Neural Information Processing
+Systems, NIPS ’24, Red Hook, NY, USA, 2024. Curran
+Associates Inc. ISBN 9798331314385.
+Latif, S., Zaidi, A., Cuay´ahuitl, H., Shamshad, F.,
+Shoukat, M., and Qadir, J.
+Transformers in speech
+processing:
+A survey.
+ArXiv,
+abs/2303.11607,
+2023.
+URL https://api.semanticscholar.
+org/CorpusID:257636830.
+Li, Y., Li, Y., and Risteski, A. How do transformers learn
+topic structure: towards a mechanistic understanding. In
+Proceedings of the 40th International Conference on Ma-
+chine Learning, ICML’23. JMLR.org, 2023.
+Li,
+Y.,
+Huang,
+Y.,
+Ildiz,
+M. E.,
+Rawat,
+A. S.,
+and Oymak,
+S.
+Mechanics of next token pre-
+diction with self-attention.
+ArXiv, abs/2403.08081,
+2024.
+URL https://api.semanticscholar.
+org/CorpusID:268379753.
+Linzen, T., Dupoux, E., and Goldberg, Y.
+Assessing
+the ability of LSTMs to learn syntax-sensitive depen-
+dencies.
+Transactions of the Association for Com-
+putational Linguistics, 4:521–535, 2016.
+doi:
+10.
+1162/tacl a 00115. URL https://aclanthology.
+org/Q16-1037/.
+Lu, H., Mao, Y., and Nayak, A.
+On the dynamics of
+training attention models. In International Conference
+on Learning Representations, 2021. URL https://
+openreview.net/forum?id=1OCTOShAmqB.
+Mathew, B., Saha, P., Yimam, S. M., Biemann, C.,
+Goyal,
+P.,
+and Mukherjee,
+A.
+Hatexplain:
+A
+benchmark dataset for explainable hate speech detec-
+tion.
+In AAAI Conference on Artificial Intelligence,
+2020.
+URL https://api.semanticscholar.
+org/CorpusID:229332119.
+Olsson, C., Elhage, N., Nanda, N., Joseph, N., DasSarma,
+N., Henighan, T., Mann, B., Askell, A., Bai, Y., Chen,
+A., Conerly, T., Drain, D., Ganguli, D., Hatfield-Dodds,
+Z., Hernandez, D., Johnston, S., Jones, A., Kernion, J.,
+Lovitt, L., Ndousse, K., Amodei, D., Brown, T., Clark, J.,
+Kaplan, J., McCandlish, S., and Olah, C. In-context learn-
+ing and induction heads. Transformer Circuits Thread,
+2022. https://transformer-circuits.pub/2022/in-context-
+learning-and-induction-heads/index.html.
+Pandey, L. N., Vashisht, R., and Ramaswamy, H. G. On the
+interpretability of attention networks. In Khan, E. and
+Gonen, M. (eds.), Proceedings of The 14th Asian Confer-
+ence on Machine Learning, volume 189 of Proceedings
+of Machine Learning Research, pp. 832–847. PMLR, 12–
+14 Dec 2023. URL https://proceedings.mlr.
+press/v189/pandey23a.html.
+P´erez, J., Barcel´o, P., and Marinkovic, J. Attention is turing
+complete. J. Mach. Learn. Res., 22(1), January 2021.
+ISSN 1532-4435.
+10
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Radford, A., Narasimhan, K., Salimans, T., and Sutskever,
+I. Improving language understanding by generative pre-
+training. 2018.
+Rajpurkar, P., Zhang, J., Lopyrev, K., and Liang, P. SQuAD:
+100,000+ questions for machine comprehension of text.
+In Su, J., Duh, K., and Carreras, X. (eds.), Proceed-
+ings of the 2016 Conference on Empirical Methods in
+Natural Language Processing, pp. 2383–2392, Austin,
+Texas, November 2016. Association for Computational
+Linguistics. doi: 10.18653/v1/D16-1264. URL https:
+//aclanthology.org/D16-1264/.
+Serrano, S. and Smith, N. A. Is attention interpretable?
+In Korhonen, A., Traum, D., and M`arquez, L. (eds.),
+Proceedings of the 57th Annual Meeting of the Asso-
+ciation for Computational Linguistics, pp. 2931–2951,
+Florence, Italy, July 2019. Association for Computa-
+tional Linguistics. doi: 10.18653/v1/P19-1282. URL
+https://aclanthology.org/P19-1282/.
+Tian, Y., Wang, Y., Chen, B., and Du, S. Scan and snap:
+understanding training dynamics and token composition
+in 1-layer transformer. In Proceedings of the 37th Inter-
+national Conference on Neural Information Processing
+Systems, NIPS ’23, Red Hook, NY, USA, 2023. Curran
+Associates Inc.
+Vashisht, R. and Ramaswamy, H. G.
+On the learning
+dynamics of attention networks. In European Confer-
+ence on Artificial Intelligence, 2023.
+URL https:
+//api.semanticscholar.org/CorpusID:
+260155204.
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones,
+L., Gomez, A. N., Kaiser, L. u., and Polosukhin, I.
+Attention is all you need. In Guyon, I., Luxburg, U. V.,
+Bengio, S., Wallach, H., Fergus, R., Vishwanathan, S.,
+and Garnett, R. (eds.), Advances in Neural Information
+Processing Systems, volume 30. Curran Associates, Inc.,
+2017.
+URL https://proceedings.neurips.
+cc/paper_files/paper/2017/file/
+3f5ee243547dee91fbd053c1c4a845aa-Paper.
+pdf.
+Wiegreffe, S. and Pinter, Y.
+Attention is not not ex-
+planation.
+In Inui, K., Jiang, J., Ng, V., and Wan,
+X. (eds.), Proceedings of the 2019 Conference on Em-
+pirical Methods in Natural Language Processing and
+the 9th International Joint Conference on Natural Lan-
+guage Processing (EMNLP-IJCNLP), pp. 11–20, Hong
+Kong, China, November 2019. Association for Compu-
+tational Linguistics. doi: 10.18653/v1/D19-1002. URL
+https://aclanthology.org/D19-1002/.
+Yun, C., Bhojanapalli, S., Rawat, A. S., Reddi, S. J., and
+Kumar, S. Are transformers universal approximators of
+sequence-to-sequence functions? ArXiv, abs/1912.10077,
+2019.
+URL https://api.semanticscholar.
+org/CorpusID:209444410.
+11
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+A. Supplementary Material
+A.1. Code Reproducibility
+Code
+for
+reproducing
+the
+experiments
+is
+available
+at
+https://github.com/vashishtrahul/
+Faster-Query-Key-Learning-Sharpens-Attention-in-Self-Attention-Models.
+A.2. Dataset Details
+A.2.1. SYNTHETIC DATA SECTION 4
+The dataset for the task in Section 4 is generated as follows. We consider 4 sequence classes, with 4 query and corresponding
+next tokens. For each query token, we define a set of 10 distinct tokens. We also have a set of common tokens with
+cardinality 10. Note that the position (or index) of the distinct and common tokens can be arbitrary. We sample multiple
+such triples (context tokens, query token, next token), train a single-layer self-attention model on a subset of this dataset,
+and evaluate it on the remaining data. The vocabulary size is 50 tokens and sequence length is 64. We train the model with
+200 batches with batch size 32 using stochastic gradient descent.
+A.2.2. REAL-WORLD DATASET SECTION 7
+Table 2 lists the three datasets used in the experiments.
+Table 2. Dataset statistics: number of instances and rationales for each split.
+Dataset
+Train Inst
+Validation Inst.
+Test Inst.
+Number of Rationales
+Hatexplain
+15383
+1922
+1924
+9132 (train), 1141 (test/validation)
+Subject-Verb Agreement
+100K
+20K
+20K
+100K (Train), 20K (Test/Validation)
+SQuAD QA
+40K
+10K
+-
+-
+Table 3 gives model architecture details for each dataset.
+Table 3. Model architecture configurations used in experiments.
+Dataset
+Variant
+dmodel
+nheads
+dhead
+dmlp / dff
+nlayers
+nctx
+HateXplain
+1-layer (baseline)
+64
+4
+64
+256
+1
+256
+SVA
+1-layer
+64
+4
+64
+256
+1
+256
+HateXplain
+2-layer (baseline)
+32
+4
+8
+128
+2
+96
+HateXplain
+4-layer
+64
+4
+64
+256
+4
+256
+SQuAD
+GPTAnswerGenerator
+300
+6
+50
+1200
+6
+256
+HateXplain Data: We describe the validation and test results for the HateXplain dataset here. For the preprocessing of
+text data, we follow (Mathew et al., 2020) and clean the data using the same method. For hyperparameter tuning, we first
+consider the same-learning-rate setting and then use the same initialization for the faster-learning setting, except for the
+query-key parameters, for which we use a learning rate of 30× the base rate of 5e−5.
+Hyperparameter Tuning: We choose the base learning rate by hyperparameter tuning on validation data for learning rates
+in range [0.01, 0.000001]. Once we choose the base learning rate, we increase the learning rate of query-key parameters by
+5×, 10×, 20×, 30×, and 100×. In the main paper, we observe that increasing the learning rate of the query-key parameters
+improves interpretability in terms of heatmaps for all the cases. We report the best performing hyperparameters in the paper.
+For this data, we also experiment with 2−layer and 4−layer models.
+Subject Verb Agreement Data: We further test our hypothesis on the Subject-Verb Agreement (SVA) dataset (binary-
+classification) (Linzen et al., 2016), which evaluates the model’s ability to capture long-range dependencies between subjects
+and verbs. The dataset contains sentences designed to check grammatical number agreement (e.g., whether a singular
+12
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+subject like “the cat” pairs with a singular verb like “runs,” or a plural subject like “the cats” pairs with “run”). This task
+provides a controlled setting to examine whether faster learning for query-key parameters, which improved interpretability
+for HateXplain, generalizes to core syntactic tasks. We use the same single-layer attention-only model. We train the model
+with SGD and batch size 256, and consider two settings: a same learning-rate setting and a faster-query-key-learning
+setting.The validation and test results for SVA are described here. For the preprocessing of text data, we follow (Linzen
+et al., 2016) and clean the data using the same method. For hyperparameter tuning, we first consider the same-learning-rate
+setting and then use the same weights for the faster-learning setting, except for the query-key parameters, for which we use a
+learning rate of 100× the base rate of 1e−5.
+Hyperparameter Tuning: We choose the base learning rate by hyperparameter tuning on validation data for learning rates
+in range [0.01, 0.000001]. Once we choose the base learning rate, we increase the learning rate of query-key parameters by
+5×, 10×, 20×, 30×, and 100×. In the main paper, we observe that increasing the learning rate of the query-key parameters
+improves interpretability in terms of heatmaps for all the cases. We report the best performing hyperparameters in the paper.
+SQuAD QA Data: We also run large-scale experiments on the subset of SQuAD question-answering dataset. Here,
+we finetune a 6-layer GPT model to generate answers based on given contexts and questions. We use the answer span
+information only for evaluation of attention-based interpretability. We train the model under two settings: (1) same learning
+rate for all parameters and (2) faster learning for query-key parameters (20× the base rate of 5e−5). We also show the
+results on proxies for attention-based interpretability after aggregating attention scores using the rollout method (Abnar &
+Zuidema, 2020).
+Hyperparameter Tuning: We choose the base learning rate by hyperparameter tuning on validation data for learning rates
+in range [0.01, 0.00001]. Once we choose the base learning rate, we increase the learning rate of query-key parameters by
+5×, 10×, 20× , 30×, and 100×. In the main paper, we observe that increasing the learning rate of the query-key parameters
+improves interpretability proxies for interpretability in terms of heatmaps for all the cases. We report the best performing
+hyperparameters in the paper.
+All DTAP heatmaps averaged over 5 runs are provided in Appendix D.5.
+Standard Deviation Table for Table 1
+Table 4. We report 95% confidence intervals, shown as ± values, for each metric in Table 1.
+Dataset
+Setting
+Train
+Performance ↑
+Test
+Performance ↑
+AC ↑
+ACMC ↑
+MRTA
+(Rollout) ↑
+Suff. ↓
+Compr. ↑
+SQuAD QA
+Baseline
+0.71
+0.63
+2.34
+2.41
+0.003
+0.012
+0.03
+Faster QK
+0.61
+0.40
+7.29
+6.68
+0.01
+0.07
+0.03
+SVA
+Baseline
+0.84
+0.03
+0.29
+0.31
+0.0001
+0.17
+0.14
+Faster QK
+0.60
+0.15
+8.45
+8.29
+0.03
+0.06
+0.01
+HateXplain
+Baseline
+0.87
+1.04
+0.00
+0.00
+0.00
+0.06
+0.06
+Faster QK
+0.01
+2.28
+1.18
+2.07
+0.01
+0.05
+0.03
+B. Theorem 1 Proof
+Theorem 1 [Parameter Trajectories]
+Under the orthogonal full-data setting, consider sequences of length T with m
+distinct tokens and n common tokens. Suppose that WOV (0) = 0 and WQK(0) = 0, and let ηOV and ηQK be the learning
+rates of WOV and WQK, respectively. Then the parameters evolve under population gradient flow as follows:
+W (k,:)
+OV (t) = µOV (t)
+"
+b
+X
+τ=1
+sτ
+k −1
+M
+M
+X
+y=1
+b
+X
+τ=1
+sτ
+y
+#
+,
+W (k,:)
+QK (t) = µQK(t)
+" M
+X
+y=1
+b
+X
+τ=1
+sτ
+y
+b
+X
+τ ′=1
+sτ ′,k
+y
+#
+,
+13
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+where the scalars µOV (t) and µQK(t) vary as follows:
+dµOV (t)
+dt
+=
+ηOV α(t)
+b ∗(exp(α(t)µOV (t)) + M −1),
+dµQK(t)
+dt
+= ηQK(M −1)(α(t) −α2(t))µOV (t)
+b2M(exp(α(t)µOV (t)) + M −1) ,
+α(t) =
+m × exp(µQK(t))
+m ∗(exp(µQK(t))) + n.
+Proof. We consider the following form of the network output:
+z = WOV ex,
+ex = X⊤α,
+α = softmax(XWQKxT ),
+where WOV ∈RM×d, WQK ∈Rd×d, X ∈RT ×d stacks the sequence tokens, and xT ∈Rd is the query token.
+Gradient of cross-entropy with softmax.
+Let z = WOV X⊤α and p = softmax(z). For the cross-entropy loss L = −log py,
+−∇W (k,:)
+OV L =
+ 1[y = k] −pk
+
+X⊤α.
+Under population gradient flow (averaging over the data distribution),
+−∇W (k,:)
+OV L = E
+
+ 1[y = k] −pk
+
+T
+X
+j=1
+αjx⊤
+j
+
+.
+(4)
+Note that α depends on the sampled sequence. Using linearity of expectation,
+E
+
+
+T
+X
+j=1
+αjxj
+
+=
+T
+X
+j=1
+E[αjxj].
+Let D denote the m distinct-token positions and C denote the n common-token positions. Define the scalar
+α(t) :=
+X
+j∈D
+αj,
+i.e., the total attention mass on distinct-token positions. By symmetry, all distinct positions have the same expected weight,
+and all common positions have the same expected weight:
+E[αj] =
+(
+α(t)/m,
+j ∈D,
+(1 −α(t))/n,
+j ∈C.
+Under the full-data symmetry assumptions for distinct-token sampling,
+E
+
+X
+j∈D
+xj
+
+y
+
+= m
+b
+b
+X
+τ=1
+sτ
+y.
+Moreover, since the common-token distribution has zero mean, E[ν] = 0, we have E
+hP
+j∈C αjxj
+i
+= 0.
+14
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Therefore,
+E[X⊤α | y] = E
+
+X
+j∈D
+αjxj
+
+y
+
+= α(t)
+m E
+
+X
+j∈D
+xj
+
+y
+
+= α(t)
+b
+b
+X
+τ=1
+sτ
+y.
+(5)
+Substituting (5) into (4) yields
+−∇W (k,:)
+OV L = 1
+M
+M
+X
+y=1
+
+1[y = k] −pk
+ α(t)
+b
+b
+X
+τ=1
+sτ
+y.
+(6)
+Now consider the ansatz
+W (k,:)
+OV (t) = µOV (t)
+
+
+b
+X
+τ=1
+sτ
+k −1
+M
+M
+X
+y′=1
+b
+X
+τ=1
+sτ
+y′
+
+.
+Let
+esk :=
+b
+X
+τ=1
+sτ
+k −1
+M
+M
+X
+y′=1
+b
+X
+τ=1
+sτ
+y′.
+Using orthogonality of the vectors {sτ
+y}y,τ,
+es⊤
+k
+b
+X
+τ=1
+sτ
+y =
+ b
+X
+τ=1
+sτ
+k
+!⊤ b
+X
+τ=1
+sτ
+y
+!
+−1
+M
+
+
+M
+X
+y′=1
+b
+X
+τ=1
+sτ
+y′
+
+
+⊤ b
+X
+τ=1
+sτ
+y
+!
+= b 1[k = y] −b
+M = b
+
+1[k = y] −1
+M
+
+.
+(7)
+Hence, for a sequence with label y,
+WOV E[X⊤α | y] = µOV (t)α(t)
+b
+
+
+es⊤
+1
+Pb
+τ=1 sτ
+y
+...
+es⊤
+M
+Pb
+τ=1 sτ
+y
+
+= µOV (t)α(t)
+
+ey −1
+M 1
+
+.
+(8)
+Using shift-invariance of softmax, this implies
+p = softmax(µOV (t)α(t) ey) ,
+and hence
+pk=y =
+exp(α(t)µOV (t))
+exp(α(t)µOV (t)) + M −1,
+pk̸=y =
+1
+exp(α(t)µOV (t)) + M −1.
+(9)
+Using (9) into (6), we have,
+−∇W (k,:)
+OV L = 1
+M
+M
+X
+y=1
+
+1[y = k] −pk
+ α(t)
+b
+b
+X
+τ=1
+sτ
+y.
+(10)
+−∇W (k,:)
+OV L = α(t)
+b ∗M
+"h
+1 −pk=y
+i
+b
+X
+τ=1
+sτ
+k +
+M
+X
+y=1,y̸=k
+−pk̸=y
+b
+X
+τ=1
+sτ
+y
+#
+(11)
+15
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+−∇W (k,:)
+OV L = α(t)
+b ∗M
+"h
+1 −
+exp(α(t)µOV (t))
+exp(α(t)µOV (t)) + M −1
+i
+b
+X
+τ=1
+sτ
+k
+−
+M
+X
+y=1,y̸=k
+1
+exp(α(t)µOV (t)) + M −1
+b
+X
+τ=1
+sτ
+y
+#
+.
+−∇W (k,:)
+OV L = α(t)
+b ∗M
+"h
+M −1
+exp(α(t)µOV (t)) + M −1
+i
+b
+X
+τ=1
+sτ
+k
+−
+M
+X
+y=1,y̸=k
+1
+exp(α(t)µOV (t)) + M −1
+b
+X
+τ=1
+sτ
+y
+#
+.
+−∇W (k,:)
+OV L =
+α(t)
+b ∗M(exp(α(t)µOV (t)) + M −1)
+"h
+M −1
+i
+b
+X
+τ=1
+sτ
+k −
+M
+X
+y=1,y̸=k
+b
+X
+τ=1
+sτ
+y
+#
+.
+−∇W (k,:)
+OV L =
+α(t)
+b ∗M(exp(α(t)µOV (t)) + M −1)
+"
+M
+b
+X
+τ=1
+sτ
+k −
+M
+X
+y=1
+b
+X
+τ=1
+sτ
+y
+#
+.
+−∇W (k,:)
+OV L =
+α(t)
+b(exp(α(t)µOV (t)) + M −1)
+"
+b
+X
+τ=1
+sτ
+k −1
+M
+M
+X
+y=1
+b
+X
+τ=1
+sτ
+y
+#
+.
+−∇W (k,:)
+OV L =
+α(t)
+b (exp(α(t)µOV (t)) + M −1) esk .
+(12)
+Therefore, under gradient flow,
+dW (k,:)
+OV (t)
+dt
+= ηOV
+α(t)
+b (exp(α(t)µOV (t)) + M −1) esk.
+(13)
+On the other hand, differentiating the ansatz W (k,:)
+OV (t) = µOV (t)esk with respect to time yields
+dW (k,:)
+OV (t)
+dt
+= dµOV (t)
+dt
+esk.
+Since esk̸ = 0 and the same direction esk appears in (13), we obtain the scalar differential equation
+dµOV (t)
+dt
+=
+ηOV α(t)
+b (exp(α(t)µOV (t)) + M −1).
+Key-Query Parameter Trajectory Proof
+Recall ex = X⊤α and α = softmax(XWQKxT ). Let z = WOV ex and p = softmax(z).
+16
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+−∇W (k,:)
+QK L = 1
+M
+M
+X
+y=1
+xT
+T
+X
+j=1
+αj xj,k (xj −ex)⊤
+"
+W (y,:)
+OV
+−
+M
+X
+k′=1
+pk′ W (k′,:)
+OV
+#
+.
+(14)
+Using (8), the logits satisfy
+WOV (X⊤α) = µOV (t)α(t)
+
+ey −1
+M 1
+
+,
+and therefore
+W (y,:)
+OV
+−
+M
+X
+k′=1
+pk′ W (k′,:)
+OV
+=
+MµOV (t)
+exp(α(t)µOV (t)) + M −1
+" b
+X
+τ=1
+sτ
+y −1
+M
+M
+X
+k′=1
+b
+X
+τ ′=1
+sτ ′
+k′
+#
+.
+(15)
+We now analyze the remaining factor in (14) under population expectation. Let D denote the multiset of distinct-token
+positions in the sequence (|D| = m, counting multiplicities), and C denote the multiset of common-token positions (|C| = n).
+Under the trajectory ansatz for WQK,
+W (k,:)
+QK (t) = µQK(t)
+M
+X
+y=1
+ b
+X
+τ=1
+sτ
+y
+! 
+b
+X
+τ ′=1
+sτ ′,k
+y
+!
+,
+the attention scores uj = x⊤
+j WQKxT take only two values: for distinct-token positions j ∈D, uj = µQK(t), while for
+common-token positions j ∈C, uj = 0. Consequently, the softmax attention vector α is uniform within each group:
+αj =
+(
+α(t)/m,
+j ∈D,
+(1 −α(t))/n,
+j ∈C,
+α(t) =
+X
+j∈D
+αj.
+Writing xj = sτ
+y for distinct tokens and xj = ντ for common tokens, the population expectation of the first factor in (14)
+becomes
+1
+M
+M
+X
+y=1
+xT
+T
+X
+j=1
+αj xj,k (xj −ex)⊤= 1
+M
+M
+X
+y=1
+ 
+1
+b
+b
+X
+r=1
+sr
+y
+! (
+α(t)
+m
+b
+X
+τ=1
+sτ,k
+y
+ 
+sτ
+y −α(t)
+m
+b
+X
+τ ′=1
+sτ ′
+y −1 −α(t)
+n
+n
+X
+τ ′′=1
+ντ ′′
+!⊤
++ 1 −α(t)
+n
+n
+X
+τ=1
+ντ,k
+ 
+ντ −α(t)
+m
+b
+X
+τ ′=1
+sτ ′
+y −1 −α(t)
+n
+n
+X
+τ ′′=1
+ντ ′′
+!⊤)
+.
+(16)
+Substituting (15) and (16) into (14) yields
+−∇W (k,:)
+QK L =
+µOV (t)
+exp(α(t)µOV (t)) + M −1
+" M
+X
+y=1
+ 
+1
+b
+b
+X
+r=1
+sr
+y
+!
+{· · · }
+# " b
+X
+τ=1
+sτ
+y −1
+M
+M
+X
+k′=1
+b
+X
+τ ′=1
+sτ ′
+k′
+#
+,
+(17)
+where {· · · } denotes the bracketed expression in (16).
+Under the orthogonality assumptions and the zero-mean condition E[ντ] = 0, all cross terms involving common tokens
+vanish under the population expectation. The expression therefore reduces to the distinct-token component:
+−∇W (k,:)
+QK L =
+µOV (t)
+exp(α(t)µOV (t)) + M −1
+M
+X
+y=1
+ 
+1
+b
+b
+X
+r=1
+sr
+y
+!
+eCy Vy,
+(18)
+17
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+where
+eCy = α(t)
+m
+b
+X
+τ=1
+sτ,k
+y
+ 
+sτ
+y −α(t)
+m
+b
+X
+τ ′=1
+sτ ′
+y
+!⊤
+,
+(19)
+Vy =
+" b
+X
+τ=1
+sτ
+y −1
+M
+M
+X
+k′=1
+b
+X
+τ ′=1
+sτ ′
+k′
+#
+.
+(20)
+Using orthogonality of {sτ
+y}, the product
+
+1
+b
+Pb
+r=1 sr
+y
+
+eCyVy simplifies to a rank-one term, yielding
+−∇W (k,:)
+QK L =
+µOV (t)(M −1)α(t)
+ 1 −α(t)
+
+Mb2 exp(α(t)µOV (t)) + M −1
+
+M
+X
+y=1
+ b
+X
+τ=1
+sτ
+y
+! 
+b
+X
+τ ′=1
+sτ ′,k
+y
+!
+.
+(21)
+In continuous time,
+dW (k,:)
+QK
+dt
+= ηQK
+µOV (t)(M −1)α(t)
+ 1 −α(t)
+
+Mb2 exp(α(t)µOV (t)) + M −1
+
+M
+X
+y=1
+ b
+X
+τ=1
+sτ
+y
+! 
+b
+X
+τ ′=1
+sτ ′,k
+y
+!
+,
+(22)
+and hence
+dµQK(t)
+dt
+= ηQK
+µOV (t)(M −1)α(t)
+ 1 −α(t)
+
+Mb2 exp(α(t)µOV (t)) + M −1
+.
+(23)
+Finally, since distinct-token positions have score µQK(t) and common-token positions have score 0, the total attention mass
+on distinct-token positions is
+α(t) =
+m exp(µQK(t))
+m exp(µQK(t)) + n.
+C. Lemma 3 Proof
+Lemma 3 [Part I: µOV (t) Bounds]
+Let µOV (t) evolve as
+˙µOV (t) =
+ηOV α(t)
+b
+ eα(t)µOV (t) + M −1
+,
+µOV (0) = 0,
+where α(t) =
+meµQK (t)
+meµQK (t)+n and α0 := α(0) =
+m
+m+n. Then for all t ≥0,
+log
+
+1 + ηOV α0
+Mb
+t
+
+≤µOV (t) ≤
+1
+α0
+log
+
+1 + ηOV α0
+b
+t
+
+.
+(24)
+Proof. From ˙µQK(t) ≥0 and µQK = 0, we have µQK(t) ≥0 and non-decreasing; since α() is increasing, α(t) is
+non-decreasing and α0 ≤α(t) ≤1
+For any x ≥0, ex ≤ex + M −1 ≤Mex, hence
+1
+M e−x ≤
+1
+ex + M −1 ≤e−x.
+Apply this with x = α(t)µOV (t) in the ODE to obtain
+ηOV α(t)
+Mb
+e−α(t)µOV (t) ≤˙µOV (t) ≤ηOV α(t)
+b
+e−α(t)µOV (t).
+(25)
+18
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Using α(t) ≤1 and e−α(t)µ ≤e−α0µ (since α(t) ≥α0 and µ ≥0), the right inequality of (25) implies
+˙µOV (t) ≤ηOV
+b
+e−α0µOV (t).
+Multiplying by α0eα0µOV (t) gives
+α0eα0µOV (t) ˙µOV (t) ≤ηOV α0
+b
+,
+i.e.,
+d
+dt
+
+eα0µOV (t)
+≤ηOV α0
+b
+.
+Integrating from 0 to t and using eα0µOV (0) = 1 yields
+eα0µOV (t) ≤1 + ηOV α0
+b
+t.
+Applying log(·) and dividing by α0 gives
+µOV (t) ≤1
+α0
+log
+
+1 + ηOV α0
+b
+t
+
+.
+Using α(t) ≥α0 and e−α(t)µ ≥e−µ (since α(t) ≤1 and µ ≥0), the left inequality of (25) implies
+˙µOV (t) ≥ηOV α0
+Mb
+e−µOV (t).
+Multiplying by eµOV (t) gives
+eµOV (t) ˙µOV (t) ≥ηOV α0
+Mb
+,
+i.e.,
+d
+dt
+
+eµOV (t)
+≥ηOV α0
+Mb
+.
+Integrating from 0 to t and using eµOV (0) = 1 yields
+eµOV (t) ≥1 + ηOV α0
+Mb
+t.
+Applying log(·) gives
+µOV (t) ≥log
+
+1 + ηOV α0
+Mb
+t
+
+.
+Combining the two bounds proves (24).
+Lemma 3 [Part II: µQK(t) Bounds]
+Let µOV (t), µQK(t) satisfy the coupled ODEs
+˙µOV (t) =
+ηOV α(t)
+b
+ eα(t)µOV (t) + M −1
+,
+˙µQK(t) = ηQK
+(M −1)α(t)(1 −α(t))µOV (t)
+Mb2 eα(t)µOV (t) + M −1
+ ,
+with µOV (0) = µQK(0) = 0 and α(t) =
+meµQK (t)
+meµQK (t)+n. Let α0 =
+m
+m+n.
+For all t ≥0,
+µQK(t) ≤ηQK
+ηOV
+(M −1)(1 −α0)
+2Mb α2
+0
+log2
+1 + ηOV α0
+b
+t
+
+.
+(26)
+Fix δ ∈(0, 1) and assume
+α(t) ≤1 −δ
+for all t ∈[0, T].
+(27)
+Then for all t ∈[0, T],
+µQK(t) ≥ηQK
+ηOV
+(M −1)δ
+2Mb
+log2
+1 + ηOV α0
+Mb
+t
+
+.
+(28)
+19
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Proof. Divide the µQK-ODE by the µOV -ODE to cancel the common denominator:
+dµQK
+dµOV
+= ˙µQK
+˙µOV
+= ηQK
+ηOV
+M −1
+Mb
+(1 −α(t)) µOV (t).
+(29)
+Since α(t) is nondecreasing and α(0) = α0, we have α(t) ≥α0 and hence 1 −α(t) ≤1 −α0. Using this in (29) yields
+dµQK
+dµOV
+≤ηQK
+ηOV
+M −1
+Mb
+(1 −α0) µOV .
+Integrating over µOV ∈[0, µOV (t)] gives
+µQK(t) ≤ηQK
+ηOV
+M −1
+Mb
+(1 −α0)
+Z µOV (t)
+0
+u du = ηQK
+ηOV
+(M −1)(1 −α0)
+2Mb
+µOV (t)2.
+Applying the upper bound from Lemma 3,
+µOV (t) ≤1
+α0
+log
+
+1 + ηOV α0
+b
+t
+
+,
+we obtain
+µQK(t) ≤ηQK
+ηOV
+(M −1)(1 −α0)
+2Mb α2
+0
+log2
+1 + ηOV α0
+b
+t
+
+,
+which is exactly (26).
+Assume (27). Then 1 −α(t) ≥δ for all t ∈[0, T]. Using this in (29) yields
+dµQK
+dµOV
+≥ηQK
+ηOV
+M −1
+Mb
+δ µOV .
+Integrating over µOV ∈[0, µOV (t)] gives
+µQK(t) ≥ηQK
+ηOV
+M −1
+Mb
+δ
+Z µOV (t)
+0
+u du = ηQK
+ηOV
+(M −1)δ
+2Mb
+µOV (t)2.
+Applying the lower bound of µOV from Lemma 3,
+µOV (t) ≥log
+
+1 + ηOV α0
+Mb
+t
+
+,
+we obtain
+µQK(t) ≥ηQK
+ηOV
+(M −1)δ
+2Mb
+log2
+1 + ηOV α0
+Mb
+t
+
+,
+which is exactly (28).
+D. Relation Between Collapsed and Factorized Parameterization
+In this section, we provide proofs for Proposition 1, Lemma 1, and Lemma 2. we also state the corresponding proposition
+and lemmas for QK circuit in proposition 2, 4 and 5.
+D.1. Proposition 1 Proof
+Proposition 1 Consider the network output
+by = WOWV ex,
+WO ∈RM×d, WV ∈Rd×d, ex ∈Rd,
+and define the collapsed output-value parameter WOV := WOWV . Let ey = S(by) and let L be the cross-entropy loss
+L = −log
+
+exp(byc)
+P
+k exp(byk)
+
+.
+20
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Then,
+∂L
+∂WOV
+= (ey −y) ex⊤.
+(30)
+By chain rule,
+∂L
+∂WO
+= (ey −y) (WV ex)⊤,
+(31)
+∂L
+∂WV
+= W ⊤
+O (ey −y) ex⊤.
+(32)
+Under gradient flow, the dynamics are
+dWOV
+dt
+= (ey −y) ex⊤,
+(33)
+dWO
+dt
+= (ey −y) ex⊤W ⊤
+V ,
+(34)
+dWV
+dt
+= W ⊤
+O (ey −y) ex⊤.
+(35)
+Proof. Equation (30) is the standard softmax cross-entropy gradient. Equations (31) (32) follow by chain rule, and (33)-(35)
+are the corresponding gradient-flow updates.
+D.2. Lemma 1 Proof
+Lemma 1 [OV Parameters Balancedness]
+Under gradient flow and balanced initialization,
+WV (t)W ⊤
+V (t) = W ⊤
+O (t)WO(t)
+∀t.
+Proof. Using (34)–(35),
+d
+dt
+ WV W ⊤
+V
+
+= WV
+dWV
+dt
+⊤
++
+dWV
+dt
+
+W ⊤
+V
+= WV ex(ey −y)⊤WO + W ⊤
+O (ey −y)ex⊤W ⊤
+V .
+(36)
+Similarly,
+d
+dt
+ W ⊤
+O WO
+
+=
+dWO
+dt
+⊤
+WO + W ⊤
+O
+dWO
+dt
+
+= WV ex(ey −y)⊤WO + W ⊤
+O (ey −y)ex⊤W ⊤
+V .
+(37)
+Comparing (36) and (37) gives
+d
+dt
+ WV W ⊤
+V −W ⊤
+O WO
+
+= 0.
+Hence the difference is constant in time, and under (approximately) balanced initialization it is 0, so WV W ⊤
+V = W ⊤
+O WO
+for all t.
+D.3. Lemma 2 Proof
+Lemma 2 [Relation Between Factorized and Collapsed OV parameterization]
+Let f
+WOV = WOWV and WOV be the
+collapsed parameter. Then
+vec
+ 
+∂f
+WOV
+∂t
+!
+= Ω(WOV ) vec
+∂WOV
+∂t
+
+,
+(38)
+21
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+where
+Ω(C) := (C⊤C)1/2 ⊗IM + Id ⊗(CC⊤)1/2,
+and Ω(αC) = α Ω(C) (degree-1 homogeneous).
+Proof. From Lemma 1, WV W ⊤
+V = W ⊤
+O WO. For fixed t, write WO = UOΣOV ⊤
+O and WV = UV ΣV V ⊤
+V . The Gram
+matrices share eigenvalues
+Σ⊤
+OΣO = ΣV Σ⊤
+V = diag(ρ1Id1, . . . , ρmIdm),
+hence ΣO = ΣV = diag(√ρ1Id1, . . . , √ρmIdm). Therefore,
+WOW ⊤
+O = UOdiag(ρ1Id1, . . . , ρmIdm)U ⊤
+O ,
+(39)
+W ⊤
+V WV = VV diag(ρ1Id1, . . . , ρmIdm)V ⊤
+V .
+(40)
+Moreover, since WOV = WOWV ,
+WOV W ⊤
+OV = UOdiag(ρ2
+1Id1, . . . , ρ2
+mIdm)U ⊤
+O ,
+(41)
+W ⊤
+OV WOV = VV diag(ρ2
+1Id1, . . . , ρ2
+mIdm)V ⊤
+V .
+(42)
+Thus,
+WOW ⊤
+O = (WOV W ⊤
+OV )1/2,
+W ⊤
+V WV = (W ⊤
+OV WOV )1/2.
+Using the product rule,
+df
+WOV
+dt
+= dWO
+dt
+WV + WO
+dWV
+dt
+.
+Substituting (34)-(35) and the identities above yields
+df
+WOV
+dt
+= (y −ey)ex⊤(W ⊤
+OV WOV )1/2 + (WOV W ⊤
+OV )1/2(y −ey)ex⊤.
+(43)
+vec
+ 
+df
+WOV
+dt
+!
+=
+
+(W ⊤
+OV WOV )1/2 ⊗IM + Id ⊗(WOV W ⊤
+OV )1/2
+vec
+ (y −ey)ex⊤
+.
+(44)
+Using (30) and (33) ,
+vec
+ 
+df
+WOV
+dt
+!
+= Ω(WOV ) vec
+dWOV
+dt
+
+,
+which is (38).
+D.4. Proposition and Lemma for QK circuit
+Proposition 2. Consider by = WOWV ex with ex = X⊤A and A = S(XWKW ⊤
+Q xT ), and define WQK = WKW ⊤
+Q .
+Let Z = Diag(A) −AA⊤. Then the gradient w.r.t. WQK is
+∂L
+∂WQK
+= xT (ey −y)⊤WOWV X⊤ZX =: G.
+(45)
+By chain rule,
+∂L
+∂WQ
+= G⊤WK,
+(46)
+∂L
+∂WK
+= GWQ.
+(47)
+22
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Under gradient flow, the dynamics are
+dWQK
+dt
+= G,
+(48)
+dWQ
+dt
+= G⊤WK,
+(49)
+dWK
+dt
+= GWQ.
+(50)
+Proof. Equation (45) is the standard gradient with respect to the WQK parameters. Equations (46) and (47) follow by chain
+rule, and (49) and (50) are the corresponding gradient-flow updates.
+Lemma 4 (QK Parameter Balancedness). Let WQK = WKW ⊤
+Q and define G as in Equation (45). Under gradient flow
+and balanced initialization,
+W ⊤
+Q (t)WQ(t) = W ⊤
+K (t)WK(t)
+∀t.
+Proof.
+d
+dt
+ W ⊤
+Q WQ
+
+= W ⊤
+Q
+dWQ
+dt
+
++
+dWQ
+dt
+⊤
+WQ
+= W ⊤
+Q G⊤WK + W ⊤
+K GWQ.
+(51)
+Similarly,
+d
+dt
+ W ⊤
+K WK
+
+= W ⊤
+K
+dWK
+dt
+
++
+dWQ
+dt
+⊤
+WQ
+= W ⊤
+K GWQ + W ⊤
+Q G⊤WK.
+(52)
+d
+dt
+ W ⊤
+Q WQ
+
+= W ⊤
+K GWQ + W ⊤
+Q G⊤WK,
+(53)
+d
+dt
+ W ⊤
+K WK
+
+= W ⊤
+Q G⊤WK + W ⊤
+K GWQ.
+(54)
+Comparing (53) and (54) yields
+d
+dt
+ W ⊤
+Q WQ −W ⊤
+K WK
+
+= 0.
+Thus the difference is constant in time and equals 0 under balanced initialization, so W ⊤
+Q WQ = W ⊤
+K WK for all t.
+Lemma 5 (QK preconditioning identity). Let f
+WQK = WKW ⊤
+Q and WQK be the collapsed parameter. Then
+vec
+ 
+∂f
+WQK
+∂t
+!
+= Ω(WQK) vec
+∂WQK
+∂t
+
+,
+(55)
+where
+Ω(C) := (C⊤C)1/2 ⊗Id + Id ⊗(CC⊤)1/2,
+and Ω(αC) = α Ω(C).
+Proof. Using Lemma 4, W ⊤
+Q WQ = W ⊤
+K WK, SVD argument of the proof of Lemma 2, we obtain
+WQW ⊤
+Q = (W ⊤
+QKWQK)1/2,
+WKW ⊤
+K = (WQKW ⊤
+QK)1/2.
+23
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Using the product rule,
+df
+WQK
+dt
+= dWK
+dt
+W ⊤
+Q + WK
+dWQ
+dt
+⊤
+= GWQW ⊤
+Q + WKW ⊤
+K G.
+Thus,
+df
+WQK
+dt
+= G(W ⊤
+QKWQK)1/2 + (WQKW ⊤
+QK)1/2G.
+(56)
+Vectorizing (56) and using vec(AB) = (B⊤⊗I)vec(A),
+vec
+ 
+df
+WQK
+dt
+!
+=
+
+(W ⊤
+QKWQK)1/2 ⊗Id + Id ⊗(WQKW ⊤
+QK)1/2
+vec(G).
+Under gradient flow, (45) implies
+vec
+ 
+df
+WQK
+dt
+!
+= Ω(WQK) vec
+dWQK
+dt
+
+,
+which is (55).
+D.5. Additional Results DTAP Heatmaps and Multilayer Setting Results
+Table 5. Train and test performance together with attention-based interpretability metrics on real-world datasets. ↑indicates higher is
+better, while ↓indicates lower is better. All results are reported as mean over 5 random seeds. We report 95% confidence intervals over
+five random seeds in Table 6.
+Dataset
+Setting
+Train
+Performance ↑
+Test
+Performance ↑
+AC ↑
+ACMC ↑
+MRTA
+(Rollout) ↑
+Suff. ↓
+Compr. ↑
+HateXplain
+Baseline
+94.58
+58.12
+4.54
+0.00
+0.08
+0.49
+0.22
+( 2-Layers )
+Faster QK
+96.10
+57.91
+9.86
+5.23
+0.15
+0.32
+0.35
+HateXplain
+Baseline
+94.29
+57.84
+8.89
+0.00
+0.1
+0.53
+0.21
+(4-Layers)
+Faster QK
+95.89
+58.51
+12.89
+6.45
+0.16
+0.44
+0.26
+Table 6. In this table we report 95% CI as ± values for each metric for Table 5.
+Dataset
+Setting
+Train
+Performance ↑
+Test
+Performance ↑
+AC ↑
+ACMC ↑
+MRTA
+(Rollout) ↑
+Suff. ↓
+Compr. ↑
+HateXplain
+Baseline
+0.002
+0.004
+0.80
+0.00
+0.007
+0.07
+0.03
+( 2-Layers )
+Faster QK
+0.006
+0.02
+1.20
+1.39
+0.005
+0.1
+0.05
+HateXplain
+Baseline
+0.008
+0.009
+1.45
+0.00
+0.001
+0.06
+0.01
+(4-Layers)
+Faster QK
+0.74
+0.01
+2.39
+2.12
+0.025
+0.07
+0.03
+D.6. Detailed Metric Discussion
+We adopt the definitions of sufficiency and comprehensiveness from (DeYoung et al., 2020).
+Sufficiency: Sufficiency captures whether the important tokens are sufficient to retain the original prediction.
+Sufficiency = f(x) −f(r:k%)
+,
+where r : k% denotes the top-k% most important tokens ranked by attention score.
+Comprehensiveness: Comprehensiveness measures the change in the predicted-class probability after removing important
+tokens.
+24
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+0
+0.05
+0.1
+0.5
+1
+Distinct token attention
+1
+0.5
+0.1
+0.05
+0
+True Token Probability
+10.77
+19.45
+11.13
+0
+19.25
+12.08
+1.47
+0
+0.54
+0.19
+0.01
+0
+23.51
+1.57
+0.04
+0
+(a) Baseline Average
+0
+0.05
+0.1
+0.5
+1
+Distinct token attention
+1
+0.5
+0.1
+0.05
+0
+True Token Probability
+1.36
+0.46
+1.38
+0
+1.6
+1.33
+0.35
+0
+0.06
+0.04
+0.01
+0
+0.61
+0.55
+0.02
+0
+(b) Baseline STD Dev
+0
+0.05
+0.1
+0.5
+1
+Distinct token attention
+1
+0.5
+0.1
+0.05
+0
+True Token Probability
+2.22
+7.42
+24.8
+0
+7.68
+14.62
+16.68
+0
+0.53
+0.75
+0.4
+0
+14.63
+9.2
+1.08
+0
+(c) Faster QK Average
+0
+0.05
+0.1
+0.5
+1
+Distinct token attention
+1
+0.5
+0.1
+0.05
+0
+True Token Probability
+0.2
+1.91
+2.45
+0
+1.37
+1.58
+2.52
+0
+0.08
+0.12
+0.11
+0
+1.4
+1.07
+0.37
+0
+(d) Faster QK STD Dev
+Figure 5. 6 layer model Distinct Token Attention-Prediction heat map of SQuAD QA Data (a)(b) Baseline Model Average and Standard
+Deviation (c)(d) FasterQK Model Average and Standard Deviation (5 runs)
+0
+0.1
+0.5
+1.0
+Distinct token attention
+1
+0.5
+0.1
+0
+True Token Probability
+52.03
+40.4
+0
+4.57
+1.27
+0
+1.23
+0.51
+0
+(a) Baseline Average
+0
+0.1
+0.5
+1.0
+Distinct token attention
+1
+0.5
+0.1
+0
+True Token Probability
+0.2
+0.22
+0
+0.03
+0.02
+0
+0.02
+0.01
+0
+(b) Baseline STD Dev
+0
+0.1
+0.5
+1.0
+Distinct token attention
+1
+0.5
+0.1
+0
+True Token Probability
+18.94
+62.08
+12.39
+1.99
+2.11
+0.27
+1.02
+1.1
+0.09
+(c) Faster QK Average
+0
+0.1
+0.5
+1.0
+Distinct token attention
+1
+0.5
+0.1
+0
+True Token Probability
+5.62
+20.85
+24.41
+0.14
+0.6
+0.54
+0.15
+0.32
+0.18
+(d) Faster QK STD Dev
+Figure 6. 1 layer model Distinct Token Attention-Prediction heat map of SVA data (a)(b) Baseline Model Average and Standard Deviation
+(c)(d) Faster QK Model Average and Standard Deviation (5 runs)
+0
+0.33
+0.66
+1
+Distinct token attention
+1
+0.66
+0.33
+0
+True Token Probability
+49.04
+0
+0
+15.89
+0
+0
+35.07
+0
+0
+(a) Baseline Average
+0
+0.33
+0.66
+1
+distinct token attention
+0
+0.33
+0.66
+1
+true token probability
+0.1
+0
+0
+0.15
+0
+0
+0.09
+0
+0
+(b) Baseline STD Dev
+0
+0.33
+0.66
+1
+Distinct token attention
+1
+0.66
+0.33
+0
+True Token Probability
+24.24
+8.09
+17.87
+5.92
+3.33
+1
+26.33
+9.04
+4.17
+(c) Faster QK Average
+0
+0.33
+0.66
+1
+distinct token attention
+0
+0.33
+0.66
+1
+true token probability
+0.53
+0.67
+1.25
+0.46
+0.94
+0.07
+0.52
+1.21
+0.42
+(d) Faster QK STD Dev
+Figure 7. 1 layer model Distinct Token Attention-Prediction heat map of HateXplain data (a)(b) Baseline Model Average and Standard
+Deviation (c)(d) Faster QK Model Average and Standard Deviation (5 runs)
+Comprehensiveness = f(x) −f(x/r:k%)
+where r:k% refers to top-k% most important tokens chosen based on attention scores.
+Mean Relevant Token Attention (MRTA): Using the learned attention vector, we compute the average attention mass
+assigned to relevant tokens for an instance. This metric can be computed exactly using DTAP heatmaps, if the full attention
+distribution is known.
+Attention Confidence (AC): We compute fraction of instances where attention confidence is high. This refers to right-half
+column sum in DTAP heatmap. For example: Fig 5a for baseline model we will have AC value 11.13+1.47+0.01+0.04 =
+12.65 (Table 1 column 5 row 1).
+25
+
+
+Faster Query-Key Learning Sharpens Attention in Self-Attention Models
+Attention Confidence Model Confidence (ACMC): We compute fraction of instances where attention confidence is high
+as well as prediction probability is high. This refers to right-half columns and top-half rows sum in DTAP heatmap. For
+example: Fig 5a for baseline model we will have ACMC value 11.13 + 1.47 = 12.6 (Table 1 column 5 row 1).
+26

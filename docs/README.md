@@ -6,35 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-14
-- 运行时间：2026-08-14 21:18:18 UTC
+- 最新运行日期：2026-08-15
+- 运行时间：2026-08-15 20:32:57 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：2
+- 本次总论文数：6
+- 精读区：3
 - 速读区：3
 
 ### 今日简报（AI）
-今日精读2篇、速读3篇，重点聚焦LLM多智能体的潜在通信与拓扑优化。最值得关注StateBridge（9.0）的无训练隐状态对齐方案，以及用因果推断发现高效可解释通信拓扑的研究。建议优先精读这两篇，后续可留意可执行角色与多目标策略方向。
-- 详情：[/202608/14/README](/202608/14/README)
+1) 今日聚焦多智能体决策，6篇论文中精读2篇、速读3篇，核心围绕未知Lipschitz常数与局部通信协作。  
+2) 最值得关注：《Coordinating the Unknown Lipschitz Constant in Multiplayer Bandits》突破参数未知困境，《Scalable Multi-Agent Maze Traversal》验证局部通信即可高效协作。  
+3) 普通读者可优先精读这两篇，重尾奖励与注意力机制等速读条目作为延伸补充。
+- 详情：[/202608/15/README](/202608/15/README)
 
 ### 精读区论文标签
-1. [StateBridge: Training-free Hidden-state Alignment for Latent Communication in LLM Multi-Agent Systems](/202608/14/2608.13317v1-statebridge-training-free-hidden-state-alignment-for-latent-communication-in-llm-multi-agent-systems)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：大模型多智能体系统中基于隐藏状态对齐的潜在通信方法
-2. [Discovering Efficient and Explainable Communication Topologies for LLM-based Multi-Agent Systems via Causal Inference](/202608/14/2608.12921v1-discovering-efficient-and-explainable-communication-topologies-for-llm-based-multi-agent-systems-via-causal-inference)  
+1. [Coordinating the Unknown Lipschitz Constant in Multiplayer Bandits](/202608/15/2608.10526v1-coordinating-the-unknown-lipschitz-constant-in-multiplayer-bandits)  
    标签：评分：8.0/10、query:ma-la
-   evidence：基于因果推断的可解释LLM多智能体通信拓扑发现
+   evidence：研究未知Lipschitz常数下无通信的协作多智能体老虎机
+2. [Scalable Multi-Agent Maze Traversal with Local Communication](/202608/15/2608.11895v1-scalable-multi-agent-maze-traversal-with-local-communication)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：局部通信下多智能体协同遍历未知图
+3. [Joint Communication-Control Strategy Optimization with Partially Nested Information Structures: The Linear-Quadratic Case](/202608/15/2608.13535v1-joint-communication-control-strategy-optimization-with-partially-nested-information-structures-the-linear-quadratic-case)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：多智能体线性系统中联合优化通信与控制策略
 
 ### 速读区论文标签
-1. [ExRole: From Team Trajectories to Executable Roles in Multi-Agent Language Models](/202608/14/2608.11949v1-exrole-from-team-trajectories-to-executable-roles-in-multi-agent-language-models)  
+1. [Faster Query-Key Learning Sharpens Attention in Self-Attention Models](/202608/15/2608.06776v1-faster-query-key-learning-sharpens-attention-in-self-attention-models)  
    标签：评分：7.0/10、query:ma-la
-   evidence：从多智能体语言模型的团队轨迹中学习可执行角色原型，直接涉及多智能体交互动态。
-2. [Hybrid Gated Attention](/202608/14/2608.11805v1-hybrid-gated-attention)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：通过低秩分解和门控增强注意力机制
-3. [Entropy-Augmented Multi-Objective Policy Optimization in Multiagent Systems](/202608/14/2608.12534v1-entropy-augmented-multi-objective-policy-optimization-in-multiagent-systems)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：面向多智能体协调的熵增强策略优化
+   evidence：分析查询-键参数化对注意力锐化的影响
+2. [Robust Multi-Agent Bandits with Heavy-Tailed Rewards and Information Asymmetry](/202608/15/2608.10529v1-robust-multi-agent-bandits-with-heavy-tailed-rewards-and-information-asymmetry)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：研究信息不对称下多智能体重尾奖励老虎机问题，提出鲁棒分散算法
+3. [BoardroomAI: Dependency-Aware Human-Steerable Multi-Agent Deliberation through Evolving Decision Graphs](/202608/15/2608.13046v1-boardroomai-dependency-aware-human-steerable-multi-agent-deliberation-through-evolving-decision-graphs)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：演化决策图支持下的人机共同多智能体协商
 
 
 <div class="dpr-home-promo-card">

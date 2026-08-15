@@ -1,0 +1,667 @@
+Robust Multi-Agent Bandits with Heavy-Tailed
+Rewards and Information Asymmetry
+Daphne Feng∗, Ricardo Parada†, Lily Jiang∗, Sophia Yi∗, William Chang∗
+∗Department of Mathematics, University of California, Los Angeles, Los Angeles, CA, USA
+†Department of Mathematics, University of California, Riverside, Riverside, CA, USA
+Abstract—The multi-armed bandit problem is a central frame-
+work in sequential decision-making, extensively studied under
+sub-Gaussian reward assumptions. However, real-world applica-
+tions often involve heavy-tailed reward distributions and decen-
+tralized, information-asymmetric interactions. We study multi-
+agent multi-armed bandits with heavy-tailed rewards under
+three information-asymmetry regimes: unobserved actions with
+common rewards, observed actions with independent rewards,
+and unobserved actions with independent rewards. We develop
+robust decentralized algorithms for each setting and derive
+regret guarantees that nearly match centralized heavy-tailed
+rates. Experiments on a Pareto-distributed reward environment
+validate our theoretical findings and illustrate the trade-offs
+between synchronization, coordination, and exploration across
+the three regimes.
+Index Terms—Multi-armed bandits, heavy-tailed rewards, de-
+centralized learning, information asymmetry
+I. INTRODUCTION
+The multi-armed bandit (MAB) problem is a core model for
+sequential decision-making under uncertainty, originating in
+work on adaptive experimentation and Bayesian selection [1],
+[2]. At each round a learner selects an action and observes
+a random payoff, balancing exploration of uncertain actions
+against exploitation of apparently good ones. Bandit models
+underpin data-driven decision systems—online experimenta-
+tion, recommendation, resource allocation, spectrum access,
+multi-robot coordination—which are typically distributed in
+ways not captured by single-agent abstractions: several agents
+learn simultaneously while each observes only part of the
+system state.
+The multi-player MAB (MMAB) literature spans several
+information structures. In one line, players share informa-
+tion over communication graphs or gossip protocols [3], [4].
+Another has players choose from a common arm set where
+collisions couple outcomes [5], [6]. More recently, cooperative
+MMAB has been studied under limited or no communication
+with structured observation asymmetries [7], [8]; see [9]
+for a survey. These works show that even without explicit
+messaging, agents can sometimes coordinate through shared
+structure or pre-agreed protocols.
+A largely orthogonal challenge is that many reward signals
+are heavy-tailed: rare extreme events dominate observations,
+producing weak concentration and rendering sub-Gaussian
+analyses inaccurate. Heavy tails arise naturally in financial
+returns, network traffic bursts, and outlier-prone performance
+metrics. Robust algorithms for heavy-tailed rewards include
+TABLE I
+SUMMARY OF INFORMATION STRUCTURES AND REGRET BOUNDS.
+Prob. A
+Prob. B
+Prob. C
+Actions observed?
+No
+Yes
+No
+Rewards shared?
+Yes
+No (i.i.d.)
+No (i.i.d.)
+Algorithm
+mRUCB-A
+mRUCB-Int.
+mHT-DSEE
+Regret
+O
+
+log T
+∆1/ε
+
+O
+
+log T
+∆1/ε
+
+O(log2 T)
+robust-UCB methods [10] and deterministic exploration–
+exploitation schedules [11], with extensions to pure explo-
+ration [12], linear bandits [13], and minimax-optimal proce-
+dures [14], while Catoni-style confidence sequences sharpen
+what is achievable under weak moment assumptions [15].
+The intersection of cooperative multi-agent bandits, heavy-
+tailed rewards, and decentralized operation with no online
+communication remains underexplored. Existing multi-agent
+heavy-tailed work relies on explicit communication: [16]
+considers delayed message passing and [17] studies graph-
+based communication. We ask: what is achievable when agents
+coordinate implicitly via a pre-agreed protocol?
+Our contributions. We introduce three problem formu-
+lations capturing distinct information asymmetries in multi-
+agent heavy-tailed bandits: common rewards with unobserved
+actions (Problem A), independent rewards with observed
+actions (Problem B), and independent rewards with unob-
+served actions (Problem C). For each we develop a robust
+decentralized algorithm—mRUCB-A, mRUCB-Intervals,
+and mHT-DSEE—and prove regret guarantees summarized
+in Table I. The robust mean estimator and the single-agent
+concentration arguments are adapted from [10], [11]; our
+contribution lies in the multi-agent formulation, in the use of
+intentional action deviations as an implicit signaling channel,
+and in a unified comparison of what each information structure
+costs.
+II. PRELIMINARIES
+A. Heavy-tailed bandits
+Consider a stochastic MAB with K arms. Each arm a ∈
+A := {1, . . . , K} has an unknown reward distribution νa with
+mean µa. At round t, the agent selects arm at and observes a
+reward drawn from νat. The expected regret at horizon T is
+RT = Tµ⋆−
+T
+X
+t=1
+E[µat] =
+X
+a∈A
+∆a E[na(T)],
+(1)
+arXiv:2608.10529v1  [cs.LG]  11 Aug 2026
+
+
+where µ⋆= maxa µa, ∆a = µ⋆−µa is the suboptimality
+gap, and na(T) is the number of pulls. We assume heavy-
+tailed rewards: there exist ε ∈(0, 1] and v > 0 such that for
+all a ∈A,
+E[|Xa −µa|1+ε] ≤v.
+(2)
+This allows distributions with infinite variance (when ε < 1),
+capturing Pareto, Student-t, and other heavy-tailed families;
+smaller ε corresponds to heavier tails.
+B. Multi-agent extension
+We extend the setting to M players, where player i has an
+individual action set Ai of size Ki. The joint action space
+is A = A1 × · · · × AM, containing KM := QM
+i=1 Ki joint
+arms. At each round t, each player simultaneously selects an
+arm, forming joint arm a(t) = (a1(t), . . . , aM(t)), and then
+observes a reward sampled from νa(t). The cumulative regret
+is RT = Tµ⋆−PT
+t=1 E[Xa(t)], where µ⋆= maxa∈A µa.
+Players may agree on a strategy beforehand and know each
+other’s action spaces, but cannot communicate during learn-
+ing. We consider three information structures, each matching
+a distinct class of deployment.
+Problem A (action asymmetry). All players observe the same
+reward realization Xa(t) but not each other’s actions. This is
+the situation of a team optimizing a single aggregate metric:
+transmitters in a shared spectrum band that observe total
+network throughput, or advertising channels evaluated against
+one conversion count, where the aggregate is instrumented but
+attribution to individual actions is not.
+Problem B (reward asymmetry). Players observe the joint
+action a(t) but each receives an independent sample Xi
+a(t) ∼
+νa(t). This matches federated or multi-site experimentation: a
+configuration is chosen jointly and logged centrally, so every
+site knows what was deployed, while each site measures only
+its own privately held outcomes.
+Problem C (full asymmetry). Players observe neither others’
+actions nor a common reward; each receives an i.i.d. sample.
+This models fully decentralized deployments such as sensor
+or robot teams operating with no backhaul, where each unit
+sees only its own measurements.
+C. Robust upper confidence bounds
+Throughout, bµa(t) is the truncated mean of [10]: writing
+Xa,1, . . . , Xa,na(t) for the rewards observed from arm a,
+bµa(t) =
+1
+na(t)
+na(t)
+X
+s=1
+Xa,s 1
+
+|Xa,s| ≤
+
+vs
+log(T γ)
+
+1
+1+ε 
+. (3)
+The robust upper confidence bound (RUCB) for joint arm a
+is
+RUCBa(t) =
+(
+∞
+if na(t) = 0,
+bµa(t) + αa(t)
+otherwise,
+(4)
+where the first case marks an arm from which nothing has yet
+been observed, so that bµa(t) is undefined; setting the index
+Algorithm 1 mRUCB-A
+1: Players agree on a lexicographic ordering of A.
+2: Init. na(0) ←0, bµa(0) ←0 for all a ∈A.
+3: for t = 1, . . . , T do
+4:
+Compute RUCBa(t) for all a ∈A via (4).
+5:
+Select a(t)
+←
+arg maxa RUCBa(t) (ties: lexico-
+graphic).
+6:
+Pull individual arm; observe common reward; update
+statistics.
+to ∞forces every joint arm to be played at least once before
+any comparison is made. The confidence radius is
+αa(t) = v
+1
+1+ε
+c log(T γ)
+na(t)
+
+ε
+1+ε
+,
+(5)
+with c, γ > 0, and [10, Prop. 1] gives Pr(|bµa(t) −µa| >
+αa(t)) ≤t−γ. Only this concentration property is used below,
+so any estimator obeying a bound of the form (5)—median-
+of-means, or the Catoni-style confidence sequences of [15]—
+may be substituted. Such a substitution changes the constant
+c and the way v enters, and hence the constants in all three
+theorems, but not the rates; Catoni-style estimators give the
+sharpest constants as ε →1, at the cost of solving an implicit
+equation at each round.
+III. PROBLEM A: COMMON REWARDS, UNOBSERVED
+ACTIONS
+In Problem A, all players observe the same reward but can-
+not see others’ actions. Two technical challenges arise. First,
+since actions are hidden, miscoordination may occur if the
+players’ internal estimates diverge, and the observed reward is
+then attributed to the wrong joint action. Second, the reward
+distributions are heavy-tailed, requiring robust estimators to
+control estimation error under weak moment assumptions.
+However, because rewards are shared, all players’ estimates
+remain identical under the same deterministic update rule—the
+key simplifying feature. We impose a lexicographic ordering
+on A for consistent tie-breaking: a < b if there exists n
+such that ai = bi for all i < n and an < bn. Each player
+then computes RUCBa(t) for every joint arm and selects the
+highest, breaking ties lexicographically, yielding mRUCB-A
+(Algorithm 1).
+Theorem
+1.
+Under
+condition
+(2),
+if
+all
+players
+fol-
+low
+mRUCB-A,
+the
+expected
+regret
+satisfies
+RT
+=
+O
+
+log(T) P
+a∈A ∆−1/ε
+a
+
+.
+Proof. Since all players observe the same reward and use the
+same deterministic update rule with consistent tie-breaking,
+every player selects the same joint arm at every round. The
+problem thus reduces to a single-agent heavy-tailed bandit
+over KM arms, and the analysis follows [10]. For each
+suboptimal arm a with gap ∆a > 0, define the good event
+at round t: Gt : |bµa(t) −µa| ≤αa(t) for all a. By the
+concentration bound of Section II-C, Pr(Gc
+t ) ≤KMt−γ.
+Under Gt, selection of a requires bµa(t) + αa(t) ≥bµa⋆(t) +
+
+
+Algorithm 2 mRUCB-Intervals
+1: Players agree on an ordering of A; set S ←A, P ←∅.
+2: while t ≤T do
+3:
+for each a ∈S in order do
+4:
+if some player i finds Ii
+a(t) strictly below the interval
+of another arm of S then
+5:
+That player pulls a different individual arm; all
+players observe a′(t)̸ = a and set P ←P ∪{a};
+the reward of this round is discarded.
+6:
+else
+7:
+All players pull the components of a; player i
+observes Xi
+a and updates Ii
+a via (6); na ←na+1.
+8:
+S ←S \ P; P ←∅.
+αa⋆(t), which implies 2αa(t) ≥∆a. This fails after τa =
+cγ log(T)(2v1/(1+ε)/∆a)(1+ε)/ε pulls. Hence E[na(T)] ≤
+τa + PT
+t=1 Pr(Gc
+t ), where the tail sum converges for γ > 1.
+Summing ∆a · E[na(T)] over all suboptimal arms gives the
+result.
+This matches the optimal single-agent heavy-tailed rate over
+KM arms. Since the KM dependence is unavoidable even
+for a centralized learner, the decentralized agents incur no
+additional cost from action asymmetry.
+IV. PROBLEM B: INDEPENDENT REWARDS, OBSERVED
+ACTIONS
+In Problem B, players observe the joint action but receive
+independent reward samples X1
+a(t), . . . , XM
+a(t)
+i.i.d.
+∼νa(t). This
+reverses Problem A’s structure: players see all actions but their
+estimates diverge because each empirical mean uses different
+samples, so one player may conclude that an arm is suboptimal
+while another player’s interval still overlaps. An index rule
+applied independently by each player would therefore cause
+persistent miscoordination. mRUCB-Intervals avoids this
+by replacing index maximization with round-robin elimina-
+tion: players cycle through a common active set S, and an arm
+leaves S only through a signal that every player observes.
+For each joint arm a and player i the algorithm maintains
+Ii
+a(t) =
+
+bµi
+a(t) −αa(t), bµi
+a(t) + αa(t)
+
+,
+(6)
+where αa(t) is common to all players because it depends only
+on the shared pull count na(t). Elimination proceeds in three
+stages. Detection: if player i finds that Ii
+a(t) lies strictly below
+and disjoint from the interval of another active arm, then a is
+dominated from player i’s perspective. Signaling: player i then
+deviates from the prescribed action by pulling a different indi-
+vidual arm, the only form of implicit communication available.
+Propagation: since actions are observable, all players detect
+the mismatch between the scheduled joint arm a(t) and the
+realized one a′(t), and mark a(t) for removal regardless of
+whether their own intervals support it. Two conventions keep
+the players’ statistics aligned: the reward of a signaling round
+is discarded, and removals take effect at the end of the current
+cycle. Algorithm 2 gives the procedure.
+Lemma 1. Under mRUCB-Intervals, at every round all
+players hold the same active set S(t) and the same pull counts
+na(t). Moreover, if a is the arm scheduled at round t, then
+nb(t) ≥na(t) for every b ∈S(t).
+Proof. Both claims follow by induction on t. Initially S = A
+and all counts are zero. The scheduled arm is a deterministic
+function of S and the position in the cycle, which are common
+by hypothesis. Since actions are observed, every player sees
+the realized joint arm and applies the same count update,
+and removals are triggered only by observed deviations, so S
+remains common. Within a cycle each active arm is scheduled
+exactly once and signaling rounds increment no counts, so all
+active arms have equal counts at cycle boundaries and, at any
+point inside a cycle, the arms not yet scheduled—including
+the scheduled arm itself—have the smallest counts.
+Theorem 2. If all players follow mRUCB-Intervals un-
+der (2), then
+RT ≤cγ 4
+1+ε
+ε v
+1
+ε log(T)
+X
+a̸=a⋆
+∆−1/ε
+a
++
+X
+a̸=a⋆
+∆a + (KM −1)∆max + O(1),
+(7)
+where the O(1) term collects the contribution of the failure
+event and is independent of T for γ > 1.
+Proof. Let Gt be the event that |bµi
+a(t) −µa| ≤αa(t) for all i
+and all a; by Section II-C and a union bound over the MKM
+player-arm pairs, Pr(Gc
+t ) ≤MKMt−γ.
+Step 1: a⋆is never eliminated. Under Gt, for every player i
+and every active b, the lower end of Ii
+a⋆satisfies bµi
+a⋆+αa⋆≥
+µ⋆≥µb ≥bµi
+b −αb, so Ii
+a⋆never lies strictly below the
+interval of another active arm. No player signals on a⋆, and
+by Lemma 1 no player removes it.
+Step 2: Elimination time. Let a̸ = a⋆be scheduled at round
+t. By Lemma 1, na⋆(t) ≥na(t) and hence αa⋆(t) ≤αa(t).
+Under Gt the upper end of Ii
+a is at most µa + 2αa(t) and
+the lower end of Ii
+a⋆is at least µ⋆−2αa(t), so every player
+detects domination as soon as 4αa(t) < ∆a. By (5) this holds
+once na(t) exceeds
+τa = cγ log(T)
+4v1/(1+ε)
+∆a
+(1+ε)/ε
+,
+(8)
+so that na(T) ≤τa + 1: the arm is signaled the next time
+it is scheduled and is removed at the end of that cycle. Note
+that the detection threshold is 4αa, rather than the 2αa of an
+index comparison, because separating two intervals requires
+both radii to be small.
+Step 3: Signaling cost. Each arm is removed exactly once,
+and by Lemma 1 its removal consumes exactly one round
+in which the realized joint action is unintended, contributing
+regret at most ∆max. Simultaneous deviations by several
+players still consume a single round, so the total signaling
+cost is at most (KM −1)∆max, independent of both T and
+M.
+
+
+Algorithm 3 mHT-DSEE
+1: Players agree on an ordering of A and on w(t) ↑∞;
+N ←0.
+2: for t = 1, . . . , T do
+3:
+if N < KM⌈w(t) log t⌉then
+4:
+Play the next joint arm in the cyclic order; N ←
+N + 1; each player stores its own reward.
+5:
+else
+6:
+Player
+i
+plays
+its
+own
+component
+of
+arg maxa RUCBi
+a(t), computed from exploration
+samples.
+Step 4: Summing. By Step 2, P
+a̸=a⋆∆a(τa + 1) gives
+the first two terms of (7). Adding the failure contribution
+P
+t≤T Pr(Gc
+t )∆max ≤MKM∆max
+P
+t≥1 t−γ = O(1) for
+γ > 1, together with Step 3, yields the bound.
+The leading term matches Problem A up to the constant
+4(1+ε)/ε in place of 2(1+ε)/ε, and the remaining terms are
+independent of the horizon. The mechanism thus uses action
+deviations as a 1-bit implicit communication channel; this
+suffices because αa(t) is common across players, so a single
+detection is enough to eliminate an arm for everyone.
+V. PROBLEM C: INDEPENDENT REWARDS, UNOBSERVED
+ACTIONS
+Problem C combines both asymmetries, eliminating the
+coordination mechanisms of Problems A (shared rewards)
+and B (observable actions). A player cannot tell whether
+the realized reward corresponds to the intended joint arm
+or to a different one caused by another player’s deviation,
+and independent samples simultaneously prevent synchronized
+estimates. Adaptive, index-driven coordination is therefore un-
+available, and exploration must be scheduled deterministically
+from the round index alone, which every player can reproduce.
+mHT-DSEE (Algorithm 3) follows the DSEE frame-
+work [11]. Fix an increasing w(t) →∞and let D(t) =
+⌈w(t) log t⌉be the target number of samples of each joint arm
+by round t. If fewer than KMD(t) exploration rounds have
+been used, round t is an exploration round and the next joint
+arm in a fixed cyclic order is played; otherwise every player
+commits to the maximizer of its own RUCB, computed from
+exploration samples only. Because the test N(t) < KMD(t)
+depends only on t, players stay synchronized without commu-
+nication. Two features matter for the analysis: the schedule is
+anytime, requiring neither T nor the gaps, and the confidence
+radius uses log t rather than log T.
+Theorem 3. Under (2), if all players follow mHT-DSEE with
+γ > 1, then
+RT ≤∆maxKMD(T) + ∆maxt0 + O(1),
+(9)
+where t0 = min{t : w(t) > cγ(2v1/(1+ε)/∆min)(1+ε)/ε}
+depends on ε, v and the gaps but not on T. With w(t) = ⌈log t⌉
+this gives RT = O(KM log2 T).
+Proof. Step 1: Exploration. At most KMD(T) rounds are
+exploration rounds, each contributing regret at most ∆max,
+which is the first term.
+Step 2: Good event. At an exploitation round t every arm has
+D(t) samples for each player. By Section II-C with confidence
+level t−γ and a union bound over the MKM player-arm pairs,
+the event Gt that |bµi
+a−µa| ≤α(D(t)) for all i, a has Pr(Gc
+t ) ≤
+MKMt−γ, where α(n) = v1/(1+ε)(c log(tγ)/n)ε/(1+ε).
+Step 3: Coordination. On Gt, RUCBi
+a ≤µa + 2α(D(t))
+and RUCBi
+a⋆≥µ⋆for every player i, so every player selects
+a⋆once 2α(D(t)) < ∆min, i.e. once
+D(t) > cγ log(t)
+2v1/(1+ε)
+∆min
+(1+ε)/ε
+=: κ log t.
+(10)
+The threshold does not depend on the player index, so the
+players agree; and since D(t) ≥w(t) log t, condition (10)
+holds as soon as w(t) > κ, that is for every t ≥t0. This
+is the role of the anytime schedule: both sides of (10) scale
+with log t, so the crossing time t0 is determined by w and the
+gaps alone and does not grow with the horizon. Each player
+then plays its component of a⋆, and the realized joint arm is
+exactly a⋆.
+Step 4: Exploitation regret. Exploitation rounds with t < t0
+contribute at most ∆maxt0. For t ≥t0, regret is incurred only
+on Gc
+t , contributing at most MKM∆max
+P
+t≥1 t−γ = O(1)
+for γ > 1. Adding Step 1 gives (9). Taking w(t) = ⌈log t⌉
+gives D(T) = O(log2 T).
+Remark 1. The choice of w trades the two terms of (9)
+against each other: faster growth shortens t0 but enlarges
+the exploration budget D(T). Any w ↑∞yields o(log1+η T)
+regret for the corresponding η, and knowledge of ∆min would
+allow the constant schedule w ≡κ and hence O(log T); the
+extra factor is the price of not knowing the gaps.
+VI. EXPERIMENTS
+A. Setup
+We take M = 2 players, K = 2 individual arms (KM = 4
+joint arms), and horizon T = 106, averaging over 10 indepen-
+dent runs on the fixed instance µ = (0.44, 0.57, 0.91, 0.25),
+so that the gaps are (0.46, 0.34, −, 0.65). Pulling joint arm
+a yields a Pareto reward with shape a0 = 2 and scale
+xm = µa(a0 −1)/a0, so that E[Xa] = µa. This distribution
+has finite mean and infinite variance: its centered moments
+of order 1 + ε are finite exactly for ε < 1. We therefore set
+ε = 0.5, for which E|Xa −µa|1.5 ≤0.75 < 1 = v for
+every µa ∈[0, 1], so (2) holds; taking ε = 1 would instead
+require a finite second moment and is not admissible for this
+reward family. All three algorithms use the truncated-mean
+estimator (3) with (c, γ) = (1, 2), i.e. exactly the estimator
+the analysis assumes, and mHT-DSEE uses w(t) = ⌈log t⌉.
+B. Results
+Figure 1 shows mean cumulative regret. All three curves are
+clearly sublinear, confirming that each algorithm identifies a⋆
+under infinite-variance rewards and with the robust estimator in
+
+
+Fig. 1. Mean cumulative regret over 10 runs under Pareto rewards with infinite
+variance (M=2, K=2, T=106), log–log axes.
+place. mRUCB-A ends at 214±24 and mHT-DSEE at 292±21,
+both still growing slowly, while mRUCB-Intervals ends at
+4115 ± 285 but is exactly flat beyond ≈7 × 104 rounds.
+The ordering at this horizon is governed by constants rather
+than by rates, and is instructive. Elimination in Problem B
+requires two intervals to separate, i.e. 4αa < ∆a, whereas the
+index comparisons of Problems A and C need only 2αa < ∆a;
+by (5) this is 2(1+ε)/ε = 8 times more samples of each
+arm when ε = 0.5, which is what the early growth of the
+orange curve buys. The payoff is that once the active set
+collapses, mRUCB-Intervals incurs no further regret at
+all, whereas the other two keep exploring; the curves would
+therefore cross at larger horizons. Similarly, mHT-DSEE is
+inexpensive here because its exploration budget KM⌈log2 t⌉
+is only ≈760 rounds at T = 106, even though its rate is the
+worst of the three. The experiments thus support the theory
+while showing that the hierarchy of Table I is asymptotic: at
+moderate horizons the constants attached to each coordination
+mechanism dominate. A further practical caveat is that the
+joint action space grows as KM, so larger instances lengthen
+the exploration phases of mHT-DSEE and slow the elimination
+cascade of mRUCB-Intervals.
+VII. CONCLUSION
+We studied multi-agent bandits with heavy-tailed rewards
+under three information asymmetries. Our algorithms show
+that effective decentralized learning is achievable even under
+significant asymmetry and non-sub-Gaussian noise: shared re-
+wards (Problem A) enable costless synchronization; observed
+actions (Problem B) provide an implicit signaling channel
+whose cost is independent of the horizon and of the number
+of players; and the fully asymmetric setting (Problem C)
+requires a pre-committed anytime schedule at a log T factor
+of additional cost. That observable actions compensate for the
+loss of shared rewards at leading order is a notable positive
+result, while the barrier between Problems B and C shows the
+value of even minimal observability.
+Two limitations point to future work. First, our guarantees,
+like those of [10], [11], assume that (ε, v) are known: a
+conservative choice (smaller ε or larger v) keeps every bound
+valid but inflates the confidence radius and hence the regret,
+so adapting to unknown tail heaviness—plausibly through self-
+normalized constructions such as [15]—remains open. Second,
+tighter lower bounds for Problem C would clarify whether
+the extra log T factor is necessary without shared informa-
+tion. Extensions to adversarial or non-stationary rewards, and
+structured reward models such as linear or factored bandits
+that would mitigate the exponential KM dependence, are also
+natural directions.
+REFERENCES
+[1] H. E. Robbins, “Some aspects of the sequential design of experiments,”
+Bulletin of the American Mathematical Society, vol. 58, pp. 527–535,
+1952.
+[2] W. R. Thompson, “On the likelihood that one unknown probability
+exceeds another in view of the evidence of two samples,” Biometrika,
+vol. 25, no. 3/4, pp. 285–294, 1933.
+[3] B. Awerbuch and R. Kleinberg, “Competitive collaborative learning,”
+Journal of Computer and System Sciences, vol. 74, no. 8, pp. 1271–
+1288, 2008. Learning Theory 2005.
+[4] B. Szorenyi, R. Busa-Fekete, I. Hegedus, R. Ormandi, M. Jelasity,
+and B. Kegl, “Gossip-based distributed stochastic bandit algorithms,” in
+Proceedings of the 30th International Conference on Machine Learning
+(S. Dasgupta and D. McAllester, eds.), vol. 28 of Proceedings of Ma-
+chine Learning Research, (Atlanta, Georgia, USA), pp. 19–27, PMLR,
+17–19 Jun 2013.
+[5] D. Kalathil, N. Nayyar, and R. Jain, “Decentralized learning for multi-
+player multiarmed bandits,” IEEE Transactions on Information Theory,
+vol. 60, no. 4, pp. 2331–2345, 2014.
+[6] C. Shi and C. Shen, “Multi-player multi-armed bandits with collision-
+dependent reward distributions,” IEEE Transactions on Signal Process-
+ing, vol. 69, p. 4385–4402, 2021.
+[7] W. Chang, M. Jafarnia-Jahromi, and R. Jain, “Online learning for coop-
+erative multi-player multi-armed bandits,” CoRR, vol. abs/2109.03818,
+2021.
+[8] W. Chang and Y. Lu, “Optimal cooperative multiplayer learning
+bandits with noisy rewards and no communication,” arXiv preprint
+arXiv:2311.06210, 2023.
+[9] E. Boursier and V. Perchet, “A survey on multi-player bandits,” 2024.
+[10] S. Bubeck, N. Cesa-Bianchi, and G. Lugosi, “Bandits with heavy tail,”
+2012.
+[11] S. Vakili, K. Liu, and Q. Zhao, “Deterministic sequencing of exploration
+and exploitation for multi-armed bandit problems,” 2013.
+[12] X. Yu, H. Shao, M. R. Lyu, and I. King, “Pure exploration of multi-
+armed bandits with heavy-tailed payoffs.,” in UAI, pp. 937–946, 2018.
+[13] H. Shao, X. Yu, I. King, and M. R. Lyu, “Almost optimal algorithms
+for linear stochastic bandits with heavy-tailed payoffs,” in Advances
+in Neural Information Processing Systems (S. Bengio, H. Wallach,
+H. Larochelle, K. Grauman, N. Cesa-Bianchi, and R. Garnett, eds.),
+vol. 31, Curran Associates, Inc., 2018.
+[14] K. Lee and S. Lim, “Minimax optimal bandits for heavy tail rewards,”
+IEEE Transactions on Neural Networks and Learning Systems, vol. 35,
+no. 4, pp. 5280–5294, 2024.
+[15] H. Wang and A. Ramdas, “Catoni-style confidence sequences for heavy-
+tailed mean estimation,” Stochastic Processes and their Applications,
+vol. 163, p. 168–202, Sept. 2023.
+[16] A. Dubey et al., “Cooperative multi-agent bandits with heavy tails,” in
+International conference on machine learning, pp. 2730–2739, PMLR,
+2020.
+[17] X. Wang and M. Xu, “Multi-agent multi-armed bandit with fully heavy-
+tailed dynamics,” 2025.
