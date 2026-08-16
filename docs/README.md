@@ -6,40 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-15
-- 运行时间：2026-08-15 20:32:57 UTC
+- 最新运行日期：2026-08-16
+- 运行时间：2026-08-16 19:41:14 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：2
+- 精读区：1
+- 速读区：1
 
 ### 今日简报（AI）
-1) 今日聚焦多智能体决策，6篇论文中精读2篇、速读3篇，核心围绕未知Lipschitz常数与局部通信协作。  
-2) 最值得关注：《Coordinating the Unknown Lipschitz Constant in Multiplayer Bandits》突破参数未知困境，《Scalable Multi-Agent Maze Traversal》验证局部通信即可高效协作。  
-3) 普通读者可优先精读这两篇，重尾奖励与注意力机制等速读条目作为延伸补充。
-- 详情：[/202608/15/README](/202608/15/README)
+今日精读1篇、速读1篇，共梳理2篇多智能体领域论文；最值得关注的是精读中“高阶多智能体系统距离编队控制”的性能保障方法；建议普通读者从该编队控制结论入手，再延伸至策略迁移的安全性思考。
+- 详情：[/202608/16/README](/202608/16/README)
 
 ### 精读区论文标签
-1. [Coordinating the Unknown Lipschitz Constant in Multiplayer Bandits](/202608/15/2608.10526v1-coordinating-the-unknown-lipschitz-constant-in-multiplayer-bandits)  
+1. [Distance-Based Formation Control with Prescribed Performance for Higher-Order Multi-Agent Systems](/202608/16/2608.12896v1-distance-based-formation-control-with-prescribed-performance-for-higher-order-multi-agent-systems)  
    标签：评分：8.0/10、query:ma-la
-   evidence：研究未知Lipschitz常数下无通信的协作多智能体老虎机
-2. [Scalable Multi-Agent Maze Traversal with Local Communication](/202608/15/2608.11895v1-scalable-multi-agent-maze-traversal-with-local-communication)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：局部通信下多智能体协同遍历未知图
-3. [Joint Communication-Control Strategy Optimization with Partially Nested Information Structures: The Linear-Quadratic Case](/202608/15/2608.13535v1-joint-communication-control-strategy-optimization-with-partially-nested-information-structures-the-linear-quadratic-case)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：多智能体线性系统中联合优化通信与控制策略
+   evidence：多智能体编队控制，涉及交互动力学与通信图
 
 ### 速读区论文标签
-1. [Faster Query-Key Learning Sharpens Attention in Self-Attention Models](/202608/15/2608.06776v1-faster-query-key-learning-sharpens-attention-in-self-attention-models)  
+1. [Is Per-Agent Policy Composition Safe? Rethinking Successor-Feature Transfer in Cooperative Multi-Agent Reinforcement Learning](/202608/16/2608.11658v1-is-per-agent-policy-composition-safe-rethinking-successor-feature-transfer-in-cooperative-multi-agent-reinforcement-learning)  
    标签：评分：7.0/10、query:ma-la
-   evidence：分析查询-键参数化对注意力锐化的影响
-2. [Robust Multi-Agent Bandits with Heavy-Tailed Rewards and Information Asymmetry](/202608/15/2608.10529v1-robust-multi-agent-bandits-with-heavy-tailed-rewards-and-information-asymmetry)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：研究信息不对称下多智能体重尾奖励老虎机问题，提出鲁棒分散算法
-3. [BoardroomAI: Dependency-Aware Human-Steerable Multi-Agent Deliberation through Evolving Decision Graphs](/202608/15/2608.13046v1-boardroomai-dependency-aware-human-steerable-multi-agent-deliberation-through-evolving-decision-graphs)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：演化决策图支持下的人机共同多智能体协商
+   evidence：合作多智能体强化学习中的每智能体策略组合
 
 
 <div class="dpr-home-promo-card">
