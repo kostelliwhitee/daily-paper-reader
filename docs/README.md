@@ -6,26 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-16
-- 运行时间：2026-08-16 19:41:14 UTC
+- 最新运行日期：2026-08-17
+- 运行时间：2026-08-17 20:30:18 UTC
 - 运行状态：成功
-- 本次总论文数：2
+- 本次总论文数：3
 - 精读区：1
-- 速读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读1篇、速读1篇，共梳理2篇多智能体领域论文；最值得关注的是精读中“高阶多智能体系统距离编队控制”的性能保障方法；建议普通读者从该编队控制结论入手，再延伸至策略迁移的安全性思考。
-- 详情：[/202608/16/README](/202608/16/README)
+今日精读线性注意力遗忘机制，另速读高效预训练与多智能体消息价值两篇。最值得关注“二次擦除方向”提升线性注意力遗忘能力，以及解耦知识存储的注意力预训练方案。建议优先看精读论文，后者可结合自身场景速览。
+- 详情：[/202608/17/README](/202608/17/README)
 
 ### 精读区论文标签
-1. [Distance-Based Formation Control with Prescribed Performance for Higher-Order Multi-Agent Systems](/202608/16/2608.12896v1-distance-based-formation-control-with-prescribed-performance-for-higher-order-multi-agent-systems)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：多智能体编队控制，涉及交互动力学与通信图
+1. [The Query Knows What to Forget: A Second Erase Direction for Linear Attention](/202608/17/2608.13668v1-the-query-knows-what-to-forget-a-second-erase-direction-for-linear-attention)  
+   标签：评分：10.0/10、query:ma-la
+   evidence：提出查询派生擦除方向以改进线性注意力检索
 
 ### 速读区论文标签
-1. [Is Per-Agent Policy Composition Safe? Rethinking Successor-Feature Transfer in Cooperative Multi-Agent Reinforcement Learning](/202608/16/2608.11658v1-is-per-agent-policy-composition-safe-rethinking-successor-feature-transfer-in-cooperative-multi-agent-reinforcement-learning)  
+1. [LoKiFormer: Locality-aware Attention with Decoupled Knowledge Memory for Efficient Large Language Model Pretraining](/202608/17/2608.12419v1-lokiformer-locality-aware-attention-with-decoupled-knowledge-memory-for-efficient-large-language-model-pretraining)  
    标签：评分：7.0/10、query:ma-la
-   evidence：合作多智能体强化学习中的每智能体策略组合
+   evidence：局部融合注意力与解耦知识记忆相结合的高效注意力架构，接近线性注意力的效率提升目标
+2. [Wrong but Useful: Trajectory Value Beyond Answer Correctness in Multi-Agent Messages](/202608/17/2608.14375v1-wrong-but-useful-trajectory-value-beyond-answer-correctness-in-multi-agent-messages)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：度量多智能体消息对下游推理的轨迹价值
 
 
 <div class="dpr-home-promo-card">
