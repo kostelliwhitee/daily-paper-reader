@@ -1,0 +1,2245 @@
+Title: Submodular Policy Learning for Distributed Task Allocation in Open Multi-Agent Systems
+
+URL Source: https://arxiv.org/pdf/2608.14390v1
+
+Published Time: Mon, 17 Aug 2026 00:57:19 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+> 1
+
+# Submodular Policy Learning for Distributed Task Allocation in Open Multi-Agent Systems 
+
+Jing Liu, Luca Ballotta, Member, IEEE , Yangyang Yang, Fangfei Li, Member, IEEE ,Yang Tang, Fellow, IEEE , and Ruggero Carli, Member, IEEE 
+
+Abstract — This paper studies policy learning for dis-tributed task allocation in open multi-agent systems, where agents may join and leave in a time-varying fashion, with submodular stage team utilities. At each time, the active agents select actions from local categorical policies such that the feasible joint agent-action pairs form a partition matroid. Standard continuous relaxations of submodular set functions are based on independent Bernoulli sam-pling, making them inconsistent with agents’ policies. To solve this mismatch, we propose the partition multilinear extension (PME), a policy-based relaxation whose contin-uous support matches feasible actions under categorical policies. We prove that the marginal gains of the stage utility provide an unbiased estimator of the gradient of the PME and that maximizing the PME over action distributions is equivalent to maximizing the stage utilities over agent actions, which are critical to devise principled policy gra-dient. Building on this, we design SubMAPL , a centralized-training decentralized-execution KL-mirror policy-learning method that uses local marginal gains as stochastic PME gradients during training. KL-mirror updates preserve cate-gorical feasibility without Euclidean projection. In the case where agents run tabular-softmax policies, we introduce open policy migration and an open-system KL tracking variation to handle agent arrivals and departures. Using dynamic regret analysis, we establish a lower bound on the cumulative utility which accounts for the openness of the environment and for the gap between optimal stage-wise and global utilities. Simulations on multi-agent coverage demonstrate that SubMAPL outperforms policy-gradient and online-learning baselines. 
+
+Index Terms — Open multi-agent systems, submodu-
+
+This work is supported by the Program of China Scholarship Coun-cil under Grant 202506740033, the National Key R&D Program of China under Grant 2025YFA1016504, the National Natural Science Foundation of China under Grants 62233005, 62573198, U2441245, U25B6002, 62403141, the National Key Laboratory of Space Target Awareness under Grant STA2025ZCB0208, in part by the Shanghai Institute for Mathematics and Interdisciplinary Sciences (SIMIS) under Grant SIMIS-ID-2025-SP. (Corresponding authors: Fangfei Li and Yang Tang.) 
+
+Jing Liu and Yangyang Yang are with the School of Mathematics, East China University of Science and Technology, Shanghai 200237, China (e-mail: y20220091@mail.ecust.edu.cn; y20250091@mail.ecust.edu.cn). Luca Ballotta and Ruggero Carli are with the Department of Infor-mation Engineering, University of Padova, 35131 Padova, Italy (e-mail: luca.ballotta@unipd.it; ruggero.carli@unipd.it). Fangfei Li is with the School of Mathematics and the Key Labora-tory of Smart Manufacturing in Energy Chemical Process, Ministry of Education, East China University of Science and Technology, Shanghai 200237, China (e-mail: li fangfei@163.com, lifangfei@ecust.edu.cn). Yang Tang is with the Key Laboratory of Smart Manufacturing in Energy Chemical Process, Ministry of Education, East China University of Science and Technology, Shanghai 200237, China (e-mail: yang-tang@ecust.edu.cn). 
+
+lar optimization, multi-agent reinforcement learning, dis-tributed task allocation, policy learning. 
+
+I. I NTRODUCTION 
+
+# MULTI-agent task allocation in open multi-agent sys-tems (OMAS) arises in dynamic target tracking, active sensing, and coverage, where agents must coordinate local decisions under time-varying participation, limited commu-nication, and non-additive team utilities. In long-duration deployments, agents may enter, leave, fail, or recover due to hardware malfunctions, battery recharging, or mission-level reconfiguration [1], [2], [3]. A central feature of such tasks is that utility functions are rarely additive across agents. For instance, overlapping field-of-views capture redundant information in coverage tasks. This so-called diminishing-returns structure is naturally mod-eled by monotone submodular set functions [4], [5], [6]. Submodularity has been extensively used in combinatorial optimization because it enables approximation guarantees for greedy selection under matroid constraints [2], [7], [8], [9] and the use of continuous relaxations such as the multilinear extension (MLE) with rounding [10], [11]. While these ap-proaches are mostly tailored to static centralized optimization and task allocation and require dense communication graphs for consensus, the benefits of submodularity in learning data-driven multi-agent policies are underexplored. Multi-agent reinforcement learning (MARL) is widespread to learn decentralized agent policies under partial observability and dynamical environment [1], [12], [13]. Although the interplay between MARL and submodularity has been studied, existing results are limited to centralized settings [14], [15], [16]. On the other hand, OMASs have garnered attention in the online learning literature, where submodularity-based methods enable suboptimality quantification of online optimization al-gorithms rather than learnable policies [2], [11], [17]. Incorporating submodular utilities into the learning of dis-tributed policies is challenging. Static submodular problems are NP-hard in general and admit approximation guarantees rather than exact polynomial-time solutions [7], [8], [10]. The data-driven and dynamic nature of multi-agent policy learning introduces additional challenges compared to static optimization. First, the gradient feedback signal used in training must be consistent with decentralized categorical policies. However, classical multilinear relaxations rely on independent Bernoulli sampling and rounding, and therefore arXiv:2608.14390v1 [cs.MA] 14 Aug 2026 2
+
+do not represent factorized categorical policies executed by agents [10], [11]. Moreover, the combinatorial difficulty is cou-pled with sequential state evolution, decentralized information, and exponentially growing joint action space which demands careful credit assignment [1], [12], [13]. Existing submodular RL formulations target centralized policies rather than fully distributed decision-making [14], [15], [16].  
+
+> Contribution:
+
+Building on the PME and its gradient charac-terization introduced in our preliminary work [18], we propose three main contributions to bridge the above mentioned gaps. (1) We formulate distributed online submodular coordination as Markov decision process (MDP) in an OMAS and de-velop SubMAPL , a KL-mirror policy-learning method for decentralized submodular task allocation. Unlike sampled-action difference-reward policy gradients and counterfac-tual credit-assignment methods [18], [19], [20], SubMAPL uses a stochastic local gradient that evaluates every feasi-ble local action of each active agent under the same sam-pled actions of the other agents. We show that this vector is an unbiased estimator of the PME coordinate gradient, thereby providing a principled first-order interpretation of marginal-contribution feedback. (2) We introduce an open policy-migration mechanism to handle agent arrivals and departures, and define an open-system KL tracking variation that measures changes in both the stagewise optimal comparator and the time-varying policy domain. Our preliminary work [18] estab-lishes guarantees for idealized Euclidean projected dynam-ics that directly update the PME marginals. However, the standard softmax policy-gradient implementation updates the logits, and the resulting marginal change depends on the softmax Jacobian and agrees with PME ascent only to first order. SubMAPL admits an exact equivalence between its KL-mirror policy update and an additive tabular-logit update. This removes the first-order mismatch between the analyzed policy-space dynamics and the implemented parameter update, allowing us to establish open-system guarantees directly for the policy sequence generated un-der agent arrivals and departures. (3) By leveraging dynamic regret analysis in conjunction with DR-submodularity and monotonicity of the PME, we establish a lower bound on the cumulative utility within a 1/2-approximation factor from the optimum. We further establish a 1/3-factor bound in the case where the stage utilities are themselves marginal gains of a utility function capturing performance through the whole horizon, including scenarios such as coverage of static maps. These results complement previous analysis on stability and adaptability of open systems [3], [21]. Our analysis significantly improves our preliminary work [18], which derives a stagewise bound on the PME and a regret bound on the cumulative PME without formal guarantees on the original finite-horizon cumulative utility.  
+
+> Organization:
+
+Section II formulates distributed submodular coordination as an MDP in OMAS. Section III introduces the PME and its properties. Section IV presents SubMAPL and Section V derives its suboptimality bound. Section VI reports 
+
+TABLE I : Main notation in the paper.                                                                                       
+
+> Symbol Meaning
+> MMarkov decision process in OMAS.
+> NtSet of active agents at time t.
+> RtSet of agents active at both times t−1and t.
+> Nin
+> tSet of agents arriving at time t.
+> Nout
+> tSet of agents departing at time t.
+> SGlobal state space.
+> stGlobal state at time t.
+> AiLocal action space of agent i.
+> oi,t Local observation of agent iat time t.
+> ai,t Local action selected by agent iat time t.
+> atJoint action tuple (ai,t )i∈N t.
+> ΩtActive agent-action space at time t.
+> Ωi,t Local agent-action space of agent iat time t.
+> ItPartition-matroid feasible family on Ωt.
+> AtSet of agent-action pairs executed at time t.
+> Ft(At;st)Stage utility at time t.
+> πiLocal categorical policy of agent i.
+> πSequence of factorized policies with active agents.
+> pπDistribution of state-action trajectory under π.
+> J(π)Expected cumulative utility under π.
+> xπt(st)Policy-induced action marginal vector at state st.
+> P(It)Partition-matroid polytope at time t.
+> FtCategorical-policy face of P(It).
+> ˜ft(·;st)Partition multilinear extension of Ft(·;st).
+> Dt(· | x)Partition sampling distribution induced by x.
+> D−it(· | x)Sampling distribution over all agents except i.
+> bgtStochastic estimator of ∇eft(xt;st).
+> HtPre-sampling history at time t.
+> x⋆tPME maximizer at time t.
+> Vopen
+> TOpen-system KL tracking variation.
+> Reg 1/2
+> TDynamic 1/2-approximation regret.
+
+simulations, and Section VII concludes the paper.  
+
+> Notation:
+
+We use N to denote the set of positive integers and define [T ] = {1, . . . , T } for any T ∈ N. For a finite set 
+
+S, |S| denotes its cardinality and 2S denotes its power set. For sets A and B, A \ B, A ∪ B, and A ∩ B denote set difference, union, and intersection, respectively. For a scalar z, [z]+ =max {z, 0}. For vectors x and y, x ≤ y denotes componentwise inequality and ⟨x, y ⟩ denotes the Euclidean inner product. We use ∇f (x) and ∂f /∂x i for gradients and partial derivatives, respectively. Expectations and probabilities are denoted by E[·]
+
+and Pr( ·). The Kullback–Leibler divergence is denoted by 
+
+DKL (·∥· ). Standard asymptotic notation is denoted by O(·)
+
+and o(·). Table I summarizes the main paper-specific notation. 
+
+II. S YSTEM SETUP AND PROBLEM FORMULATION 
+
+We study decentralized task allocation in open MDPs [3], [14]. At each time step, the active agents locally observe the state of the environment and execute actions aiming to max-imize a non-additive submodular global utility. Active agents and utilities may change over time, reflecting agent arrivals and departures, dynamic tasks, or an evolving environment [22], as shown in Figure 1. Our goal is to efficiently learn effective decentralized policies by leveraging the submodularity of team utilities. LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 3
+
+Fig. 1 : Open multi-agent task allocation with time-varying agent participation, dynamic tasks, and limited communication and sensing. 
+
+A. Markov Decision Process in OMAS 
+
+Let t ∈ [T ] = {1, . . . , T } denote the time step and Nt the set of active agents at time t. We model the task-allocation process as a finite-horizon partially observed open multi-agent Markov decision process M = ⟨S , A, O, P, F, μ 1⟩, where S
+
+is the global state space, A denotes the collection of feasible local action sets, O = {Ot}t∈[T ] is the sequence of local observation maps, P = {Pt}t∈[T ] is the sequence of controlled transition kernels, F = {Ft}t∈[T ] is the sequence of stage-utility set functions, and μ1 is the initial-state distribution on 
+
+S. For each agent i that may be active during the horizon, let Oi denote its finite local observation space. Here, Ot =(Oi,t )i∈N t , where Oi,t : S → O i and oi,t = Oi,t (st). The initial state is sampled as s1 ∼ μ1 [3], [16], [23]. Each active agent i ∈ N t receives a local observation oi,t 
+
+and selects an action ai,t from a finite nonempty feasible action set Ai. The global state st ∈ S characterizes the environment, including the tasks to be completed. Given the joint action 
+
+at = ( ai,t )i∈N t , the transition kernel Pt governs the state evolution as st+1 ∼ Pt(· | st, at).The ground set of agent-action pairs available at time t is 
+
+Ωt = (i, a ) : i ∈ N t, a ∈ A i . For each active agent, define the local actions Ωi,t = (i, a ) : a ∈ A i , i ∈ N t.The feasible subsets of agent-action pairs are described by the partition matroid (Ω t, It) with It = A ⊆ Ωt : |A ∩ Ωi,t | ≤ 
+
+1, ∀i ∈ N t . The executed joint action induced by the local choices is At = {(i, a i,t ) : i ∈ N t} ∈ I t [10]. To describe changes in the open-system domain, let N0 = ∅
+
+and define Rt = Nt ∩N t−1, N in  
+
+> t
+
+= Nt \N t−1, N out  
+
+> t
+
+= Nt−1 \Nt. Here Rt, N in  
+
+> t
+
+, and N out  
+
+> t
+
+denote the remaining, arriving, and departing agents at time t, respectively. Moreover, we assume the agent arrivals and departures are independent of the agents’ local policies and the state transitions [3]. 
+
+B. Decentralized Categorical Policies 
+
+Each active agent i ∈ N t processes a local observation 
+
+oi,t = Oi,t (st), where Oi,t : S → O i is a deterministic observation map modeling local sensing and communication with neighbors, and selects an action ai,t ∈ A i. A policy πi
+
+assigns a categorical distribution over Ai given o ∈ O i such that, at time t, active agent i ∈ N t computes its action as a realization ai,t ∼ πi(· | oi,t ). Let ot = ( oi,t )i∈N t denote the joint observation vector. We consider factorized categorical policies [1], [24] 
+
+πt(at | ot) = Y
+
+> i∈N t
+
+πi(ai,t | oi,t ). (1) The factorized policy πt is time dependent as a consequence of time-varying active agent sets Nt. The factorization in (1) governs decentralized execution during deployment; since the distributions {πi(· | oi,t )}i∈N t are conditioned on local obser-vations oi,t , the agents sample their actions independently. 
+
+C. Submodular Team Utility and Problem Statement 
+
+At each time step t, the team performance is measured by a set function Ft(· ; st) : 2 Ωt → R≥0 defined over subsets of the current agent-action ground set Ωt.
+
+Definition 1 (Normalized monotone submodular set func-tion [25]) . Let Ω be a finite ground set. For any A ⊆ Ω
+
+and e ∈ Ω \ A, define the marginal gain of adding e to A as 
+
+F (e | A) = F (A∪{ e})−F (A). A set function F : 2 Ω → R≥0
+
+is normalized, monotone, and submodular if it respectively satisfies the following properties: 1) F (∅) = 0 .2) for any sets A ⊆ A′ ⊆ Ω, F (A) ≤ F (A′).3) for any sets A ⊆ A′ ⊆ Ω and element e ∈ Ω \ A′,
+
+F (e | A) ≥ F (e | A′).
+
+Assumption 1 (Utility and Feasibility Conditions) . For every time step t ∈ [T ], the following holds. (i) For every state st, the team utility Ft(· ; st) : 2 Ωt → R≥0
+
+is normalized, monotone, and submodular. (ii) Each active agent has a nonempty local feasible action set, i.e., Ai̸ = ∅ for all i ∈ N t.Assumption 1 means that adding an agent-action pair can increase the team utility but its marginal gain decreases when more agent-action pairs have already been selected. This diminishing-returns structure captures redundancy among agent contributions [2]. 
+
+Problem 1 (Open-System Submodular Policy Learning) .
+
+Given the open multi-agent MDP, find a decentralized categor-ical policy π = {πt}Tt=1 , with πt = Q 
+
+> i∈N t
+
+πi, that maximizes the expected cumulative submodular utility 
+
+max 
+
+> π={πt}Tt=1
+
+J(π) = Eτ ∼pπ
+
+" TX
+
+> t=1
+
+Ft(At; st)
+
+#
+
+s.t. ai,t ∼ πi(· | oi,t ), ∀i ∈ N t, ∀t ∈ [T ],At ∈ I t, ∀t ∈ [T ].
+
+(2) Here, τ = ( s1, a1, s 2, . . . , s T , aT , s T +1 ) and pπ denotes the trajectory distribution induced by π and the transition kernels 
+
+{Pt}Tt=1 .Even for a single time step, Problem 1 reduces to monotone submodular maximization under a partition matroid constraint, which is NP-hard in general [7], [10]. Over a finite hori-zon, this combinatorial difficulty is exacerbated by action-dependent state evolution and time-varying agent participa-tion. Since directly optimizing the cumulative utility (i.e., the 4
+
+return) is intractable [14], we adopt a stagewise approach and leverage the submodularity of stage utilities to learn the decentralized policies. The next section develops a continuous relaxation of stage utilities that formally supports our stagewise policy learning framework. 
+
+III. P ARTITION MULTILINEAR EXTENSION 
+
+A standard approach to combinatorial submodular maxi-mization is to replace the discrete set problem with a contin-uous relaxation that is amenable to continuous optimization methods, particularly under matroid constraints [10], [26]. The standard multilinear extension is based on independent Bernoulli sampling over ground-set elements [27]. Under the partition constraint induced by It, this sampling rule may select multiple elements from the same agent action subset 
+
+Ωi,t , creating a formal mismatch with the policy in (1) which selects one feasible action per agent. This motivates the con-tinuous relaxation defined in the following to support training of factorized categorical policies in a principled fashion. Building on our preliminary work [18], we use the partition multilinear extension (PME), a continuous relaxation of util-ities Ft whose sampling distribution matches the factorized categorical execution under the partition matroid. At each time step t, policy (1) at observations {oi,t }i∈N t induces a marginal vector xπt (st) ∈ [0 , 1] |Ωt| over agent-action pairs, with coordinates 
+
+xπ
+
+> (i,a ),t
+
+(st) = πi(a | oi,t ), (i, a ) ∈ Ωt. (3) For readability, we denote a generic marginal vector by x.Each coordinate xπ
+
+> (i,a ),t
+
+(st) is the probability that agent i ∈ N t
+
+executes action a at the current state st under policy πi.
+
+A. Definition and Policy Equivalence 
+
+The partition matroid polytope associated with (Ω t, It) is [10] 
+
+P(It) = 
+
+(
+
+x ∈ [0 , 1] |Ωt| : X
+
+> a∈A i
+
+x(i,a ) ≤ 1, ∀i ∈ N t
+
+)
+
+. (4) For x ∈ P (It), let Dt(· | x) denote the partition sampling distribution over It. Under this distribution, each agent i ∈ N t
+
+selects element (i, a ) with probability x(i,a ), and selects no element with probability 1 − P 
+
+> a∈A i
+
+x(i,a ). The choices are independent across agents. 
+
+Definition 2 (Partition Multilinear Extension [18]) . Given the current state st and open-system domain, the partition multilinear extension of Ft(·; st) is the function ˜ft(·; st) : 
+
+P(It) → R≥0 defined by 
+
+˜ft(x; st) = EA∼D t(·| x) [Ft(A; st)] (5) 
+
+= X
+
+> A∈I t
+
+Ft(A; st) Y
+
+> i∈N t
+
+pi(A; x), (6) where 
+
+pi(A; x) = 
+
+
+
+x(i,a ), if A ∩ Ωi,t = {(i, a )},
+
+1 − X
+
+> a′∈A i
+
+x(i,a ′), if A ∩ Ωi,t = ∅. (7) The categorical-policy face of P(It) is 
+
+Ft =
+
+(
+
+x ∈ P (It) : X
+
+> a∈A i
+
+x(i,a ) = 1 , ∀i ∈ N t
+
+)
+
+. (8) For each i ∈ N t, define the local categorical simplex Fi =xi ∈ [0 , 1] |A i| : P 
+
+> a∈A i
+
+x(i,a ) = 1 . Then Ft = Q 
+
+> i∈N t
+
+Fi.For any x ∈ F t, the probability of selecting no action is zero in (7). Hence, the distribution induced by the PME respects the partition structure of Ωt since it selects exactly one agent-action pair from each Ωi,t w.p.1, matching the categorical action-selection model in (1). 
+
+Remark 1. At a fixed time step, the PME is closely related to the policy-based continuous extension in [17] and the Multinoulli Extension in [28]. The former considers online coordination over fixed agent and action sets, whereas the latter addresses static subset selection under fixed partition constraints. Since these formulations do not model controlled Markovian dynamics or changes in the active-agent set, they cannot capture the coupling among current decisions, future states, and utilities. Our formulation extends the PME to finite-horizon decentralized policy learning for an OMAS and establishes exact equivalence with both the expected stage utility and the finite-horizon policy objective. 
+
+Lemma 1 (Policy-PME Objective Equivalence [18]) . Let πt =Q 
+
+> i∈N t
+
+πi be a factorized categorical policy, and let xπt (st) be defined by (3) . Then, for any fixed st,
+
+EAt∼πt [Ft(At; st) | st] = ˜ft
+
+ xπt (st); st
+
+. (9) 
+
+Proof. Consider the current state st and the current open-system domain. Then the local observations {oi,t }i∈N t are fixed, and each agent samples independently from πi(· | oi,t ).Hence, the executed set is At = {(i, a i,t ) : i ∈ N t}, a i,t ∼
+
+πi(· | oi,t ). By definition of xπt (st), the per-agent factor in (7) satisfies pi(A; xπt (st)) = πi(a | oi,t ) if A ∩ Ωi,t =
+
+{(i, a )}. Moreover, since πi(· | oi,t ) is a categorical distri-bution, P 
+
+> a∈A i
+
+xπ
+
+> (i,a ),t
+
+(st) = 1 , the probability of selecting no action in (7) is zero for every active agent. Therefore, under Dt(· | xπt (st)) , positive probability is assigned only to feasible sets that select exactly one action per active agent, and this probability equals the product of the corresponding local categorical probabilities. Thus, for any feasible A ∈ I t,
+
+Pr( At = A | st) = Q 
+
+> i∈N t
+
+pi(A; xπt (st)) . Substituting this identity into the conditional expectation gives 
+
+EAt∼πt [Ft(At; st) | st] = X
+
+> A∈I t
+
+Ft(A; st) Pr( At = A | st)= X
+
+> A∈I t
+
+Ft(A; st) Y
+
+> i∈N t
+
+pi(A; xπt (st)) = ˜ft
+
+ xπt (st); st
+
+,
+
+which proves (9). Let D−it (· | x) denote the joint distribution induced by x
+
+over the local action blocks of all agents except i, namely 
+
+{Ωj,t }j∈N t\{ i}.
+
+Lemma 2 (PME Coordinate Gradient [18]) . For any (i, a ) ∈LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 5
+
+Ωt and x ∈ P (It),
+
+∂ ˜ft
+
+∂x (i,a )
+
+(x; st) = EA−i∼D −it (·| x)
+
+Ft
+
+ (i, a ) | A−i; st
+
+ , (10) 
+
+where Ft
+
+ (i, a ) | A−i; st
+
+ = Ft
+
+ A−i ∪ { (i, a )}; st
+
+ −
+
+Ft(A−i; st) denotes the marginal gain of adding the agent-action pair (i, a ) to A−i at state st.Proof. Consider an arbitrary (i, a ) ∈ Ωt. In the sum represen-tation in (6), the coordinate x(i,a ) appears only in the local factor pi(A; x). There are three cases. If A ∩ Ωi,t = {(i, a )},then ∂p i(A; x)/∂x (i,a ) = 1 . If A ∩ Ωi,t = {(i, a ′)} for some 
+
+a′̸ = a, then ∂p i(A; x)/∂x (i,a ) = 0 . If A ∩ Ωi,t = ∅, then 
+
+∂p i(A; x)/∂x (i,a ) = −1. Applying the product rule to (6) gives 
+
+∂ ˜ft
+
+∂x (i,a )
+
+(x; st) = X
+
+> A:( i,a )∈A
+
+Ft(A; st) Y 
+
+> k̸=i
+
+pk(A; x)
+
+− X
+
+> A:A∩Ωi,t =∅
+
+Ft(A; st) Y 
+
+> k̸=i
+
+pk(A; x).
+
+Every set in the first sum can be written uniquely as A−i ∪{(i, a )}, while every set in the second sum can be identified with the same partial joint action A−i of all agents except 
+
+i. Moreover, Q  
+
+> k̸=i
+
+pk(A; x) is exactly the probability of A−i
+
+under D−it (· | x). Hence 
+
+∂ ˜ft
+
+∂x (i,a )
+
+(x; st)= X
+
+> A−i
+
+Pr  
+
+> D−it(·| x)
+
+(A−i) Ft(A−i ∪ { (i, a )}; st) − Ft(A−i; st)
+
+= EA−i∼D −it (·| x)
+
+Ft
+
+ (i, a ) | A−i; st
+
+ .
+
+This proves (10). Lemma 2 shows that partial derivative of PME is the expected marginal gain of the corresponding agent-action pair under the current categorical sampling distribution of the other agents. This identity provides the first-order information used by the counterfactual marginal-gain estimator in Section IV. 
+
+Proposition 1 (Properties of the PME [18]) . Under Assump-tion 1, ˜ft(·; st) satisfies the following properties on P(It):1) ˜ft(0; st) = 0 .2) ˜ft(x; st) ≥ 0 for all x ∈ P (It).3) ˜ft(· ; st) is a multilinear polynomial and hence is smooth. 4) ∇ ˜ft(x; st) ≥ 0 componentwise for all x ∈ P (It).5) For any x, y ∈ P(It) with x ≤ y componentwise, 
+
+∇ ˜ft(x; st) ≥ ∇ ˜ft(y; st) componentwise. Consequently, ˜ft(· ; st) is monotone and DR-submodular on 
+
+P(It).Proof. We prove the properties in order. 1) When x = 0, each agent selects no element with probability one under Dt(· | 0) . Therefore, the only set with nonzero probability is ∅, and ˜ft(0; st) = Ft(∅; st) = 0 .2) By nonnegativity of Ft and by the fact that all factors 
+
+pi(A; x) are valid probabilities for x ∈ P (It), every term in (6) is nonnegative. Thus, ˜ft(x; st) ≥ 0.3) For each fixed set A ∈ I t, every factor pi(A; x) is affine in the coordinates {x(i,a ) : a ∈ A i}. Since these coordinate sets are disjoint across agents, the product Q 
+
+> i∈N t
+
+pi(A; x) is multilinear in the variables associated with different agents. Hence ˜ft(· ; st) is a finite sum of multilinear polynomials and is smooth. 4) By Lemma 2, for any (i, a ) ∈ Ωt, ∂ ˜ft 
+
+> ∂x (i,a )
+
+(x; st) =
+
+EA−i∼D −it (·| x)
+
+Ft
+
+ (i, a ) | A−i; st
+
+ .For every realization A−i in the support of D−it (· | x),we have A−i ⊆ A−i ∪ { (i, a )}. Since Ft(· ; st) is monotone, 
+
+Ft
+
+ (i, a ) | A−i; st
+
+ = Ft
+
+ A−i ∪ { (i, a )}; st
+
+ − Ft(A−i; st) ≥
+
+0. Taking expectation preserves the inequality, and hence   
+
+> ∂˜ft
+> ∂x (i,a )
+
+(x; st) ≥ 0, (i, a ) ∈ Ωt. Therefore, ∇ ˜ft(x; st) ≥ 0
+
+componentwise. 5) We prove the DR property by showing that the gradient is componentwise nonincreasing. For each agent i, the PME is affine in the local coordinates {x(i,a ) : a ∈ A i}, because the per-agent factor pi(A; x) in (7) is affine in these coordinates and no product contains two coordinates associated with the same agent. Hence, all second partial derivatives with respect to two coordinates of the same agent are zero: 
+
+∂2 ˜ft
+
+∂x (i,a )∂x (i,b )
+
+(x; st) = 0 , a, b ∈ A i. (11) Consider two distinct agents i̸ = u and actions a ∈ A i and 
+
+b ∈ A u. Let D−{ i,u } 
+
+> t
+
+(· | x) denote the product distribution induced by x over all agents in Nt \ { i, u }. By Lemma 2, 
+
+∂ ˜ft
+
+∂x (i,a )
+
+(x; st) = EA−i∼D −it (·| x)
+
+Ft
+
+ (i, a ) | A−i; st
+
+ . (12) To differentiate this expression with respect to x(u,b ), separate the random choice of agent u from the choices of the other agents. For any fixed realization A−{ i,u } of the agents other than i and u, the contribution of agent u to (12) is 
+
+1 − X
+
+> c∈A u
+
+x(u,c )
+
+!
+
+Ft
+
+ (i, a ) | A−{ i,u }; st
+
+
+
++ X
+
+> c∈A u
+
+x(u,c )Ft
+
+ (i, a ) | A−{ i,u } ∪ { (u, c )}; st
+
+. (13) Differentiating (13) with respect to x(u,b ) gives 
+
+∂2 ˜ft
+
+∂x (u,b )∂x (i,a )
+
+(x; st)= EA−{ i,u }∼D −{ i,u } 
+
+> t(·| x)
+
+h
+
+Ft
+
+ (i, a ) | A−{ i,u } ∪ { (u, b )}; st
+
+
+
+− Ft
+
+ (i, a ) | A−{ i,u }; st
+
+i
+
+.
+
+(14) Since A−{ i,u } ⊆ A−{ i,u } ∪ { (u, b )}, submodularity of 
+
+Ft(· ; st) implies Ft
+
+ (i, a ) | A−{ i,u } ∪{ (u, b )}; st
+
+−Ft
+
+ (i, a ) |
+
+A−{ i,u }; st
+
+ ≤ 0. Taking expectation in (14) yields 
+
+∂2 ˜ft
+
+∂x (u,b )∂x (i,a )
+
+(x; st) ≤ 0, i ̸ = u. (15) Equations (11) and (15) show that each coordinate deriva-tive of ˜ft is nonincreasing in every coordinate. There-fore, for any x, y ∈ P(It) with x ≤ y componentwise, 6
+
+∇ ˜ft(x; st) ≥ ∇ ˜ft(y; st) componentwise. This establishes DR-submodularity on P(It).Proposition 1 shows that the PME is a smooth, monotone, DR-submodular objective on P(It) while preserving the per-agent categorical sampling structure required for decentralized execution [29], [30]. 
+
+B. Problem Equivalence 
+
+In this section, we relate the PME to Problem 1. First, we relate the continuous PME optimum to the discrete stagewise submodular optimum. Then, we extend the equivalence to the finite-horizon objective J(π).Although ˜ft(·; st) is defined over the partition-matroid poly-tope P(It), monotonicity implies that an optimal solution can be chosen on the categorical-policy face Ft.
+
+Lemma 3 (PME Exactness on the Categorical Face) . Under Assumption 1, the following stagewise identity holds at each time step t and state st:
+
+max 
+
+> x∈P (It)
+
+˜ft(x; st) = max 
+
+> x∈F t
+
+˜ft(x; st) = max 
+
+> A∈I t
+
+Ft(A; st). (16) 
+
+Proof. We first show that the optimum of ft(·; st) over P(It)
+
+is attained on Ft. Let x⋆ ∈ arg max x∈P (It) ˜ft(x; st). If x⋆ ∈Ft, the claim is immediate. Otherwise, there exists an agent 
+
+i ∈ N t for which the corresponding partition constraint is nonactive: ρi = 1 −P 
+
+> a∈A i
+
+x⋆ 
+
+> (i,a )
+
+> 0. Choose any action ai ∈Ai and define x′ = x⋆ +ρie(i,a i), where e(i,a i) is the canonical vector with nonzero coordinate (i, a i). Then x′ ∈ P (It) and the i-th partition constraint becomes tight. By monotonicity of 
+
+˜ft from Proposition 1, ˜ft(x′; st) ≥ ˜ft(x⋆; st). Repeating this operation for every agent i such that P 
+
+> a∈A i
+
+x⋆ 
+
+> (i,a )
+
+< 1 yields a point ¯x ∈ F t with ˜ft(¯ x; st) ≥ ˜ft(x⋆; st). Since x⋆ is optimal over P(It), equality holds. Thus, max x∈P (It) ˜ft(x; st) =max x∈F t
+
+˜ft(x; st).It remains to relate the optimum over Ft to the discrete optimum over It. The set Ft is a product of local categorical simplices. Fix the local marginals of all agents except i. Then the PME is affine in the local vector xi ∈ F i. Therefore, optimizing ˜ft over xi admits an optimal solution at an extreme point of Fi. Applying this argument successively to all active agents, there exists a maximizer of ˜ft over Ft that is an extreme point of every local categorical simplex. Such a point assigns probability one to exactly one action for each active agent and therefore corresponds to a deterministic feasible set in It.Conversely, let A⋆ ∈ arg max A∈I t Ft(A; st). If A⋆ omits an active agent, monotonicity of Ft allows us to add any action from that agent’s local action set without decreasing the utility. Repeating this step gives a feasible set ¯A⋆ ∈ I t
+
+that selects exactly one action per active agent and satisfies 
+
+Ft( ¯A⋆; st) ≥ Ft(A⋆; st). The indicator vector 1 ¯A⋆ lies in 
+
+Ft, and by the PME definition at deterministic vertices, 
+
+˜ft(1 ¯A⋆ ; st) = Ft( ¯A⋆; st).Therefore the continuous optimum over Ft and the discrete optimum over It have the same value. Lemma 3 shows that, for monotone utilities, the PME admits an optimal solution on the categorical-policy face Ft.Therefore, restricting to factorized categorical policies does not reduce the optimal value. The stagewise equivalence in Lemma 1 yields an exact reformulation of the finite-horizon objective in Problem 1. The following corollary shows that the original expected cumulative submodular utility is equal to the cumulative PME objective evaluated along the trajectory induced by the factorized categorical policy sequence. 
+
+Corollary 1 (Problem Equivalence) . Under the factorized categorical policy sequence π = {πt}Tt=1 , the finite-horizon objective in Problem 1 is exactly equal to the expected cumulative PME objective evaluated along the induced state trajectory: 
+
+J(π) = Eτ ∼pπ
+
+" TX
+
+> t=1
+
+˜ft
+
+ xπt (st); st
+
+#
+
+, (17) 
+
+where pπ is the trajectory distribution induced by π and the transition kernels {Pt}Tt=1 .Proof. By the definition of the finite-horizon objective, 
+
+J(π) = Eτ ∼pπ
+
+hPTt=1 Ft(At; st)
+
+i
+
+, where the trajectory distribution pπ is induced by the policy sequence π and the transition kernels {Pt}Tt=1 . By linearity of expecta-tion, J(π) = PTt=1 Eτ ∼pπ [Ft(At; st)] . For each time step 
+
+t, applying the tower property of conditional expectation with respect to the state st gives Eτ ∼pπ [Ft(At; st)] =
+
+Eτ ∼pπ [EAt∼πt [Ft(At; st) | st]] . Conditional on st, the local observations {oi,t }i∈N t are fixed, and the action set At is sampled from the factorized categorical policy πt. There-fore, by Lemma 1, EAt∼πt [Ft(At; st) | st] = ˜ft
+
+ xπt (st); st
+
+.Substituting this identity into the preceding display yields 
+
+Eτ ∼pπ [Ft(At; st)] = Eτ ∼pπ
+
+h ˜ft
+
+ xπt (st); st
+
+i
+
+. Summing over 
+
+t = 1 , . . . , T gives 
+
+J(π) = Eτ ∼pπ
+
+" TX
+
+> t=1
+
+˜ft
+
+ xπt (st); st
+
+#
+
+,
+
+which proves (17). 
+
+IV. S UBMODULAR MULTI -A GENT POLICY LEARNING 
+
+This section describes our policy-learning method, Sub-modular Multi-Agent Policy Learning (SubMAPL). By Corol-lary 1, policy learning for Problem 1 can be carried out through the PME objectives evaluated along the induced state trajectory. The main challenge is to construct tractable first-order feedback and update the local categorical policies without violating their simplex constraints. Mirror ascent is a standard first-order method for con-strained optimization that replaces Euclidean projection with a Bregman-divergence regularization [31], [32]. For categor-ical distributions, the KL divergence is particularly suitable because the resulting mirror step admits a multiplicative up-date that preserves nonnegativity and normalization without Euclidean projection [11], [33]. Motivated by this geome-try, and in contrast to the Euclidean projected-gradient and LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 7
+
+policy-gradient framework studied in our preliminary work [18], SubMAPL uses this PME representation to construct local marginal-gain feedback during training and updates local categorical policies through a KL-mirror step. SubMAPL follows the centralized training-decentralized ex-ecution (CTDE) paradigm [12], [19]. In the training phase, the stage utility Ft(· ; st) is evaluated on feasible sets that differ only in one agent’s action to construct the stochastic local gradient estimator used in the KL-mirror update. In execution, each active agent applies its learned local policy using observations oi,t .
+
+A. Tabular Categorical Policies 
+
+For each active agent i ∈ N t, SubMAPL uses a tabular softmax parameterization of the local categorical policy. Here, “tabular” means that a separate trainable logit is maintained for each local observation-action entry [34], [35], [36]. Let 
+
+θi(o, a ) ∈ R denote the logit of agent i for observation o ∈ O i
+
+and action a ∈ A i. Given the local observation oi,t , the policy is 
+
+πi(a | oi,t ) = exp  θi(oi,t , a )P 
+
+> b∈A i
+
+exp  θi(oi,t , b ) , a ∈ A i. (18) The logits {θi(o, a )}o∈O i, a ∈A i parameterize the tabular policy 
+
+πi. Equation (18) evaluates this policy at the current observa-tion oi,t . The induced marginal vector satisfies xπ
+
+> (i,a ),t
+
+(st) = 
+
+πi a | oi,t 
+
+, (i, a ) ∈ Ωt.In open systems, the active-agent set Nt may vary over time. The logits of remaining agents are inherited across consecutive open-system domains. Each arriving agent is initialized using finite logits. Departing agents are excluded from the active policy domain. Hence, every feasible action of each active agent has strictly positive probability under the local softmax policy. 
+
+B. Marginal-Gain Feedback and KL-Mirror Update 
+
+At time t, condition on the current state st. For each active agent i ∈ N t and a ∈ A i, define the local PME gradient coordinate by 
+
+gi,a,t (πt; st) = ∂ ˜ft
+
+∂x (i,a )
+
+(xπt (st); st), (i, a ) ∈ Ωt. (19) By Lemma 2, this coordinate admits the marginal-gain rep-resentation gi,a,t (πt; st) = E Ft(( i, a ) | A−i; st), where the actions in A−i are sampled independently according to πj (· | 
+
+oj,t ) for j ∈ N t \ { i}.After the joint action At = {(i, a i,t ) : i ∈ N t} is sampled, let A−it = At \ { (i, a i,t )}. SubMAPL constructs the local marginal-gain estimator 
+
+bgi,a,t = Ft(( i, a ) | A−it ; st), a ∈ A i. (20) The vector bgi, ·,t evaluates every feasible action of agent i un-der the same sampled actions of the other agents. Conditional on πt and st, the actions in A−it are sampled independently according to πj (· | oj,t ) for j ∈ N t \ { i}. Therefore, 
+
+E [bgi,a,t | πt, s t] = gi,a,t (πt; st) = ∂ ˜ft
+
+∂x (i,a )
+
+(xπt (st); st). (21) Thus, bgi, ·,t is an unbiased stochastic estimator of the local PME gradient evaluated at the current policy. The estimator in (20) provides first-order information with respect to the local action probabilities. A direct additive prob-ability update would require projection onto the probability simplex [31], [32]. SubMAPL instead applies KL-regularized mirror ascent, which preserves the simplex constraint without Euclidean projection and can be implemented through tabular softmax logits. Let πi, + denote the tabular policy of agent i after the KL-mirror update at time t and before open-system migration. Given the current local policy πi(· | oi,t ) and the stochastic local gradient estimator bgi, ·,t , the local policy distribution at the current observation is updated as [31] 
+
+πi, +(· | oi,t ) ∈ arg max 
+
+> p∈F i
+
+η⟨bgi, ·,t , p ⟩ − DKL 
+
+ p∥πi(· | oi,t ) ,
+
+(22) where η > 0 is the step size. For two local categorical distributions p, q ∈ F i, define 
+
+DKL (p∥q) = X
+
+> a∈A i
+
+pa log pa
+
+qa
+
+, (23) with the convention 0 log(0 /q a) = 0 . For two tabular policies 
+
+π and π′ defined on the current open-system domain, define 
+
+DKL ,t (π∥π′) = X
+
+> i∈N t
+
+X
+
+> o∈O i
+
+DKL 
+
+ πi(· | o)∥π′i(· | o) . (24) The first-order optimality condition yields 
+
+πi, +(a | oi,t ) = πi(a | oi,t ) exp( ηbgi,a,t )
+
+P 
+
+> b∈A i
+
+πi(b | oi,t ) exp( ηbgi,b,t ) , a ∈ A i.
+
+(25) For all other observations, the local policy distributions remain unchanged: 
+
+πi, +(· | o) = πi(· | o), o ∈ O i \ { oi,t }. (26) Hence, πi, +(· | oi,t ) ∈ F i. Since the KL-mirror step changes only the row associated with oi,t , all other terms in the tabular-policy KL divergence remain unchanged. Under the tabular softmax parameterization (18), (25) is implemented by the additive logit update 
+
+θi, +(oi,t , a ) = θi(oi,t , a ) + ηbgi,a,t , a ∈ A i, (27) where all other logit entries remain unchanged: 
+
+θi, +(o, a ) = θi(o, a ), o ∈ O i \ { oi,t }, a ∈ A i. (28) Substituting (27) into the softmax parameterization yields 
+
+πi, +(a | oi,t ) = exp  θi(oi,t , a ) + ηbgi,a,t 
+
+X
+
+> b∈A i
+
+exp  θi(oi,t , b ) + ηbgi,b,t 
+
+
+
+= exp  θi(oi,t , a ) exp( ηbgi,a,t )
+
+X
+
+> b∈A i
+
+ exp  θi(oi,t , b ) exp( ηbgi,b,t )
+
+> (i)
+
+= πi(a | oi,t ) exp( ηbgi,a,t )
+
+X
+
+> b∈A i
+
+πi(b | oi,t ) exp( ηbgi,b,t ) , a ∈ A i,
+
+(29) 8
+
+where (i) follows by dividing the numerator and denominator by P 
+
+> b∈A i
+
+exp( θi(oi,t , b )) . Thus, the additive logit update exactly implements the KL-mirror update in (25). The post-update active joint policy before migration is defined by 
+
+π+ 
+
+> t
+
+(at | ot) = Y
+
+> i∈N t
+
+πi, +(ai | oi,t ). (30) Therefore, SubMAPL performs a local full-action KL-mirror step on the current local observation of each active agent’s tab-ular policy and implements this policy-space update through an additive logit update. 
+
+C. Open Policy Migration 
+
+The transition from time step t to t + 1 involves the remaining agents Rt+1 , the arriving agents N in 
+
+> t+1
+
+, and the departing agents N out 
+
+> t+1
+
+. After the KL-mirror update at time 
+
+t, let π+ 
+
+> t
+
+denote the post-update active joint policy on the current agent domain Nt. Open policy migration retains the updated local policies of the remaining agents, assigns policies to the arriving agents, and excludes the departing agents from the next active policy domain. 
+
+Definition 3 (Open Policy Migration) . Given the post-update active joint policy π+ 
+
+> t
+
+, the open policy migration map Mt
+
+constructs πt+1 = Mt(π+ 
+
+> t
+
+) according to 
+
+(πt+1 )i(· | o) = 
+
+
+
+πi, +(· | o), i ∈ R t+1 ,πi, 0(· | o), i ∈ N in 
+
+> t+1
+
+,
+
+(31) where πi, 0 is the categorical policy assigned to an arriving agent i. It is represented by finite logits θi, 0 ∈ R|O i|×|A i|, so that πi, 0(a | o) > 0, o ∈ O i, a ∈ A i. Agents in N out  
+
+> t+1
+
+do not appear in the next active joint-policy domain. The complete training procedure is summarized in Algo-rithm 1. At each time step, SubMAPL evaluates the marginal gain of every feasible action of each active agent while keeping the sampled actions of the other agents fixed. The learned policy remains decentralized at execution time, because each active agent samples from its own categorical policy using only its local observation. 
+
+V. P ERFORMANCE ANALYSIS 
+
+This section establishes performance guarantees for SubMAPL as a PME-based KL-mirror policy-learning method in OMAS. The analysis is conducted along the state sequence generated by Algorithm 1. At each time step, the current state and open-system domain define a conditional stagewise PME objective over the current categorical-policy face. We first collect the basic gradient and mirror-ascent inequalities used in the analysis, then derive a bound on the finite-horizon objective in Problem 1 through regret analysis, and finally specialize the general bound to a tighter one when the finite-horizon objective J(π) is itself submodular. 
+
+Algorithm 1 Submodular Multi-Agent Policy Learning (SubMAPL)  
+
+> 1:
+
+Input: horizon T , step size η, initial active parameter collection 
+
+Θ1 = {θi, 0 : i ∈ N 1}, finite-logit migration rule for arriving agents, and stage-utility evaluators {Ft}Tt=1  
+
+> 2:
+
+for t = 1 , . . . , T do  
+
+> 3:
+
+for each active agent i ∈ N t do  
+
+> 4:
+
+Receive the local observation oi,t  
+
+> 5:
+
+Form πi(· | oi,t ) using (18)  
+
+> 6:
+
+Sample ai,t ∼ πi(· | oi,t ) 
+
+> 7:
+
+end for  
+
+> 8:
+
+Form At = {(i, a i,t ) : i ∈ N t} 
+
+> 9:
+
+for each active agent i ∈ N t do  
+
+> 10:
+
+Set A−it = At \ { (i, a i,t )} 
+
+> 11:
+
+for each feasible action a ∈ A i do  
+
+> 12:
+
+Evaluate bgi,a,t using (20) at the pre-transition state st 
+
+> 13:
+
+Update θi(oi,t , a ) ← θi(oi,t , a ) + ηbgi,a,t  
+
+> 14:
+
+end for  
+
+> 15:
+
+end for  
+
+> 16:
+
+Execute At 
+
+> 17:
+
+Sample the next state st+1 ∼ Pt(· | st, at) 
+
+> 18:
+
+if t < T then  
+
+> 19:
+
+Observe the next active-agent set Nt+1  
+
+> 20:
+
+Apply the open policy migration in Definition 3  
+
+> 21:
+
+end if  
+
+> 22:
+
+end for  
+
+> 23:
+
+Output: the online policy sequence {πt}Tt=1 and the final post-update policy π+
+
+> T
+
+A. Analysis of KL-Mirror and Stagewise Bound 
+
+Assumption 2 (Bounded Marginal Gains [37]) . There exists a constant B < ∞ such that, for every t ∈ [T ] and state st,
+
+0 ≤ Ft(e | A; st) ≤ B, ∀A ⊆ Ωt, e ∈ Ωt \ A. (32) Let bgt = (bgi,a,t )(i,a )∈Ωt ∈ R|Ωt| denote the stochastic marginal-gain vector used by SubMAPL, where bgi,a,t is de-fined in (20). Let Ht denote the information available before action sampling at time t, including the past trajectory, the cur-rent state st, the current open-system domain (Nt, {A i}i∈N t ),and the current tabular policy πt. Since xt = xπt (st), condi-tional on Ht, the quantities πt, xt, st, and the current open-system domain are fixed. By (21), we have 
+
+E [bgi,a,t | H t] = ∂ ˜ft
+
+∂x (i,a )
+
+(xt; st), (i, a ) ∈ Ωt. (33) Equivalently, 
+
+E [bgt | H t] = ∇ ˜ft(xt; st). (34) Assumption 2 also gives a uniform bound on the stochastic feedback. Indeed, for every (i, a ) ∈ Ωt, we have (i, a ) /∈ A−it .Hence Assumption 2 can be applied with e = (i, a ) and 
+
+A = A−it , which yields 0 ≤ bgi,a,t = Ft(( i, a ) | A−it ; st) ≤
+
+B, (i, a ) ∈ Ωt . Consequently, for each active agent i ∈ N t,
+
+max a∈A i |bgi,a,t | ≤ B.For any vector g ∈ R|Ωt| indexed by the current agent-action ground set Ωt, define the per-agent mixed norm by 
+
+∥g∥2 
+
+> ∞,2
+
+= X
+
+> i∈N t
+
+
+
+max 
+
+> a∈A i
+
+|gi,a |
+
+2
+
+. (35) LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 9
+
+The norm ∥·∥ ∞,2 is always understood with respect to the current open-system domain (Nt, {A i}i∈N t ). Then 
+
+∥bgt∥2 
+
+> ∞,2
+
+= X
+
+> i∈N t
+
+
+
+max 
+
+> a∈A i
+
+|bgi,a,t |
+
+2
+
+≤ X
+
+> i∈N t
+
+B2 = |N t|B2. (36) Let Nmax = max t∈[T ] |N t|. Then 
+
+∥bgt∥2 
+
+> ∞,2
+
+≤ Nmax B2, t ∈ [T ]. (37) 
+
+Lemma 4 (Auxiliary Inequalities) . Consider a time step t, a state st, and the open-system domain at time t. Let ˜ft(· ; st)
+
+be the PME of a normalized, monotone, submodular utility 
+
+Ft(· ; st). Then the following inequalities hold. 1) Categorical-face first-order bound [29]: For any x, y ∈Ft,
+
+12 ˜ft(y; st) − ˜ft(x; st) ≤ 12
+
+D
+
+∇ ˜ft(x; st), y − x
+
+E
+
+. (38) 
+
+2) KL mirror-ascent inequality [31]: Suppose x ∈ Ft
+
+satisfies x(i,a ) > 0 for all i ∈ N t and a ∈ A i. Let 
+
+x+ ∈ F t be generated by 
+
+x+ ∈ arg max 
+
+> z∈F t
+
+{η⟨g, z ⟩ − DKL (z∥x)} , (39) 
+
+where η > 0 and 
+
+DKL (z∥x) = X
+
+> i∈N t
+
+X
+
+> a∈A i
+
+z(i,a ) log z(i,a )
+
+x(i,a )
+
+.
+
+Then, for any u ∈ F t,
+
+⟨g, u − x⟩ ≤ DKL (u∥x) − DKL (u∥x+)
+
+η + η
+
+2 ∥g∥2
+
+> ∞,2
+
+.
+
+(40) 
+
+Proof. (1) Let A ∼ D t(· | x) and Y ∼ D t(· | y) be sampled independently. Since x, y ∈ F t, both A and Y select exactly one agent-action pair for each active agent. Define A = {ei :
+
+i ∈ N t} and Y = {ui : i ∈ N t}, where ei, u i ∈ Ωi,t . Let 
+
+A−i = A \ { ei}. By monotonicity, Ft(Y ; st) − Ft(A; st) ≤
+
+Ft(A ∪ Y ; st) − Ft(A; st).Fix an arbitrary ordering {i1, . . . , i m} of Nt,where m = |N t|. By telescoping, Ft(A ∪ Y ; st) −
+
+Ft(A; st) = Pmℓ=1 Ft
+
+ uiℓ | A ∪ { ui1 , . . . , u iℓ−1 }; st
+
+.Since A−iℓ ⊆ A ∪ { ui1 , . . . , u iℓ−1 }, submodularity implies 
+
+Ft
+
+ uiℓ | A ∪ { ui1 , . . . , u iℓ−1 }; st
+
+ ≤ Ft(uiℓ | A−iℓ ; st).Therefore, 
+
+Ft(Y ; st) − Ft(A; st) ≤ X
+
+> i∈N t
+
+Ft(ui | A−i; st). (41) Next, by normalization and telescoping along the same ordering, Ft(A; st) = Pmℓ=1 Ft
+
+ eiℓ | { ei1 , . . . , e iℓ−1 }; st
+
+.Since {ei1 , . . . , e iℓ−1 } ⊆ A−iℓ , submodularity gives 
+
+Ft
+
+ eiℓ | { ei1 , . . . , e iℓ−1 }; st
+
+ ≥ Ft(eiℓ | A−iℓ ; st). Hence, 
+
+X
+
+> i∈N t
+
+Ft(ei | A−i; st) ≤ Ft(A; st). (42) Combining (41) and (42) yields 
+
+Ft(Y ; st) − 2Ft(A; st)
+
+≤ X
+
+> i∈N t
+
+h
+
+Ft(ui | A−i; st) − Ft(ei | A−i; st)
+
+i
+
+. (43) Taking expectations in (43) over the independent samples 
+
+A ∼ D t(· | x) and Y ∼ D t(· | y) gives 
+
+˜ft(y; st) − 2 ˜ft(x; st)
+
+≤ X
+
+> i∈N t
+
+X
+
+> a∈A i
+
+y(i,a )EA−i∼D −it (·| x)
+
+Ft(( i, a ) | A−i; st)
+
+− X
+
+> i∈N t
+
+X
+
+> a∈A i
+
+x(i,a )EA−i∼D −it (·| x)
+
+Ft(( i, a ) | A−i; st) .
+
+Here, under Dt(· | x), the selected action of agent i is in-dependent of A−i and has marginal distribution (x(i,a ))a∈A i ;similarly, under Dt(· | y), the selected action of agent i has marginal distribution (y(i,a ))a∈A i and is independent of A.By Lemma 2, the expected marginal gain is the corresponding PME coordinate derivative. Therefore, 
+
+˜ft(y; st) − 2 ˜ft(x; st) ≤
+
+D
+
+∇ ˜ft(x; st), y − x
+
+E
+
+.
+
+Dividing by 2 proves (38). (2) The optimality condition of (39) gives the three-point inequality 
+
+η⟨g, u − x+⟩ ≤ DKL (u∥x) − DKL (u∥x+) − DKL (x+∥x).
+
+(44) For each active agent i ∈ N t, H¨ older’s inequality gives [31], [32] 
+
+η X
+
+> a∈A i
+
+gi,a 
+
+
+
+x+(i,a ) − x(i,a )
+
+
+
+≤ η
+
+
+
+max 
+
+> a∈A i
+
+|gi,a |
+
+ X
+
+> a∈A i
+
+x+(i,a ) − x(i,a ) .
+
+(45) By Young’s inequality, 
+
+η
+
+
+
+max 
+
+> a∈A i
+
+|gi,a |
+
+ X
+
+> a∈A i
+
+x+(i,a ) − x(i,a )
+
+≤ η2
+
+2
+
+
+
+max 
+
+> a∈A i
+
+|gi,a |
+
+2
+
++ 12
+
+X
+
+> a∈A i
+
+x+(i,a ) − x(i,a )
+
+!2
+
+.
+
+Pinsker’s inequality, applied to the two categorical distribu-tions over Ai, gives 
+
+12
+
+X
+
+> a∈A i
+
+x+(i,a ) − x(i,a )
+
+!2
+
+≤ X
+
+> a∈A i
+
+x+(i,a ) log x+(i,a )
+
+x(i,a )
+
+.
+
+Thus, 
+
+η X
+
+> a∈A i
+
+gi,a 
+
+
+
+x+(i,a ) − x(i,a )
+
+
+
+≤ η2
+
+2
+
+
+
+max 
+
+> a∈A i
+
+|gi,a |
+
+2
+
++ X
+
+> a∈A i
+
+x+(i,a ) log x+(i,a )
+
+x(i,a )
+
+.
+
+Summing over i ∈ N t yields 
+
+η⟨g, x + − x⟩ ≤ DKL (x+∥x) + η2
+
+2 ∥g∥2
+
+> ∞,2
+
+. (46) Combining (44) and (46), we obtain 
+
+η⟨g, u − x⟩ = η⟨g, u − x+⟩ + η⟨g, x + − x⟩≤ DKL (u∥x) − DKL (u∥x+) + η2
+
+2 ∥g∥2
+
+> ∞,2
+
+.10 
+
+Dividing by η proves (40). 
+
+B. Suboptimality Gap in the General Case 
+
+Dynamic approximation regret compares the cumulative utility attained by an algorithm with that of a sequence of stagewise optimal allocations [11], [17]. Existing formulations for multi-agent online submodular coordination consider a fixed agent-action domain. However, the consecutive compara-tor policies in OMAS may belong to different policy domains as agents arrive and depart. We introduce an open-system variant that measures comparator variation after mapping the previous comparator to the new domain through policy migration. Given the current state st and open-system domain, define the stagewise discrete optimum F ⋆t (st) = max A∈I t Ft(A; st).Let x⋆t ∈ arg max x∈F t
+
+˜ft(x; st). By Lemma 3, ˜ft(x⋆t ; st) = 
+
+F ⋆t (st). The sequence {x⋆t }Tt=1 may vary with the state and the active-agent domain. Define the tabular policy π⋆t associated with x⋆t by 
+
+(π⋆t )i(a | o) = 
+
+(x⋆
+
+> (i,a ),t
+
+, o = oi,t ,πi(a | o), o̸ = oi,t , i ∈ N t, o ∈ O i, a ∈ A i.
+
+(47) By (24), DKL ,t (π⋆t ∥πt) = DKL (x⋆t ∥xt).The transition from time step t to t+1 consists of remaining agents Rt+1 , arriving agents N in 
+
+> t+1
+
+, and departing agents 
+
+N out 
+
+> t+1
+
+. SubMAPL first obtains the post-update tabular policy 
+
+π+ 
+
+> t
+
+through the KL-mirror update in (25)-(26). It then applies the open policy migration in Definition 3: πt+1 = Mt(π+ 
+
+> t
+
+).Let bπ = {πt}Tt=1 denote the online policy sequence generated by SubMAPL, and let pbπ denote the trajectory distribution induced by bπ and the transition kernels {Pt}Tt=1 . Following KL-potential tracking analyses on a fixed domain [33], [38], we define the open-system KL tracking variation as 
+
+Vopen  
+
+> T
+
+= Eτ ∼pbπ
+
+" T −1X
+
+> t=1
+
+
+
+DKL ,t +1 (π⋆t+1 ∥πt+1 )
+
+− DKL ,t (π⋆t ∥π+ 
+
+> t
+
+)
+
+
+
+> +
+
+#
+
+.
+
+(48) This variation records the increase in the KL tracking po-tential between consecutive time steps while allowing both the stagewise benchmark and the open-system policy domain to change. In particular, it incorporates agent arrivals and departures through Rt+1 , N in 
+
+> t+1
+
+, and N out 
+
+> t+1
+
+. When the active-agent set is fixed, Mt is the identity map, and Vopen  
+
+> T
+
+reduces to the corresponding KL tracking variation on a fixed tabular-policy domain. 
+
+Definition 4 (Open-System Dynamic Approximation-Regret) .
+
+The open-system dynamic 1/2-approximation regret is defined as 
+
+Reg 1/2 
+
+> T
+
+=
+
+> T
+
+X
+
+> t=1
+
+Eτ ∼pbπ
+
+ 12 F ⋆t (st) − ˜ft(xt; st)
+
+
+
+. (49) By Lemma 1, ˜ft(xt; st) is the conditional expected stage utility of the factorized categorical policy πt. Thus, Reg 1/2 
+
+> T
+
+measures its cumulative approximation gap relative to the time-varying stagewise optimal values. 
+
+Lemma 5 (Open-System KL-Mirror Approximation-Regret Bound) . Let {πt}Tt=1 be the policy sequence generated by Algorithm 1. Under Assumption 1 and Assumption 2, for any constant step size η > 0,
+
+Reg 1/2 
+
+> T
+
+≤ Es1∼μ1 [DKL ,1 (π⋆ 
+
+> 1
+
+∥π1)] + Vopen 
+
+> T
+
+2η + ηT N max B2
+
+4 .
+
+(50) 
+
+Proof. For each time step t, the categorical-face first-order bound in Lemma 4 gives 
+
+12 F ⋆t (st) − ˜ft(xt; st) ≤ 12
+
+D
+
+∇ ˜ft(xt; st), x ⋆t − xt
+
+E
+
+. (51) Since xt and x⋆t are measurable with respect to the pre-sampling history Ht, taking expectations and using (34) yields 
+
+Eτ ∼pbπ
+
+ 12 F ⋆t (st) − ˜ft(xt; st)
+
+
+
+≤ 12 Eτ ∼pbπ [⟨bgt, x ⋆t − xt⟩] .
+
+(52) Since Ft = Q 
+
+> i∈N t
+
+Fi, the local KL-mirror updates in (22) jointly realize the product-space update in Lemma 4. Apply the KL mirror-ascent inequality with x = xt, u = x⋆t , and 
+
+g = bgt, where the post-update vector x+ 
+
+> t
+
+has coordinates 
+
+x+(i,a ),t = πi, +(a | oi,t ), (i, a ) ∈ Ωt.
+
+By (24) and (47), together with the fact that π+ 
+
+> t
+
+and πt
+
+coincide at all noncurrent observations, 
+
+DKL (x⋆t ∥xt) = DKL ,t (π⋆t ∥πt) ,DKL (x⋆t ∥x+ 
+
+> t
+
+) = DKL ,t 
+
+ π⋆t ∥π+
+
+> t
+
+ . (53) Therefore, 
+
+⟨bgt, x ⋆t − xt⟩ ≤ DKL ,t (π⋆t ∥πt) − DKL ,t 
+
+ π⋆t ∥π+
+
+> t
+
+
+
+η + η
+
+2 ∥bgt∥2
+
+> ∞,2
+
+.
+
+(54) By the uniform gradient bound in (37), 
+
+∥bgt∥2 
+
+> ∞,2
+
+≤ Nmax B2. (55) Combining (52), (54), and (55) gives 
+
+Eτ ∼pbπ
+
+ 12 F ⋆t (st) − ˜ft(xt; st)
+
+
+
+≤ Eτ ∼pbπ
+
+DKL ,t (π⋆t ∥πt) − DKL ,t 
+
+ π⋆t ∥π+
+
+> t
+
+ 
+
+2η + ηN max B2
+
+4 .
+
+(56) For compactness, define Φt = DKL ,t (π⋆t ∥πt), and Γt =
+
+DKL ,t 
+
+ π⋆t ∥π+
+
+> t
+
+. For t = 1 , . . . , T − 1, we have 
+
+Φt − Γt = Φ t − Φt+1 + Φ t+1 − Γt
+
+≤ Φt − Φt+1 + [Φ t+1 − Γt]+ . (57) By the definition of the two potentials, 
+
+[Φ t+1 − Γt]+ = DKL ,t +1 
+
+ π⋆t+1 ∥πt+1 
+
+ − DKL ,t 
+
+ π⋆t ∥π+
+
+> t
+
+  
+
+> +
+
+.
+
+(58) LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 11 
+
+Summing (57) over t = 1 , . . . , T − 1 gives  
+
+> T−1
+
+X
+
+> t=1
+
+(Φ t − Γt) ≤ Φ1 − ΦT + 
+
+> T−1
+
+X
+
+> t=1
+
+[Φ t+1 − Γt]+ . (59) Adding the terminal term ΦT − ΓT to both sides and using 
+
+ΓT ≥ 0 yields 
+
+> T
+
+X
+
+> t=1
+
+(Φ t − Γt) ≤ Φ1 + 
+
+> T−1
+
+X
+
+> t=1
+
+[Φ t+1 − Γt]+ . (60) Taking expectations with respect to τ ∼ pbπ and using the definition of Vopen  
+
+> T
+
+in (48), we obtain 
+
+> T
+
+X
+
+> t=1
+
+Eτ ∼pbπ [Φ t − Γt] ≤ Eτ ∼pbπ [Φ 1] + Vopen  
+
+> T
+
+. (61) Summing (56) over t = 1 , . . . , T and applying (61) gives 
+
+> T
+
+X
+
+> t=1
+
+Eτ ∼pbπ
+
+ 12 F ⋆t (st) − ˜ft(xt; st)
+
+
+
+≤ Es1∼μ1 [DKL ,1 (π⋆ 
+
+> 1
+
+∥π1)] + Vopen 
+
+> T
+
+2η + ηT N max B2
+
+4 .
+
+(62) The left-hand side equals Reg 1/2 
+
+> T
+
+by Definition 4, which proves (50). Lemma 5 controls the cumulative approximation gap rel-ative to the time-varying stagewise optimal values. How-ever, Problem 1 evaluates the cumulative policy value in-duced over the full trajectory. We next connect the stagewise approximation-regret guarantee in Lemma 5 to the finite-horizon objective of Problem 1. By Corollary 1, 
+
+J(bπ) = Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+˜ft(xt; st)
+
+#
+
+. (63) Let J⋆ = max π J(π) be the optimal finite-horizon value over the considered class of decentralized factorized policy sequences. For readability, denote the bound in (50) by 
+
+CT = Es1∼μ1 [DKL ,1 (π⋆ 
+
+> 1
+
+∥π1)] + Vopen 
+
+> T
+
+2η + ηT N max B2
+
+4 . (64) Moreover, define the finite-horizon benchmark mismatch 
+
+∆T =
+
+"
+
+J⋆ − Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+## 
+
+> +
+
+. (65) 
+
+Theorem 1 (Finite-Horizon Performance Bound) . Let bπ =
+
+{πt}Tt=1 be the policy sequence generated by Algorithm 1. Under Assumption 1 and Assumption 2, we have 
+
+12 J⋆ − J(bπ) ≤ C T + 12 ∆T , (66) 
+
+where CT and ∆T are defined in (64) and (65) , respectively. Proof. By Definition 4 and Lemma 5, 
+
+J(bπ) ≥ 12 Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+− C T . (67) By the definition of ∆T in (65), 
+
+Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+≥ J⋆ − ∆T . (68) Substituting (68) into (67) and rearranging yields (66). The mismatch term ∆T captures the discrepancy between the optimal finite-horizon value and the cumulative stagewise optimal values along the trajectory induced by SubMAPL. Since the stagewise KL-mirror analysis does not control this term without additional temporal structure, Theorem 1 pro-vides a finite-horizon decomposition rather than a uniform approximation guarantee. 
+
+C. Suboptimality Gap With Submodular Finite-Horizon Utility 
+
+We next identify a structural setting in which the stagewise approximation-regret bound yields a finite-horizon approxima-tion guarantee. In coverage and information-collection prob-lems, the stage utility can often be represented as the marginal gain of a trajectory-level submodular function with respect to the accumulated history [14]. Under such a time-expanded representation, if the ground set and the feasible families are independent of the executed policy, submodularity connects the cumulative stagewise oracle values along the SubMAPL trajectory with the finite-horizon optimum J⋆.
+
+Assumption 3 (Time-Expanded Submodular Utility [14]) .
+
+There exist a policy-independent time-expanded ground set 
+
+¯Ω1: T , policy-independent feasible families {¯It}Tt=1 , and anormalized, monotone, submodular function ¯F : 2 ¯Ω1: T →
+
+R≥0. For every feasible execution, each At ∈ I t corresponds to a time-expanded action set ¯At ∈ ¯It, and the state st contains the accumulated history ¯A1: t−1 = St−1  
+
+> τ=1
+
+¯Aτ . The stage utility satisfies Ft(At; st) = ¯F ( ¯At | ¯A1: t−1) = ¯F ( ¯A1: t−1 ∪ ¯At) −
+
+¯F ( ¯A1: t−1). Moreover, every ¯A′ 
+
+> t
+
+∈ ¯It corresponds to some feasible A′ 
+
+> t
+
+∈ I t.Assumption 3 is used to convert the stagewise approximation-regret bound into a finite-horizon guarantee. It holds for trajectory-level coverage and information-collection objectives whose cumulative utility is represented by amonotone submodular function of the selected time-expanded items [14], [39], [40]. 
+
+Example 1 (Static Sensing Coverage Utility [41]) . Consider a multi-agent coverage problem over a finite target set Q. At time step t, each agent-action pair (i, a ) ∈ Ωt covers a sensing region Ct(i, a ) ⊆ Q , that does not depend on the current state. Assume that Ωt and the sensing regions {Ct(i, a )}(i,a )∈Ωt are determined independently of the executed policy. Define the time-expanded ground set ¯Ω1: T = {(i, a, t ) : 
+
+t ∈ [T ], (i, a ) ∈ Ωt}. For each feasible At ∈ I t, let ¯At =
+
+{(i, a, t ) : ( i, a ) ∈ At}, and let ¯It = { ¯At : At ∈ I t}. Define 
+
+¯A1: t = Stτ =1 ¯Aτ and ¯A1:0 = ∅. Given target weights wq ≥ 0,define 
+
+¯F (S) = X
+
+> q∈Q
+
+wq 1
+
+q ∈ [
+
+> (i,a,t )∈S
+
+Ct(i, a )
+
+ , S ⊆ ¯Ω1: T .12 
+
+Then ¯F is normalized, monotone, and submodular. If st
+
+records the targets covered before time t, the stage utility satisfies Ft(At; st) = ¯F ( ¯At | ¯A1: t−1), and therefore 
+
+> T
+
+X
+
+> t=1
+
+Ft(At; st) = ¯F ( ¯A1: T ).
+
+Thus, Assumption 3 holds. 
+
+Theorem 2 (Finite-Horizon Approximation under Time-Ex-panded Submodularity) . Let bπ be the policy sequence gener-ated by Algorithm 1. Suppose Assumption 1, Assumption 2, and Assumption 3 hold. Then 
+
+J(bπ) ≥ 13 J⋆ − 23 CT . (69) 
+
+Proof. Consider an arbitrary trajectory generated by bπ. Let 
+
+{ ¯At}Tt=1 denote the corresponding time-expanded action sets, and let {st}Tt=1 denote the state sequence. Let { ¯A′
+
+> t
+
+}Tt=1 be any fixed feasible reference sequence with ¯A′ 
+
+> t
+
+∈ ¯It for each t, and define ¯A′ 
+
+> 1: t
+
+= Stτ =1 ¯A′ 
+
+> τ
+
+with ¯A′ 
+
+> 1:0
+
+= ∅. By Assumption 3, for each ¯A′ 
+
+> t
+
+∈ ¯It, there exists A′ 
+
+> t
+
+∈ I t whose corresponding time-expanded action set is ¯A′
+
+> t
+
+.By monotonicity of ¯F ,
+
+¯F ( ¯A′ 
+
+> 1: T
+
+) ≤ ¯F ( ¯A1: T ) + ¯F ( ¯A′ 
+
+> 1: T
+
+| ¯A1: T ). (70) Using the chain rule for marginal gains, we have 
+
+¯F ( ¯A′ 
+
+> 1: T
+
+| ¯A1: T ) = 
+
+> T
+
+X
+
+> t=1
+
+¯F   ¯A′ 
+
+> t
+
+| ¯A1: T ∪ ¯A′
+
+> 1: t−1
+
+
+
+≤
+
+> T
+
+X
+
+> t=1
+
+¯F   ¯A′ 
+
+> t
+
+| ¯A1: t−1
+
+ , (71) where the inequality follows from ¯A1: t−1 ⊆ ¯A1: T ∪ ¯A′ 
+
+> 1: t−1
+
+and the diminishing-returns property of the submodular function 
+
+¯F .By Assumption 3, the marginal gain of the reference time-expanded action set ¯A′ 
+
+> t
+
+along the SubMAPL history is exactly the corresponding stage utility: 
+
+¯F ( ¯A′ 
+
+> t
+
+| ¯A1: t−1) = Ft(A′
+
+> t
+
+; st) ≤ F ⋆t (st). (72) Combining (70)–(72) gives, for the trajectory under consider-ation, 
+
+¯F ( ¯A′ 
+
+> 1: T
+
+) ≤ ¯F ( ¯A1: T ) + 
+
+> T
+
+X
+
+> t=1
+
+F ⋆t (st). (73) We next take expectation with respect to the trajectory distribution induced by SubMAPL. By Assumption 3, the cumulative utility along the SubMAPL trajectory telescopes: 
+
+> T
+
+X
+
+> t=1
+
+Ft(At; st) = 
+
+> T
+
+X
+
+> t=1
+
+¯F ( ¯At | ¯A1: t−1)=
+
+> T
+
+X
+
+> t=1
+
+ ¯F ( ¯A1: t) − ¯F ( ¯A1: t−1)
+
+= ¯F ( ¯A1: T ),
+
+where ¯F (∅) = 0 because ¯F is normalized. Therefore, 
+
+J(bπ) = Eτ ∼pbπ
+
+ ¯F ( ¯A1: T ) .
+
+Taking expectation in (73) over τ ∼ pbπ gives 
+
+¯F ( ¯A′ 
+
+> 1: T
+
+) ≤ J(bπ) + Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+. (74) Since (74) holds for every feasible reference sequence 
+
+{ ¯A′
+
+> t
+
+}Tt=1 with ¯A′ 
+
+> t
+
+∈ ¯It, it also holds after maximizing the left-hand side over all such reference sequences: 
+
+max  
+
+> ¯A′
+> t∈¯It, t ∈[T]
+
+¯F ( ¯A′ 
+
+> 1: T
+
+) ≤ J(bπ) + Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+. (75) Since the time-expanded feasible families are policy-independent, every realization generated by an admissible policy π satisfies ¯At ∈ ¯It for all t ∈ [T ]. Therefore, for any admissible policy π,
+
+J(π) = Eτ ∼pπ
+
+ ¯F ( ¯A1: T ) ≤ max  
+
+> ¯A′
+> t∈¯It, t ∈[T]
+
+¯F ( ¯A′ 
+
+> 1: T
+
+).
+
+Taking the maximum over π gives 
+
+J⋆ ≤ max  
+
+> ¯A′
+> t∈¯It, t ∈[T]
+
+¯F ( ¯A′ 
+
+> 1: T
+
+).
+
+Combining this inequality with (75) yields 
+
+J⋆ ≤ J(bπ) + Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+. (76) It remains to use the stagewise approximation-regret bound. From (67), we have 
+
+Eτ ∼pbπ
+
+" TX
+
+> t=1
+
+F ⋆t (st)
+
+#
+
+≤ 2J(bπ) + 2 CT . (77) Substituting (77) into (76) gives 
+
+J⋆ ≤ 3J(bπ) + 2 CT .
+
+Rearranging proves (69). Lemma 5 establishes an open-system dynamic 1/2-approximation-regret bound for SubMAPL relative to the time-varying stagewise PME maximizers. These results characterize the stagewise tracking performance of SubMAPL along its induced state trajectory. However, the objective in Problem 1 is the optimal finite-horizon policy value, which need not coincide with the cumulative stagewise optimal values. Thus, we quantify this discrepancy through the mismatch term ∆T
+
+in (66). Under Assumption 3, the policy-independent time-expanded submodular representation connects the stagewise benchmark to the finite-horizon optimum, yielding the approx-imation guarantee in Theorem 2. 
+
+VI. N UMERICAL EXPERIMENTS 
+
+We evaluate SubMAPL on a multi-agent coverage task [14]. SubMAPL is trained with a fixed (time-invariant) agent set and evaluated on open systems with a time-varying agent set. LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 13 0 500 1000 1500 2000         
+
+> Time Step
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Coverage Ratio
+> uniform 0500 1000 1500 2000
+> Time Step
+> mixture of two Gaussians 0500 1000 1500 2000
+> Time Step
+> Gaussian process
+> SubMAPL (ours) MA-SPL MA-OSEA REINFORCE OSG
+
+Fig. 2 : Coverage ratio under the controlled 5 → 2 → 5 active-agent profile. From left to right: uniform, mixture of two Gaussians, and Gaussian process fields. Curves show the means, and shaded regions denote 95% confidence intervals over shared evaluation scenarios. 
+
+A. Experimental Setup 
+
+The workspace V is a 30 × 30 grid with Nmax = 5 agents. To model spatially heterogeneous information, we weigh grid cells according to a probability distribution. We consider a uniform field, a mixture of two isotropic Gaussian components, and a positive log-Gaussian process field generated using a separable radial basis function (RBF) kernel. Cell weights remain constant throughout each experiment. All methods are evaluated with the same cell weights and initial agent positions. The global state st contains the active-agent set Nt, the current agent positions, and the accumulated coverage set 
+
+Chist  
+
+> t−1
+
+= St−1 
+
+> k=1
+
+Ck(Ak; sk), which records all cells sensed before the action at time t. The complete coverage history is maintained by the environment for state transitions and utility evaluation but is not directly available to individual agents during decentralized execution. Each agent observes only a local encoding of the coverage status described below. Each agent receives a discrete local observation oi,t . It contains: 1) the index of the agent’s current 6 × 6 region in a partition of the workspace into 25 regions; 2) the relative positions of at most two nearest active neighbors within the communication radius rcom = 2 ; 3) the states of the agent’s current cell and its four axially adjacent cells, where each cell is classified as already covered or outside the workspace, uncovered with low information density, or uncovered with high information density; and 4) the agent’s previous action. Thus, an agent observes only nearby coverage and neighbor information, rather than the complete coverage history or the positions of all agents. At each step t, active agent i ∈ N t selects a motion action 
+
+ai,t ∈ A i = {idle , left , right , up , down }, which determines its next position. Let Di(ai,t ; st) denote the sensing region of agent i after applying action ai,t at state st, which includes all cells within Chebyshev distance rcov = 1 from the agent’s new position. Hence, Di(ai,t ; st) forms a 3 × 3 neighborhood and determines the information collected by agent i.The cells sensed as a result of executing At at state st are 
+
+Ct(At; st) = [
+
+> i∈N t
+
+Di(ai,t ; st). (78) Let Chist  
+
+> t−1
+
+= St−1 
+
+> k=1
+
+Ck(Ak; sk) denote all cells covered before the action at time t. We define the stage utility as the weighted information collected from uncovered cells: 
+
+Ft(At; st) = X
+
+> v∈C t(At;st)\C hist
+> t−1
+
+ρ(v), (79) where ρ(v) ≥ 0 is the weight of cell v ∈ V . Utility Ft(·; st)
+
+is a normalized, monotone, and submodular set function over the active agent-action ground set Ωt, satisfying Assumption 1 [25], [41]. We measure performance as the weighted coverage ratio 
+
+CovRatio t =
+
+P
+
+> v∈C hist
+> t
+
+ρ(v)
+
+P 
+
+> v∈V
+
+ρ(v) . (80) We compare our proposed algorithm SubMAPL (Algo-rithm 1) with four benchmarks. 
+
+MA-SPL [17]: a policy-based continuous-extension method that employs a submodular surrogate gradient, a minimum-marginal-gain correction, neighbor consensus, and Euclidean projection. 
+
+MA-OSEA [11]: a multilinear-extension method based on curvature-aware surrogate gradients, neighbor consensus, uni-form mixing, and a projection-free KL update. 
+
+REINFORCE [42]: a tabular return-based policy-gradient method trained using the global newly covered information as the stage reward. 
+
+OSG [2]: a centralized online greedy method that sequentially selects one action for each agent according to their current marginal coverage gains following a fixed order. SubMAPL and REINFORCE are trained in a closed-system setting for 3000 episodes with horizon T = 100 steps. Each evaluation trajectory has length T = 2000 . MA-SPL and MA-OSEA are initialized with uniform policies and perform their native online updates throughout the evaluation horizon. At each time step, OSG processes the active agents in a fixed order, and each active agent greedily maximizes Ft over the active agent set at each step t. A complete communication graph is used for MA-SPL and MA-OSEA. SubMAPL does not perform inter-agent communication or consensus during decentralized execution. Each agent instead locally observes the relative positions of at most the two nearest active agents within communication radius of rcom = 2 .For the methods trained in the closed-system setting, each agent retains its finite-logit policy table while inactive and restores it upon reactivation. We use five training seeds and five 14 
+
+TABLE II : Normalized areas under the coverage curves in the open-system evaluation. Higher values indicate faster overall information acquisition. Method Uniform Mixture of two Gaussians Gaussian process Average SubMAPL 0.966 0.960 0.963 0.963 
+
+MA-SPL 0.939 0.914 0.918 0.924 MA-OSEA 0.843 0.775 0.831 0.816 REINFORCE 0.377 0.499 0.487 0.454 OSG 0.917 0.873 0.850 0.880 0 500 1000 1500 2000     
+
+> Time Step
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Coverage Ratio Gaussian process
+> SubMAPL (ours) MA-SPL MA-OSEA REINFORCE OSG
+> 0500 1000 1500 2000
+> Time Step
+> 12345
+> Active Agents
+
+Fig. 3: Performance under random agent participation on the Gaussian-process field. Top: coverage ratios of the five methods. Bottom: the active-agent profile shared by all methods, reported as the mean with 95% confidence intervals over five shared evaluation scenarios. 
+
+evaluation scenarios. For SubMAPL and REINFORCE, results are first averaged over training seeds within each evaluation scenario. The curves report averages across the five evaluation scenarios, and the shaded regions delimit 95% confidence intervals. 
+
+B. Results 
+
+We first evaluate performance under mild changes in the active agent set Nt, and then conduct a stress test with strongly time-varying agent participation. 
+
+1) Main Comparison: In the main comparison, all five agents are active for t = 0 , . . . , 699 , three agents are tem-porarily unavailable for t = 700 , . . . , 1299 , and all five are active again from t = 1300 . Fig. 2 compares the five methods 
+
+TABLE III : Performance under the random agent participation on the Gaussian-process information field. Method Normalized area Final coverage 95% coverage successes Mean 
+
+T0.95 
+
+SubMAPL 0.887 0.999 5/5 580 
+
+MA-SPL 0.844 0.989 5/5 904 MA-OSEA 0.683 0.894 0/5 –REINFORCE 0.338 0.444 0/5 –OSG 0.665 0.714 0/5 –        
+
+> The normalized area is the area under the coverage-ratio curve normalized by the evaluation horizon. T0.95 denotes the first time step at which the coverage ratio reaches 0.95 and is averaged only over successful scenarios. The mean normalized-area advantage of SubMAPL over MA-SPL is 0.043 , with a 95%
+> confidence interval of [0 .009 ,0.078] .
+
+under the same open-system profile. SubMAPL achieves the fastest overall information acquisition in all three landscapes. Table II reports the normalized areas under the coverage curves for all five methods. SubMAPL achieves the largest area in every information-density landscape, with an average normal-ized area of 0.963 , compared with 0.924 for the strongest competing method, MA-SPL. This advantage indicates that SubMAPL acquires information more rapidly throughout the evaluation horizon. The online optimization baselines exhibit different transient behavior. OSG initially acquires information rapidly by se-lecting actions from current marginal gains, but its sequential myopic decisions eventually plateau below complete coverage. MA-OSEA improves after the active population is restored at 
+
+t = 1300 , especially in the nonuniform fields, but remains slower than MA-SPL and SubMAPL. REINFORCE is sub-stantially slower and shows the clearest loss of progress during the interval with only two active agents. The results support the benefit of combining this categorical relaxation with full local-action marginal feedback and KL-mirror policy updates in the tested open-system coverage task. 
+
+2) Open-system Robustness: We next evaluate the trans-ferability of the closed-system trained policies under stronger stochastic variation in agent participation. The experiment uses the Gaussian process field. One agent remains active throughout the evaluation horizon, whereas each of the other four agents is active over a randomly generated contiguous time interval. All methods are evaluated under the same active-agent schedule within each evaluation scenario. Fig. 3 shows that SubMAPL achieves the fastest cumulative information acquisition despite substantial changes in both the size and composition of the active-agent set. Table III shows that SubMAPL achieves the largest normalized area and the highest final coverage. Both SubMAPL and MA-SPL reach 
+
+0.95 coverage in all five scenarios, but SubMAPL reaches this level considerably earlier, with a mean hitting time of 580 
+
+steps compared with 904 steps for MA-SPL. SubMAPL reuses observation-conditioned local policy ta-bles learned before deployment and restores the correspond-ing policy whenever an agent becomes active. Therefore, it avoids restarting the decision process after each change in LIU et al. : SUBMODULAR POLICY LEARNING FOR DISTRIBUTED TASK ALLOCATION IN OPEN MULTI-AGENT SYSTEMS 15 
+
+participation. MA-SPL continues to adapt online, but its slower transient response reduces the information accumulated early in the finite horizon. These results indicate that the learned SubMAPL policies remain effective under substantial random changes in the size and composition of the active-agent set, without deployment-time policy updates. 
+
+VII. C ONCLUSION 
+
+This paper studied decentralized policy learning for open multi-agent task allocation with monotone submodular team utilities. We introduced the partition multilinear extension (PME) as a policy-based continuous representation of the expected stage utility induced by factorized categorical poli-cies and developed SubMAPL, a KL-mirror policy-learning method using the stochastic local gradient as feedback over each agent’s feasible action set. We showed that this feedback provides unbiased PME coordinate-gradient information and that the KL-mirror update is exactly equivalent to an addi-tive logit update under tabular softmax parameterization. We established open-system approximation-regret guarantees and finite-horizon performance bounds. Numerical experiments on information coverage showed that SubMAPL policies remain effective under random changes in agent participation and out-perform online submodular-coordination and policy-gradient baselines. Future work will consider richer communication constraints, neural policy approximation, and long-horizon value-aware objectives. 
+
+REFERENCES 
+
+[1] K. Zhang, Z. Yang, H. Liu, T. Zhang, and T. Basar, “Fully decentralized multi-agent reinforcement learning with networked agents,” in Proceed-ings of the 35th International Conference on Machine Learning , vol. 80. PMLR, 2018, pp. 5872–5881. [2] Z. Xu, H. Zhou, and V. Tzoumas, “Online submodular coordination with bounded tracking regret: Theory, algorithm, and applications to multi-robot coordination,” IEEE Robotics and Automation Letters , vol. 8, no. 4, pp. 2261–2268, 2023. [3] D. Deplano, N. Bastianello, M. Franceschelli, and K. H. Johansson, “Op-timization and learning in open multi-agent systems,” IEEE Transactions on Automatic Control , vol. 71, no. 6, pp. 3864–3879, 2026. [4] S. Fujishige, Submodular functions and optimization . Elsevier, 2005, vol. 58. [5] S. Welikala, C. G. Cassandras, H. Lin, and P. J. Antsaklis, “A new performance bound for submodular maximization problems and its application to multi-agent optimal coverage problems,” Automatica , vol. 144, p. 110493, 2022. [6] Z. Xu, S. S. Garimella, and V. Tzoumas, “Communication-and computation-efficient distributed submodular optimization in robot mesh networks,” IEEE Transactions on Robotics , vol. 41, pp. 3480–3499, 2025. [7] G. L. Nemhauser, L. A. Wolsey, and M. L. Fisher, “An analysis of approximations for maximizing submodular set functions—I,” Mathe-matical programming , vol. 14, pp. 265–294, 1978. [8] M. L. Fisher, G. L. Nemhauser, and L. A. Wolsey, “An analysis of approximations for maximizing submodular set functions—II,” in 
+
+Polyhedral Combinatorics: Dedicated to the memory of DR Fulkerson .Springer, 2009, pp. 73–87. [9] J. Liu, F. Li, X. Jin, and Y. Tang, “Distributed task allocation for multi-agent systems: A submodular optimization approach,” IEEE Transac-tions on Automatic Control , 2026. [10] G. Calinescu, C. Chekuri, M. Pal, and J. Vondr´ ak, “Maximizing a monotone submodular function subject to a matroid constraint,” SIAM Journal on Computing , vol. 40, no. 6, pp. 1740–1766, 2011. [11] Q. Zhang, Z. Wan, Y. Yang, L. Shen, and D. Tao, “Near-optimal online learning for multi-agent submodular coordination: Tight approximation and communication efficiency,” in International Conference on Learning Representations , 2025. [12] R. Lowe, Y. Wu, A. Tamar, J. Harb, P. Abbeel, and I. Mordatch, “Multi-agent actor-critic for mixed cooperative-competitive environments,” Ad-vances in Neural Information Processing Systems , vol. 30, 2017. [13] C. Yu, A. Velu, E. Vinitsky, J. Gao, Y. Wang, A. Bayen, and Y. Wu, “The surprising effectiveness of PPO in cooperative multi-agent games,” 
+
+Advances in Neural Information Processing Systems , vol. 35, pp. 24 611– 24 624, 2022. [14] M. Prajapat, M. Mutn` y, M. N. Zeilinger, and A. Krause, “Submodular reinforcement learning,” in International Conference on Learning Rep-resentations , 2024. [15] R. De Santi, M. Prajapat, and A. Krause, “Global reinforcement learning: beyond linear and convex rewards via submodular semi-gradient meth-ods,” in Proceedings of the 41st International Conference on Machine Learning , vol. 235. PMLR, 2024, pp. 10 235–10 266. [16] W. Chen, C. Qian, S. Xing, Y. Zhou, and V. Crawford, “Multi-agent reinforcement learning with submodular reward,” arXiv preprint arXiv:2603.06810 , 2026. [17] Q. Zhang, Y. Sun, C. Jin, X. Zhang, Y. Shu, P. Zhao, L. Shen, and D. Tao, “Effective policy learning for multi-agent online coordination beyond submodular objectives,” Advances in Neural Information Processing Systems , vol. 38, pp. 164 278–164 339, 2025. [18] J. Liu, Y. Yang, L. Ballotta, F. Li, Y. Tang, and R. Carli, “Submodular multi-agent policy learning for online distributed task allocation in open multi-agent systems,” arXiv preprint arXiv:2605.13269 , 2026. [19] J. Foerster, G. Farquhar, T. Afouras, N. Nardelli, and S. Whiteson, “Counterfactual multi-agent policy gradients,” in Proceedings of the AAAI Conference on Artificial Intelligence , vol. 32, 2018, pp. 2974– 2982. [20] J. Castellini, S. Devlin, F. A. Oliehoek, and R. Savani, “Difference rewards policy gradients,” Neural Computing and Applications , vol. 37, no. 19, pp. 13 163–13 186, 2025. [21] G. Anil, P. Doshi, D. A. Redder, A. Eck, and L.-K. Soh, “Mohito: Multi-agent reinforcement learning using hypergraphs for task-open systems,” in The 41st Conference on Uncertainty in Artificial Intelligence , 2025. [22] L. Su, X. Li, Y. Hua, X. Dong, and J. L¨ u, “Optimal tracking of time-varying formation in open nonlinear multiagent systems,” IEEE Transactions on Automatic Control , 2026. [23] M. L. Puterman, Markov decision processes: discrete stochastic dynamic programming . John Wiley & Sons, 2014. [24] F. A. Oliehoek, C. Amato et al. , A concise introduction to decentralized POMDPs . Springer, 2016. [25] A. Krause and D. Golovin, “Submodular function maximization,” in 
+
+Tractability: Practical Approaches to Hard Problems . Cambridge University Press, 2014. [26] J. Vondr´ ak, “Optimal approximation for the submodular welfare problem in the value oracle model,” in Proceedings of the fortieth annual ACM symposium on Theory of computing , 2008, pp. 67–74. [27] C. Chekuri, J. Vondr´ ak, and R. Zenklusen, “Submodular function maximization via the multilinear relaxation and contention resolution schemes,” SIAM Journal on Computing , vol. 43, no. 6, pp. 1831–1879, 2014. [28] Q. Zhang, W. Huang, C. Jin, P. Zhao, Y. Shu, L. Shen, and D. Tao, “Multinoulli extension: A lossless yet effective probabilistic framework for subset selection over partition constraints,” in Proceedings of the 42nd International Conference on Machine Learning . PMLR, 2025, pp. 75 030–75 066. [29] A. A. Bian, B. Mirzasoleiman, J. Buhmann, and A. Krause, “Guaranteed non-convex optimization: Submodular maximization over continuous domains,” in Proceedings of the 20th International Conference on Artificial Intelligence and Statistics , vol. 54. PMLR, 2017, pp. 111–120. [30] H. Hassani, M. Soltanolkotabi, and A. Karbasi, “Gradient methods for submodular maximization,” Advances in Neural Information Processing Systems , vol. 30, 2017. [31] A. Beck and M. Teboulle, “Mirror descent and nonlinear projected subgradient methods for convex optimization,” Operations Research Letters , vol. 31, no. 3, pp. 167–175, 2003. [32] E. Hazan, “Introduction to online convex optimization,” Foundations and Trends in Optimization , vol. 2, no. 3-4, pp. 157–325, 2016. [33] S. Shahrampour and A. Jadbabaie, “Distributed online optimization in dynamic environments using mirror descent,” IEEE Transactions on Automatic Control , vol. 63, no. 3, pp. 714–725, 2017. [34] R. S. Sutton, D. McAllester, S. Singh, and Y. Mansour, “Policy gradi-ent methods for reinforcement learning with function approximation,” 
+
+Advances in Neural Information Processing Systems , vol. 12, 1999. [35] J. Peters and S. Schaal, “Natural actor-critic,” Neurocomputing , vol. 71, no. 7-9, pp. 1180–1190, 2008. 16 
+
+[36] A. Agarwal, S. M. Kakade, J. D. Lee, and G. Mahajan, “On the theory of policy gradient methods: Optimality, approximation, and distribution shift,” Journal of Machine Learning Research , vol. 22, no. 98, pp. 1–76, 2021. [37] M. Zhang, L. Chen, H. Hassani, and A. Karbasi, “Online continuous submodular maximization: From full-information to bandit feedback,” 
+
+Advances in Neural Information Processing Systems , vol. 32, 2019. [38] E. Hall and R. Willett, “Dynamical models and tracking regret in online convex programming,” in International Conference on Machine Learning . PMLR, 2013, pp. 579–587. [39] A. Krause, A. Singh, and C. Guestrin, “Near-optimal sensor placements in Gaussian processes: Theory, efficient algorithms and empirical stud-ies,” in Journal of Machine Learning Research , vol. 9, no. 8, 2008, pp. 235–284. [40] D. Golovin and A. Krause, “Adaptive submodularity: Theory and applications in active learning and stochastic optimization,” Journal of Artificial Intelligence Research , vol. 42, pp. 427–486, 2011. [41] X. Sun, C. G. Cassandras, and X. Meng, “Exploiting submodularity to quantify near-optimality in multi-agent coverage problems,” Automatica ,vol. 100, pp. 349–359, 2019. [42] R. J. Williams, “Simple statistical gradient-following algorithms for connectionist reinforcement learning,” Machine Learning , vol. 8, no. 3, pp. 229–256, 1992.

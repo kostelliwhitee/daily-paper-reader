@@ -1,0 +1,641 @@
+Title: DeltaLog: Deferred Materialization of Recurrent States for Linear Attention Decoding
+
+URL Source: https://arxiv.org/pdf/2608.15533v1
+
+Published Time: Tue, 18 Aug 2026 00:57:51 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# DeltaLog: Deferred Materialization of Recurrent States for Linear Attention Decoding 
+
+Junqing Lin 
+
+linjunqing@mail.ustc.edu.cn 
+
+University of Science and Technology of China Hefei, China 
+
+Jingwei Sun †
+
+sunjw@ustc.edu.cn 
+
+University of Science and Technology of China Hefei, China 
+
+Guangzhong Sun 
+
+gzsun@ustc.edu.cn 
+
+University of Science and Technology of China Hefei, China 
+
+Abstract 
+
+Linear attention models eliminate the quadratic prefix com-putation and context-growing KV cache of softmax attention by replacing pairwise token interactions with recurrent state updates. However, existing decoding implementations often materialize and write back the full recurrent state after every generated token, making state maintenance a major source of memory traffic, especially for models with large states and many heads. This paper presents DeltaLog, a recurrent-state decoding scheme that reduces this overhead without changing the model semantics. Specifically, DeltaLog repre-sents the recurrent state as a dense base state together with a bounded log of recent compact updates. Most decode steps append only compact update factors to this log, while peri-odic merge steps fold the accumulated updates back into the dense base state. Thus, the model observes the same dense state as in eager decoding, but most full-state write-backs are replaced by lightweight append operations. We implement DeltaLog for GDN, KDA, and RWKV6 and integrate it into a prototype serving stack. Across these models, DeltaLog accelerates the recurrent-state update kernel by up to 1 .86 ×,reduces profiled recurrent-state write traffic by up to 7 .83 ×,and achieves 1 .05–1 .20 × end-to-end serving speedups over dense recurrent baselines. 
+
+Keywords: Recurrent Linear Attention, Autoregressive De-coding, Memory-Bandwidth Optimization 
+
+1 Introduction 
+
+Large language models (LLMs) have become central to many production services [3, 15, 35, 36]. However, as deployments scale, inference efficiency is increasingly limited by the soft-max attention mechanism in Transformer-based LLMs [28], in which each token attends to all preceding tokens in the pre-fix. This design introduces two major efficiency bottlenecks. First, full-sequence attention requires quadratic token inter-actions, causing computational cost to grow rapidly with sequence length. Second, autoregressive decoding relies on a key-value (KV) cache to store previously computed keys and values, which can impose substantial GPU memory pressure when serving large batches or long sequences. These limi-tations have motivated systems optimizations for standard 
+
+> †Co-corresponding author
+
+attention, including IO-aware kernels such as FlashAtten-tion [8, 9, 22] and serving systems that improve KV-cache management [15, 23, 36]. A complementary line of work modifies the attention oper-ator itself. Rather than computing softmax attention between the current token and all preceding tokens, recurrent linear-attention models [17, 25, 26, 30] maintain a fixed-size recur-rent state that summarizes the prefix. During decoding, each step reads the previous state, applies an operator-specific transformation such as decay or gating, and incorporates the current token into the state. This update is compact, since it can be represented by two vectors instead of a full matrix. However, the state that must be carried to the next token is still a dense matrix. As a result, although recurrent linear attention avoids the context-length growth of the KV cache, it does not remove the cost of maintaining decode state. The bottleneck shifts from storing many token-level KV entries to repeatedly updating a dense recurrent state. This recurrent update pattern creates a mismatch between the logical update required by linear-attention models and the physical memory traffic performed by existing implemen-tations [15, 33]. As shown in Figure 1, for batch size 𝐵 and 𝐻 
+
+attention heads, the compact per-token update contains only 
+
+𝑂 (𝐵𝐻 (𝑑 𝑘 +𝑑 𝑣 )) values. In contrast, an eager implementation immediately materializes this update into the full recurrent state and writes back the dense [𝐵, 𝐻, 𝑑 𝑘 , 𝑑 𝑣 ] tensor to high-bandwidth memory (HBM). This touches 𝑂 (𝐵𝐻𝑑 𝑘 𝑑 𝑣 ) state elements at every generated token, even though the actual information added by the token is much smaller. We refer  
+
+> COMPACT FACTORS
+> 𝑎 𝑡
+
+⊗ 𝑏 ⊤  
+
+> 𝑡
+> 𝑑 𝑘
+> 𝑑 𝑣
+> 𝑎 𝑡 , 𝑏 ⊤
+> 𝑡 is specified compactly
+> WRITE AMPLIFICATION
+> EAGER DENSE COMMIT
+
+𝑆 𝑡   
+
+> [𝐵, 𝐻, 𝑑 𝑘 , 𝑑 𝑣 ]
+
+Figure 1. The state-update tax. A token contributes compact factors with 𝑂 (𝐵𝐻 (𝑑 𝑘 +𝑑 𝑣 )) values, but eager materialization writes back the full [𝐵, 𝐻, 𝑑 𝑘 , 𝑑 𝑣 ] recurrent state, touching 
+
+𝑂 (𝐵𝐻𝑑 𝑘 𝑑 𝑣 ) elements per token. 
+
+> 1arXiv:2608.15533v1 [cs.DC] 16 Aug 2026 Junqing Lin, Jingwei Sun, and Guangzhong Sun
+
+to this amplified per-token maintenance cost as the state-update tax . This cost arises from the chosen materialization policy rather than from the recurrence itself. This mismatch motivates a different execution strategy. Future decoding steps must observe the same logical state 𝑆 𝑡 , but 𝑆 𝑡 does not need to be stored as a freshly materialized dense tensor after every token. Instead, recent compact updates can remain deferred, as long as subsequent state reads incorporate them exactly. This paper proposes DeltaLog, a deferred materialization strategy for recurrent linear-attention decoding. Rather than eagerly materializing this state as a fully updated dense ten-sor after every step, DeltaLog decomposes the state into a dense base state that stores older history and a bounded up-date log that stores recent compact updates. Each log entry stores the compact factors needed to reconstruct a recent state update. As a result, most decoding steps only append a compact log entry while leaving the dense base unchanged. To bound replay overhead, DeltaLog periodically merges the accumulated log entries into the dense base. To imple-ment DeltaLog efficiently on GPUs, we partition each head state along the value dimension. Each value tile stores the corresponding dense-base slice and value-side shard of the deferred update log, whereas the key-side component of each compact update is shared across value tiles and written only once per request–head. This layout exposes value-tile paral-lelism while avoiding redundant writes. DeltaLog changes only the physical schedule by which state updates are com-mitted, without modifying the model weights or logical re-currence. In exact arithmetic, it is algebraically equivalent to eager dense-state updates. We evaluate DeltaLog with both decode kernels and a serving prototype. For one-token decoding across Gated DeltaNet (GDN) [30], Kimi Delta Attention (KDA) [26], and RWKV6 [17], DeltaLog reduces latency relative to Fast Linear Attention (FLA) [33], a highly optimized dense recurrent-state baseline, by 1 .19–1 .69 × on H200 and 1 .30–1 .86 × on RTX 4090. In the serving prototype, the gains are smaller but positive, reaching 1 .08–1 .20 × on Qwen3.6-35B-A3B [20] and 1.05–1 .12 × on Kimi-Linear-48B-A3B-Instruct [26]. These re-sults show that deferred recurrent-state write-back improves the targeted decode kernels and can translate into end-to-end serving benefits under the evaluated configurations. This paper makes the following contributions. 
+
+• We identify and characterize the state-update tax : the per-token overhead caused by eager dense recurrent-state materialization in large-batch recurrent linear attention serving. 
+
+• We propose DeltaLog, a deferred-materialization exe-cution strategy for recurrent linear-attention decod-ing. DeltaLog represents the state as a dense base augmented with a bounded log of compact updates, allowing most decoding steps to append compact fac-tors rather than rewrite the full dense state. 
+
+• We instantiate DeltaLog for one-token decoding in GDN, KDA, and RWKV6. Experiments show that our implementation preserves the original recurrence equa-tions and improves decoding performance at the ker-nel level and in end-to-end prototype serving. 
+
+2 Background and Motivation 
+
+2.1 Recurrent Form of Linear Attention 
+
+Softmax attention evaluates each query against the keys and values of preceding tokens, requiring the processed prefix to remain available as a token-level KV history. Linear atten-tion instead uses a factorized similarity function that allows key–value contributions to be aggregated before a query arrives [14]. Ignoring optional normalization, causal linear attention can be written as the recurrence 
+
+𝑆 𝑡 = 𝑆 𝑡 −1 + 𝜙 (𝑘 𝑡 )𝑣 ⊤ 
+
+> 𝑡
+
+, 𝑜 𝑡 = 𝜙 (𝑞 𝑡 )⊤𝑆 𝑡 , (1) where 𝑆 𝑡 aggregates the key–value interactions of the prefix through step 𝑡 . Rather than retaining one key and value per preceding token, the recurrence carries a matrix state 
+
+𝑆 𝑡 ∈ R𝑑 𝑘 ×𝑑 𝑣 whose shape is independent of context length. Modern recurrent linear-attention models extend this ba-sic additive recurrence with decay, gating, or delta-rule cor-rections [17, 25, 26, 30, 31]. For our systems analysis, these variants can be expressed by the same two operations: trans-forming the previous state and adding the outer product of two token-dependent vectors. Let 
+
+𝐷 (ℓ) = diag (exp (ℓ)) . (2) Absorbing any query feature map into 𝑞 𝑡 , a recurrent decod-ing step can then be written as 
+
+𝑆 𝑡 = 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1 + 𝑎 𝑡 𝑏 ⊤ 
+
+> 𝑡
+
+, 𝑜 𝑡 = 𝜙 (𝑞 𝑡 )⊤𝑆 𝑡 , (3) where 𝜆 𝑡 ∈ R𝑑 𝑘 is the per-step log-decay vector and 𝑎 𝑡 ∈ R𝑑 𝑘 
+
+and 𝑏 𝑡 ∈ R𝑑 𝑣 form the token update. Thus, the carried state is 
+
+Table 1. Representative recurrent formulations written in the components used by our systems analysis. The columns list the model-specific ingredients that instantiate Eq. 3.                                                              
+
+> Model State Transform Update Pair
+> (𝑎 𝑡 , 𝑏 𝑡 )
+> Decay Form
+> Linear Attention 𝑆 𝑡 −1(𝜙 (𝑘 𝑡 ), 𝑣 𝑡 )none RetNet 𝛾 𝑡 𝑆 𝑡 −1(𝑘 𝑡 , 𝑣 𝑡 )scalar GLA 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1(𝑘 𝑡 , 𝑣 𝑡 )diagonal RWKV6 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1(𝑘 𝑡 , 𝑣 𝑡 )diagonal GDN 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1(𝑘 𝑡 , 𝛽 𝑡 (𝑣 𝑡 −𝑘 ⊤
+> 𝑡 𝑆 𝑡 −1)) scalar KDA 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1(𝑘 𝑡 , 𝛽 𝑡 (𝑣 𝑡 −𝑘 ⊤
+> 𝑡 𝑆 𝑡 −1)) diagonal
+> 2DeltaLog
+> 64 128 256
+> 010 20 30 40 50
+> 25 .235 .644 .624 .534 .242 .323 .732 .638 .7
+> Serving batch size ( 𝐵 )Latency share (%) 1k context 2k context 4k context
+
+Figure 2. Recurrent-state materialization occupies a growing share of full-model decode latency. a dense 𝑑 𝑘 × 𝑑 𝑣 matrix, whereas each new token contributes an update represented by vectors of total size 𝑂 (𝑑 𝑘 + 𝑑 𝑣 ).Table 1 shows how representative models instantiate this common form. Linear attention [14] applies no decay, Ret-Net [25] uses scalar decay, and GLA [31], RWKV6 [17], and KDA [26] use diagonal decay with different update seman-tics. Scalar decay is represented by sharing one value across the coordinates of 𝜆 𝑡 , whereas diagonal decay uses a key-wise vector. Delta-rule models, including DeltaNet [32] and GDN [30], additionally construct the value-side factor us-ing the previous state. Eq. 3 therefore provides the common decode-time interface used in the remainder of our analysis. 
+
+2.2 Recurrent State in Autoregressive Decoding 
+
+LLM inference typically comprises two phases: prefill and 
+
+decode [15, 36]. The prefill phase processes the input prompt in parallel and constructs the state required for subsequent generation. The decode phase then generates tokens autore-gressively, with each step depending on the state produced by the previous step. As a result, decode latency is sensitive not only to per-token arithmetic cost, but also to how the recurrent state is stored, accessed, and updated across steps. In recurrent linear attention, prefill compresses the prompt into an initial recurrent state. During decode, each active request maintains one state slot per recurrent layer, instead of a token-level KV history. At step 𝑡 , the decoder reads 𝑆 𝑡 −1,computes the output and token-specific update factors, and produces the logical state 𝑆 𝑡 needed by the next step. Each state slot has a fixed shape independent of context length, but a serving batch must maintain and access these slots across all active requests and attention heads. 
+
+2.3 The State-Update Tax in Serving 
+
+Existing dense implementations typically materialize each state slot as a tensor and evaluate Eq. 3 eagerly [33, 37]. Given the compact factors 𝑎 𝑡 and 𝑏 𝑡 , they read the full state from HBM, apply the state transformation and outer-product up-date, and write the resulting dense state back to HBM. This design makes 𝑆 𝑡 immediately available for the next decode step, but it places a full-state read–modify–write operation on the critical path of every generated token. Thus, replacing a context-growing KV cache with a fixed-shape recurrent state changes the structure of decode-state traffic, but does not necessarily make that traffic inexpensive. The recurrence exposes an important asymmetry between the logical update and its eager physical realization. A new token contributes factors of total size 𝑂 (𝑑 𝑘 +𝑑 𝑣 ), but immediately folding those factors into the state reads and writes 𝑂 (𝑑 𝑘 𝑑 𝑣 ) elements. We call the memory traffic caused by this eager dense material-ization the state-update tax . The term separates the cost of physically maintaining the recurrent state from the compact information introduced by the token itself. This tax scales with serving concurrency. For a batch of 𝐵 requests and 𝐻 heads, the runtime maintains a dense recurrent-state tensor of shape [𝐵, 𝐻, 𝑑 𝑘 , 𝑑 𝑣 ], while the new token factors occupy only 𝑂 (𝐵𝐻 (𝑑 𝑘 +𝑑 𝑣 )) elements. Increas-ing the batch exposes more parallel decode work, but also increases the dense state traffic incurred at every iteration. A fixed per-request state can therefore become a large ag-gregate bandwidth cost. To determine whether this cost remains visible beyond an isolated recurrent kernel, we measure its share of full-model decode latency in Qwen3.6-35B-A3B. Figure 2 shows a consistent concurrency trend across context lengths: for a 1k-token context, recurrent-state materialization grows from 25.2% of decode latency at 𝐵 = 64 to 44.6% at 𝐵 =
+
+256. The corresponding shares at 2k and 4k contexts also rise monotonically with batch size. Eager state maintenance can therefore become a first-order serving bottleneck even though the recurrent state is independent of context length. 
+
+2.4 Why the State-Update Tax Is Memory-Bound 
+
+The measurements above are consistent with a bandwidth bottleneck. Eager materialization converts a compact logical update into a large physical memory transaction: for every generated token, the runtime reads the dense 𝑑 𝑘 × 𝑑 𝑣 state from HBM, performs the state transition and compact update, and writes the entire result back. The amount of arithmetic and the amount of memory traffic both scale as 𝑂 (𝑑 𝑘 𝑑 𝑣 ),but the update performs only a small constant amount of computation per state element. The roofline model [29] characterizes this imbalance via arithmetic intensity, defined as computation per byte moved. Retaining only the dominant dense-state read and write traf-fic yields AI dense = 4𝑑 𝑘 𝑑 𝑣 FLOPs 2 · 4𝑑 𝑘 𝑑 𝑣 bytes = 0.5 FLOPs/byte for a 32-bit state and approximately 1 .0 FLOPs/byte for a 16-bit state. This estimate deliberately excludes metadata traffic, output writes, vector loads, and model-specific additional arithmetic; it isolates the inherent cost of eagerly reading and writing the dense state.      
+
+> 3Junqing Lin, Jingwei Sun, and Guangzhong Sun 0.1 110 100 1000 10000
+> Arithmetic Intensity (FLOPs/byte)
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> 10 6
+> Performance (GFLOPS)
+> Dense (float32) Dense (bfloat16/float16)
+
+Figure 3. Roofline view of eager dense recurrent-state up-dates. Their arithmetic intensity is far below machine bal-ance, making them strongly memory-bound. These arithmetic intensities are far below the machine balance of modern GPUs. For example, an H200-class accel-erator provides on the order of 1 ,000 TFLOPS of FP16/BF16 throughput and 4 .8 TB/s of HBM bandwidth, implying a balance of roughly 208 FLOPs/byte. The gap of more than two orders of magnitude places eager dense-state updates deep in the memory-bound regime: compute is abundant, but per-token latency is dominated by HBM traffic. Figure 3 visualizes this separation between dense recurrent updates and the machine-balance line. The bottleneck becomes more severe as serving batch size grows. For batch size 𝐵 and 𝐻 attention heads, the recurrent state has shape [𝐵, 𝐻, 𝑑 𝑘 , 𝑑 𝑣 ], so dense-state traffic scales linearly with the number of concurrently decoded sequences. With 𝐵 = 512, 𝐻 = 32, 𝑑 𝑘 = 𝑑 𝑣 = 128, and a 32-bit state, the recurrent state occupies 1 GiB; one eager decode step moves roughly 2 GiB for the state read and write alone. This scaling explains the trend in Figure 2: eager materialization creates a bandwidth-dominated latency floor even though the logical update introduced by each token remains compact. Avoiding this repeated dense write-back therefore requires a different physical representation of the recurrent state. 
+
+3 Method 
+
+The preceding analysis indicates that the dominant ineffi-ciency arises not from the recurrent update itself, but from eagerly materializing each update as dense HBM traffic. This observation motivates an alternative physical representation of the state for one-token recurrent decoding: one that pre-serves the original logical recurrence while avoiding dense per-token write-back. We therefore introduce DeltaLog, a deferred-materialization execution strategy for recurrent lin-ear attention decoding. Figure 4 provides an overview of the execution workflow. At a high level, DeltaLog represents the live recurrent state as a dense base augmented with a bounded log of re-cent compact updates, rather than overwriting the full dense state after every token. Let 𝑀 denote the merge interval. During the first 𝑀 − 1 steps of each cycle, new updates are appended to the log; at the 𝑀 -th step, the accumulated logi-cal state is materialized back into the dense base. Crucially, DeltaLog modifies only the physical representation of the state: in exact arithmetic, the logical state observed by the model is identical to that produced by eager dense mate-rialization. Model weights, operator equations, and prefill behavior are unchanged. The dense base is still read at every decoding step to preserve access to long-range history. Thus, the optimization specifically targets the write path, replacing dense per-token write-back with compact appends and one amortized dense write per cycle. The remainder of this section develops the method from three progressively more concrete perspectives: the append– merge decoding cycle, the base-plus-log state invariant to-gether with its traffic model, and the kernel- and operator-level realizations adopted in our implementation. 
+
+3.1 Append–Merge Decode Cycle 
+
+DeltaLog replaces eager dense write-back with an append– merge decoding cycle. During the common append step, the runtime records the current compact update in a bounded live log while leaving the dense recurrent state unchanged. At periodic merge steps, all deferred updates are remateri-alized into the dense state, after which the log is cleared. By decoupling frequent compact updates from infrequent dense state materialization, this cycle avoids dense state write-back on most decoding steps while bounding the num-ber of deferred updates that must be replayed. Algorithm 1 summarizes the resulting logical decoding procedure. Within each DeltaLog cycle, the live physical state con-sists of a dense base state ¯ 𝑆 generated by the most recent materialization, a cumulative log-decay ¯ ℓ applied since that materialization, and a bounded log of deferred compact up-dates. Let 𝑀 denote the merge interval and 𝐶 = 𝑀 − 1 the live-log capacity. Each cycle comprises 𝐶 append steps fol-lowed by one merge step. For a batch of requests, the physical state contains: 
+
+• a dense FP32 base state ¯ 𝑆 ∈ R𝐵 ×𝐻 ×𝑑 𝑘 ×𝑑 𝑣 ;
+
+• a cumulative log-decay ¯ ℓ in FP32, stored either as one value per head for head-wise scalar decay or as one value per key for per-key decay; 
+
+• bounded log buffers 𝐾 log ∈ R𝐵 ×𝐻 ×𝐶 ×𝑑 𝑘 and 𝑈 log ∈
+
+R𝐵 ×𝐻 ×𝐶 ×𝑑 𝑣 ;
+
+• one FP32 log-decay snapshot Λlog per log entry, with the same scalar-or-vector structure as ¯ ℓ;
+
+• the current live-log length 𝐿 ≤ 𝐶 .Here 𝐵 is the serving batch size and 𝐻 is the number of heads. The main structural difference across operators lies in the 
+
+> 4DeltaLog
+
+(a) Eager dense recurrent decoding (b) DeltaLog                                            
+
+> dense state
+> St−1
+> decode kernel low-rank update dense state
+> St
+> ot
+> full-state write every token
+> O(BHd kdv)
+> read write
+> dense base
+> ¯S
+> cumulative log-decay
+> ¯ℓ
+> {K, U, Λ}log [0]
+> {K, U, Λ}log [1]
+> · · · {K, U, Λ}log [L−1]
+> St=D(¯ℓ) ¯S+∑
+> i<L D(¯ℓ−Λi)KiU⊤
+> i
+> decode step
+> read base, replay log emit ot
+> ot
+> dispatch by L
+> append
+> write (at, b t,¯ℓ)
+> L←L+ 1
+> merge
+> write dense base reset L= 0 compact log write
+> O(BH (dk+dv))
+> L < C L=C
+> periodic schedule ( C=M−1)
+> app app · · · app merge
+> append while L < C
+> merge when L=C
+
+Figure 4. DeltaLog overview. Eager recurrent decoding materializes the state at every token. DeltaLog instead stores a base plus a bounded compact update log, appends while 𝐿 < 𝐶 , and materializes the logical state into the dense base when 𝐿 = 𝐶 .
+
+Algorithm 1 DeltaLog Logical Decode Step 
+
+Require: Base state ¯ 𝑆 , cumulative log-decay ¯ ℓ, live log 
+
+𝐾 log , 𝑈 log , Λlog , live-log length 𝐿 , merge interval 
+
+𝑀 , live-log capacity 𝐶 = 𝑀 − 1, and current token tensors  
+
+> 1:
+
+Evaluate any operator-defined readouts from the pre-update logical state represented by the dense base and live log.  
+
+> 2:
+
+Update cumulative log-decay: ¯ ℓ ← ¯ℓ + 𝜆 𝑡 . 
+
+> 3:
+
+Form the model-specific update factors (𝑎 𝑡 , 𝑏 𝑡 ) and any post-update output required by the original recurrence.  
+
+> 4:
+
+if 𝐿 < 𝐶 then  
+
+> 5:
+
+Append (𝑎 𝑡 , 𝑏 𝑡 , ¯ℓ) into slot 𝐿 and set 𝐿 ← 𝐿 + 1.  
+
+> 6:
+
+else  
+
+> 7:
+
+Materialize the represented logical state plus the cur-rent update into ¯ 𝑆 . 
+
+> 8:
+
+Reset ¯ ℓ ← 0 and 𝐿 ← 0.  
+
+> 9:
+
+Return the step output. log-decay metadata: head-wise scalar decay requires 𝑂 (𝐵𝐻 )
+
+metadata storage, whereas per-key decay requires 𝑂 (𝐵𝐻𝑑 𝑘 ).
+
+Append stage. When 𝐿 < 𝐶 , the runtime follows the append path. It first evaluates any operator-defined read-outs that must be taken from the pre-update logical state. This ordering is required to preserve the original recurrence semantics: quantities defined on the old state must be eval-uated before the transition, while quantities defined on the new state are evaluated afterward. In the evaluated Delta-rule operators, the old-state correction is precisely such a pre-update readout. The runtime then folds the current log-decay into the cumulative log-decay, ¯ℓ ← ¯ℓ + 𝜆 𝑡 . (4) After forming the update factors (𝑎 𝑡 , 𝑏 𝑡 ), it appends them to the current log slot 𝑗 = 𝐿 :
+
+𝐾 log [ 𝑗 ] ← 𝑎 𝑡 , 𝑈 log [ 𝑗 ] ← 𝑏 𝑡 , Λlog [ 𝑗 ] ← ¯ℓ, (5) and increments 𝐿 . The dense base is left unchanged on this path. Thus, the append path is computationally inexpensive, although each append increases the replay set by one entry. 
+
+Merge stage. The merge operation bounds live-log growth. At the 𝑀 -th step of a cycle, when the live log reaches its ca-pacity 𝐿 = 𝐶 , the runtime materializes the represented logical state together with the current update into the dense base. After applying the current log-decay and constructing the current update factors, it writes ¯𝑆 ← 𝐷 ( ¯ℓ) ¯𝑆 +
+
+> 𝐿 −1
+
+∑︁ 
+
+> 𝑖 =0
+
+𝐷   ¯ℓ − Λlog [𝑖 ] 𝐾 log [𝑖 ]𝑈 log [𝑖 ]⊤ + 𝑎 𝑡 𝑏 ⊤ 
+
+> 𝑡
+
+. (6) The runtime then resets ¯ ℓ ← 0, clears the log, and sets 𝐿 ← 0. After this reset, the physical representation contains only the dense base. Append and merge therefore serve comple-mentary purposes: append avoids dense write-back in the common case, whereas merge incurs this cost once per cycle to keep replay bounded. 
+
+3.2 State Invariant and Traffic Model 
+
+We now formalize the logical state induced by the append– merge cycle and derive the corresponding recurrent-state traffic model. The key invariant is that, at every decoding step, the dense base state together with the deferred update log is logically equivalent to the state that would have been obtained under eager dense decoding. Suppose that there are currently 𝐿 deferred entries, where 0 ≤ 𝐿 ≤ 𝐶 . The logical 
+
+> 5Junqing Lin, Jingwei Sun, and Guangzhong Sun
+
+state represented by the physical state is then given by 
+
+𝑆 𝑡 = 𝐷 ( ¯ℓ) ¯𝑆 +
+
+> 𝐿 −1
+
+∑︁ 
+
+> 𝑖 =0
+
+𝐷   ¯ℓ − Λlog [𝑖 ] 𝐾 log [𝑖 ]𝑈 log [𝑖 ]⊤. (7) The first term is the dense base decayed by the cumula-tive log-decay since the last materialization. The second term replays all deferred compact updates, where the factor 
+
+𝐷   ¯ℓ − Λlog [𝑖 ] accounts exactly for the decay accumulated after entry 𝑖 was inserted. 
+
+Closure under the recurrence. Eq. 7 is useful only if one recurrent step maps the representation back to the same form. This follows directly from Eq. 3. Consider first an append step. Applying 𝐷 (𝜆 𝑡 ) increments the cumulative log-decay from ¯ ℓ to ¯ ℓ + 𝜆 𝑡 . When 𝐿 < 𝐶 , the new compact contribution 
+
+𝑎 𝑡 𝑏 ⊤ 
+
+> 𝑡
+
+is stored as one additional deferred entry, 
+
+(𝐾 log [𝐿 ], 𝑈 log [𝐿 ], Λlog [𝐿 ]) = (𝑎 𝑡 , 𝑏 𝑡 , ¯ℓ + 𝜆 𝑡 ).
+
+Under this update, each previous log entry continues to be weighted by the decay accumulated after it was inserted, and the new entry has zero subsequent decay at insertion time. Therefore, in exact arithmetic, the represented state after the append is 𝐷 (𝜆 𝑡 )𝑆 𝑡 −1 + 𝑎 𝑡 𝑏 ⊤ 
+
+> 𝑡
+
+, which matches the eager dense recurrence. When 𝐿 = 𝐶 , the merge step writes Eq. 6 into the dense base and then resets ¯ ℓ ← 0 and 𝐿 ← 0. After the reset, Eq. 7 reduces to 𝑆 𝑡 = ¯𝑆. Thus, the merge step also preserves the invariant. The representation is therefore closed under both append and merge steps, establishing equivalence to eager dense decoding in exact arithmetic. 
+
+Traffic analysis. We next compare the recurrent-state traffic of eager dense decoding and DeltaLog. To fairly com-pare the two representations, we separate traffic shared by both paths from state traffic specific to each representation. Let 𝑇 common denote current-token inputs, such as the update factors and log-decay 𝜆 𝑡 , that are read by both eager dense decoding and DeltaLog. Let 𝑝 𝑆 be the number of bytes per dense-state element. The recurrent-state footprint of one layer is 𝐶 state = 𝑝 𝑆 𝐵𝐻𝑑 𝑘 𝑑 𝑣 . An eager dense implementation reads and writes this state at every decoding step, yielding 
+
+𝑇 dense ≈ 𝑇 common + 2𝐶 state . (8) For DeltaLog, let 𝑝 𝐾 and 𝑝 𝑈 denote the bytes per element of the deferred key- and value-side factors, respectively. Let 
+
+𝑑 𝜆 denote the log-decay width, where 𝑑 𝜆 = 1 for head-wise scalar decay and 𝑑 𝜆 = 𝑑 𝑘 for per-key decay. The persistent cumulative log-decay requires 𝐶 decay = 4𝐵𝐻𝑑 𝜆 , and each log entry, including its FP32 log-decay snapshot, requires 
+
+𝐶 entry = 𝐵𝐻 (𝑝 𝐾 𝑑 𝑘 + 𝑝 𝑈 𝑑 𝑣 + 4𝑑 𝜆 ) . (9) Over an 𝑀 -step cycle, DeltaLog writes 𝑀 − 1 log entries and replays Í𝑀 −1 
+
+> 𝐿 =0
+
+𝐿 = 𝑀 (𝑀 −1) 
+
+> 2
+
+entries. Assuming the replay stream reads each live entry once, the idealized average per-step log traffic is 
+
+𝐶 log (𝑀 ) ≈ 
+
+ 𝑀 − 1
+
+𝑀 + 𝑀 − 12
+
+
+
+𝐶 entry , (10) where the two terms correspond to amortized append writes and replay reads, respectively. The dominant per-step traffic for DeltaLog is therefore 
+
+𝑇 delta ≈ 𝑇 common + 𝐶 state + 𝐶 state 
+
+𝑀 + 𝐶 log (𝑀 ) + 2𝐶 decay . (11) Under the same idealized single-stream assumption, the final term accounts for reading and writing the persistent cumu-lative log-decay once per step. We omit lower-order length and index metadata, as well as transient scratch traffic. Hence, DeltaLog is beneficial when the avoided dense write traffic, 𝐶 state 
+
+ 1 − 1
+
+> 𝑀
+
+ , exceeds the additional deferred-representation traffic, 𝐶 log (𝑀 ) + 2𝐶 decay . Increasing 𝑀 re-duces the amortized dense-state write cost but increases replay traffic, so the optimal merge interval is operator- and kernel-dependent. 
+
+3.3 Tiled Kernel Decomposition 
+
+The append–merge cycle defines the logical procedure for decoding; however, an efficient implementation must also conform to the GPU execution model. Since each slot–head state contains a full 𝑑 𝑘 × 𝑑 𝑣 matrix, assigning an entire state to a single work unit would severely limit parallelism and make it difficult to saturate memory bandwidth. We therefore partition the state along the value dimension. For each state slot and attention head, each work unit owns a dense-base tile of size 𝑑 𝑘 × 𝐵 𝑉 , where 𝐵 𝑉 is the tile width along the value dimension and V𝑗 denotes the value coordinates assigned to tile 𝑗 . This yields 𝑁 𝑉 = ⌈𝑑 𝑣 /𝐵 𝑉 ⌉ value tiles, and the GPU execution grid is organized over state slots, attention heads, and value tiles. This decomposition induces an asymmetry between value-local data and shared metadata. The dense-base tile and the corresponding shard of the value-side log, 𝑈 log , are local to each value tile; thus, each work unit can stream its assigned dense tile, update the corresponding output slice, and write to 𝑈 log [𝐿, V𝑗 ] independently. In contrast, the key-side entry 
+
+𝐾 log [𝐿 ], the log-decay snapshot Λlog [𝐿 ], the cumulative log-decay ¯ ℓ, and the live-log length 𝐿 are shared across all value tiles associated with the same slot and head. This asymmetry creates two coordination requirements. First, replay coefficients should be computed once per slot– head pair rather than redundantly by every value tile. Re-playing a previous entry requires key-side quantities such as 
+
+𝑞 ⊤ 
+
+> 𝑡
+
+𝐾 log [𝑖 ] and, for Delta-rule operators, the correction projec-tion 𝑘 ⊤ 
+
+> 𝑡
+
+𝐾 log [𝑖 ], together with the row-wise rescaling induced by 𝐷 ( ¯ℓ − Λlog [𝑖 ]) . These terms depend on the current head and log entry but are independent of the value tile. Second, the shared append metadata must be updated by a single                                                
+
+> 6DeltaLog
+> Append–merge path for one slot–head pair
+> 1shared prep 2tile decode
+> 𝑁 𝑉 value-tile work units
+> 3single writer
+> shared state
+> 𝐾 log ,Λlog
+> ¯ℓ, 𝐿 𝑞 𝑡 , 𝑘 𝑡 , 𝜆 𝑡
+> ReplayPrep FP32 replay coeffs
+> ¯𝑆 [:,V0]
+> 𝑈 log [:,V0]
+> Append Decode V0
+> 𝑜 V0
+> 𝑈 log [𝐿, V0]
+> ¯𝑆 [:,V𝑗 ]
+> 𝑈 log [:,V𝑗 ]
+> Append Decode V𝑗
+> 𝑜 V𝑗
+> 𝑈 log [𝐿, V𝑗 ]
+> ¯𝑆 [:,V∗]
+> 𝑈 log [:,V∗]
+> Append Decode V∗
+> 𝑜 V∗
+> 𝑈 log [𝐿, V∗]
+> merge phase ( 𝐿 =𝐶 ): same tiled grid writes dense ¯𝑆 [:,V𝑗 ]
+> append owner
+> 𝐾 log [𝐿 ],Λlog [𝐿 ]
+> Finalize
+> ¯ℓ, 𝐿
+> append increment or merge reset reused by all tiles
+
+Figure 5. The append–merge kernel ownership path comprises three stages: shared replay preparation, parallel append decode across value tiles, and single-writer metadata commit. The merge path uses the same structure but writes back dense-base tiles. logical owner, while tile-local work units remain responsible only for their output slices and value-log shards. We address both issues with a staged append decomposi-tion based on ownership, illustrated in Figure 5. When replay reuse is profitable, ReplayPrep runs once for each state slot and head, computes the reusable key-side replay coefficients, and stores them in transient FP32 scratch space. AppendDe-code then executes in parallel across value tiles: each work unit streams its dense-base tile, loads the corresponding tile-local 𝑈 log shard, reuses the prepared coefficients, computes its output slice, and appends the new 𝑈 log [𝐿, V𝑗 ] shard. A designated writer records the shared 𝐾 log [𝐿 ] and Λlog [𝐿 ]
+
+entries, while Finalize commits the cumulative-log-decay update and increments 𝐿 exactly once. Merge follows the same value-tiled execution structure, but differs in its commit target. Instead of appending a com-pact log entry, each tile-local work unit accumulates the replayed contributions associated with its dense-base tile and writes the fully materialized FP32 tile back to HBM. Af-ter this materialization step, a single metadata update resets both the cumulative log-decay and the live-log length. 
+
+3.4 Operator Instantiations 
+
+We instantiate the base-plus-log design for three operators: GDN [30], KDA [26], and RWKV6 [17]. These operators all preserve the eager logical recurrence up to floating-point tol-erance, but differ in two orthogonal implementation choices that govern replay cost in 𝐶 log (𝑀 ): decay granularity and up-date semantics. Along these axes, GDN provides the simplest instantiation, with head-wise scalar decay and a Delta-rule correction; KDA increases the decay granularity to per-key vectors while retaining the correction path; and RWKV6 keeps the per-key log-decay metadata but removes the cor-rection path by using raw-value updates. GDN is a lightweight instantiation of the Delta rule. Its head-wise scalar decay requires only one FP32 cumulative log-decay per head. Although append operations still com-pute the Delta-rule old-state correction before committing each deferred entry, replay remains inexpensive because each deferred key-side factor is rescaled by a single scalar. Consequently, GDN benefits from the shared-ReplayPrep decomposition introduced in Section 3.3: its coefficients can be reused across value tiles with minimal metadata overhead. The dense base state and log-decay metadata are stored in FP32. Deferred key-side factors 𝑎 𝑡 use 16-bit storage, whereas deferred value-side factors 𝑏 𝑡 are retained in FP32 to mitigate cancellation error along the correction path. KDA retains GDN’s Delta-rule corrected update but re-places head-wise scalar decay with per-key decay. Replay must therefore rescale each deferred key-side factor element-wise using the cumulative log-decay vector, which increases both arithmetic cost and metadata traffic. ReplayPrep still reuses key-side projections across value tiles, but its relative benefit is smaller because per-key scaling remains neces-sary. The dense base state, cumulative per-key log-decay vectors, and per-entry log-decay snapshots are stored in FP32. Deferred key-side factors 𝑎 𝑡 use 16-bit storage, while deferred value-side factors 𝑏 𝑡 remain in FP32 for the same cancellation-sensitive correction path as in GDN. RWKV6 shares KDA’s per-key log-decay metadata, in-cluding FP32 cumulative log-decay vectors and per-entry log-decay snapshots, but differs in update semantics. Because it uses the raw token value rather than a Delta-rule corrected update, replay only replays deferred key-side factors under per-key decay and avoids the old-state correction path. This simplification allows more replay work to be folded into the main decode kernel. The dense base state and log-decay metadata are stored in FP32, while deferred key- and value-side factors are stored in BF16. 
+
+> 7Junqing Lin, Jingwei Sun, and Guangzhong Sun
+
+4 End-to-End System Implementation 
+
+This section describes how the proposed scheduling scheme is integrated into a graph-captured serving runtime. We prototype DeltaLog in a vLLM-based serving stack [15], re-placing the eager dense decode path in the evaluated serv-ing configurations while leaving model weights and prefill kernels unchanged. This integration raises three implemen-tation challenges: replaying phase-specific decode graphs, managing the base-plus-log recurrent state, and preserving correctness with continuous batching. 
+
+Graph selection and execution. Because DeltaLog de-composes decoding into append and merge phases with dis-tinct kernel schedules and state-update semantics, the full decode path cannot be represented by a single CUDA graph. Our prototype therefore captures two CUDA-graph variants during warmup for each uniform decode-batch descriptor: one for append and one for merge. These graphs expose the same model-level inputs and outputs but differ in how they commit recurrent state. The append graph records the current update in the bounded log, whereas the merge graph replays the logical state, writes it back to the dense base, and clears the deferred representation. During replay, the run-time tracks the phase associated with each captured uniform batch and selects the corresponding pre-captured graph, with the phase encoded in the graph-cache key. Thus, the addi-tional host-side overhead is limited to phase selection and graph-cache lookup, rather than to launching the internal recurrent kernels individually. 
+
+State-slot lifecycle. To support the base-plus-log repre-sentation, we extend the recurrent-state allocator for each integrated linear-attention layer. In addition to the dense recurrent state produced during prefill, each allocated slot maintains bounded key- and value-log storage, cumulative log-decay metadata, per-entry log-decay snapshots, and live-log metadata. When a request is assigned a fresh slot, its prefill output initializes the dense base and the auxiliary representation is initialized as empty. When a slot is reused, only its auxiliary buffers and metadata are reset, leaving the states of other active requests unchanged. 
+
+Phase-specialized decode scheduling. Graph replay re-quires phase-aware batching rather than a single monolithic decode queue. The runtime therefore maintains separate append and merge queues: requests are normally decoded through append-graph replay, moved to the merge queue when they reach a merge boundary, and returned to the append queue after the corresponding merge graph mate-rializes deferred updates into the dense base and clears the live log. This policy preserves continuous batching while sat-isfying the phase-specific graph interface. Newly admitted requests are initialized with an empty auxiliary representa-tion and placed directly in the append queue, so they can batch with other append-phase requests without modifying existing slots and are never forced into merge executions for which they have no deferred updates. 
+
+5 Experiments 
+
+We evaluate DeltaLog as a systematic optimization for recur-rent decoding, focusing on three questions: whether deferred materialization improves decode performance, what mecha-nisms drive the improvement, and how much kernel-level benefit persists after integration into a serving stack. To this end, we present both kernel- and serving-level evidence. At the kernel level, we measure one-token decode latency across operators, batch sizes, and GPUs; use hardware counters to validate the write-back mechanism; analyze sensitivity to merge interval and recurrent-state size; and assess numeri-cal behavior under mixed precision. At the serving level, we evaluate whether these gains persist in a batch-synchronous graph-mode prototype. 
+
+5.1 Experimental Setup 
+
+Hardware platforms. We evaluate kernel decode perfor-mance on two NVIDIA GPUs: an RTX 4090, representing a commodity single-GPU platform, and an H200 NVL, repre-senting a data-center serving platform. End-to-end serving experiments are run on H200 only. Table 2 summarizes the hardware context using vendor specifications. 
+
+Table 2. Hardware configuration.               
+
+> GPU Deployment Memory Peak Memory Peak Tensor Class Bandwidth Throughput
+> RTX 4090 commodity 24 GB 1008 GB/s 165.2 TFLOPS H200 NVL data-center 141 GB 4.8 TB/s 1671 TFLOPS
+
+Implementation scope. The experimental implementa-tion is designed to separate kernel-level applicability from serving-level impact, while focusing exclusively on the de-coding stage. We do not evaluate prefill, since DeltaLog tar-gets recurrent-state updates during autoregressive token generation rather than the parallel computation used in pre-fill. For kernel-level evaluation, we implement DeltaLog as standalone Triton [27] decode kernels, enabling controlled comparisons across the recurrent operators considered in this study. For serving-level evaluation, we incorporate Delta-Log into the batch-synchronous vLLM-based prototype de-scribed in Section 4; this integration is used only for the full-model decoding experiments reported below. 
+
+Operators, models, and precision. Our kernel study cov-ers GDN [30], KDA [26], and RWKV6 [17]. Table 3 sum-marizes the standalone-kernel shapes, persistent-state and log precisions, and merge intervals selected from the sweep in Section 5.4. Activations are stored in bfloat16 , whereas dense recurrent states and log-decay metadata are stored 
+
+> 8
+
+DeltaLog 
+
+Table 3. Recurrent-kernel configurations. Shape reports 
+
+𝐻 /𝑑 𝑘 /𝑑 𝑣 ; log-decay metadata is FP32 for all operators. 
+
+Operator Shape State Log (𝐾 /𝑈 ) 𝑀 
+
+GDN 32/128/128 FP32 BF16/FP32 8KDA 32/128/128 FP32 BF16/FP32 4RWKV6 32/128/128 FP32 BF16/BF16 4in float32 , following the numerically stable dense configu-rations. GDN and KDA retain the value-side update log in FP32 because their Delta-rule corrections are more sensitive to cancellation; RWKV6 stores both log factors in BF16. The serving study evaluates the integrated GDN and KDA paths, using Qwen3.6-35B-A3B [20] for GDN and Kimi-Linear-48B-A3B-Instruct for KDA [26]. 
+
+Baselines. For kernel experiments, we compare DeltaLog with dense recurrent baselines whenever available. PyTorch Compile is a dense PyTorch implementation optimized with 
+
+torch.compile [4]. FLA uses optimized Triton kernels from Fast Linear Attention [33] and is the strongest dense baseline available for all three operator families in our local environ-ment. vLLM denotes the dense recurrent kernel path used in our serving-stack integration [15]; because it is available for GDN and KDA but not RWKV6, we restrict vLLM-relative claims to GDN and KDA. For end-to-end serving, we use the same vLLM-based stack as the baseline, with dense recurrent decode enabled in place of DeltaLog. Baseline and DeltaLog runs use identical models, batch sizes, decode lengths, precision settings, and CUDA-graph replay configurations. Thus, differences in time per output token (TPOT) isolate the effect of replacing eager dense recurrent write-back with DeltaLog under an otherwise fixed serving configuration. 
+
+5.2 Kernel Decode Performance 
+
+We first isolate the recurrent decode kernel, where Delta-Log directly changes execution. A dense recurrent imple-mentation reads and writes the full state at every generated 64 128 256 512              
+
+> Batch Size
+> 0.0 0.5 1.0 1.5 2.0
+> TPOT (  s / token)
+> Gated DeltaNet
+> 64 128 256 512
+> Batch Size
+> 0.0 0.5 1.0 1.5 2.0 2.5
+> KDA
+> 64 128 256 512
+> Batch Size
+> 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00
+> RWKV6
+> 1.34x 1.45x 1.53x 1.60x
+> 1.19x 1.36x 1.56x 1.60x
+> 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0
+> Speedup over FLA (x)
+> 1.52x 1.62x 1.66x 1.69x
+> Torch Compile (TPOT) vLLM (TPOT) FLA (TPOT) DeltaLog (Ours) (TPOT) Speedup vs FLA
+
+Figure 6. Single-token decode performance on H200. Bars show TPOT, and lines show DeltaLog speedup over FLA. 64 128 256 512              
+
+> Batch Size
+> 01234
+> TPOT (  s / token)
+> Gated DeltaNet
+> 64 128 256 512
+> Batch Size
+> 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5
+> KDA
+> 64 128 256 512
+> Batch Size
+> 0.0 0.5 1.0 1.5 2.0 2.5
+> RWKV6
+> 1.84x 1.86x 1.74x 1.69x
+> 1.30x 1.35x 1.48x 1.55x
+> 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0
+> Speedup over FLA (x) 1.63x 1.41x 1.53x 1.61x
+> Torch Compile (TPOT) vLLM (TPOT) FLA (TPOT) DeltaLog (Ours) (TPOT) Speedup vs FLA
+
+Figure 7. Single-token decode performance on RTX 4090. Bars show TPOT, and lines show DeltaLog speedup over FLA. 
+
+9Junqing Lin, Jingwei Sun, and Guangzhong Sun 
+
+token, whereas DeltaLog replaces most dense writes with compact log appends and amortizes materialization through periodic merges. Figures 7 and 6 report one-token decode latency across operators and batch sizes. On H200, DeltaLog improves over FLA by 1 .34–1 .60 × for GDN, 1 .19–1 .60 × for KDA, and 1 .52–1 .69 × for RWKV6 over 𝐵 ∈ { 64 , 128 , 256 , 512 }.On RTX 4090, the corresponding FLA-relative speedups are 1.69–1 .86 × for GDN, 1 .30–1 .55 × for KDA, and 1 .41–1 .63 ×
+
+for RWKV6. For H200 configurations with vLLM dense ker-nel results, DeltaLog improves over vLLM by 1 .26–1 .42 × for GDN and 1 .29–1 .46 × for KDA. The main trend is that DeltaLog remains beneficial across both GPUs, although the gain is operator-dependent. GDN generally benefits the most because its head-wise scalar de-cay keeps the log metadata compact. KDA shares the same Delta-rule correction structure but uses per-key decay, which increases metadata and replay work; its speedup is therefore smaller at some shapes. RWKV6 also uses per-key decay, but its update path is simpler because it does not require the Delta-rule old-state correction, helping its speedups remain competitive despite the heavier metadata. 
+
+5.3 Where the Speedup Comes From 
+
+We next examine the mechanism behind the speedup. We first profile one representative H200 GDN configuration to verify the write-back reduction directly. We then ablate the internal organization of the append path to measure the additional benefit of split replay across operators. Dense Append log=0 Append log=6 Merge Amortized   
+
+> Profiled phase
+> 0.00 0.05 0.10 0.15 0.20 0.25
+> Latency (ms)
+> (a) Latency Breakdown
+> Fair FLA Dense Append Merge Amortized
+> Dense Append log=0 Append log=6 Merge Amortized
+> Profiled phase
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> HBM Traffic per Token (GiB)
+> (b) H200 DRAM Traffic
+> HBM Read HBM Write
+
+Figure 8. Latency and profiled DRAM traffic for GDN at 
+
+𝐵 = 128 and 𝑀 = 8. (a) reports dense decoding, append latency by log size, merge latency, and the amortized result. (b) reports the corresponding DRAM-traffic breakdown. 
+
+Latency and Traffic Breakdown. DeltaLog is designed to reduce dense recurrent-state write-back. To test that mech-anism directly, we profile one representative GDN configura-tion on H200 at 𝐵 = 128 with merge interval 𝑀 = 8. Figure 8 compares the dense reference with four DeltaLog views at the same shape: the first append step (live log size 0), the last append step before merge (live log size 6), the merge step that materializes a live log of size 7, and the resulting amortized per-token latency. The second panel reports the corresponding Nsight Compute DRAM counters. Panel (a) shows the expected append–merge behavior. Ap-pend latency increases only marginally as the live log grows. The subsequent merge is more expensive because it mate-rializes the dense state. However, this cost is incurred once per interval rather than once per token. Compared with the dense FLA reference latency at the same shape, all append steps remain below the dense baseline, while the merge cost is amortized over the full merge cycle. Panel (b) provides consistent evidence from DRAM traffic. Dense GDN reads 0.253 GiB and writes 0.230 GiB, for total profiled DRAM traffic of 0.483 GiB. In DeltaLog, append steps read both the dense base and the live log, causing profiled read traffic to increase from 0.253 GiB at log size 0 to 0.273 GiB at log size 6. By contrast, append writes remain small because the append path commits only compact log entries and meta-data, rather than materializing or persisting the full dense state. The merge restores the dense write-back cost, reading 0.274 GiB and writing 0.229 GiB. Amortized over 𝑀 = 8, DeltaLog writes only 0.0294 GiB per token, corresponding to a 7 .83 × reduction in write traffic and a 1 .64 × reduction in total profiled DRAM traffic relative to the dense baseline. 
+
+Split-Replay Ablation. We ablate the organization of the DeltaLog append path. Specifically, we compare a fused append kernel with a split path that precomputes replay dot products before append decode; both variants use the same metadata-finalization step. For fairness, we capture the full cycle of 𝑀 −1 appends followed by one merge in a CUDA Graph and report amortized per-token latency. Fig-ure 9 shows that split replay consistently improves GDN, yielding 1 .02–1 .07 × speedup at 𝑀 = 4 and 1 .05–1 .11 × at 
+
+𝑀 = 8 over 𝐵 ∈ { 128 , 256 , 512 }. KDA exhibits smaller gains: it is nearly neutral at its selected 𝑀 = 4 configuration (0 .998– 1.003 ×), but improves by 1 .03–1 .04 × at 𝑀 = 8. RWKV6 benefits the least, slowing down at 𝑀 = 4 (0 .979–0 .980 ×)and reaching only 1 .00–1 .02 × at 𝑀 = 8. These trends are explained by operator structure rather than total kernel cost alone. Split replay is beneficial only when duplicated live-log dot products constitute a substan-tial fraction of append work. This condition holds for GDN, particularly at 𝑀 = 8, because its decay metadata is head-wise scalar. By contrast, KDA and RWKV6 retain per-key decay operations after the split; KDA additionally applies the Delta-rule correction against the dense base state, while RWKV6 already has a relatively inexpensive fused replay path. Consequently, split replay is most effective when the eliminated replay computation outweighs the added prepare-kernel launch and scratch-memory overhead. 
+
+5.4 Sensitivity to Merge Interval and State Size 
+
+The merge interval 𝑀 controls the central trade-off in Delta-Log. A larger 𝑀 reduces the frequency of dense-state materi-alization, but it also increases live-log replay during append. Figure 10 visualizes this trade-off on H200 at 𝐵 = 128 for 
+
+> 10
+
+DeltaLog 128 256 512         
+
+> Batch Size
+> 0.95 1.00 1.05 1.10 1.15 1.20
+> Split Replay Speedup over Single Replay
+> 1.02x 1.06x 1.07x 1.05x 1.09x 1.11x 1.00x 1.00x 1.00x 1.03x 1.04x 1.04x 0.98x 0.98x 0.98x 1.02x 1.01x 1.00x
+> Period-Cycle Replay Decomposition on H200
+> Gated DeltaNet (M=4) Gated DeltaNet (M=8) KDA (M=4) KDA (M=8) RWKV6 (M=4) RWKV6 (M=8)
+
+Figure 9. Split-replay ablation on H200 with CUDA Graph replay. Latencies are amortized over one merge cycle; GDN, KDA, and RWKV6 are shown at 𝑀 = 4 and 𝑀 = 8. 2 4 8 16 32 64        
+
+> Merge Interval M
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> Amortized Latency (ms)
+> (a) Amortized Latency
+> Gated DeltaNet KDA RWKV6
+> 24816 32 64
+> Merge Interval M
+> 0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4 1.6
+> Speedup over Dense (×)
+> (b) Speedup vs Dense Baseline
+> Gated DeltaNet KDA RWKV6
+
+Figure 10. Interval sweep for DeltaLog at 𝐵 = 128. (a) Amor-tized per-token latency. (b) Speedup over FLA. 
+
+𝑀 ∈ { 2, 4, 8, 16 , 32 , 64 }, with nearby operator-specific candi-dates also included for selection. The measured curves are U-shaped. Small intervals merge too frequently and recover only part of the avoided write-back cost. Very large intervals amortize merge more aggres-sively but increase append latency because the active log is longer. At 𝐵 = 128, the best FLA-relative intervals are GDN 
+
+𝑀 = 8 with 0.103 ms amortized latency and 1 .57 × speedup, KDA 𝑀 = 4 with 0.116 ms and 1 .34 ×, and RWKV6 𝑀 = 4with 0.110 ms and 1 .60 ×.128 256 512 1024 
+
+> Total State Size (MiB)
+> 1.0 1.2 1.4 1.6 1.8
+> Speedup over Fair FLA Dense (×)
+> Scaling with Recurrent State Size (H200)
+> Gated DeltaNet KDA RWKV6 Break-even
+
+Figure 11. Scaling with total recurrent-state size on H200. We also vary the total recurrent-state size from 128 MiB to 1024 MiB on H200 while keeping the operator dimensions fixed and changing batch size. Figure 11 shows that DeltaLog becomes more effective as the recurrent state grows. Against FLA, GDN speedup increases from 1 .48 × at 128 MiB to 1 .62 ×
+
+at 1024 MiB. KDA is close to parity at the smallest state size, with 1 .02 × speedup at 128 MiB, but reaches 1 .58 × at 1024 MiB. RWKV6 improves from 1 .51 × to 1 .69 × over the same range. These results identify the main operating regime of the method. DeltaLog is most effective when recurrent-state write-back is a first-order cost. When the state is small, replay and metadata overhead can offset the saved write traffic. When the state is large, the avoided dense writes dominate the additional log work. 
+
+5.5 Numerical Behavior 
+
+DeltaLog changes the order and timing of recurrent-state materialization. Although it is algebraically equivalent to ea-ger dense decoding under exact arithmetic, the implemented kernels use mixed precision and a different accumulation order, which may introduce floating-point discrepancies. We therefore assess numerical behavior against dense references using 128-token kernel rollouts for 𝐵 ∈ { 64 , 128 , 256 }.All three operators satisfy both the repository tolerances and the BF16-aware benchmark tolerances in the selected-𝑀 
+
+campaign. The maximum output relative errors are 0.00303 for GDN, 0.00450 for KDA, and 0.00376 for RWKV6; the corresponding maximum state relative errors are 7 .92 ×10 −7,4.61 ×10 −4, and 2 .86 ×10 −7. These results support describing the kernels as tolerance-equivalent to dense references. Gated DeltaNet KDA RWKV6 10 4            
+
+> 10 3
+> 10 2
+> Output Max Relative Error
+> (a) Output Relative Error
+> 1% threshold (10 2)
+> Gated DeltaNet KDA RWKV6 10 7
+> 10 6
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> State Max Relative Error
+> (b) State Relative Error
+> 1% threshold (10 2)
+
+Figure 12. Kernel correctness. (a) Output relative error. (b) Materialized recurrent-state relative error. 
+
+Table 4. End-to-end decode TPOT (ms/token) on H200 NVL. 
+
+Model (Operator) Method Batch Size 64 128 256 
+
+Qwen-35B (GDN) Baseline 8.36 10.30 16.07 DeltaLog 7.75 9.01 13.40 
+
+Speedup 1.08 × 1.14 × 1.20 ×
+
+Kimi-48B (KDA) Baseline 7.66 8.92 13.98 DeltaLog 7.33 8.13 12.54 
+
+Speedup 1.05 × 1.10 × 1.12 ×
+
+11 Junqing Lin, Jingwei Sun, and Guangzhong Sun 
+
+5.6 End-to-End Serving Impact 
+
+Finally, we evaluate whether the kernel-level gains translate into full-model serving improvements. We integrate Delta-Log into the vLLM-based serving path [15] and measure decode TPOT (ms/token) on H200 for Qwen3.6-35B-A3B and Kimi-Linear-48B-A3B-Instruct. Each run generates 128 de-code tokens. The dense baseline uses the same model, batch size, precision, and CUDA-graph replay configuration. Table 4 reports TPOT for 𝐵 ∈ { 64 , 128 , 256 }. DeltaLog improves all six recorded model–batch configurations. On Qwen/GDN at 𝑀 = 8, TPOT speedups range from 1 .08– 1.20 ×. On Kimi/KDA at 𝑀 = 4, speedups range from 1 .05– 1.12 ×. The end-to-end gains are smaller than the isolated kernel gains, as expected. Full-model decode includes feed-forward layers, normalization, scheduling, memory manage-ment, graph replay, and other framework overheads. Delta-Log optimizes only the recurrent-state update path, so its end-to-end benefit is bounded by the fraction of TPOT spent in that path, consistent with Amdahl’s law [2]. 
+
+6 Discussion and Limitations 
+
+DeltaLog is designed to optimize large-batch recurrent de-coding, where recurrent-state write-back can constitute a substantial portion of memory traffic. This focus is reflected in the state-size sweep and end-to-end serving results, and is further corroborated by the H200 GDN counter profile, which confirms the expected reduction in write traffic under a representative configuration. At the serving level, how-ever, the realized speedups are limited by components out-side the optimized update path. In full-model decoding, la-tency also includes MLP computation, normalization, sched-uling, memory management, CUDA-graph replay, and other runtime overheads. Consequently, the end-to-end improve-ment is bounded by the fraction of execution time affected by DeltaLog, explaining the gap between isolated kernel speedups and full-model serving gains. The benefits of Delta-Log are therefore most pronounced in autoregressive decod-ing regimes where recurrent-state write-back is a dominant cost. In contrast, workloads with small batches or small re-current states offer less opportunity for this optimization. Our current serving evaluation focuses on the GDN and KDA paths under a graph-mode runtime, providing initial validation in representative recurrent-decoding settings. Fu-ture evaluation across additional operators, deployment con-figurations, and hardware-counter profiles would further characterize the generality of the method. 
+
+7 Related Work 
+
+DeltaLog relates to recurrent linear attention, efficient re-current kernels, and IO-aware inference. In contrast to prior work that modifies architectures or optimizes parallel exe-cution, DeltaLog reduces decode-time recurrent-state write-back while preserving the trained model. 
+
+Recurrent linear attention. Linear attention [7, 14] re-places token-level histories with constant-size recurrent sta-tistics, which fast-weight linear Transformers [21] interpret as associative memories updated by outer products. Subse-quent models improve these recurrences through decay or gating, as in RetNet [25] and GLA [31]; delta-rule corrections, as in DeltaNet [32] and Gated DeltaNet [30]; and dynamic, matrix-valued, or finer-grained updates, as in RWKV6 [17] and Kimi Linear [26]. Related fixed-state or subquadratic sequence mixers include state-space and hybrid models such as S4 [12], Mamba [11], Mamba-2 [10], Jamba [16], and gated convolutional models [5]. Unlike these architecture-level ad-vances, DeltaLog preserves the recurrence and optimizes its decode-time state representation. 
+
+Efficient recurrent algorithms and kernels. Although recurrent formulations enable efficient one-token decoding, their sequential dependencies complicate parallel training and prefill. Prior work addresses this challenge with par-allel or chunkwise formulations of recurrent linear atten-tion [10, 14, 19, 31, 32]. Complementary systems efforts, including FLA [33], ThunderKittens [24], FlashRNN [18], and MetaAttention [6], provide optimized kernels, reusable abstractions, or code generation for recurrent and linear-attention operators. These methods primarily improve paral-lel or chunkwise execution with eagerly materialized states, whereas DeltaLog targets one-token decoding and amortizes dense recurrent-state write-back across steps. 
+
+IO-aware serving. FlashAttention [8, 9, 22] reduces HBM traffic in softmax attention via IO-aware tiling, and FlashIn-fer [34] extends this principle to inference kernels and sched-uling. Serving systems further improve utilization through batching, KV-cache paging, offloading, chunked prefill, and prefill–decode disaggregation [1, 15, 23, 35, 36]. However, these methods primarily target Transformer KV-cache bot-tlenecks, whereas recurrent linear attention is dominated at decode time by fixed-state write-back. A complementary FPGA design [13] avoids this cost by keeping the GDN state on chip for batch-one inference. In contrast, DeltaLog targets GPU execution, reducing recurrent-state write-back through a base-plus-update-log representation and value-tiled ker-nels. 
+
+8 Conclusion 
+
+We presented DeltaLog, a deferred materialization strategy for recurrent linear-attention decoding. By representing the recurrent state as a dense base plus a bounded log of compact updates, DeltaLog avoids most full dense-state write-backs while preserving the original recurrence semantics. Across GDN, KDA, and RWKV6, DeltaLog accelerates recurrent-state update kernels by up to 1.86× and reduces profiled recurrent-state write traffic by up to 7.83×. When integrated into a prototype serving stack, DeltaLog further achieves 1.05–1.20× end-to-end serving speedups over dense recurrent 
+
+> 12
+
+DeltaLog 
+
+baselines. These results show that recurrent-state material-ization is a significant bottleneck in linear-attention decod-ing, and that optimizing the physical state-update schedule is an effective direction for improving inference efficiency. 
+
+References 
+
+[1] Amey Agrawal, Nitin Kedia, Ashish Panwar, Jayashree Mohan, Nipun Kwatra, Bhargav Gulavani, Alexey Tumanov, and Ramachandran Ram-jee. Taming throughput-latency tradeoff in llm inference with sarathi-serve. In 18th USENIX symposium on operating systems design and implementation (OSDI 24) , pages 117–134, 2024. [2] Gene M Amdahl. Validity of the single processor approach to achieving large scale computing capabilities. In Proceedings of the April 18-20, 1967, spring joint computer conference , pages 483–485, 1967. [3] Reza Yazdani Aminabadi, Samyam Rajbhandari, Ammar Ahmad Awan, Cheng Li, Du Li, Elton Zheng, Olatunji Ruwase, Shaden Smith, Minjia Zhang, Jeff Rasley, et al. Deepspeed-inference: enabling efficient inference of transformer models at unprecedented scale. In SC22: International Conference for High Performance Computing, Networking, Storage and Analysis , pages 1–15. IEEE, 2022. [4] Jason Ansel, Edward Yang, Horace He, Natalia Gimelshein, Animesh Jain, Michael Voznesensky, Bin Bao, Peter Bell, David Berard, Evgeni Burovski, et al. Pytorch 2: Faster machine learning through dynamic python bytecode transformation and graph compilation. In Proceedings of the 29th ACM international conference on architectural support for programming languages and operating systems, volume 2 , pages 929– 947, 2024. [5] Simran Arora, Sabri Eyuboglu, Michael Zhang, Aman Timalsina, Silas Alberti, Dylan Zinsley, James Zou, Atri Rudra, and Christopher Ré. Simple linear attention language models balance the recall-throughput tradeoff. arXiv preprint arXiv:2402.18668 , 2024. [6] Feiyang Chen, Yu Cheng, Lei Wang, Yuqing Xia, Ziming Miao, Lingx-iao Ma, Fan Yang, Jilong Xue, Zhi Yang, Mao Yang, Xingda Wei, and Haibo Chen. Metaattention: A unified and performant attention frame-work across hardware backends. In Proceedings of the 31st ACM SIG-PLAN Annual Symposium on Principles and Practice of Parallel Pro-gramming , pages 635–647. Association for Computing Machinery, 2026. [7] Krzysztof Choromanski, Valerii Likhosherstov, David Dohan, Xingyou Song, Andreea Gane, Tamas Sarlos, Peter Hawkins, Jared Davis, Afroz Mohiuddin, Lukasz Kaiser, et al. Rethinking attention with performers. 2020. [8] Tri Dao. Flashattention-2: Faster attention with better parallelism and work partitioning. In International Conference on Learning Representa-tions , volume 2024, pages 35549–35562, 2024. [9] Tri Dao, Dan Fu, Stefano Ermon, Atri Rudra, and Christopher Ré. Flashattention: Fast and memory-efficient exact attention with io-awareness. In Advances in Neural Information Processing Systems ,volume 35, pages 16344–16359, 2022. [10] Tri Dao and Albert Gu. Transformers are ssms: generalized models and efficient algorithms through structured state space duality. In 
+
+Proceedings of the 41st International Conference on Machine Learning ,pages 10041–10071, 2024. [11] Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 , 2023. [12] Albert Gu, Karan Goel, and Christopher Ré. Efficiently modeling long sequences with structured state spaces. arXiv preprint arXiv:2111.00396 ,2021. [13] Neelesh Gupta, Peter Wang, Rajgopal Kannan, and Viktor K Prasanna. A persistent-state dataflow accelerator for memory-bound linear at-tention decode on fpga. arXiv preprint arXiv:2603.05931 , 2026. [14] Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and François Fleuret. Transformers are rnns: Fast autoregressive transformers with linear attention. In International conference on machine learning , pages 5156–5165. PMLR, 2020. [15] Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles , pages 611–626, 2023. [16] Opher Lieber, Barak Lenz, Hofit Bata, Gal Cohen, Jhonathan Osin, Itay Dalmedigos, Erez Safahi, Shaked Meirom, Yonatan Belinkov, Shai Shalev-Shwartz, et al. Jamba: A hybrid transformer-mamba language model. arXiv preprint arXiv:2403.19887 , 2024. [17] Bo Peng, Daniel Goldstein, Quentin Anthony, Alon Albalak, Eric Al-caide, Stella Biderman, Eugene Cheah, Xingjian Du, Teddy Ferdinan, Haowen Hou, et al. Eagle and finch: Rwkv with matrix-valued states and dynamic recurrence. arXiv preprint arXiv:2404.05892 , 2024. [18] Korbinian Pöppel, Maximilian Beck, and Sepp Hochreiter. Flashrnn: I/o-aware optimization of traditional rnns on modern hardware, 2024. [19] Zhen Qin, Weigao Sun, Dong Li, Xuyang Shen, Weixuan Sun, and Yiran Zhong. Lightning attention-2: A free lunch for handling un-limited sequence lengths in large language models. arXiv preprint arXiv:2401.04658 , 2024. [20] Qwen Team. Qwen3.6-35B-A3B model card. https://huggingface.co/ Qwen/Qwen3.6-35B-A3B , 2026. Accessed: 2026. [21] Imanol Schlag, Kazuki Irie, and Jürgen Schmidhuber. Linear transform-ers are secretly fast weight programmers. In International conference on machine learning , pages 9355–9366. PMLR, 2021. [22] Jay Shah, Ganesh Bikshandi, Ying Zhang, Vijay Thakkar, Pradeep Ramani, and Tri Dao. Flashattention-3: Fast and accurate attention with asynchrony and low-precision. volume 37, pages 68658–68685, 2024. [23] Ying Sheng, Lianmin Zheng, Binhang Yuan, Zhuohan Li, Max Ryabinin, Beidi Chen, Percy Liang, Christopher Ré, Ion Stoica, and Ce Zhang. Flexgen: High-throughput generative inference of large language models with a single gpu. In International Conference on Machine Learning , pages 31094–31116. PMLR, 2023. [24] Benjamin F Spector, Simran Arora, Aaryan Singhal, Daniel Y Fu, and Christopher Ré. Thunderkittens: Simple, fast, and adorable ai kernels, 2024. URL https://arxiv. org/abs/2410.20399 , 2(2):3–3. [25] Yutao Sun, Li Dong, Shaohan Huang, Shuming Ma, Yuqing Xia, Jilong Xue, Jianyong Wang, and Furu Wei. Retentive network: A successor to transformer for large language models. arXiv preprint arXiv:2307.08621 ,2023. [26] Kimi Team, Yu Zhang, Zongyu Lin, Xingcheng Yao, Jiaxi Hu, Fanqing Meng, Chengyin Liu, Xin Men, Songlin Yang, Zhiyuan Li, et al. Kimi linear: An expressive, efficient attention architecture. arXiv preprint arXiv:2510.26692 , 2025. [27] Philippe Tillet, Hsiang-Tsung Kung, and David Cox. Triton: an inter-mediate language and compiler for tiled neural network computations. In Proceedings of the 3rd ACM SIGPLAN International Workshop on Machine Learning and Programming Languages , pages 10–19, 2019. [28] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. [29] Samuel Williams, Andrew Waterman, and David Patterson. Roofline: an insightful visual performance model for multicore architectures. 
+
+Communications of the ACM , 52(4):65–76, 2009. [30] Songlin Yang, Jan Kautz, and Ali Hatamizadeh. Gated delta networks: Improving mamba2 with delta rule. In International Conference on Learning Representations , volume 2025, pages 29687–29707, 2025. [31] Songlin Yang, Bailin Wang, Yikang Shen, Rameswar Panda, and Yoon Kim. Gated linear attention transformers with hardware-efficient training. In International Conference on Machine Learning , pages 56501– 56523. PMLR, 2024. 13 Junqing Lin, Jingwei Sun, and Guangzhong Sun 
+
+[32] Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, and Yoon Kim. Parallelizing linear transformers with the delta rule over sequence length. In Advances in Neural Information Processing Systems , vol-ume 37, pages 115491–115522, 2024. [33] Songlin Yang and Yu Zhang. Fla: A triton-based library for hardware-efficient implementations of linear attention mechanism, January 2024. [34] Zihao Ye, Lequn Chen, Ruihang Lai, Wuwei Lin, Yineng Zhang, Stephanie Wang, Tianqi Chen, Baris Kasikci, Vinod Grover, Arvind Krishnamurthy, et al. Flashinfer: Efficient and customizable attention engine for llm inference serving. Proceedings of Machine Learning and Systems , 7, 2025. [35] Gyeong-In Yu, Joo Seong Jeong, Geon-Woo Kim, Soojeong Kim, and Byung-Gon Chun. Orca: A distributed serving system for 
+
+{Transformer-Based } generative models. In 16th USENIX sympo-sium on operating systems design and implementation (OSDI 22) , pages 521–538, 2022. [36] Yinmin Zhong, Shengyu Liu, Junda Chen, Jianbo Hu, Yibo Zhu, Xu-anzhe Liu, Xin Jin, and Hao Zhang. {DistServe }: Disaggregating prefill and decoding for goodput-optimized large language model serving. In 18th USENIX Symposium on Operating Systems Design and Implementation (OSDI 24) , pages 193–210, 2024. [37] Longwei Zou and Lin Zhong. KVBuffer: IO-aware serving for linear attention, 2026. 14

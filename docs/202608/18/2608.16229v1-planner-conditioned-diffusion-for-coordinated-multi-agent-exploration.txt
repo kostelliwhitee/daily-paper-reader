@@ -1,0 +1,240 @@
+Title: Planner-Conditioned Diffusion for Coordinated Multi-Agent Exploration
+
+URL Source: https://arxiv.org/pdf/2608.16229v1
+
+Published Time: Tue, 18 Aug 2026 01:44:51 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Planner-Conditioned Diffusion for Coordinated Multi-Agent Exploration 
+
+Marcus Yu Siong Teo ⋆, Jeric Lew ⋆, Tanishq Duhan, and Guillaume Sartoretti 
+
+Department of Mechanical Engineering, National University of Singapore, Singapore 
+
+{e0958027,jericlew,e1280621}@u.nus.edu, mpegas@nus.edu.sg https://marmotlab.org/ 
+
+Abstract. Coordinated multi-agent exploration requires not only effi-cient individual coverage but also non-redundant coverage across agents over extended planning horizons. Conventional approaches rely on hand-crafted coordination rules, while end-to-end multi-agent learning meth-ods are difficult to scale and train. Diffusion-based planners such as DARE offer a promising alternative by generating long-horizon trajecto-ries instead of single-step actions, but existing methods are trained on a narrow planner distribution, limiting behavioral diversity and inference-time controllability. We propose a Planner-Conditioned Diffusion Policy (PCDP) for graph-based multi-agent exploration. PCDP is trained on demonstrations from multiple planner styles with planner identity as an explicit conditioning input, enabling a single shared model to learn a multimodal trajectory distribution and generate diverse, controllable trajectory candidates from the same observation. Rather than learning coordination end-to-end, we reuse this multimodal single-agent policy across all agents and introduce coordination through local reranking, in which nearby agents jointly select the trajectory combination with minimal predicted overlap. We evaluate PCDP against classical and diffusion-based baselines on 100 held-out maps in a four-agent simulation setting. PCDP matches the perfect success rate of the diffusion-based baselines while improving mean max-agent travel by 1.94%, mean total team travel by 1.58%, and mean agent imbalance by 5.66%. Crucially, reranking alone over a single-planner baseline yields only marginal gains, indicating that planner-conditioned multimodality is the main contrib-utor to improved coordination. Qualitative simulation results and real-robot experiments with two agents further validate that diverse long-horizon trajectory generation produces emergent spatial separation be-tween agents without any explicit repulsion mechanism. Code available at github.com/marmotlab/PCDP. 
+
+Keywords: Multi-agent systems · Robot exploration · Diffusion Policy 
+
+# 1 Introduction 
+
+Autonomous exploration is a well-researched problem in robotics, with applica-tions in search and rescue, infrastructure inspection, and mapping of unknown  
+
+> ⋆
+
+The first two authors contributed equally to this work. arXiv:2608.16229v1 [cs.RO] 17 Aug 2026 2 M. Y. S. Teo et al.  
+
+> Fig. 1. PCDP execution with two agents. Each agent independently samples a diverse set of candidate trajectories from the diffusion policy, conditioned on its own graph observation and multiple planner identities to maximize behavioral diversity. Agents within coordination range perform local reranking over their joint candidate sets, se-lecting the combination that minimizes predicted overlap and redundant coverage. The selected trajectory is then executed in a receding-horizon manner before replanning.
+
+environments. The objective is to uncover unseen areas while maximizing effi-ciency in terms of distance traveled or time taken. This requires reasoning over partial observations and making sequential decisions under uncertainty, which makes exploration inherently challenging even in the single-agent setting [4,17]. A natural extension is to deploy multiple agents to accelerate coverage in large or time-critical environments. However, multi-agent exploration introduces additional complexity: agents must not only explore efficiently individually, but also coordinate to avoid redundant coverage and ensure effective spatial distribu-tion [2,18]. The quality of the team’s performance depends on how well agents’ behaviors complement each other over time. Classical frontier-based, information-theoretic, next-best-view, and hierar-chical methods have achieved strong practical results through interpretable geo-metric objectives [1,3,10,17]. Their behavior, however, is largely determined by the objective or heuristic specified by the designer, motivating complementary learned models that can represent long-horizon exploration behaviors. Learning-based methods offer a data-driven alternative, with learned poli-cies selecting next actions or local goals [4,6]. End-to-end multi-agent learning approaches attempt to address coordination directly [19,21], but such training is often computationally expensive, difficult to scale, and sensitive to training instability. Diffusion-based planners for exploration [7,11,13], such as DARE [5], provide a promising direction by representing distributions over complete trajec-tories and supporting multimodal long-horizon generation, enabling richer rea-soning over future motion. However, existing diffusion-based exploration meth-Planner-Conditioned Diffusion for Multi-Agent Exploration 3
+
+ods are typically trained on a single planner distribution, resulting in limited behavioral diversity and reduced controllability at inference time. In this work, we aim to leverage long-horizon diffusion-based planning for multi-agent exploration without requiring end-to-end multi-agent training. We propose a Planner-Conditioned Diffusion Policy (PCDP), as shown in Figure 1, that is trained on trajectories from multiple planner types, with planner identity provided as an explicit conditioning variable. This enables the model to learn a multimodal distribution over different exploration behaviors and to generate diverse trajectory candidates under different planner conditions. At inference time, we reuse this shared single-agent policy across all agents and introduce coordination through a lightweight, local reranking procedure that selects com-plementary trajectories with minimal overlap. Our key insight is that adding structured diversity to long-horizon trajectory candidates directly improves multi-agent coordination under a fixed selection mechanism. We evaluate PCDP against classical and diffusion-based baselines on 100 held-out maps in a four-agent simulation setting. PCDP + local reranking achieves full exploration coverage and the lowest mean travel and agent imbal-ance among all compared methods. We further validate the approach on a real two-agent robot platform, demonstrating that our proposed coordination behav-ior transfers to physical deployment. The contributions of this work are: (1) a planner-conditioned diffusion policy that learns a controllable, multimodal tra-jectory distribution for exploration; (2) a modular multi-agent framework that achieves coordination via a shared trajectory generator reused across agents with local-range inference-time reranking; and (3) empirical evidence that enhanced trajectory diversity improves coordination efficiency without end-to-end multi-agent training, validated in both simulation and real-robot experiments. 
+
+# 2 Related Work 
+
+Classical exploration has long been studied through frontier-based and information-driven formulations. Frontier-based exploration remains a founda-tional approach for directing an agent toward the boundary between known and unknown space [17]. Subsequent work has extended this line with stronger heuristics, information-gain objectives, and next-best-view style criteria [1,10], with TARE [3] in particular representing a strong hierarchical classical planner that serves as a key demonstration source in our dataset. In multi-agent settings, these approaches are often combined with explicit coordination logic to reduce redundant exploration and improve coverage efficiency [2,18]. Our approach is complementary to this literature: rather than introducing a new frontier utility or assignment rule, we represent multiple planner-inspired behaviors within a shared learned trajectory generator. Learning-based exploration methods [4,6,15,16,20] learn policies directly from data or interaction. End-to-end multi-agent learning approaches [8,21] address coordination directly by jointly training agents, but are often computationally expensive, difficult to scale, and sensitive to parameter tuning. More recent work 4 M. Y. S. Teo et al. 
+
+has also explored topological and active mapping formulations for multi-agent exploration [14,19]. However, many of these methods still operate at the level of action prediction or local decision-making, rather than directly modeling a distribution over future trajectories. In contrast, our approach shares a single-agent policy across all agents and introduces coordination entirely at inference time, avoiding joint training while placing greater demand on the quality and diversity of trajectory candidates. Diffusion models are increasingly used for trajectory generation in robotics, as they can represent multimodal trajectory distributions and support long-horizon planning through iterative denoising [7,13]. DARE applies diffusion-based tra-jectory generation to autonomous exploration by learning long-term exploration trajectories from planner demonstrations [5]. PCDP extends this direction by training on a planner-diverse dataset rather than a narrow planner set, and by treating planner identity as a controllable conditioning signal, allowing the same observation to generate behaviorally distinct trajectory modes. These planner-conditioned trajectories then serve directly as the candidate source for coordi-nated multi-agent planning through inference-time reranking. 
+
+# 3 Background 
+
+3.1 Multi-Agent Exploration 
+
+We consider n agents exploring a bounded and initially unknown environment represented as a 2D occupancy grid map M. The map is partitioned into free, occupied, and unknown regions Mf , Mo, and Mu, respectively, with Mf ∪M o ∪Mu = M. Agents operate under global communication and plan from a shared map updated with all observations. Exploration is complete when Mu = ∅.At each decision step t, each agent i selects and executes an action a(i) 
+
+> t
+
+.The team objective is to minimize the maximum agent path length required to complete exploration: 
+
+Ψ ∗ = arg min  
+
+> Ψ
+
+max  
+
+> i∈[1 ,n ]
+
+L
+
+
+
+ψ(i)
+
+, s.t. Mu = ∅ (1) where L(ψ(i)) denotes the total path length of agent i and Ψ = {ψ(1) , . . . , ψ (n)}
+
+is the set of agent trajectories. 
+
+3.2 Diffusion-Based Exploration Planning 
+
+Diffusion models [11] generate samples by reversing a forward process that pro-gressively corrupts a clean sample x0 with Gaussian noise. At inference, the learned reverse process denoises iteratively from a Gaussian prior conditioned on available context, producing diverse outputs across repeated samples. DARE [5] applies this framework to single-agent exploration planning, train-ing a conditional diffusion policy pθ (τt | Ot) on demonstrations from a ground-truth planner with full map access. Here τt is the window of actions (trajectory) Planner-Conditioned Diffusion for Multi-Agent Exploration 5
+
+generated at planning step t defined in Eq. (2) below, Ot = ( ot−To+1 , . . . , o t)
+
+is the observation context formed by the To most recent graph observations, pθ
+
+is the conditional trajectory distribution induced by the learned reverse pro-cess given Ot, and θ contains all learnable policy parameters. Exploration is performed on a collision-free uniform graph Gt = ( Vt, Et), where nodes Vt are placed at regular intervals of dn meters in the known free space and edges Et con-nect nodes with collision-free line-of-sight paths. At each step, the agent receives a graph-based observation ot in which each node encodes its position relative to the agent (x, y ), a utility value counting reachable frontier cells, and a binary guidepost signal toward the nearest frontier. This representation gives the agent a structured, global view of where unexplored area remains and how to navigate toward it. The diffusion model then outputs an action sequence of future node positions with the same grid layout as the uniform graph. The policy operates over three horizons. The observation horizon To is the number of recent observations forming the conditioning context Ot, with the corresponding past actions retained in the generated window. The prediction horizon Tp is the length of the window produced by a single denoising pass, so 
+
+τt contains exactly Tp elements: 
+
+τt =  at−To+1 , . . . , a t, . . . , a t−To+Tp
+
+ (2) of which the first To − 1 are past actions, so the action taken from the current observation sits at index To − 1. The action horizon Ta is the number of actions executed before replanning. DARE follows a receding horizon strategy with Ta =1: only τt[To −1] = at is executed before the shared map is updated and the policy replans, allowing for long-horizon reasoning and reactivity to new information. Because the denoising process is stochastic, repeated sampling from the same observation produces a diverse set of trajectory candidates, each representing a plausible future path as shown in Figure 1. This property makes diffusion poli-cies naturally suited for candidate-based planning, where multiple trajectories are generated and the best is selected. However, single-planner demonstration data may concentrate these samples around a dominant behavior, limiting the diversity available to downstream trajectory selection. 
+
+# 4 Method 
+
+Figure 2 summarizes the three components of PCDP: planner-diverse dataset construction, planner-conditioned diffusion policy training, and inference-time local reranking for multi-agent coordination. The learning problem is kept at the single-agent level throughout; coordinated behavior emerges from trajectory selection rather than joint training. 
+
+4.1 Planner-Diverse Demonstration Dataset 
+
+To broaden the behavioral diversity of the trajectory generator, we construct demonstrations from M = 8 planner classes selected to provide complementary 6 M. Y. S. Teo et al.  
+
+> Fig. 2. PCDP training and execution pipeline. Planner-diverse demonstrations train a diffusion policy conditioned on graph observation and planner identity; at inference, locally coordinating agents jointly rerank sampled trajectories.
+
+exploration preferences: Greedy Nearest favors short-range frontier travel, Infor-mation Gain prioritizes high-utility regions, four directional-bias planners induce spatially distinct motion, TARE [3] contributes hierarchical long-range behav-ior, and the Ground-Truth planner provides privileged expert-style coverage, as shown in Figure 3. Together these span distance-, information-, direction-, and expert-driven behaviors. Each training sample takes the form (Ot, τ t, c t), where Ot is the observation context at decision time t, τt is the trajectory produced by the selected plan-ner, and ct is the associated planner label. The purpose of planner diversity is not merely to increase sample count, but to expose the model to structurally distinct exploration behaviors. Planner identity therefore acts as a structured source of behavioral variation rather than generic data augmentation. The base-line diffusion model follows the narrower DARE-style training setup [5], using demonstrations from a single ground-truth planner. 
+
+4.2 Planner-Conditioned Diffusion Policy 
+
+We extend the DARE baseline by introducing planner identity as an explicit conditioning variable. Rather than learning a single conditional policy pθ (τt |
+
+Ot), we define a planner-conditioned policy: pθ (τt | Ot, c t), where Ot is the observation context and ct ∈ { 1, . . . , M } is the planner identity drawn from a finite set of M planner classes. This enables a single shared model to represent a multimodal trajectory distribution, producing qualitatively different trajectories from the same observation under different planner conditions. Each observation ot is encoded into a latent feature zt via an attention-based graph encoder following the architecture of DARE [5], and the resulting latents Planner-Conditioned Diffusion for Multi-Agent Exploration 7 
+
+> Fig. 3. Trajectory diversity under planner conditioning. From similar graph observa-tions, different planner conditions produce distinct trajectory modes, illustrating that the learned policy captures a multimodal exploration distribution.
+
+are stacked into the conditioning sequence Zt = ( zt−To+1 , . . . , z t ). The planner identity ct is represented as a one-hot vector over the set of M planner classes and projected to a learnable embedding et before being fused with Zt as input to the diffusion model. The graph observation therefore provides state-dependent context capturing frontier structure and connectivity, while the planner embed-ding provides style-dependent context that steers the denoising process toward a particular trajectory mode. The same observation can yield qualitatively differ-ent trajectories under different planner conditions, which is the key mechanism through which the policy captures multimodality within a single shared model. 
+
+Diffusion training objective. Let x0 denote the encoded clean trajectory cor-responding to τt, xs its noisy version at diffusion step s, and ϵ ∼ N (0 , I) the injected noise. The denoising network ϵθ is the noise-prediction model parame-terizing the reverse diffusion process, which in turn induces pθ (τt | Ot, c t). It is trained to predict the noise residual: 
+
+Lϵ = Ex0, ϵ, s 
+
+h
+
+∥ϵ − ϵθ (xs, s | Zt, e t)∥22
+
+i
+
+(3) 
+
+Planner dropout. To prevent over-reliance on the planner label and encourage ro-bustness when planner identity is unavailable, planner conditioning is randomly removed for a fraction of training samples by substituting the true label with a null condition. This regularization encourages the model to learn both planner-aware specialization and planner-agnostic exploration behavior, mirroring the classifier-free guidance technique used in conditional diffusion models [12]. 8 M. Y. S. Teo et al. 
+
+4.3 Multi-Agent Execution and Local Reranking 
+
+During inference, the trained single-agent policy is shared across all n agents. Each agent independently forms its own graph observation from the same glob-ally shared map before sampling candidate trajectories. 
+
+Candidate trajectory generation. At each planning step, every agent samples 
+
+K trajectories. In the reported experiments K = M = 8 . PCDP samples one trajectory under each of the M planner conditions, whereas DARE generates 
+
+K unconditioned stochastic candidates; this ensures all diffusion-based methods rerank over candidate sets of equal size. Although the policy parameters are shared, trajectories differ across agents because each agent conditions on its own graph observation and its own stochastic diffusion samples. Each candidate tra-jectory is converted into a set of predicted traversed map cells and an estimated travel cost computed as the cumulative Euclidean length of the predicted path. 
+
+Coordination groups. Although the map is shared globally, coordination during reranking is performed locally. At each planning step, robots are partitioned into local coordination groups via a proximity graph with local radius Rlocal = 25 m .Two robots are connected if their positions lie within this radius; connected components of this graph define the coordination groups. 
+
+Local reranking. For a coordination group g, Cg denotes the set of all joint candidate combinations formed from K trajectories sampled by each robot in the group. The selected combination minimizes a local coordination score: 
+
+S(C) = λoverlap Ω(C) + λtravel D(C) (4) where Ω(C) is the total predicted overlap in traversed map cells across the group’s trajectories and D(C) is the sum of their travel costs; in simple terms, the robots choose the combination that works best together by reducing overlap while keep-ing travel cost low. In the reported experiments, λoverlap = 1 .0 and λtravel = 0 .02 .The group reaches its joint optimum by enumerating Cg , which costs K|g| score evaluations; in the worst four-agent case this gives 84 = 4096 combinations. 
+
+Isolated robots. If a robot’s coordination group contains only itself, reranking is not applied. That robot instead selects the best single candidate from its own 
+
+K samples, falling back to independent planner-guided behavior. 
+
+Execution. Once a trajectory is selected for each robot, all agents follow the receding horizon strategy of DARE: only the first action of the chosen trajec-tory is executed before the shared map is updated and replanning occurs. This preserves long-horizon reasoning while keeping the system reactive to newly ob-served information. The coordination layer is deliberately lightweight: the primary source of coor-dination benefit is the quality and diversity of the K-candidate set generated by the planner-conditioned policy, while reranking is the mechanism that exploits this diversity at execution time. Planner-Conditioned Diffusion for Multi-Agent Exploration 9
+
+# 5 Results and Discussion 
+
+We evaluate the proposed framework in a 4-agent simulation setting in which all agents share the same trained single-agent trajectory generator. Five meth-ods are compared: two classical baselines, Nearest [18] and NBVP [1]; two diffusion-only baselines, DARE + independent and DARE + local rerank-ing ; and the proposed PCDP + local reranking . The two DARE variants isolate the benefit of local reranking alone (DARE + local reranking vs. DARE + independent) and the benefit of planner conditioning under the same reranking rule (PCDP vs. DARE, both with local reranking). The classical baselines pro-vide broader context on whether the proposed method remains competitive be-yond diffusion-only comparisons. They are evaluated in their native multi-agent execution form on the same map instances, while the diffusion-based methods are evaluated under the shared local-reranking framework described in Section 4.3. 
+
+5.1 Training 
+
+All diffusion-based policies are trained on simulated environments generated by a random dungeon generator [4,5]. Each training environment is a 250 × 250 
+
+grid map corresponding to a 100 m × 100 m area, with sensor range ds = 20 mand graph node resolution dn = 4 m. All models use prediction horizon Tp = 8 ,observation horizon To = 2 , and action horizon Ta = 1 . The DARE baseline is trained on 4000 expert trajectories from a ground-truth coverage planner, following DARE [5]. PCDP is trained on a planner-diverse dataset containing 1000 trajectories from each of M = 8 planner classes, giving 8000 trajectories in total. All remaining training hyperparameters are kept identical. 
+
+5.2 Evaluation 
+
+Evaluation is carried out over 100 test episodes on 350 × 350 grid maps corre-sponding to 140 m×140 m environments, with 4 agents per episode. All methods are evaluated on the same map instances. Trajectory sampling uses DDPM in-ference with 100 denoising steps, and each agent draws one candidate under each of the M = 8 planner conditions at every planning step. 
+
+5.3 Metrics 
+
+We report five metrics, with d(i) 
+
+> T
+
+denoting the total travel distance of agent i at the end of an episode. Explored rate is the fraction of free space discovered by the team, separating true efficiency from under-exploration. Success rate 
+
+is the fraction of episodes in which the team fully explores the map within the allotted episode horizon. Three distance metrics (lower is better) are: Max-agent travel Dmax = max i d(i) 
+
+> T
+
+is the primary travel metric, as it captures the largest individual burden within the team; Total team travel Dsum =
+
+P 
+
+> i
+
+d(i) 
+
+> T
+
+measures aggregate motion cost; and Agent imbalance Dimbalance =max i d(i) 
+
+> T
+
+− min i d(i) 
+
+> T
+
+reflects how evenly work is distributed. 10 M. Y. S. Teo et al. 
+
+Table 1. Quantitative comparison over 100 test episodes with four agents. Travel distance metrics (lower is better) are reported as mean ± standard deviation. Method Success Explored Dmax Dsum Dimbalance                                                    
+
+> Nearest 88% 0.9618 982.04 ±388.60 3637.21 ±1221.60 158.43 ±327.27 NBVP 51% 0.9554 1109.87 ±210.33 3188.08 ±747.41 685.94 ±401.68 DARE + independent 100% 1.0000 664.33 ±81.97 2559.38 ±318.53 49.78 ±20.78 DARE + local reranking 100% 1.0000 662.02 ±88.55 2542.91 ±346.08 51.37 ±22.55
+> PCDP + local reranking 100% 1.0000 649.18 ±91.57 2502.85 ±355.91 48.46 ±20.78
+
+5.4 Quantitative Comparison 
+
+Table 1 summarizes the 100-episode comparison across all completed methods. 
+
+PCDP + local reranking is the strongest method overall. It preserves the same perfect success and exploration regime as the DARE baselines, while also achieving the lowest mean max-agent travel, lowest mean total team travel, and lowest mean agent imbalance. Relative to the classical baselines, it also shows a substantially better efficiency–reliability trade-off: Nearest reaches reasonably high exploration but at much higher travel cost, while NBVP exhibits poor completion consistency and very high imbalance. 
+
+5.5 Effect of Planner Conditioning and Local Reranking 
+
+Relative to the strongest classical baseline, Nearest , PCDP + local rerank-ing achieves a substantially better efficiency–reliability trade-off. It improves success from 88% to 100%, increases mean explored rate from 0.9618 to 1.0000, and reduces mean max-agent travel by 33.9% (982.04 → 649.18), mean to-tal team travel by 31.2% (3637.21 → 2502.85), and mean agent imbalance by 69.4% (158.43 → 48.46). This shows that the proposed method does not merely maintain coverage, but does so with substantially lower travel cost and better-balanced coordination. Against the diffusion-based baselines, the gain can be examined more directly. Compared with DARE + local reranking , PCDP + local reranking re-duces mean max-agent travel by 1.94% (662.02 → 649.18), total team travel by 1.58% (2542.91 → 2502.85), and agent imbalance by 5.66% (51.37 → 48.46). By contrast, the comparison between DARE + local reranking and DARE + independent shows that reranking alone yields only marginal gains: 0.35% on max-agent travel and 0.64% on total team travel, with imbalance slightly worsening. This indicates that planner-conditioned multimodality, rather than reranking alone, is the main contributor to improved coordination. The gains are distributed across the team rather than concentrated in a single agent: mean travel distance is lower for all four agents under PCDP + local reranking than under both diffusion baselines. At the episode level, the proposed method achieves lower max-agent travel in 63 of 100 episodes against 
+
+DARE + local reranking (59 against DARE + independent ), and lower total team travel in 54 of 100 episodes (60 against independent). It ranks best Planner-Conditioned Diffusion for Multi-Agent Exploration 11  
+
+> (a) Within Reranking Range (b) Out of Reranking Range
+> Fig. 4. Real-robot two-agent exploration under the proposed framework.
+
+on max-agent travel in 45 episodes and worst in only 23, indicating a consistent reduction in poor coordination outcomes rather than just an average shift. 
+
+5.6 Qualitative Results 
+
+Figure 3 shows that different planner conditions produce structurally distinct trajectory candidates from similar observations, providing qualitative support for the multimodality claim and illustrating how diverse trajectories arise from the same shared policy. Notably, trajectories generated with different planner conditions but the same graph observation diverge in both direction and extent, covering different regions. This behavioral spread is what single-planner policies lack: they tend to cluster around the same dominant mode, leaving little room for the coordination mechanism to differentiate agent assignments. 
+
+5.7 Real-Robot Experiments 
+
+To validate our approach beyond simulation, we deploy the framework on a two-agent platform of mecanum-wheeled robots, using the OptiTrack motion capture system for localization and a P3GASUS [9]-based centralized planning, decentralized execution framework for plan execution. The full video is included in the supplementary material. Two complementary behaviors are observed, as illustrated in Figure 4. When the agents are within coordination range (Figure 4(a)), the local reranking stage selects trajectories that diverge toward different frontiers, actively reducing re-dundant coverage. When an agent is isolated (Figure 4(b)), it falls back to independently selecting its best planner-conditioned trajectory, continuing to explore efficiently on its own. Together, these observations confirm that planner-conditioned diversity is the key enabler: without it, agents operating from simi-lar observations would concentrate on the same dominant trajectory mode and pursue redundant paths. The framework therefore produces emergent spatial 12 M. Y. S. Teo et al. 
+
+separation when agents are nearby, and effective independent exploration when they are not, without any explicit repulsion or role-assignment mechanism. 
+
+# 6 Conclusion 
+
+In this work we presented Planner-Conditioned Diffusion Policy (PCDP) for co-ordinated multi-agent exploration. By training a shared single-agent diffusion policy on demonstrations from multiple planner styles with planner identity as an explicit conditioning input, PCDP learns a multimodal trajectory distribution that produces diverse, controllable trajectory candidates from the same obser-vation. Applied in a modular multi-agent framework with local reranking, the policy achieves coordination without end-to-end multi-agent training. The central finding is that planner-conditioned multimodality, rather than the reranking mechanism alone, is the main contributor to improved coordina-tion. Reranking over a single-planner candidate set yields only marginal gains, whereas the same rule applied to PCDP’s richer candidate set reduces max-agent travel, total team travel, and agent imbalance while preserving perfect task completion. Real-robot experiments with two agents further confirm that the framework transfers to physical deployment, producing emergent spatial sep-aration without any explicit repulsion or role-assignment mechanism. Several limitations remain. Because PCDP uses both a larger demonstration set and greater planner diversity than DARE, the present experiments do not isolate planner conditioning from training-data volume. Local reranking also scales exponentially with coordination-group size, and the reranking objective reduces predicted overlap without enforcing inter-robot collision avoidance. More broadly, this work demonstrates that improving the quality and diver-sity of the trajectory generation mechanism is a practical alternative to end-to-end multi-agent coordination learning. Future work could explore learned or adaptive reranking objectives, more efficient selection for larger coordination groups, and richer planner conditioning that further narrows the gap between single-agent training and multi-agent execution. 
+
+Acknowledgments. This work was supported by NUS under grant TL/FS/2025/01. 
+
+Disclosure of Interests. The authors have no competing interests to declare that are relevant to the content of this article. Planner-Conditioned Diffusion for Multi-Agent Exploration 13 
+
+# References 
+
+1. Bircher, A., Kamel, M., Alexis, K., Oleynikova, H., Siegwart, R.: Receding horizon" next-best-view" planner for 3d exploration. In: 2016 IEEE international conference on robotics and automation (ICRA). pp. 1462–1468. IEEE (2016) 2. Burgard, W., Moors, M., Stachniss, C., Schneider, F.E.: Coordinated multi-robot exploration. IEEE Transactions on robotics 21 (3), 376–386 (2005) 3. Cao, C., Zhu, H., Choset, H., Zhang, J.: Tare: A hierarchical framework for ef-ficiently exploring complex 3d environments. In: Robotics: Science and Systems. vol. 5, p. 2 (2021) 4. Cao, Y., Hou, T., Wang, Y., Yi, X., Sartoretti, G.: Ariadne: A reinforcement learn-ing approach using attention-based deep networks for exploration. In: 2023 IEEE International Conference on Robotics and Automation (ICRA). pp. 10219–10225. IEEE (2023) 5. Cao, Y., Lew, J., Liang, J., Cheng, J., Sartoretti, G.: Dare: Diffusion policy for au-tonomous robot exploration. In: 2025 IEEE International Conference on Robotics and Automation (ICRA). pp. 11987–11993 (2025). https://doi.org/10.1109/ ICRA55743.2025.11128196 
+
+6. Cao, Y., Zhao, R., Wang, Y., Xiang, B., Sartoretti, G.: Deep reinforcement learning-based large-scale robot exploration. IEEE Robotics and Automation Let-ters (2024) 7. Chi, C., Xu, Z., Feng, S., Cousineau, E., Du, Y., Burchfiel, B., Tedrake, R., Song, S.: Diffusion policy: Visuomotor policy learning via action diffusion. The International Journal of Robotics Research (2024) 8. Chiun, J., Zhang, S., Wang, Y., Cao, Y., Sartoretti, G.: Marvel: Multi-agent re-inforcement learning for constrained field-of-view multi-robot exploration in large-scale environments. In: 2025 IEEE International Conference on Robotics and Au-tomation (ICRA). pp. 11392–11398. IEEE (2025) 9. Duhan, T., He, C., Sartoretti, G.: P3gasus: Pre-planned path execution graphs for multi-agent systems at ultra-large scale. IEEE Robotics and Automation Letters 
+
+11 (2), 1274–1281 (2025) 10. Gao, W., Booker, M., Adiwahono, A., Yuan, M., Wang, J., Yun, Y.W.: An improved frontier-based approach for autonomous exploration. In: 2018 15th international conference on control, automation, robotics and vision (ICARCV). pp. 292–297. IEEE (2018) 11. Ho, J., Jain, A., Abbeel, P.: Denoising diffusion probabilistic models. In: Larochelle, H., Ranzato, M., Hadsell, R., Balcan, M., Lin, H. (eds.) Advances in Neu-ral Information Processing Systems. vol. 33, pp. 6840–6851. Curran Associates, Inc. (2020), https://proceedings.neurips.cc/paper_files/paper/2020/file/ 4c5bcfec8584af0d967f1ab10179ca4b-Paper.pdf 
+
+12. Ho, J., Salimans, T.: Classifier-free diffusion guidance. In: NeurIPS 2021 Work-shop on Deep Generative Models and Downstream Applications (2021), https: //openreview.net/forum?id=qw8AKxfYbI 
+
+13. Janner, M., Du, Y., Tenenbaum, J., Levine, S.: Planning with diffusion for flexible behavior synthesis. In: International Conference on Machine Learning (2022) 14. Lee, E.S., Kim, Y.M.: Multi-agent exploration with similarity score map and topo-logical memory. IEEE Robotics and Automation Letters 9(11), 10327–10334 (2024) 15. Li, H., Zhang, Q., Zhao, D.: Deep reinforcement learning-based automatic ex-ploration for navigation in unknown environment. IEEE Transactions on Neural Networks and Learning Systems 31 (6), 2064–2076 (2019) 14 M. Y. S. Teo et al. 16. Xu, Y., Yu, J., Tang, J., Qiu, J., Wang, J., Shen, Y., Wang, Y., Yang, H.: Explore-bench: Data sets, metrics and evaluations for frontier-based and deep-reinforcement-learning-based autonomous exploration. In: 2022 International Con-ference on Robotics and Automation (ICRA). pp. 6225–6231. IEEE (2022) 17. Yamauchi, B.: A frontier-based approach for autonomous exploration. In: Pro-ceedings 1997 IEEE International Symposium on Computational Intelligence in Robotics and Automation CIRA’97.’Towards New Computational Principles for Robotics and Automation’. pp. 146–151. IEEE (1997) 18. Yamauchi, B.: Frontier-based exploration using multiple robots. In: Proceedings of the second international conference on Autonomous agents. pp. 47–53 (1998) 19. Yang, X., Yang, Y., Yu, C., Chen, J., Yu, J., Ren, H., Yang, H., Wang, Y.: Ac-tive neural topological mapping for multi-agent exploration. IEEE Robotics and Automation Letters 9(1), 303–310 (2023) 20. Zhu, D., Li, T., Ho, D., Wang, C., Meng, M.Q.H.: Deep reinforcement learning supervised autonomous exploration in office environments. In: 2018 IEEE inter-national conference on robotics and automation (ICRA). pp. 7548–7555. IEEE (2018) 21. Zhu, S., Zhou, J., Chen, A., Bai, M., Chen, J., Xu, J.: Maexp: A generic platform for rl-based multi-agent exploration. In: 2024 IEEE International Conference on Robotics and Automation (ICRA). pp. 5155–5161. IEEE (2024)
