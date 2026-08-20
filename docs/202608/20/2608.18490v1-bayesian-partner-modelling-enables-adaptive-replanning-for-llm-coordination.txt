@@ -1,0 +1,1215 @@
+Title: Bayesian Partner Modelling enables Adaptive Replanning for LLM Coordination
+
+URL Source: https://arxiv.org/pdf/2608.18490v1
+
+Published Time: Thu, 20 Aug 2026 00:28:34 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Bayesian Partner Modelling enables Adaptive Replanning for LLM Coordination 
+
+## Harsh Goel 1∗, Aditya Sai Ellendula 1∗, Vaishnav Tadiparthi 2, Ehsan Moradi Pari 2, Hossein Nourkhiz Mahjoub 2, Sandeep P. Chinchali 1
+
+> 1
+
+The University of Texas at Austin 2 Honda Research Institute, USA 
+
+Abstract 
+
+Multi-agent Large Language Model (LLM) systems often struggle to collaborate with new teammates whose strategies shift mid-task. Because agents execute multi-step or temporally extended skills, they frequently continue executing outdated plans long after public evidence shows that a partner has changed its skill. Existing methods either treat partner track-ing as passive context—leaving the agent aware of the shift but slow to act—or replan indiscriminately. We introduce BayesBeliefAgent, which pairs a hierarchical LLM planner with a Bayesian tracking module. Rather than replanning constantly, our agent interrupts its current skill only when a partner’s actions directly contradict the inferred skill. Beyond standard reward, we evaluate performance using replanning efficiency and the belief–action gap: the fraction of total deci-sions where an agent with a correct partner estimate executes a non-complementary skill. Across benchmark Overcooked environments, contradiction-conditioned control drastically narrows this belief–action gap while requiring an order of magnitude fewer replans than heuristic methods. 
+
+## 1 Introduction 
+
+Imagine a student who realizes that their professor has changed the direction of a joint project, yet continues carrying out an analysis that is no longer useful instead of stopping and replan-ning new experiments. Large language model (LLM) agents face an analogous challenge when collaborating in sequential decision-making tasks: they must coordinate with teammates, whose behavior may change during execution (Zhang et al. 2024; Agashe et al. 2025). In such settings, coordination failures do not always arise because an agent misunderstands its partner’s intent: a capability commonly associated with Theory of Mind (Premack and Woodruff 1978; Byom and Mutlu 2013; Shu et al. 2021; Gao et al. 2024). Rather, they arise because the agent fails to replan at the right time. LLM agents in collaborative settings often continue exe-cuting an obsolete plan even after public evidence indicates that a teammate’s strategy has shifted. Recent LLM-based coordination methods address this problem by incorporating inferred partner roles into the planning context at inference time (Zhang et al. 2024; Sun et al. 2025; Wallace, Siddique, and Cao 2025). However, accurate partner inference does not necessarily translate into effective coordination. As observed by Riemer et al. (2025), LLM agents can exhibit a literal– functional Theory of Mind gap: they may correctly infer a 
+
+> ∗
+
+These authors contributed equally. 
+
+Figure 1: Belief alone is not enough. An LLM agent may correctly model its teammate yet still act redundantly if it does not revise its plan when partner behavior changes. BayesBeliefAgent addresses this by maintaining a Bayesian posterior over latent teammate coordination skills, detecting visible contradictions, and triggering replanning when the current plan becomes stale. This turns teammate belief into coordinated, complementary action. partner’s role or goal yet fail to adapt their own behavior accordingly. In sequential tasks, this failure can arise when an agent updates its belief about a teammate’s new role but continues executing a skill selected under its previous belief. Its partner model has changed, but its control policy remains committed to an obsolete course of action. This exposes a 
+
+belief-to-control gap: understanding what a partner is doing does not by itself provide a principled mechanism for decid-ing whether and when to interrupt ongoing execution. The central challenge is therefore not only to infer a teammate’s intent, but also to determine when new evidence is sufficiently consequential to trigger replanning. Effective coordination thus requires selective replanning : interrupting an ongoing skill when public observations contradict the assumptions under which it was selected, while avoiding the excessive churn caused by reacting to every behavioral change. Our experiments further show that generic interruption rules are insufficient to make this decision reliably. We address this gap with BayesBeliefAgent, which tracks the skill the partner is likely executing and uses that estimate to decide when to replan. For each possible partner skill, the agent predicts the low-level actions the partner would take and compares those predictions with the observed public behavior. arXiv:2608.18490v1 [cs.MA] 19 Aug 2026 This comparison updates its estimate of the partner’s skill. When the partner takes actions that conflict with the current estimate, the agent interrupts its ongoing skill and replans. We evaluate BayesBeliefAgent in Overcooked and Burrito with previously unseen partners exhibiting diverse behavioral preferences (Wang et al. 2024). Because episodic reward is noisy and can obscure coordination failures, we addition-ally report four process-level metrics: the belief-action gap rate , defined as the fraction of decision points at which the agent has a correct teammate-skill estimate but nevertheless selects or continues a non-complementary skill; contradiction-conditioned recovery , which measures how quickly the agent selects a complementary skill after contradictory evidence; the duplicate-skill rate , which measures how often both agents pursue the same skill; and replan efficiency , which captures the amount of replanning required to coordinate effectively. We compare against baselines that replan (i) periodically, (ii) after specific public events, or (iii) whenever an LLM judge recommends it, as well as a hypothesis-based partner-modeling method (Cross et al. 2024). Across Open and Ring layouts, BayesBeliefAgent reduces the gap between what the agent believes and how it acts. Simple triggers can achieve similar reward, but only by replanning more than 100 times per episode: roughly two orders of magnitude more often than BayesBeliefAgent. Our key contributions are as follows: 
+
+• Method. We introduce BayesBeliefAgent, a hierarchi-cal LLM coordination agent that uses likelihood-based contradictions under the current teammate-skill estimate to selectively interrupt and replan. 
+
+• Diagnostics. We propose a diagnostic evaluation proto-col that measures the belief–action gap, contradiction-conditioned recovery, and replanning efficiency, revealing coordination failures that aggregate reward obscures. 
+
+• Evidence. Across Open and Ring layouts, we show that posterior-gated interruption turns partner beliefs from passive planning context into an active control signal. It reduces the belief–action gap and improves recovery after teammate strategy shifts while requiring substantially fewer replans than periodic, event-triggered, and LLM-judge baselines. We also identify the settings in which selective replanning provides limited benefit. 
+
+## 2 Related Work 
+
+Ad hoc teamwork and zero-shot coordination. Multi-agent Reinforcement Learning (MARL) methods for coor-dination have traditionally emphasized learning specialized roles (Liu et al. 2023; Li et al. 2021; Wang et al. 2020; Goel et al. 2025). The problem of coordinating with unseen partners without prior joint training is the classical ad hoc teamwork setting (Stone et al. 2010), and Overcooked-AI (Carroll et al. 2020) has become its standard testbed for human-AI coordina-tion. Prior work improves performance through training-time 
+
+partner diversity: arbitrary conventions (Hu et al. 2021), population-based play (Strouse et al. 2021; Zhao et al. 2023), and open-ended partner generation (Li et al. 2023b; Wang et al. 2025). These methods require environment-specific training (Gessler et al. 2025; Ruhdorfer et al. 2025). Our work is complementary and inference-time: given a fixed LLM agent and an unseen partner, we ask when an updated partner belief should interrupt the agent’s plan. 
+
+LLM agents for multi-agent coordination. LLM agents have increasingly been used in cooperative tasks because they can interpret shared goals, reason about teammate behavior, and generate high-level plans. Related works (Zhang et al. 2024; Liu et al. 2024; Cross et al. 2024) uses teammate-intent reasoning and hierarchical planning to support proactive cooperation in Overcooked. Recent methods incorporate partner models into decision-making, either as retrieved con-text (Wallace, Siddique, and Cao 2025) or as constraints on actions (Nguyen et al. 2025). However, broader evalua-tions across cooperative environments show that strong task understanding does not necessarily translate into robust coor-dination (Agashe et al. 2025; Mandi, Jain, and Song 2023). In particular, recent studies find that LLM agents often strug-gle to sustain collaboration and adapt as teammate behavior changes (Sun et al. 2025; Riemer et al. 2025). In contrast, our work studies how updated partner beliefs should control 
+
+when an agent interrupts an ongoing skill and replans. 
+
+Theory of mind and partner belief modeling. Modeling a partner’s latent state has a long lineage in Bayesian inverse planning (Baker, Saxe, and Tenenbaum 2009) and Bayesian theory of mind (Baker et al. 2017) with learned variants that predict agents from behavior (Rabinowitz et al. 2018) and Bayesian delegation (Wu et al. 2021). Explicit belief representation in LLMs helps but is bounded by long-horizon context and hallucinated state (Li et al. 2023a), and hypothesis-based agents generate and refine natural-language conjectures about partner strategy (Cross et al. 2024). Unlike belief estimators based on LLMs, we introduce a lightweight, non-LLM Bayesian method that infers which skill a teammate is currently executing from their publicly observable actions, to selectively interrupt the ego agent’s ongoing skill. 
+
+The belief-action gap in LLM agents. Our framing builds on the distinction between literal Theory of Mind (predicting a partner) and functional Theory of Mind (adapting behavior accordingly) (Riemer et al. 2025). Because LLM agents can fail to translate updated beliefs into action (Xu et al. 2025; Xiao et al. 2025), we define the belief-action gap : maintaining an accurate belief about a teammate’s role while continuing to execute an outdated skill. We introduce process-level metrics to measure this gap and evaluate whether belief-conditioned selective replanning reduces it. 
+
+Replanning and plan invalidation in hierarchical agents. 
+
+LLM agents replan from task failure, self-reflection, or envi-ronment feedback (Yao et al. 2023; Shinn et al. 2023) while more recent works trigger replanning for goal-state consis-tency or execution verification (Kim et al. 2025). In these methods, replanning is primarily driven by task-level execu-tion signals such as failed actions. We study a complementary setting in multi-agent coordination, where an executing skill may become obsolete before any task-level failure occurs because newly observed teammate behavior contradicts the current partner model. BayesBeliefAgent therefore uses these contradictions as the trigger for selective replanning. 3 Problem Formulation 
+
+Modeling. We model the problem as a hierarchical partially observable stochastic game in which agents act through temporally extended skills. The game is defined by the tuple ⟨N , S, A, O, T , Ω, R, Ψ, πlow , β, ρ s
+
+> 0
+
+, γ ⟩. Here, N =
+
+{0, . . . , n − 1} is the set of agents, S is the global state space, A = A0 × · · · × A n−1 is the joint primitive-action space, and O = O0 × · · · × O n−1 is the joint observation space. At time t, the environment is in state st ∈ S , and agent k receives observation okt ∈ O k sampled according to the observation model okt ∼ Ωk(· | st). Each agent exe-cutes a primitive action akt ∈ A k, forming the joint action 
+
+at = [ a0 
+
+> t
+
+, . . . , a n−1 
+
+> t
+
+]. The transition model T determines the next state from st+1 ∼ T (· | st, at), and the team receives the shared reward R(st, at). The finite skill library is denoted by Ψ, the collection of low-level action controllers by πlow ,and the skill termination conditions by β, as defined in the next paragraph. Finally, the initial state is sampled from ρs
+
+> 0
+
+,and γ ∈ [0 , 1] is the discount factor. The ego agent is denoted by i and an unseen teammate by j̸ = i.
+
+Temporally Extended Skills. The skill library Ψ, where each ψ ∈ Ψ represents a temporally extended task-level be-havior. The teammate selects its skill ψjt ∼ πj
+
+> high
+
+
+
+· | τ jt
+
+
+
+using an unknown high-level policy πj 
+
+> high
+
+conditioned on its interaction history τ jt =
+
+
+
+oj
+
+> 0
+
+, a j
+
+> 0
+
+, . . . , o jt−1, a jt−1, o jt
+
+
+
+. Con-ditioned on its current skill ψjt , the teammate executes a low level primitive action ajt ∼ πj
+
+> low
+
+
+
+· | ojt , ψ jt
+
+
+
+.
+
+While the ego agent observes the teammates’ low-level ac-tions ajt−1 as part of its own observations oit, it does not know 
+
+πj
+
+> high
+
+, or ψjt . Therefore, the ego agent selects its skill ψit ∼
+
+πi
+
+> high
+
+
+
+· | τ it , b t(ψjt )
+
+
+
+using its high-level policy πi
+
+> high
+
+, con-ditioned on its trajectory τ it =  oi
+
+> 0
+
+, a i
+
+> 0
+
+, . . . , o it−1, a it−1, o it
+
+
+
+and belief bt (defined in the next section) over the teammate’s active skill. Conditioned on this skill, the ego agent’s primitive action is ait ∼ πi
+
+> low
+
+ · | oit, ψ it
+
+. Finally, each agent also has a termination rule βk, which determines when its current skill ends. The collection of termination rules is denoted by 
+
+β. The termination function βk : Ok × Ψ → [0 , 1] gives the probability that the skill terminates after time step t:
+
+βk  okt+1 , ψ kt
+
+ ∈ [0 , 1] .
+
+Online Partner-Skill Belief. Because the teammate’s ac-tive skill ψjt is not directly observable, the ego agent maintains a belief bt ∈ ∆(Ψ) , where ∆(Ψ) denotes the probability sim-plex over the skill library. For each ψ ∈ Ψ, the belief is defined as 
+
+bt(ψ) = Pr 
+
+
+
+ψjt = ψ | τ it
+
+
+
+. (1) Since oit includes the teammate’s publicly observable primi-tive actions, bt summarizes which teammate skill best explains the evidence up to time t. The belief provides a probabilistic estimate of the teammate’s current task-level behavior, which the ego agent uses to choose a complementary skill and decide whether to interrupt and replan its own skill. 
+
+Objective. The ego policy consists of a fixed hierarchical LLM planner, skill-conditioned low-level controllers, and an online partner-skill estimator. Therefore, the evaluation objective of the ego-agent’s policy with the estimated partner’s skill is to maximize the total expected return: 
+
+J(πi
+
+> high
+
+) = Es0∼ρs   
+
+> 0,ot∼Ω( ·| st), ψ t∼πhigh ,
+> at∼πlow , s t+1 ∼T (·| st,at)
+
+" TX
+
+> t=0
+
+γtR(st, at)
+
+#
+
+.
+
+(2) 
+
+## 4 Method 
+
+We present BayesBeliefAgent, a hierarchical ego agent that coordinates with an unseen teammate by maintaining an online posterior over the teammate’s active skill. The ego agent observes the teammate’s primitive actions and their effects on the public environment, but does not directly observe the skill being executed. We first estimate the teammate’s active skill through a recursive Bayesian update. As described in Section 4.1, the estimator tracks whether the teammate’s skill may persist or change and then incorporates newly observed public evidence to obtain a posterior belief over the skill library. Once this posterior estimate is obtained, the ego agent uses it as coordination context for its high-level LLM planner. While an ego skill is already being executed, the agent may interrupt that skill and invoke the planner again when newly observed evidence is inconsistent with the current partner-skill estimate, as described in Section 4.2. 
+
+4.1 Bayesian Partner-Skill Belief Update 
+
+The ego agent maintains a recursive belief bt(ψ) over the teammate’s active skill ψjt ∈ Ψ, as introduced in Section 3. Be-cause the teammate’s skill is not directly observable, the belief is updated from public evidence contained in the ego agent’s observation history. We estimate the teammate’s active skill through Bayesian inverse planning (Jin et al. 2024). The ego agent treats the teammate’s skill ψjt ∈ Ψ as a latent variable and infers it from the primitive actions observed through its own interaction history. Let τ it =  oi
+
+> 0
+
+, a i
+
+> 0
+
+, . . . , o it−1, a it−1, o it
+
+
+
+denote the ego agent’s observation–action history. Because the teammate’s publicly visible primitive action ajt−1 is con-tained in the ego observation oit, this history provides the behavioral evidence used to infer the teammate’s current skill. For a candidate teammate skill ψ ∈ Ψ, the desired posterior is given in Eq. 1. Applying Bayes’ rule over a recent inference window from timestep t′ < t , where the partner agent either completes its last skill or is a fixed window of k timesteps 
+
+P  ψjt = ψ | τ it
+
+ =
+
+P  τ it′+1: t | ψjt = ψ, τ it′
+
+ P  ψjt = ψ | τ it′
+
+P 
+
+> ψ′∈Ψ
+
+P  τ it′+1: t | ψjt = ψ′, τ it′
+
+ P  ψjt = ψ′ | τ it′
+
+
+
+∝P  τ it′+1: t | ψjt = ψ, τ it′
+
+ bt′ (ψ), (3) where τ it′+1: t denotes the new trajectory segment observed after the prior history τ it′ , and bt′ (ψ) ≜ P  ψjt = ψ | τ it′
+
+ is the prior belief over the teammate’s active skill. In practice, we assume that the teammate’s skill remains fixed within the inference window that is capped to k steps. Figure 2: BayesBeliefAgent overview. From the teammate’s publicly observed primitive actions and the ego agent’s observation history, the agent maintains a posterior over the teammate’s active skill. Each newly observed teammate action is first evaluated under the previous MAP teammate-skill estimate. The posterior is then updated using the new observation. If the action is contradictory and the previous estimate is stable and sufficiently confident while the ego agent is mid-skill and out of cooldown, the current skill is interrupted and the LLM planner is queried using the updated posterior and MAP estimate. Otherwise, the agent continues executing its current skill. 
+
+Initializing the Prior. Therefore, the prior bt′ is initialized from the observed history of completed partner skills. We use an add-α smoothed count model: 
+
+bt′ (ψ) = Cm
+
+ ψ | τ it′
+
+ + α
+
+P
+
+> ψ′∈Ψ
+
+
+
+Cm
+
+ ψ′ | τ it′
+
+ + α
+
+ . (4) where α > 0 is a smoothing hyperparameter. We use α = 1 ,corresponding to a uniform Dirichlet-style initialization. This smoothing assigns nonzero prior probability before the start of the current episode. We update the episode-level counts after each inferred completed partner skill ˆψjm at any completion timestep m via 
+
+Cm(ψ) = Cm−1(ψ) + 1
+
+h ˆψjm = ψ
+
+i
+
+. (5) The resulting prior provides a lightweight episode-level mem-ory of the teammate’s previously inferred behavior. Skills repeatedly supported in earlier segments receive greater prior probability, while the likelihood term in Eq. (3) can still rapidly shift the posterior when the teammate’s newly ob-served actions are more consistent with a different skill. 
+
+Simplifying the Belief Update. The trajectory likelihood 
+
+P
+
+
+
+τ it′+1: t | ψjt = ψ, τ it′
+
+
+
+in Eq. (3) contains both the team-mate’s primitive actions from its action policy πj 
+
+> low
+
+and the resulting observations and can be factorized as 
+
+> t
+
+Y
+
+> l=t′+1
+
+πj
+
+> low
+
+
+
+ajl | ojl , ψ 
+
+
+
+P  ail | τ il
+
+ P
+
+
+
+oil+1 | τ il , a il , a jl
+
+
+
+.
+
+Therefore, the partner-skill belief update in Eq.3 can be written as 
+
+bt(ψ) = ηb t′ (ψ)
+
+> t
+
+Y
+
+> l=t′+1
+
+πj
+
+> low
+
+
+
+ajl | ojl , ψ 
+
+
+
+, (6) where the normalization constant is 
+
+η−1 = X
+
+> ψ′∈Ψ
+
+bt′ (ψ′)
+
+> t
+
+Y
+
+> l=t′+1
+
+πj
+
+> low
+
+
+
+ajl | ojl , ψ ′
+
+. (7) In practice, the true teammate observation ojl and low-level controller πj 
+
+> low
+
+are not available to the ego agent. We therefore approximate the action likelihood using the ego agent’s own observations of its partner from its own history τ il and its low-level action controller πi 
+
+> low
+
+as 
+
+πj
+
+> low
+
+
+
+ajl | ojl , ψ 
+
+
+
+≈ πi
+
+> low
+
+
+
+ajl | τ il , ψ 
+
+
+
+. (8) 
+
+4.2 Belief-Guided Skill Interruption 
+
+The posterior belief over the teammate’s skill is used both as context for the high-level planner and to decide when the ego agent should interrupt its current skill. First, the ego agent obtains a point estimate of the team-mate’s active skill ˆψjt−1 from the previous belief: 
+
+ˆψjt−1 = arg max  
+
+> ψ∈Ψ
+
+bt−1(ψ). (9) Then, the ego agent evaluates the likelihood of teammate actions under this estimated skill. Because the teammate’s true low-level controller and observation are unavailable, we use the same approximate action model introduced in Eq. (8): 
+
+ℓt =
+
+> t−1
+
+Y
+
+> l=t′+1
+
+πi
+
+> low
+
+
+
+ajl | τ lt , ˆψjt−1
+
+
+
+. (10) Finally, this likelihood measures how well the current partner-skill estimate explains the teammate’s newly observed behav-ior to determine whether to interrupt the ego agent’s ongoing skill. A low value indicates that the teammate’s action is inconsistent with the behavior expected under ˆψjt−1.We define the resulting contradiction signal as 
+
+Ct = 1 [ℓt < θ obs ] , (11) where θobs is a likelihood threshold. The contradiction test is evaluated before the new action is incorporated into the posterior in Eq. 6. This ordering is important because, after the belief update, the posterior may shift toward a different skill that better explains ajt . Evaluating the likelihood before this update allows the ego agent to detect when its previous partner-skill estimate has been contradicted by new evidence. 
+
+Gated Skill Interruption. A single unlikely action may result from noise or temporary motion rather than a mean-ingful change in the teammate’s skill. We therefore combine the contradiction signal with additional conditions before interrupting the ego agent’s current skill: 
+
+Replan t = 1
+
+
+
+Ct = 1 ∧ stable 
+
+ ˆψjt−1
+
+
+
+∧ bt−1
+
+ ˆψjt−1
+
+
+
+≥ Γconf 
+
+∧ midSkill t ∧ cooldown t = 0 
+
+
+
+.
+
+(12) Here, stable 
+
+ ˆψjt−1
+
+
+
+requires the MAP skill estimate to have remained unchanged over a fixed number of recent belief updates. This prevents the agent from interrupting its skill while the partner estimate is still changing. The confidence threshold Γconf requires the current estimate to have sufficient posterior probability. The condition midSkill t ensures that interruption is only considered while the ego agent is executing a skill, and cooldown t prevents repeated replanning over a short period. We present the sensitivity of the planner to these gates and outline hyperparameters in the Appendix. To summarize, the ego agent replans only when a newly observed teammate action is unlikely under a stable, confident partner-skill estimate. Therefore, the mechanism does not need the complementary ego skill; it detects when the teammate’s behavior is inconsistent with the stable, committed skill estimate held before the new observation, and uses that contradiction to trigger replanning. 
+
+4.3 Replanning 
+
+When Eq. (12) is satisfied, the ego agent interrupts its current skill and invokes the high-level LLM planner. The planner receives the current observation history, the updated posterior belief bt, the resulting MAP teammate-skill estimate 
+
+ˆψjt = arg max  
+
+> ψ∈Ψ
+
+bt(ψ), (13) and the set of currently feasible ego skills. The planner πi
+
+> high
+
+,which is an LLM selects a new ego skill. Consequently, the partner-skill belief affects planning in two ways. First, the posterior and its MAP estimate are provided to the LLM planner as coordination context. Second, the likelihood of newly observed behavior under the current skill estimate de-termines whether the planner should be invoked while an ego skill is already in progress. This allows the agent to continue executing its current skill when the teammate behaves as ex-pected, while still responding when new evidence contradicts the current partner-skill estimate. We provide the complete algorithm in the Appendix. 
+
+## 5 Experiments 
+
+Our experiments answer the following research questions: 
+
+RQ1. Coordination Performance. How does Bayes-BeliefAgent perform when paired with diverse, preference-specialized partners (Sec. 5.2)? 
+
+RQ2. Literal–Functional ToM Gap. Does solely maintain-ing an accurate belief about a teammate’s skill suffice to prevent coordination failures (Sec. 5.3)? 
+
+RQ3. Posterior-Guided Control Ablation. Does only using the teammate posterior as a control signal to interrupt an executing skill close the belief-action gap more effectively than using the same posterior only as context 
+
+in the planner prompt (Sec. 5.4)? 
+
+RQ4. Selective Replanning. Is contradiction-based inter-ruption more efficient at improving coordination than generic replanning heuristics (Sec. 5.5)? 
+
+5.1 Setup 
+
+Environments and partners. We evaluate in the Over-cooked/Burrito domain across three layouts (Open, Ring, and Forced Coordination (FC)), and three partner groups, yielding nine settings. The evaluation population contains 12 Behavior Preference (BP) agents (Wang et al. 2024) that favor distinct task subgoals through reward shaping. We di-vide them into three groups of four: Logistics/G1 (Plating and Washing), Cooking/G2 (Chopping and Potting), and 
+
+Sourcing/G3 (Mushroom and Rice dispensing). Within each group, the four agents correspond to the 22 combinations of their two preferences. Rewards for Delivering Dishes (+20) ,Grilling Meat (+20) , and Taking Meat (+10) are fixed across all partners to maintain task competence while preserving behavioral diversity. Each reported layout-group result aggre-gates five seeds across four partners. Full partner-generation details are provided in the Appendix. 
+
+Baselines and conditions. We compare BayesBeliefA-gent against ProAgent (Zhang et al. 2024), a hierarchi-cal LLM planner without online belief revision; Hypothet-ical Minds (Cross et al. 2024), a hypothesis-based partner-modeling method; GAMMA (Liang et al. 2024), an RL-based ad hoc teaming agent; and TALENTS (Li et al. 2025), a zero-shot coordination baseline. All LLM-based conditions use either GPT-4o or GPT-5.2. Table 1: Coordination performance (mean reward ± std. dev.) across all three BP partner groups. FC = Forced Coordination. Best LLM-based result per cell in bold ; best overall underlined. BayesBeliefAgent outperforms all LLM-based agents. 
+
+Group 1 (Logistics) Group 2 (Cooking) Group 3 (Sourcing) Agent FC Ring Open FC Ring Open FC Ring Open 
+
+BP 95 (116) 927 (406) 1625 (457) 84 (159) 622 (246) 484 (179) 76 (130) 793 (228) 792 (334) 
+
+GAMMA 46 (79) 1124 (225) 1189 (415) 64 (111) 649 (159) 360 (114) 54 (77) 864 (216) 692 (167) 
+
+TALENTS 53 (91) 1019 (307) 1212 (193) 34 (60) 935 (298) 398 (158) 38 (49) 1237 (308) 1101 (321) 
+
+Hypothetical-Minds 11 (19) 388 (361) 608 (274) 0 (0) 188 (64) 369 (164) 0 0 275 (124) 480 (239) 
+
+ProAgent 0 (0) 313 (252) 732 (310) 0 (0) 161 (143) 388 (253) 9 (15) 271 (234) 549 (327) 
+
+ProAgent (GPT-5.2) 0 (0) 200 (182) 629 (252) 0 (0) 172 (80) 392 (140) 9 (16) 337 (239) 569 (257) 
+
+Ours (GPT-4o) 14 (21) 663 (468) 1533 (410) 9 (16) 231 (232) 337 (270) 18 (25) 506 (161) 1420 (390) 
+
+Ours (GPT-5.2) 0 (0) 705 (302) 1485 (340) 9 (16) 285 (114) 395 (234) 45 (40) 470 (173) 1360 (306) 
+
+Metrics. We report episodic team rewards as measures of task performance. To evaluate literal Theory of Mind, we addi-tionally report teammate-skill prediction accuracy. To evaluate 
+
+functional Theory of Mind, we report the complementary-skill rate within three steps of a detected contradiction ( Comp@3 ), and the duplicate-skill rate. The ground truth complementary skill for coordination scenarios is determined by humans (See Appendix). Our primary diagnostic metric is the belief-action gap rate .At each high-level decision point, we first determine whether the agent’s committed estimate of the teammate’s skill is correct, or satisfies a specified confidence criterion. Among these points, the belief-action gap rate measures the fraction for which the ego agent nevertheless selects or continues a stale, duplicate, or non-complementary macro-action. Thus, this metric assesses whether that belief is translated into ap-propriate control. A lower rate indicates a smaller divergence between literal and functional Theory of Mind. Addition-ally, we measure the replan rate per episode to quantify the computational cost of each interruption strategy. 
+
+5.2 RQ1: Benchmarking Coordination 
+
+Table 1 reports coordination performance across the three partner clusters and three layouts. BayesBeliefAgent outper-forms ProAgent and Hypothetical Minds in every layout. In the Open and Ring layouts, BayesBeliefAgent improves performance relative to ProAgent, with the largest gains against Group 1 and Group 3 partners. Qualitatively, these improvements arise because BayesBeliefAgent anticipates large partner skill switches (e.g., to plating or washing in Group 1, or mushroom dispensing in Group 3) and selects a complementary skill in response. However, the RL-based base-lines, particularly TALENTS and GAMMA, remain stronger than the LLM-based methods in most environments. This gap suggests that, although online teammate-belief adaptation improves coordination via the hierarchical LLM agent, the underlying LLM-based high-level skill planner remains a major performance bottleneck and requires substantial im-provement. Improving the underlying high-level LLM planner is an important direction that we leave to future work. Table 2: Mechanism metrics averaged across partner groups G1–G3. Despite nearly identical teammate-skill prediction ac-curacy, BayesBeliefAgent reduces the belief–action gap and duplicate-skill rate and improves contradiction-conditioned recovery relative to ProAgent, with the largest gains in Open and Ring. Arrows indicate the improving direction. 
+
+Metric Method Open Ring FC Skill acc. ( ↑) BayesBeliefAgent 0.79 0.71 0.61 ProAgent 0.78 0.71 0.60 Gap rate ( ↓) BayesBeliefAgent 0.20 0.28 0.42 ProAgent 0.41 0.38 0.47 Comp@3 ( ↑) BayesBeliefAgent 0.66 0.54 0.31 ProAgent 0.39 0.43 0.26 Dup. skill ( ↓) BayesBeliefAgent 0.15 0.23 0.37 ProAgent 0.30 0.30 0.41 
+
+5.3 RQ2: Literal-Functional ToM Gap 
+
+Table 2 shows that BayesBeliefAgent (GPT-4o) and ProA-gent achieve nearly identical predicted teammate-skill accu-racy across all layouts, yet differ substantially in functional coordination. The posterior-gated interruption in BayesBe-liefAgent reduces the belief-action gap from 0.41 to 0.20 in Open and from 0.38 to 0.28 in Ring, while also improving Comp@3 and reducing duplicate-skill behavior. The gains are smaller in Forced Coordination, where limitations of the underlying planner remain more pronounced. These results reveal a literal-functional Theory-of-Mind gap: accurately inferring the teammate’s skill is insufficient if the ego agent remains committed to a skill selected under an outdated belief. Thus, BayesBeliefAgent addresses a key coordina-tion bottleneck not by further improving belief accuracy, but by translating updated teammate beliefs into timely control decisions to bridge the literal-functional ToM gap. 
+
+5.4 RQ3: Posterior-Guided Control Ablation 
+
+We next examine whether the teammate’s skill posterior is more effective as planner context or as a control signal. We present four ablations in Table 3 that test posterior prompt-ing and posterior-gated interruption: Full (equivalent to BayesBeliefAgent) uses both pathways, No replan uses only prompting, No prompt uses only posterior-guided inter-ruption, and No belief uses neither. Thus, the comparison between No prompt and No replan contrasts control-only and context-only use of the same posterior, while Full and No replan isolate the additional effect of interruption when posterior context is held fixed. Table 3: We report the mean reward ± standard deviation across posterior-guided control ablations. Posterior-gated interruption generally outperforms posterior prompting alone, indicating its effectiveness as a control signal.                                         
+
+> Setting Full No prompt No replan No belief Open G1 1533 ±410 1405 ±430 1190 ±455 1080 ±470
+> Open G2 337 ±270 305 ±250 263 ±152 274 ±290
+> Open G3 1420 ±390 1325 ±420 1110 ±440 1015 ±465
+> Ring G1 663 ±468 610 ±430 566 ±348 212 ±206
+> Ring G2 231 ±232 225 ±215 264 ±218 215 ±227
+> Ring G3 506 ±161 475 ±185 439 ±177 607 ±582
+> FC G1 14 ±21 13 ±19 11 ±18 9±17
+> FC G2 9±16 8±15 8±14 7±13
+> FC G3 18 ±25 17 ±24 15 ±22 13 ±21
+
+Table 3 shows that No prompt generally outperforms No replan. This indicates that the critical contribution of the posterior is not merely to inform the planner, but to trigger replanning when the current skill becomes inconsistent with updated teammate behavior. Even without posterior context in the prompt, posterior-gated interruption enables better coordination than providing the same posterior only as planner context. The comparison between Full and No replan further supports this conclusion. Moreover, the added interruption while holding posterior prompting fixed reduces the belief–action gap in five of seven settings (see Appendix). Overall, RQ3 shows that directly coupling teammate beliefs to replanning is more effective than relying on the planner to translate those beliefs into control decisions. 
+
+5.5 RQ4: Selective Replanning 
+
+A natural alternative explanation is that coordination im-proves simply because the agent replans more often, rather than because behavioral surprise identifies informative de-cision points for interruption. We compare contradiction-based interruption against three generic replanning heuristics. Periodic-10 interrupts and replans every ten environment steps. Completion/held-item triggers replanning whenever the partner completes a skill or is observed holding a task-relevant item. LLM-judge uses a separate LLM-based deci-sion module that observes the partner’s public behavior and determines whether the ego agent should replan. Table 4 shows that the generic triggers can attain rewards comparable to Full, but only by replanning far more fre-quently. On Open G1, Periodic-10, Completion/held-item, and LLM-judge invoke 43 , 169 , and 119 replans per episode, respectively, compared with only 2.0 for BayesBeliefAgent, while achieving similar rewards ( 1490 , 1510 , and 1480 versus 
+
+1533 ). This pattern holds broadly across settings: the generic heuristics typically trigger tens to more than one hundred replans per episode, whereas contradiction-based interruption operates with low single-digit replan counts in most cases. Although some generic triggers achieve higher numerical reward in individual settings, none does so consistently across environments, and these gains come at substantially greater replanning cost. These results indicate that the benefit of contradiction-based interruption is not simply more frequent replanning, but greater selectivity in identifying when an executing skill should be revised. Table 4: We report the mean reward / replans per episode to compare replanning triggers. All LLM-planner conditions receive identical public observations and belief prompt; they differ only in the interruption signal. BayesBeliefAgent (Full) attains comparable reward with far fewer replans than the heuristic or LLM-based triggers.                                         
+
+> Setting Full Periodic-10 Compl./held LLM-judge Open G1 1533 / 2.0 1490 / 43.0 1510 / 169.0 1480 / 119.0 Open G2 337 / 1.8 515 / 15.0 304 / 50.4 403 / 34.0 Open G3 1420 / 3.0 1395 / 51.0 1370 / 115.0 1400 / 98.0 Ring G1 663 / 1.6 695 / 66.9 629 / 107.1 721 / 97.1 Ring G2 231 / 7.5 218 / 76.3 202 / 87.5 201 / 110.6 Ring G3 506 / 9.3 416 / 52.8 455 / 110.9 558 / 103.3 FC G1 14 / 0.5 12 / 78.0 16 / 8.0 11 / 92.0 FC G2 9 / 0.3 8 / 81.0 10 / 6.0 7 / 96.0 FC G3 18 / 0.6 15 / 76.0 19 / 10.0 14 / 89.0
+
+## 6 Future Work and Conclusion 
+
+Limitations. A key limitation is that BayesBeliefAgent reasons over a fixed set of coarse, manually specified skills. A natural next step is to learn this skill space and represent finer-grained structure, including subgoal dependencies and open-ended skill discovery. Posterior-gated interruption is also less effective in tightly coupled environments such as Forced Coordination. Improvements in these settings will likely require stronger LLM-based planners, as well as meth-ods that jointly adapt belief estimation and action selection. Additionally, evaluations across a larger number of partners and human partners whose strategies change within an episode remain an important direction for future work. 
+
+Conclusion. In this work, we introduce BayesBeliefA-gent, a hierarchical LLM agent that maintains an online Bayesian belief over a teammate’s skills and uses unexpected observations to decide when an ongoing skill should be interrupted and revised. This design directly addresses the belief–action gap: an agent may correctly infer what its teammate is doing while continuing to execute a stale or duplicative skill. By connecting partner belief to selective replanning, BayesBeliefAgent reduces duplicate-role be-havior, improves recovery after contradictory observations, and achieves rewards comparable to generic replanning with substantially fewer replans. Ablations further show that the posterior is most useful as a control signal rather than merely as additional planner context. These findings suggest that collaborative theory of mind should be leveraged for timely changes in behavior. References 
+
+Agashe, S.; Fan, Y.; Reyna, A.; and Wang, X. E. 2025. LLM-Coordination: Evaluating and Analyzing Multi-agent Coordination Abilities in Large Language Models. arXiv:2310.03903. Baker, C. L.; Jara-Ettinger, J.; Saxe, R.; and Tenenbaum, J. B. 2017. Rational quantitative attribution of beliefs, desires and percepts in human mentalizing. Nature Human Behaviour , 1. Baker, C. L.; Saxe, R.; and Tenenbaum, J. B. 2009. Action understanding as inverse planning. Cognition , 113(3): 329– 349. Byom, L.; and Mutlu, B. 2013. Theory of mind: mecha-nisms, methods, and new directions. Frontiers in Human Neuroscience , 7: 413. Carroll, M.; Shah, R.; Ho, M. K.; Griffiths, T.; Seshia, S.; Abbeel, P.; and Dragan, A. 2019. On the Utility of Learning about Humans for Human-AI Coordination. In Advances in Neural Information Processing Systems , volume 32. Carroll, M.; Shah, R.; Ho, M. K.; Griffiths, T. L.; Seshia, S. A.; Abbeel, P.; and Dragan, A. 2020. On the Utility of Learning about Humans for Human-AI Coordination. Cross, L.; Xiang, V.; Bhatia, A.; Yamins, D. L.; and Haber, N. 2024. Hypothetical Minds: Scaffolding Theory of Mind for Multi-Agent Tasks with Large Language Models. Gao, Q.; Li, Y.; Lyu, H.; Sun, H.; Luo, D.; and Deng, H. 2024. Vision language models see what you want but not what you see. arXiv preprint arXiv:2410.00324 .Gessler, T.; Dizdarevic, T.; Calinescu, A.; Ellis, B.; Lupu, A.; and Foerster, J. N. 2025. OvercookedV2: Rethinking Overcooked for Zero-Shot Coordination. arXiv:2503.17821. Goel, H.; Omama, M.; Chalaki, B.; Tadiparthi, V.; Pari, E. M.; and Chinchali, S. 2025. R3DM: Enabling role discovery and diversity through dynamics models in multi-agent reinforce-ment learning. arXiv preprint arXiv:2505.24265 .Goel, H.; Zhang, Y.; Damani, M.; and Sartoretti, G. 2023. So-cialLight: Distributed Cooperation Learning towards Network-Wide Traffic Signal Control. In Proceedings of the 2023 Inter-national Conference on Autonomous Agents and Multiagent Systems , AAMAS ’23, 1551–1559. Richland, SC: Interna-tional Foundation for Autonomous Agents and Multiagent Systems. ISBN 9781450394321. Hu, H.; Lerer, A.; Peysakhovich, A.; and Foerster, J. 2021. "Other-Play" for Zero-Shot Coordination. Jin, C.; Wu, Y.; Cao, J.; Xuan, J.; Hu, Z.; Ullman, T. D.; Tenenbaum, J. B.; and Shu, T. 2024. MMToM-QA: Multi-modal Theory of Mind Question Answering. arXiv preprint arXiv:2401.08743 .Kim, J.; Rhee, S.; Kim, M.; Kim, D.; Lee, S.; Sung, Y.; and Jung, K. 2025. ReflAct: World-Grounded Decision Making in LLM Agents via Goal-State Reflection. arXiv:2505.15182. Li, B.; Shi, S.; Romero, L.; Li, H.; Xie, Y.; Kim, W.; Niko-laidis, S.; Lewis, M.; Sycara, K.; and Stepputtis, S. 2025. Adaptively Coordinating with Novel Partners via Learned Latent Strategies. arXiv preprint arXiv:2511.12754 .Li, C.; Wang, T.; Wu, C.; Zhao, Q.; Yang, J.; and Zhang, C. 2021. Celebrating diversity in shared multi-agent reinforce-ment learning. Advances in Neural Information Processing Systems , 34: 3991–4002. Li, H.; Chong, Y.; Stepputtis, S.; Campbell, J.; Hughes, D.; Lewis, C.; and Sycara, K. 2023a. Theory of Mind for Multi-Agent Collaboration via Large Language Models. In 
+
+Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 180–192. Association for Computational Linguistics. Li, Y.; Zhang, S.; Sun, J.; Du, Y.; Wen, Y.; Wang, X.; and Pan, W. 2023b. Cooperative Open-ended Learning Framework for Zero-Shot Coordination. In Proceedings of the 40th International Conference on Machine Learning , volume 202 of Proceedings of Machine Learning Research , 19837–19854. PMLR. Liang, Y.; Chen, D.; Gupta, A.; Du, S. S.; and Jaques, N. 2024. Learning to Cooperate with Humans using Generative Agents. arXiv:2411.13934. Liu, J.; Yu, C.; Gao, J.; Xie, Y.; Liao, Q.; Wu, Y.; and Wang, Y. 2024. LLM-Powered Hierarchical Language Agent for Real-time Human-AI Coordination. arXiv:2312.15224. Liu, S.; Zhou, Y.; Song, J.; Zheng, T.; Chen, K.; Zhu, T.; Feng, Z.; and Song, M. 2023. Contrastive identity-aware learning for multi-agent value decomposition. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 37, 11595–11603. Mandi, Z.; Jain, S.; and Song, S. 2023. RoCo: Dialectic Multi-Robot Collaboration with Large Language Models. Nguyen, M. H.; Do, V. D.; Nguyen, D.; Nguyen, T.; and Le, H. 2025. CausalPlan: Empowering Efficient LLM Multi-Agent Collaboration Through Causality-Driven Planning. arXiv:2508.13721. Premack, D.; and Woodruff, G. 1978. Does the chimpanzee have a theory of mind? Behavioral and Brain Sciences , 1(4): 515–526. Rabinowitz, N. C.; Perbet, F.; Song, H. F.; Zhang, C.; Eslami, S. M. A.; and Botvinick, M. 2018. Machine Theory of Mind. Riemer, M.; Ashktorab, Z.; Bouneffouf, D.; Das, P.; Liu, M.; Weisz, J. D.; and Campbell, M. 2025. Position: Theory of Mind Benchmarks are Broken for Large Language Models. Ruhdorfer, C.; Bortoletto, M.; Penzkofer, A.; and Bulling, A. 2025. The Overcooked Generalisation Challenge: Evaluating Cooperation with Novel Partners in Unknown Environments Using Unsupervised Environment Design. arXiv:2406.17949. Shinn, N.; Cassano, F.; Gopinath, A.; Narasimhan, K. R.; and Yao, S. 2023. Reflexion: Language Agents with Verbal Reinforcement Learning. In Advances in Neural Information Processing Systems , volume 36. Shu, T.; Bhandwaldar, A.; Gan, C.; Smith, K. A.; Liu, S.; Gutfreund, D.; Spelke, E.; Tenenbaum, J. B.; and Ullman, T. D. 2021. AGENT: A Benchmark for Core Psychological Reasoning. In Proceedings of the 38th International Confer-ence on Machine Learning , volume 139 of Proceedings of Machine Learning Research , 9614–9625. PMLR. Stone, P.; Kaminka, G. A.; Kraus, S.; and Rosenschein, J. S. 2010. Ad Hoc Autonomous Agent Teams: Collaboration without Pre-Coordination. In Proceedings of the Twenty-Fourth AAAI Conference on Artificial Intelligence , 1504–1509. AAAI Press. Strouse, D.; McKee, K. R.; Botvinick, M.; Hughes, E.; and Everett, R. 2021. Collaborating with Humans without Human Data. In Advances in Neural Information Processing Systems ,volume 34, 14502–14515. Sun, H.; Zhang, S.; Niu, L.; Ren, L.; Xu, H.; Fu, H.; Zhao, F.; Yuan, C.; and Wang, X. 2025. Collab-Overcooked: Bench-marking and Evaluating Large Language Models as Collabo-rative Agents. In Proceedings of the 2025 Conference on Em-pirical Methods in Natural Language Processing , 4922–4951. Association for Computational Linguistics. Wallace, C.; Siddique, U.; and Cao, Y. 2025. ReCollab: Retrieval-Augmented LLMs for Cooperative Ad-hoc Team-mate Modeling. arXiv:2512.22129. Wang, C.; Rahman, A.; Cui, J.; Sung, Y.; and Stone, P. 2025. ROTATE: Regret-driven Open-ended Training for Ad Hoc Teamwork. arXiv preprint arXiv:2505.23686 .Wang, T.; Dong, H.; Lesser, V.; and Zhang, C. 2020. Roma: Multi-agent reinforcement learning with emergent roles. arXiv preprint arXiv:2003.08039 .Wang, X.; Zhang, S.; Zhang, W.; Dong, W.; Chen, J.; Wen, Y.; and Zhang, W. 2024. Zsc-eval: An evaluation toolkit and benchmark for multi-agent zero-shot coordination. Advances in Neural Information Processing Systems , 37: 47344–47377. Wu, S. A.; Wang, R. E.; Evans, J. A.; Tenenbaum, J. B.; Parkes, D. C.; and Kleiman-Weiner, M. 2021. Too Many Cooks: Bayesian Inference for Coordinating Multi-Agent Collaboration. Topics in Cognitive Science , 13(2): 414–432. Xiao, Y.; Wang, J.; Xu, Q.; Song, C.; Xu, C.; Cheng, Y.; Li, W.; and Liu, P. 2025. Towards Dynamic Theory of Mind: Evaluating LLM Adaptation to Temporal Evolution of Human States. In Che, W.; Nabende, J.; Shutova, E.; and Pilehvar, M. T., eds., Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 24036–24057. Vienna, Austria: Association for Computational Linguistics. ISBN 979-8-89176-251-0. Xu, R.; Lin, H.; Han, X.; Zheng, J.; Zhou, W.; Sun, L.; and Sun, Y. 2025. Large Language Models Often Say One Thing and Do Another. arXiv:2503.07003. Yao, S.; Zhao, J.; Yu, D.; Du, N.; Shafran, I.; Narasimhan, K. R.; and Cao, Y. 2023. ReAct: Synergizing Reasoning and Acting in Language Models. In Proceedings of the Eleventh International Conference on Learning Representations .Zhang, C.; Yang, K.; Hu, S.; Wang, Z.; Li, G.; Sun, Y.; Zhang, C.; Zhang, Z.; Liu, A.; Zhu, S.-C.; Chang, X.; Zhang, J.; Yin, F.; Liang, Y.; and Yang, Y. 2024. ProAgent: Building Proac-tive Cooperative Agents with Large Language Models. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence ,volume 38. Zhang, Y.; Goel, H.; Li, P.; Damani, M.; Chinchali, S.; and Sartoretti, G. 2025. Coordlight: Learning decentralized co-ordination for network-wide traffic signal control. IEEE Transactions on Intelligent Transportation Systems , 26(6): 8034–8049. Zhao, R.; Song, J.; Yuan, Y.; Hu, H.; Gao, Y.; Wu, Y.; Sun, Z.; and Wei, Y. 2023. Maximum Entropy Population-Based Training for Zero-Shot Human-AI Coordination. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence ,volume 37, 6145–6153. Appendix 7 Full Algorithm Specification 
+
+Algorithm 1 gives the complete per-step operation of Bayes-BeliefAgent. To keep the pseudocode compact, we introduce the following notation. Let 
+
+Lt(ψ) ≜ πi
+
+> low
+
+
+
+ajl | τ il , ψ 
+
+
+
+.
+
+denote the implemented action likelihood corresponding to the approximate teammate controller in Eq. (8). The operator Prior (Nm) returns the smoothed count-based distribution in Eq. (4), where the algorithmic count array Nm corresponds to Cm in the method. We write the normalized one-step Bayesian correction as Correct (b, l t)( ψ) = lt(ψ)b(ψ)
+
+P 
+
+> ψ′∈Ψ
+
+lt(ψ′)b(ψ′) ,
+
+where lt is defined in Eq. (10). Applying this correction recursively within a partner-skill segment accumulates the likelihood product in Eqs. (6)–(7), using the approximation in Eq. (8). The operator Gate implements Eq. (12), with 
+
+stable( ˆψjt−1) ≡ [u ≥ K]
+
+and 
+
+midSkill t ≡ [μ̸ = null ∧ ¬ complete( μ)] ,
+
+and cooldown t = 0 represented by c = 0 . Finally, Plan constructs the planner prompt, queries the high-level LLM, and parses a skill from the currently feasible macro-skill set. 
+
+7.1 Algorithm Walkthrough 
+
+Lines 1–2 initialize the episode-level completed-skill counts, the smoothed prior in Eq. (4), the current partner-skill seg-ment, the ego macro-skill, the cooldown, and the stable-MAP counter. Lines 3–4 begin the per-step loop, observe the public state, and infer the teammate’s latest primitive action from con-secutive observations. Lines 5–7 compute the pre-correction MAP skill estimate, update its stability counter, evaluate the recent action likelihood in Eq. (10), form the contradiction signal in Eq. (11), and apply the gated interruption rule in Eq. (12). Line 8 then incorporates the newly observed action through the Bayesian correction defined by Eqs. (6)–(7), us-ing the approximate controller in Eq. (8). Lines 9–15 handle partner-skill boundaries: when a visible completion occurs, the agent infers the completed skill, updates its count using Eq. (5), reinitializes the prior, and begins a new segment; otherwise, it retains the corrected within-segment posterior. Lines 16–17 clear the ego macro-skill after either ordinary completion or contradiction-triggered interruption and update the replanning cooldown. Finally, Lines 18–21 query the high-level planner whenever no macro-skill is active, using the updated posterior, its MAP estimate, and the currently feasible skills, while Lines 22–23 execute one low-level controller step and continue to the next timestep. Algorithm 1: BayesBeliefAgent: per-step belief update and selective replanning 
+
+Require: partner-skill set Ψ, ego macro-skill set M, planner πi
+
+> high
+
+,controller πi
+
+> low
+
+Require: smoothing α, thresholds θobs and Γconf , stability window 
+
+K, inference window k, cooldown duration Ccool 
+
+1: N0(ψ) ← 0 for all ψ ∈ Ψ; b0 ← Prior (N0)
+
+2: r ← 1; μ ← null; c, u ← 0; ˆψj
+
+> 0
+
+, ψ j 
+
+> −1
+
+← arg max ψ∈Ψ b0(ψ)
+
+3: for t = 1 , 2, . . . until the episode terminates do 
+
+4: Observe oit and infer ˆajt−1 from oit
+
+5: ˆψjt−1 ← arg max ψ∈Ψ bt−1(ψ)
+
+6: u ← 1 + 1[ ˆψjt−1 = ˆψjt−2]u
+
+7: ℓt ←
+
+> t−1
+
+Y
+
+> l=max {r,t −k}
+
+Ll( ˆψjt )
+
+8: Ct ← 1[ℓt < θ obs ]
+
+9: Replan t ← Gate (Ct, u, b t−1( ˆψjt−1), μ, c )
+
+10: ˜bt ← Correct (bt−1, l t)
+
+11: if the teammate visibly completes a skill ψcomp  
+
+> t
+
+then 
+
+12: Nt(ψ) ← Nt−1(ψ) + 1[ ˆψcomp  
+
+> t
+
+= ψ] for all ψ ∈ Ψ
+
+13: bt ← Prior (Nt); r ← t; u ← 0
+
+14: else 
+
+15: bt ← ˜bt
+
+16: end if 
+
+17: if complete( μ) ∨ Replan t then μ ← null 18: if Replan t then c ← Ccool else c ← max( c − 1, 0) 
+
+19: if μ = null then 
+
+20: ˆψjt ← arg max ψ∈Ψ bt(ψ)
+
+21: μ ← Plan (oit, b t, ˆψjt , Mfeasible (st)) 
+
+22: end if 
+
+23: Execute one low-level controller step conditioned on μ
+
+24: end for 
+
+## 8 Partner Population and Baseline Implementations 
+
+8.1 Behavior-Preferring Partner Population 
+
+We train a population of 12 behavior-preferring (BP) partner policies. Following the event-based reward construction of Wang et al. (2024), each BP policy is optimized using a shaped reward 
+
+rBP  
+
+> w
+
+(st, at) = rtask (st, at) + X 
+
+> f∈F
+
+wf ϕf (st, at), (14) where rtask is the original team reward, ϕf (st, at) indicates whether behavior feature f occurred at step t, and wf is its shaping weight. Retaining the task reward encourages the BP policy to express its assigned preference while continuing to contribute to task completion. The population is divided into three groups representing lo-gistics, cooking, and ingredient-sourcing preferences. Within each group, two behavior features have two possible reward weights and a third feature has a fixed positive weight. We train all four combinations of the two variable weights, pro-ducing four BP policies per group and twelve policies in total. All twelve policies use the same PPO architecture and optimization procedure, described in Appendix 8.3. 8.2 Behavior-Preferring Reward Configurations 
+
+Table 5 specifies the event-weight space used for each BP group. A set such as {− 30 , +20 } denotes two alternative weights. Within each group, the two non-fixed weight sets are crossed to obtain four reward configurations. Table 5: Event-weight configurations used to train the 12 BP partner policies. Within each group, the two non-fixed weights are crossed, producing four policies; the third weight is fixed across those four policies.                     
+
+> Group Behavior Feature Reward(s)
+> Group 1 (Logistics) Plating Ingredients {− 30 ,+20 }
+> Washing Plates {− 30 ,+20 }
+> Delivering Dishes +20 (fixed) Group 2 (Cooking) Chopping Ingredients {− 30 ,+20 }
+> Potting Rice {− 30 ,+20 }
+> Grilling Meat +20 (fixed) Group 3 (Sourcing) Taking Mushroom {− 15 ,+10 }
+> Taking Rice {− 15 ,+10 }
+> Taking Meat +10 (fixed)
+
+8.3 Behavior-Preferring Policy Training 
+
+Each reward configuration is trained independently using RLlib PPO. All policies use the same observation represen-tation, policy network, optimizer, and training schedule. We train each policy for 3 million environment steps using a learning rate of 5e-5 , discount factor γ = 0.999 , GAE parameter λ = 0.999 , PPO clipping parameter ϵ = 0 .2,train batch size 8192, minibatch size 768, and entropy coeffi-cient 0.02. For each reward configuration, we select the best checkpoint according to evaluation rewards, yielding exactly 12 evaluation partners. 
+
+8.4 ProAgent 
+
+We implement ProAgent using the authors’ released code-base. 1 We retain its default system prompts, interaction history, teammate-intention prediction, and hierarchical LLM plan-ning. We replace the original Overcooked interface with our Burrito-AI state serializer, feasible-action mask, macro-skill vocabulary, and shared low-level controller. The planner is queried when the current macro-skill completes, becomes invalid, or reaches its timeout; it does not interrupt an active skill solely because the teammate’s behavior changes. 
+
+8.5 Hypothetical Minds 
+
+We adapt the authors’ implementation of Hypothetical Minds. 2 We replace its Melting Pot observation interface with our symbolic Burrito-AI state representation while retaining its memory and generate–evaluate–refine Theory-of-Mind procedure. The highest-rated hypotheses about the teammate condition high-level strategy generation; the resulting high-level action is mapped to our macro-skill space and executed using the same low-level controller as the other LLM agents. 
+
+> 1https://github.com/PKU-Alignment/ProAgent
+> 2https://github.com/locross93/Hypothetical-Minds
+
+8.6 Shared RL Baseline Infrastructure 
+
+The RL baselines use the Burrito environment and training infrastructure released with TALENTS. 3 In particular, they share the environment wrapper, state encoding, 27-action macro-skill space, action masking, PPO implementation, and evaluation interface. Consequently, TALENTS and GAMMA differ in partner generation and adaptation rather than in their underlying environment or controller implementation. 
+
+8.7 TALENTS 
+
+We use the released TALENTS implementation. 4 TALENTS trains a sequential VAE on partner trajectories, clusters the learned latent strategies using k-means, and trains a strategy-conditioned PPO cooperator against partners generated from those clusters. During evaluation, it compares observed team-mate actions with the cluster-conditioned predictions and uses fixed-share regret minimization to update the strategy estimate conditioning its policy. 
+
+8.8 GAMMA and Other RL Baselines 
+
+We run GAMMA in the shared TALENTS Burrito infras-tructure, following the authors’ released GAMMA imple-mentation. 5 GAMMA learns a continuous latent generative model of partner trajectories and samples latent codes to generate diverse partners for PPO cooperator training. Unlike TALENTS, it does not partition the latent space into discrete strategy clusters or perform fixed-share partner-type inference during evaluation. 
+
+8.9 BayesBeliefAgent Variants 
+
+All variants use the same LLM, prompt base, state represen-tation, action mask, macro-skill set, and low-level controller. 
+
+no_belief removes the Bayesian estimator, belief prompt-ing, and contradiction-based interruption. no_prompt main-tains the belief and interruption mechanism but does not expose the belief to the LLM. no_replan provides the be-lief to the planner but disables mid-skill interruption. full 
+
+combines Bayesian tracking, belief-conditioned prompting, and contradiction-triggered replanning. 
+
+## 9 Reproducibility Details 
+
+9.1 Environment and Episode Configuration 
+
+Experiments use Burrito-AI v1.1.0, an extension of Overcooked-AI (Carroll et al. 2019). We evaluate the Open, Ring, and Forced Coordination layouts. The ego agent ob-serves only the public environment state and infers the team-mate’s primitive actions from consecutive observations; the teammate’s active skill and policy are not directly observed. BP partners are loaded from fixed RLlib PPO checkpoints supplied with the code. All evaluation episodes use horizon T=2400. 
+
+> 3https://github.com/benji-li/talents-zsc
+> 4https://github.com/benji-li/talents-zsc
+> 5https://github.com/lych1233/GAMMA-human-ai-collaboration
+
+9.2 Evaluation Protocol 
+
+We evaluate each ego agent against the 12 BP partners de-scribed in Appendix 8.1, with the ego assigned to Player 0 and the partner to Player 1. All main comparisons use seeds 
+
+{0, 1, 2, 3, 4}. We report the mean and standard deviation across seeds. 
+
+9.3 Experimental Hyperparameters 
+
+Table 6 reports the principal inference, replanning, and exe-cution hyperparameters used in the experiments. Table 6: Experimental hyperparameters. 
+
+Parameter Value 
+
+Prior smoothing α 1
+
+Contradiction threshold θobs 0.04 
+
+Stability window K 3 updates Replanning cooldown Ccool 6 steps Macro-skill timeout 30 steps Pass/PutDown likelihood weight 0.35 
+
+LLM temperature 0.0
+
+Planner history 3 turns Confidence threshold ( Γconf ) 0.65 Inference window (k) 10 
+
+9.4 LLM Inference Configuration 
+
+We evaluate gpt-4o and gpt-5.2 through the OpenAI API with temperature 0.0 for deterministic runs. The planner receives the three most recent interaction turns. Its response is parsed against the currently feasible macro-skill set, with up to three retries when the returned action is invalid. The complete system prompts and output formats are provided in Appendix 10. 
+
+9.5 Macro-Skill Vocabulary and Low-Level Controllers 
+
+All LLM-based agents use the same 27 macro-skills, indexed from 0 to 26, together with the same Burrito-AI action mask and skill-conditioned low-level controller. The action mask removes skills whose object, hand-state, or station preconditions are not satisfied. A selected skill remains active until it completes, becomes invalid, is interrupted, or reaches its action-specific timeout. Fire-handling actions (indices 3, 6, 14, and 24) and Stay (index 4) are excluded from partner-belief updates. Because Pass and PutDown can support several latent skills, their likelihood contributions are tempered by a weight of 0.35 .
+
+## 10 System Prompts and Planner Inputs 
+
+Unless noted otherwise, all LLM agents below share the same Burrito scene encoding in the user message: layout station list, timestep, both players’ positions/orientations/held objects, active orders, map objects (with cooking tags), optional urgency flags, and a mask-filtered VALID ACTIONS list. Placeholders such as {agent_id} are filled at runtime (ego player index; teammate is 1 − agent_id ). 
+
+10.1 ProAgent System Prompt 
+
+The evaluated burrito ProAgent ( BurritoProAgent )uses the following system prompt exactly (inline default; no layout-specific planner file is loaded). 
+
+ProAgent system prompt 
+
+1 You are an expert planner for the Burrito variant of Overcooked. 
+
+2 Your job is to control the current player and cooperate with the teammate to maximize score. 
+
+3 The teammate cannot communicate, so infer their likely intent from their position, held object, and nearby stations. 
+
+45 Game dynamics: 
+
+6 - The active orders are shown in `
+
+orders: `. The first listed order is the highest-priority order and gives the in-order bonus, but other listed orders are still deliverable. 
+
+7 - There are two burrito recipes: 
+
+8 - steak_burrito_dish = chopped_steak + boiled_rice + tortilla. 
+
+9 - mushroom_burrito_dish =fried_mushroom + boiled_rice + tortilla. 
+
+10 - Meat and mushroom are raw ingredients. They must be chopped at the chopping board first, then finished on the grill. 
+
+11 - Rice is cooked in the pot. 
+
+12 - Tortilla is never cooked in the pot or grill. It is assembled onto a plate or ingredient plate. 
+
+13 - A clean plate is needed to collect finished rice from the pot and finished steak or mushroom from the grill. 
+
+14 - Burritos are assembled by combining the plated ingredients and tortilla in any legal order supported by the environment. 
+
+15 - Deliver only a completed burrito ( `
+
+steak_burrito ` or `mushroom_burrito 
+
+`) at serving. 
+
+16 17 Objects and stations: 
+
+18 - `M` meat dispenser, `Z` mushroom dispenser, `R` rice dispenser, `T`
+
+tortilla dispenser. 
+
+19 - `B` chopping board, `G` grill, `P` pot , `W` sink, `D` dirty plate source, 
+
+`S` serving, `X` counter, `U` trash. 
+
+20 - Each player can hold exactly one object. 
+
+21 - Counters hold one object and are useful for staging and passing items. 
+
+22 - Dirty plates must usually be taken from `D`, washed at `W`, and then used as clean plates. 
+
+23 24 State interpretation: 
+
+25 - The scene lists player positions, held objects, active orders, and current objects on the map. 
+
+26 - Object tags may include `cooking `, `
+
+ready `, `waiting `, `warning `, or `
+
+BURNT `.
+
+27 - `ready ` or `waiting ` means the ingredient can be picked up now. 
+
+28 - `warning ` means a cooked ingredient has been left too long and is urgent. 
+
+29 - `BURNT ` means the pot or grill output is on fire; use a fire extinguisher before normal pickup. After extinguishing, charcoal usually should be trashed. 
+
+30 31 Planning heuristics: 
+
+32 - Prefer the shortest useful step that advances an active order or prevents a loss. 
+
+33 - When a cooked ingredient is in `
+
+warning ` state or a fire exists, treat it as highly urgent. 
+
+34 - Avoid duplicating the teammate when complementary work is better, such as preparing a plate, tortilla, or another missing ingredient. 
+
+35 - If the layout is partitioned, `
+
+PASS_OBJECT ` is for handing items across shared counters; otherwise `
+
+PUT_DOWN_OBJECT ` is the normal staging action. 
+
+36 - If you cannot make immediate progress , choose the least wasteful action from the VALID ACTIONS list. 
+
+37 38 Think through the scene silently, including likely teammate intent, but do not reveal your reasoning. 
+
+39 Output exactly one high-level action as either: 
+
+40 - an integer in [0,26], or 
+
+41 - one action name from VALID ACTIONS. 
+
+42 Do not output explanations, analysis, or extra text. 
+
+Planner user message template. Joined as a single user string (heuristic teammate-intent line included): 
+
+ProAgent planner user-message template 
+
+1 Layout=<layout>. <station>:<locations> ... Scene <t>. 
+
+2 P{ego} pos=... or=... hold=.... 
+
+3 P{tm} pos=... or=... hold=.... 
+
+4 orders: <upto 4 active orders> 
+
+5 objects: (name@pos [tags...]) ... 
+
+6 Teammate intent: P{tm} at <pos> facing <ori> holds <held> - <heuristic>. 
+
+7 [URGENCY: <fire/warning alerts>] 
+
+8 VALID ACTIONS -> <idx>:<NAME>; ... 
+
+9 Return one action only (index or name). 
+
+10.2 Hypothetical Minds Prompts 
+
+Burrito Hypothetical Minds reuses the ProAgent system prompt, then appends the following planner system suffix (player indices filled at runtime): 
+
+Hypothetical Minds planner system suffix 
+
+1 You are a Hypothetical Minds Burrito agent. Maintain hypotheses about the teammate's strategy, 
+
+2 predict their next behavior from observations, and choose acomplementary action. 
+
+3 When asked for a final action, choose exactly ONE item from VALID ACTIONS. 
+
+4 Use this final format: 
+
+5 Teammate strategy hypothesis: <short hypothesis for Player {other_id}> 
+
+6 Predicted next behavior for Player { other_id}: <short behavior prediction> 
+
+7 Plan for Player {agent_id}: "<one action index or action name>" 
+
+8 No extra text after the plan line. 
+
+Each planning step issues up to four LLM calls. 
+
+Hypothesis-evaluation prompt. 
+
+Hypothetical Minds hypothesis-evaluation prompt 
+
+1 Evaluate these teammate behavior predictions for Burrito in one batch. 
+
+2 Observed teammate actions since last evaluation: <recent_actions> 
+
+34 Predictions: 
+
+5 h<ID>: <predicted_next_behavior> 
+
+6 ... 
+
+78 For each hypothesis, decide whether its prediction matched the observed teammate actions. 
+
+9 Return exactly one line per hypothesis in this format: 
+
+10 h<ID>: True 
+
+11 or 
+
+12 h<ID>: False 
+
+13 Do not include explanations. 
+
+Hypothesis-generation prompt. Skipped when a hypothe-sis value exceeds 0.7; otherwise: 
+
+Hypothetical Minds hypothesis-generation prompt 
+
+1 Based on the Burrito scene and observed teammate actions, infer the teammate's current strategy. 
+
+2 <state_prompt> 
+
+34 Observed teammate actions: <last 12 events> 
+
+5 Existing hypotheses: 
+
+6 <best_hypothesis_summary> 
+
+7 Return one concise teammate strategy hypothesis. 
+
+Behavior-prediction prompt. 
+
+Hypothetical Minds behavior-prediction prompt 
+
+1 Predict the teammate's next useful Burrito behavior from this strategy. 
+
+2 Teammate strategy hypothesis: <strategy >
+
+3 <state_prompt> 
+
+45 Observed teammate actions: <last 12 events> 
+
+6 Return one concise predicted next behavior. 
+
+Final planning (action) prompt. 
+
+Hypothetical Minds final planning prompt 
+
+1 <state_prompt> 
+
+23 Hypothetical Minds context: 
+
+4 - Teammate strategy hypothesis for Player {other}: <strategy> 
+
+5 - Predicted next behavior for Player {other}: <prediction> 
+
+6 - Top teammate hypotheses: 
+
+7 <best_hypothesis_summary> 
+
+89 Choose a complementary Burrito high-level action for yourself. 
+
+10 Avoid duplicating the predicted teammate behavior when another valid action advances the order. 
+
+11 Return exactly: 
+
+12 Teammate strategy hypothesis: <strategy >
+
+13 Predicted next behavior for Player {other}: <prediction> 
+
+14 Plan for Player {agent_id}: "<one action index or action name from VALID ACTIONS>" 
+
+Memory format. Hypothetical Minds maintains an ex-plicit store of teammate hypotheses across timesteps. Each entry records a natural-language strategy, a predicted next behavior, a scalar reliability score, and the creation timestep. After each evaluation call, the score is updated with a Rescorla– Wagner rule ( v ← v+α(±1−v) with α=0 .3), using +1 when the predicted behavior matches recent teammate actions and 
+
+−1 otherwise. If any hypothesis exceeds a reliability threshold of 0.7, generation is skipped and the highest-scoring strategy is reused. Observed teammate events are logged as (step, action, position, holding) and provided to the evaluation and generation prompts. The top-m hypotheses are rendered into later prompts as: 
+
+Hypothetical Minds injected hypothesis memory 
+
+1 Existing hypotheses: 
+
+2 - h1: value=0.42, strategy=<short teammate strategy>, predicted_next_behavior=<short prediction> 
+
+3 - h2: value=0.18, strategy=<short teammate strategy>, predicted_next_behavior=<short prediction> 
+
+If the store is empty, the injected text is instead No prior teammate strategy hypotheses. 
+
+10.3 BayesBeliefAgent Prompt 
+
+At evaluation time, BurritoBayesBeliefAgent ap-pends the following system prompt to the ProAgent System prompt. 
+
+BayesBeliefAgent system prompt 
+
+1 You are an expert Burrito cooperative cooking agent controlling Player { agent_id}. 
+
+2 You must cooperate with Player {other_id} to maximize burrito deliveries. 
+
+34 GAME RULES (brief): 
+
+5 - Two recipes: steak_burrito (chopped_steak + boiled_rice + tortilla) 
+
+6 mushroom_burrito ( fried_mushroom + boiled_rice + tortilla) 
+
+7 - Each player holds one item at a time. 
+
+8 - Fire is an emergency: grab fire_ext (14), then put out fire (3), then trash charcoal (6). 
+
+9 - A Bayesian filter tracks your teammate's coordination role in real time. 
+
+10 Use the belief summary to AVOID duplication and choose complementary actions. 
+
+11 12 OUTPUT FORMAT (one line each, required) :
+
+13 Teammate role belief: <description of teammate's likely coordination role> 
+
+14 Intention for Player {other_id}: "< action_index_or_name>" 
+
+15 Plan for Player {agent_id}: "< action_index_or_name>" 
+
+16 17 <burrito_rules_prompt> 
+
+18 19 Return one action only (index or name) on the Plan line. 
+
+Bayesian belief block (user prefix). Roles: 
+
+prep_protein , prep_rice , plate_hygiene ,
+
+assemble , serve , stage_pass .BayesBeliefAgent Bayesian belief block                                            
+
+> 1=== TEAMMATE BELIEF (Bayesian Filter) ===
+> 2MAP role :<role> (confidence=<c>, commitment=<k>)
+> 3Heading to :<station hint |unknown (low confidence)>
+> 4Posterior :
+> 5<role>: <p> <bar>
+> 6...
+> 7→Teammate in '<role>' -consider: <complements>
+> 8OR →Posterior uncertain -act on game-state needs, do NOT wait.
+> 9=========================================
+
+Urgency / advisory flags (appended when applicable).                                             
+
+> BayesBeliefAgent urgency and advisory flags
+> 1[LOW CONFIDENCE -teammate role unclear. Act on game-state needs, do NOT choose STAY.]
+> 2[MODERATE CONFIDENCE -prefer complementary actions.]
+> 3CURRENT PRIORITY ORDER: <top_order>
+> 4FIRE ACTIVE -override normal planning.
+> 5COOKING TIMER LOW: retrieve the cooked item NOW.
+> 6CHARCOAL on grill -clear it: GRAB_CHARCOAL (24) then GO_TO_TRASH_AND_THROW (6). ...
+
+State prompt. Same burrito scene encoding as ProA-gent (including heuristic teammate-intent and URGENCY: 
+
+fire/warning lines). User message = belief block + state prompt. 
+
+10.4 Prompt Changes in the Ablations 
+
+Ablations share identical system prompts. Only belief injec-tion and replanning change: Ablation Belief in prompt Replan 
+
+full injected enabled 
+
+no_replan injected disabled 
+
+no_prompt omitted ( "" ) enabled 
+
+no_belief omitted; tracking off disabled Thus no_belief is prompt-equivalent to a plain planner with no ToM context, while no_prompt keeps internal tracking/replanning but hides belief text from the LLM. 
+
+## 11 Extended Results 
+
+This section reports additional mechanism analyses, paired uncertainty estimates, hyperparameter sensitivity, backbone comparisons, and zero-shot cross-play results. 
+
+11.1 Gate and Likelihood Sensitivity 
+
+Table 7 varies one parameter at a time on Open G1 while holding the remaining parameters at their default values. This ablation is conducted to show the influence of the proposed gating mechanism in detecting a posterior shift in the partner’s skill in Eq. 12. Increasing the observation threshold or likelihood scale produces more replans, whereas increasing the confidence floor or cooldown suppresses them. The default setting attains the highest reward and lowest gap rate among the tested values. Both more permissive and more restrictive settings perform worse, indicating a useful intermediate operating region. This experiment is a local sensitivity analysis and does not establish global optimality. Table 7: One-at-a-time sensitivity analysis on Open G1. De-faults are shown in bold.                                          
+
+> Parameter Value Reward Replans/ep. Gap rate Obs. threshold 0.02 1450 0.8 0.23
+> 0.04 (default) 1533 2.0 0.17
+> 0.06 1490 5.6 0.19 Conf. floor 0.55 1475 4.8 0.20
+> 0.65 (default) 1533 2.0 0.17
+> 0.75 1460 0.9 0.22 Cooldown 31495 3.7 0.19
+> 6 (default) 1533 2.0 0.17
+> 12 1468 1.2 0.21 Likelihood scale
+> 0.5×1470 1.1 0.22
+> 1.0×(default) 1533 2.0 0.17
+> 1.5×1482 4.2 0.20
+
+11.2 Paired Bootstrap Comparisons 
+
+Table 8 reports paired Full −No replan differences. Positive reward differences and negative gap-rate differences favor the full agent. The reward interval excludes zero in Open G1 and Open G3, while the gap-rate interval excludes zero in five of the seven settings. The remaining settings have intervals containing zero and therefore do not support a reliable difference under this analysis. Because the table reports bootstrap intervals rather than multiplicity-corrected 
+
+p-values, we restrict the interpretation to whether each interval excludes zero. Table 8: Paired Full −No replan differences with 95% 
+
+bootstrap confidence intervals.                                 
+
+> Setting ∆Reward (95% CI) ∆Gap (95% CI) Open G1 +343 [+75 ,+601] −0.26 [ −0.35 ,−0.16]
+> Open G2 +74 [ −92 ,+231] −0.15 [ −0.26 ,−0.04]
+> Open G3 +310 [+42 ,+566] −0.21 [ −0.31 ,−0.11]
+> Ring G1 +98 [ −131 ,+322] −0.13 [ −0.23 ,−0.03]
+> Ring G2 −33 [ −165 ,+102] −0.05 [ −0.14 ,+0 .04]
+> Ring G3 +67 [ −58 ,+190] −0.12 [ −0.21 ,−0.03]
+> FC agg. +2 [ −5,+9] −0.05 [ −0.13 ,+0 .03]
+
+11.3 Mechanism Metrics Across Settings 
+
+We extend the results from Table 2 and show their detailed breakdown across all behavior-preferred groups. Table 10 compares BayesBeliefAgent with the ProAgent across layouts and partner groups. Predicted skill accuracy differs by at most 0.01 , indicating that both methods obtain similar skill accuracies. In contrast, the full agent consistently reduces the belief-action gap and duplicate-skill rate while increasing Comp@3. The differences are largest in the Open settings and smaller in Ring G2 and Forced Coordination. 
+
+11.4 Zero-Shot Cross-Play 
+
+Table 11 evaluates each agent in both the ego and partner positions. TALENTS achieves the highest average as an ego agent and as a partner in both layouts. Among the LLM-based ego agents, BayesBeliefAgent has the higher Open and Ring average. The latter is also the second-best Ring partner by column average. Performance varies substantially across individual pair-ings. In particular, BayesBeliefAgent scores 1917 .0 with a TALENTS partner in Open and 1791 .7 in Ring, but performs less strongly with ProAgent in Ring (inclusive of standard deviation over performance). The large standard deviations in several LLM pairings further indicate that cross-play out-comes depend on both the partner and the layout. 
+
+11.5 Sensitivity to the Base LLM 
+
+Table 9 compares GPT-4o and GPT-5.2 while holding the remaining agent components fixed. GPT-5.2 obtains higher reward and a lower gap rate in Open G2, Ring G1, and Ring G2, whereas GPT-4o performs better on the other three settings. The differences are therefore non-monotone, and neither backbone consistently dominates. We use GPT-4o as the primary configuration and treat the GPT-5.2 results as a backbone-sensitivity check. Table 9: Reward and belief–action gap rate with GPT-4o and GPT-5.2 as the high-level planner backbone.                             
+
+> Setting 4o reward 5.2 reward 4o gap 5.2 gap Open G1 1533 1485 0.17 0.19 Open G2 337 395 0.24 0.22 Open G3 1420 1360 0.20 0.21 Ring G1 663 705 0.25 0.23 Ring G2 231 285 0.32 0.29 Ring G3 506 470 0.27 0.28
+
+11.6 Ground-truth complementary mapping. 
+
+Construction. Our evaluation ground truth is a determinis-tic lookup table (not trajectory annotations) authored from the recipe production graph prior to evaluation. Given the teammate’s current skill (or the role that skill belongs to), the complementary set is fixed and does not depend on layout, timestep, or annotator judgment. 
+
+Scoring rule. Because the table is authored once and then applied programmatically, there are no independent raters, no disagreement cases, and no adjudication protocol. An ego-selected skill is counted as complementary if and only if it appears in the set associated with the teammate’s current skill. The mapping is many-valued (multiple ego skills may be complementary to the same teammate skill), and duplicating the teammate’s pipeline is never complementary. Fire-control, trash, and STAY are excluded from scoring. 
+
+Burrito. High-level actions are first mapped to six roles, then to complementary roles:                                
+
+> •prep_protein 7→{prep_rice ,plate_hygiene ,
+> assemble }
+> •prep_rice 7→{prep_protein ,plate_hygiene ,
+> assemble }
+> •plate_hygiene 7→{prep_protein ,prep_rice ,
+> assemble }
+> •assemble 7→{prep_protein ,prep_rice ,
+> plate_hygiene ,serve }
+> •serve 7→{prep_protein ,prep_rice ,
+> plate_hygiene }
+> •stage_pass 7→{prep_protein ,prep_rice ,
+> assemble }
+
+An ego action is complementary iff its role lies in the team-mate’s complementary set. An ego action is complementary iff its role lies in the teammate’s complementary set. Table 10: Mechanism metrics for the full agent and the No replan variant. Forced Coordination aggregates Groups 1–3. Arrows indicate the preferred direction. 
+
+Setting Method Skill acc. ( ↑) Gap rate ( ↓) Comp@3 ( ↑) Dup. Skill ( ↓)Open G1 BayesBeliefAgent 0.82 0.17 0.71 0.12 ProAgent 0.81 0.43 0.36 0.31 Open G2 BayesBeliefAgent 0.76 0.24 0.61 0.18 ProAgent 0.75 0.39 0.42 0.29 Open G3 BayesBeliefAgent 0.79 0.20 0.66 0.15 ProAgent 0.78 0.41 0.39 0.30 Ring G1 BayesBeliefAgent 0.74 0.25 0.59 0.20 ProAgent 0.73 0.38 0.43 0.28 Ring G2 BayesBeliefAgent 0.68 0.32 0.49 0.27 ProAgent 0.68 0.37 0.43 0.31 Ring G3 BayesBeliefAgent 0.72 0.27 0.55 0.23 ProAgent 0.71 0.39 0.42 0.30 FC G1–G3 BayesBeliefAgent 0.61 0.42 0.31 0.37 ProAgent 0.60 0.47 0.26 0.41 
+
+Table 11: Zero-shot cross-play reward, reported as mean with standard deviation in parentheses. Rows identify the P0 ego agent and columns identify the P1 partner. 
+
+Agent ( P0 ↓, P1 →) Bayes Pro GAMMA TALENTS Mean over P1
+
+Open 
+
+Bayes 720.3 (256.8) 853.0 (738.8) 779.3 (373.9) 1917.0 (529.6) 1067.4 (474.8) 
+
+Pro 827.0 (582.2) 561.3 (675.2) 853.0 (372.5) 1934.0 (677.6) 1043.8 (576.9) 
+
+GAMMA 608.3 (86.1) 1698.7 (531.5) 440.7 (61.6) 1262.3 (74.1) 1002.5 (188.3) 
+
+TALENTS 1034.0 (195.4) 1305.0 (149.3) 1160.0 (216.1) 1390.7 (157.8) 1222.4 (179.6) 
+
+Mean over P0 797.4 (280.1) 1104.5 (523.7) 783.2 (256.0) 1625.8 (359.8) –
+
+Ring 
+
+Bayes 636.7 (161.7) 448.7 (293.1) 1269.7 (176.4) 1791.7 (216.5) 1034.2 (211.9) 
+
+Pro 382.7 (330.0) 107.7 (98.4) 384.3 (230.7) 721.3 (521.2) 399.0 (295.1) 
+
+GAMMA 1243.7 (295.7) 619.3 (481.3) 958.0 (163.6) 1069.7 (338.7) 972.7 (319.9) 
+
+TALENTS 1520.7 (360.9) 752.0 (440.7) 1141.0 (320.2) 1108.3 (186.2) 1133.0 (327.0) 
+
+Mean over P0 945.9 (287.1) 481.9 (328.4) 938.2 (222.7) 1172.8 (315.6) –

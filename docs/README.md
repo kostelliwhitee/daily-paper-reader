@@ -6,29 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-19
-- 运行时间：2026-08-19 20:12:22 UTC
+- 最新运行日期：2026-08-20
+- 运行时间：2026-08-20 19:35:11 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：6
 - 精读区：2
-- 速读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日聚焦3篇论文：精读2篇、速读1篇，覆盖去中心化Agent推理与多智能体时滞共识。最值得关注的是获9.0分的《DeAR》——它用能力锚定与协作思维导航突破Agent推理瓶颈；若对系统控制感兴趣，可看带符号拉普拉斯视角的时滞共识分析。下一步建议从《DeAR》切入，理解多智能体协作的落地框架。
-- 详情：[/202608/19/README](/202608/19/README)
+今日聚焦多智能体协调与协作机制：精读贝叶斯伙伴建模的适应性重规划、潜在通信中的隐蔽协调检测，并速读相关一致性研究。最值得关注的是如何在LLM协调中通过不确定性建模提升自适应性，以及从隐式通信中识别隐蔽意图。下一步可结合离散事件系统的观测一致性方法，补充对协调失败边界的理解。
+- 详情：[/202608/20/README](/202608/20/README)
 
 ### 精读区论文标签
-1. [DeAR: Decentralized Agentic Reasoning via Capability Grounding and Collaborative Thought Navigation](/202608/19/2608.17282v1-dear-decentralized-agentic-reasoning-via-capability-grounding-and-collaborative-thought-navigation)  
+1. [Bayesian Partner Modelling enables Adaptive Replanning for LLM Coordination](/202608/20/2608.18490v1-bayesian-partner-modelling-enables-adaptive-replanning-for-llm-coordination)  
    标签：评分：9.0/10、query:ma-la
-   evidence：去中心化多智能体推理与自主点对点协作
-2. [Consensusability of Continuous-Time Multi-Agent Systems With Unbounded Heterogeneous Constant Delays: A Signed Laplacian Perspective](/202608/19/2608.15133v1-consensusability-of-continuous-time-multi-agent-systems-with-unbounded-heterogeneous-constant-delays-a-signed-laplacian-perspective)  
+   evidence：基于贝叶斯伙伴建模的LLM协作自适应重规划
+2. [Beyond the Transcript: Detecting Covert Co ordination in Latent Multi-Agent Communication](/202608/20/2608.19161v1-beyond-the-transcript-detecting-covert-co-ordination-in-latent-multi-agent-communication)  
    标签：评分：8.0/10、query:ma-la
-   evidence：异构时延下的多智能体一致性动力学
+   evidence：检测潜在多智能体通信中的隐蔽协调
 
 ### 速读区论文标签
-1. [Polaris : Multi Agentic System for Conversational Enterprise Analytics](/202608/19/2608.14246v1-polaris--multi-agentic-system-for-conversational-enterprise-analytics)  
+1. [Deciding Relabeling Observation Consistency in Multi-Agent Discrete-Event Systems](/202608/20/2608.18866v1-deciding-relabeling-observation-consistency-in-multi-agent-discrete-event-systems)  
    标签：评分：7.0/10、query:ma-la
-   evidence：面向企业分析的多智能体系统，通过动态任务协调连接专用智能体，涉及多智能体通信。
+   evidence：多智能体离散事件系统中的交互动态与观测一致性
+2. [TileMix: Tile-Centric Mixed-Precision Attention for LLM Inference Acceleration](/202608/20/2608.17336v1-tilemix-tile-centric-mixed-precision-attention-for-llm-inference-acceleration)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：以分片为中心的混合精度注意力路由内核，用于可扩展注意力
+3. [Adversarial Review: Structured Disagreement for Grounded Agentic Code Review](/202608/20/2608.18167v1-adversarial-review-structured-disagreement-for-grounded-agentic-code-review)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体协作与结构化分歧
+4. [A Multi-Agent Platform for Automated Enterprise Analytics and Insight Generation](/202608/20/2608.18740v1-a-multi-agent-platform-for-automated-enterprise-analytics-and-insight-generation)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：面向对话式商业智能的多智能体流水线
 
 
 <div class="dpr-home-promo-card">
