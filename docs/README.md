@@ -6,38 +6,41 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-20
-- 运行时间：2026-08-20 19:35:11 UTC
+- 最新运行日期：2026-08-21
+- 运行时间：2026-08-21 20:32:17 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：2
-- 速读区：4
+- 本次总论文数：7
+- 精读区：4
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦多智能体协调与协作机制：精读贝叶斯伙伴建模的适应性重规划、潜在通信中的隐蔽协调检测，并速读相关一致性研究。最值得关注的是如何在LLM协调中通过不确定性建模提升自适应性，以及从隐式通信中识别隐蔽意图。下一步可结合离散事件系统的观测一致性方法，补充对协调失败边界的理解。
-- 详情：[/202608/20/README](/202608/20/README)
+今日精读7篇，聚焦多智能体通信拓扑与关系推理，两篇9分高分论文值得重点研读。最值得关注的方向是奖励引导的图生成用于高效多智能体拓扑设计，以及“问自我、问他人”的关系为核心推理范式。若想入门，建议先看这两篇高分论文，再拓展到知识图谱驱动的协同驾驶与具身导航应用。
+- 详情：[/202608/21/README](/202608/21/README)
 
 ### 精读区论文标签
-1. [Bayesian Partner Modelling enables Adaptive Replanning for LLM Coordination](/202608/20/2608.18490v1-bayesian-partner-modelling-enables-adaptive-replanning-for-llm-coordination)  
+1. [Reward-Guided Autoregressive Graph Generation for Efficient Multi-Agent Communication Topology Design](/202608/21/2608.20099v1-reward-guided-autoregressive-graph-generation-for-efficient-multi-agent-communication-topology-design)  
    标签：评分：9.0/10、query:ma-la
-   evidence：基于贝叶斯伙伴建模的LLM协作自适应重规划
-2. [Beyond the Transcript: Detecting Covert Co ordination in Latent Multi-Agent Communication](/202608/20/2608.19161v1-beyond-the-transcript-detecting-covert-co-ordination-in-latent-multi-agent-communication)  
+   evidence：奖励引导生成高效多智能体通信拓扑
+2. [Ask Self, Ask Others: Relation Is All You Need](/202608/21/2608.20172v1-ask-self-ask-others-relation-is-all-you-need)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：提出线性关系变量作为线性注意力的高效替代
+3. [Adjacency-Based Spectral Proxy Control of Mobile Communication Agents](/202608/21/2608.13616v1-adjacency-based-spectral-proxy-control-of-mobile-communication-agents)  
    标签：评分：8.0/10、query:ma-la
-   evidence：检测潜在多智能体通信中的隐蔽协调
+   evidence：移动通信智能体的谱代理控制
+4. [Emergence of cooperation: A reputation-modulated reinforcement learning](/202608/21/2608.20016v1-emergence-of-cooperation-a-reputation-modulated-reinforcement-learning)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：空间囚徒困境中声誉调节的多智能体合作涌现动态
 
 ### 速读区论文标签
-1. [Deciding Relabeling Observation Consistency in Multi-Agent Discrete-Event Systems](/202608/20/2608.18866v1-deciding-relabeling-observation-consistency-in-multi-agent-discrete-event-systems)  
+1. [G-MARK: Grounded Multi-Agent Reasoning for Cooperative Driving via Knowledge Graphs](/202608/21/2608.19964v1-g-mark-grounded-multi-agent-reasoning-for-cooperative-driving-via-knowledge-graphs)  
    标签：评分：7.0/10、query:ma-la
-   evidence：多智能体离散事件系统中的交互动态与观测一致性
-2. [TileMix: Tile-Centric Mixed-Precision Attention for LLM Inference Acceleration](/202608/20/2608.17336v1-tilemix-tile-centric-mixed-precision-attention-for-llm-inference-acceleration)  
+   evidence：面向协同驾驶的接地多智能体推理
+2. [Graph-MambaNav: Spatial-Temporal Graph Mamba Leveraging Object-Relation Knowledge for Object-Goal Navigation](/202608/21/2608.13723v1-graph-mambanav-spatial-temporal-graph-mamba-leveraging-object-relation-knowledge-for-object-goal-navigation)  
    标签：评分：6.0/10、query:ma-la
-   evidence：以分片为中心的混合精度注意力路由内核，用于可扩展注意力
-3. [Adversarial Review: Structured Disagreement for Grounded Agentic Code Review](/202608/20/2608.18167v1-adversarial-review-structured-disagreement-for-grounded-agentic-code-review)  
+   evidence：基于Mamba的高效注意力机制应用于导航智能体
+3. [MistyPilot: Enabling Social-Robot Control through Multi-Agent LLM Skill Orchestration](/202608/21/2608.15549v1-mistypilot-enabling-social-robot-control-through-multi-agent-llm-skill-orchestration)  
    标签：评分：6.0/10、query:ma-la
-   evidence：多智能体协作与结构化分歧
-4. [A Multi-Agent Platform for Automated Enterprise Analytics and Insight Generation](/202608/20/2608.18740v1-a-multi-agent-platform-for-automated-enterprise-analytics-and-insight-generation)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：面向对话式商业智能的多智能体流水线
+   evidence：多智能体LLM技能编排与任务路由
 
 
 <div class="dpr-home-promo-card">
