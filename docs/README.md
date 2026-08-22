@@ -6,41 +6,27 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-21
-- 运行时间：2026-08-21 20:32:17 UTC
+- 最新运行日期：2026-08-22
+- 运行时间：2026-08-22 19:20:39 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：4
-- 速读区：3
+- 本次总论文数：2
+- 精读区：0
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读7篇，聚焦多智能体通信拓扑与关系推理，两篇9分高分论文值得重点研读。最值得关注的方向是奖励引导的图生成用于高效多智能体拓扑设计，以及“问自我、问他人”的关系为核心推理范式。若想入门，建议先看这两篇高分论文，再拓展到知识图谱驱动的协同驾驶与具身导航应用。
-- 详情：[/202608/21/README](/202608/21/README)
+今日速读 2 篇论文，暂无精读；聚焦大模型缓存优化与 AI 药物发现两个方向。最值得关注：KV Cache 复用压缩提升工具型 Agent 效率，多代理分子优化加速麻醉候选药研发。建议下一步精读这两篇的 7 分工作，重点看方法设计与实验对比。
+- 详情：[/202608/22/README](/202608/22/README)
 
 ### 精读区论文标签
-1. [Reward-Guided Autoregressive Graph Generation for Efficient Multi-Agent Communication Topology Design](/202608/21/2608.20099v1-reward-guided-autoregressive-graph-generation-for-efficient-multi-agent-communication-topology-design)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：奖励引导生成高效多智能体通信拓扑
-2. [Ask Self, Ask Others: Relation Is All You Need](/202608/21/2608.20172v1-ask-self-ask-others-relation-is-all-you-need)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：提出线性关系变量作为线性注意力的高效替代
-3. [Adjacency-Based Spectral Proxy Control of Mobile Communication Agents](/202608/21/2608.13616v1-adjacency-based-spectral-proxy-control-of-mobile-communication-agents)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：移动通信智能体的谱代理控制
-4. [Emergence of cooperation: A reputation-modulated reinforcement learning](/202608/21/2608.20016v1-emergence-of-cooperation-a-reputation-modulated-reinforcement-learning)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：空间囚徒困境中声誉调节的多智能体合作涌现动态
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [G-MARK: Grounded Multi-Agent Reasoning for Cooperative Driving via Knowledge Graphs](/202608/21/2608.19964v1-g-mark-grounded-multi-agent-reasoning-for-cooperative-driving-via-knowledge-graphs)  
+1. [ReCache: Efficient KV Cache Reuse and Compression for Tool-Augmented LLM Agents](/202608/22/2608.19662v1-recache-efficient-kv-cache-reuse-and-compression-for-tool-augmented-llm-agents)  
    标签：评分：7.0/10、query:ma-la
-   evidence：面向协同驾驶的接地多智能体推理
-2. [Graph-MambaNav: Spatial-Temporal Graph Mamba Leveraging Object-Relation Knowledge for Object-Goal Navigation](/202608/21/2608.13723v1-graph-mambanav-spatial-temporal-graph-mamba-leveraging-object-relation-knowledge-for-object-goal-navigation)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：基于Mamba的高效注意力机制应用于导航智能体
-3. [MistyPilot: Enabling Social-Robot Control through Multi-Agent LLM Skill Orchestration](/202608/21/2608.15549v1-mistypilot-enabling-social-robot-control-through-multi-agent-llm-skill-orchestration)  
-   标签：评分：6.0/10、query:ma-la
-   evidence：多智能体LLM技能编排与任务路由
+   evidence：面向工具增强LLM智能体的高效KV缓存复用与压缩，直接对应智能体注意力可扩展性需求。
+2. [A multi-agent molecular optimization framework leads to a rapid-recovery intravenous anesthetic candidate with an improved safety margin](/202608/22/biorxiv-10-64898-2026-08-17-745149-v1-a-multi-agent-molecular-optimization-framework-leads-to-a-rapid-recovery-intravenous-anesthetic-candidate-with-an-improved-safety-margin)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：用于分子优化的角色专业化多智能体框架，多个智能体协同交互
 
 
 <div class="dpr-home-promo-card">
