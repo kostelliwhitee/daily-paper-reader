@@ -6,27 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-22
-- 运行时间：2026-08-22 19:20:39 UTC
+- 最新运行日期：2026-08-23
+- 运行时间：2026-08-23 20:21:01 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：0
-- 速读区：2
+- 本次总论文数：4
+- 精读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日速读 2 篇论文，暂无精读；聚焦大模型缓存优化与 AI 药物发现两个方向。最值得关注：KV Cache 复用压缩提升工具型 Agent 效率，多代理分子优化加速麻醉候选药研发。建议下一步精读这两篇的 7 分工作，重点看方法设计与实验对比。
-- 详情：[/202608/22/README](/202608/22/README)
+今日精读3篇、速读1篇，核心聚焦长文档理解与记忆机制。最值得关注《D2-ScaleAgent》9.0分，提出双维度缩放方案；《Memory Is Communication》8.0分，从信号视角重塑记忆边界。建议普通读者优先精读这两篇，再以速读文章作扩展对比。
+- 详情：[/202608/23/README](/202608/23/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [D2-ScaleAgent: Dual-Dimensional Scaling for Long Document Understanding](/202608/23/2608.16417v1-d2-scaleagent-dual-dimensional-scaling-for-long-document-understanding)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：基于动态路由的多智能体RAG协同检索与推理。
+2. [Memory Is Communication: The Frontier Between Remembering and Signaling](/202608/23/2608.17053v1-memory-is-communication-the-frontier-between-remembering-and-signaling)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：研究有界智能体在记忆与同伴通信间的信息分配，刻画通信速率与任务性能的可行边界
+3. [Beyond Memory Majority: Latent-Source Reasoning for Multi-Agent Memory Arbitration](/202608/23/2608.19701v1-beyond-memory-majority-latent-source-reasoning-for-multi-agent-memory-arbitration)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：解决多智能体记忆中共享源导致的关联偏差问题，属于交互动态的核心议题
 
 ### 速读区论文标签
-1. [ReCache: Efficient KV Cache Reuse and Compression for Tool-Augmented LLM Agents](/202608/22/2608.19662v1-recache-efficient-kv-cache-reuse-and-compression-for-tool-augmented-llm-agents)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：面向工具增强LLM智能体的高效KV缓存复用与压缩，直接对应智能体注意力可扩展性需求。
-2. [A multi-agent molecular optimization framework leads to a rapid-recovery intravenous anesthetic candidate with an improved safety margin](/202608/22/biorxiv-10-64898-2026-08-17-745149-v1-a-multi-agent-molecular-optimization-framework-leads-to-a-rapid-recovery-intravenous-anesthetic-candidate-with-an-improved-safety-margin)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：用于分子优化的角色专业化多智能体框架，多个智能体协同交互
+1. [The Curious Case of Exploding DecPOMDPs: Containing the Fire through Policy Counting](/202608/23/2608.17749v1-the-curious-case-of-exploding-decpomdps-containing-the-fire-through-policy-counting)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：面向多智能体不确定交互动态的DecPOMDP框架
 
 
 <div class="dpr-home-promo-card">

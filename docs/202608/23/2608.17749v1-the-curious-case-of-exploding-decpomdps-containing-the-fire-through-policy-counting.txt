@@ -1,0 +1,1368 @@
+Title: The Curious Case of Exploding DecPOMDPs: Containing the Fire through Policy Counting
+
+URL Source: https://arxiv.org/pdf/2608.17749v1
+
+Published Time: Wed, 19 Aug 2026 00:58:36 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# The Curious Case of Exploding DecPOMDPs: Containing the Fire through Policy Counting ⋆
+
+Nazlı Nur Karabulut [0000 −0001 −7958 −5627] and Tanya Braun [0000 −0003 −0282 −4284] 
+
+Computer Science Department, University of Münster, Münster, Germany 
+
+{nnur.karabulut,tanya.braun}@uni-muenster.de 
+
+Abstract. Decentralised partially observable Markov decision processes (DecPOMDPs) provide a general framework for modelling multi-agent decision making under uncertainty. However, DecPOMDPs are known to suffer from exponential complexity in the number of agents. One way to combat this intractability in agent numbers is to look at partitions of agents that exhibit a form of symmetry among agents, allowing for a compact encoding by counting. However, a challenge arises as the pol-icy space explodes, even though the model complexity and evaluation cost reduce to a polynomial dependence. In this paper, we redirect our focus from counting agents to counting policies, which actually enables tractability in agent numbers for so called policy-counted DecPOMDPs. Further, we present policy-counted dynamic programming using the com-pact representation to solve policy-counted DecPOMDPs efficiently. 
+
+## 1 Introduction 
+
+Large-scale agent systems involve a huge number of interacting agents that have to coordinate decisions in uncertain environments. To formalise the setting, de-centralised partially observable Markov decision processes (DecPOMDPs) pro-vide a framework to compute a joint policy for a set of cooperative agents that maximises some joint utility measure in an environment that is considered to be stationary and describable by a probabilistic transition model. When agents are self-interested, the problem is formalised as a partially observable stochastic game (POSG), in which each agent has its own utility function. However, solving multi-agent decision making problems is notoriously diffi-cult as the number of potential policies escalates exponentially with the num-ber of agents. To deal with this problem, researchers have proposed various approaches: Early work focuses on dynamic programming using pruning tech-niques for POSGs [4]. Building on this basis, Szer et al. present point-based dynamic programming for DecPOMDPs [21] and Seuken et al. propose memory-bounded dynamic programming [20]. The dynamic programming operator was later extended with approximate pruning techniques to improve scalability for POSGs [12]. In addition to dynamic programming–based approaches, Szer et al.  
+
+> ⋆
+
+Full version including appendix of a paper accepted at the 17th International Con-ference on Scalable Uncertainty Management (SUM2026) under the same name. arXiv:2608.17749v1 [cs.AI] 18 Aug 2026 2 N. N. Karabulut and T. Braun 
+
+[22] propose multiagent A* (MAA*), a policy search algorithm that groups ac-tion–observation histories of agents at the same stage when they share the same optimal Q-values in a Bayesian game formulation of the problem [17]. Newer work optimises MAA* even further [10,11], working on the doubly-exponential dependence on the horizon among other things. Additional research has exam-ined more structured subclasses to improve scalability, e.g., for POSGs, examples include zero-sum formulations [26,5,24], one-sided POSGs where only one agent is affected by uncertainty [7,6,2], and common-payoff POSGs that restrict agents to share identical rewards [3]. Another lane of work focuses on so-called lifting [18]. Lifting exploits sym-metries between objects, also sometimes referred to as exchangeability, which can be used for tractable inference [15]. In multi-agent systems, lifting is ap-plied to agents, allowing for a more compact and tractable problem formulation using partitions of agents, with the number of partitions being much smaller than the number of agents. The basic assumption, first described by Braun et al. [1], is that, within a partition, permutations of joint actions and observations have the same effect on the joint transition or reward, allowing for counting actions and observations in histograms. Adding in an assumption about condi-tional independence among agents of a partition even allows for working with a single representative agent per partition without counting necessary, leading to a drastic reduction in complexity for so-called isomorphic DecPOMDPs. However, without that assumption, a reduction can only be made in model complexity and evaluation cost, while —almost counter-intuitively— the policy space explodes [1]. More recently, we have presented isomorphic POSGs and lifted dynamic pro-gramming to work with the compact encoding, yielding a runtime polynomial in the number of agents [8]. We have extended this work to counting policies to circumvent an explosion in the policy space for partitioned POSGs [9]. Invigorated by the progress made in counting POSGs, this work takes on the case of exploding DecPOMDPs under counting, a challenge left open by Braun et al. [1] in addition to a dedicated solution method, by extending the counting focus to policies. Specifically, the contributions are threefold: (i) a new definition of counting DecPOMDPs that allows for counting policies, preventing the explosion in the policy space, (ii) an updated utility calculation including an analysis that shows tractability in agent numbers, and (iii) a dynamic programming operator to solve policy-counted DecPOMDPs. As such, we solve the above-mentioned challenge and additionally provide a dedicated solution method. When showing tractability, we assume a fixed number of partitions that is much smaller than the number of agents. The paper is organised as follows: We start with DecPOMDPs and dynamic programming. Then we analyse the problem of exploding DecPOMDPs and show how to use counting for policies to circumvent the problem, followed by counting dynamic programming. We end with a conclusion. Due to space constraints, the proofs are relegated to the appendix. The Curious Case of Exploding DecPOMDPs 3
+
+## 2 Preliminaries 
+
+In this section, we define DecPOMDPs and provide an overview of dynamic programming for DecPOMDPs. 
+
+2.1 Decentralised POMDPs 
+
+The definition is based on [16] and [19], using random variables S with ran( S)
+
+referring to the set of (range) values it can take. Bold symbols denote sets, (time) steps t are denoted by superscript t, sequences over a discrete interval [ts : te] are denoted by superscript ts : te, and omitting an element i from a set or sequence is denoted by subscript −i. To add an element to a sequence, we use ◦.
+
+Definition 1. A ( ground ) DecPOMDP M is a tuple (I, S, A, T, R, O, Ω, τ ),
+
+– I a set of N agents, 
+
+– S a random variable with a set of states as a range, 
+
+– A = {Ai}i∈I a set of decision random variables, each Ai with a set of local actions as range, 
+
+– T (S′, S, A) = P (S′ | S, A) a transition function, 
+
+– R(S, A) a reward function, 
+
+– O = {Oi}i∈I a set of random variables, each Oi with a set of local observa-tions as range, 
+
+– Ω(O, S ) = P (O | S) a sensor function 1, and 
+
+– τ a horizon. 
+
+Each agent i follows a local policy πti mapping local observation histories o0: t
+
+to actions a, which can be represented as a depth-t policy tree (see Fig. 1). A joint policy is a tuple π = ( π1, ..., π n). The semantics of the ground model M is given by the joint policy space ΠM . The DecPOMDP problem asks for the joint policy that yields the maximum expected utility (with horizon τ ): 
+
+M EU (M ) = (arg max 
+
+> π∈ΠM
+
+UM (π), max 
+
+> π∈ΠM
+
+UM (π)) (1) where UM (π) is calculated recursively over τ steps, by summing over joint ob-servations and next states, and then weighted according to the prior T (s0, . , . ),i.e., UM (π) = P 
+
+> s0∈ran( S)
+
+T (s0, . , . )U π 
+
+> M
+
+(s0, ⊥0:0 ) with 
+
+U π 
+
+> M
+
+(st, o0: t) = R(st, π(o0: t))+ X
+
+> st+1 ∈ran( S)
+
+T (st+1 , s t, π(o0: t)) 
+
+X
+
+> ot+1 ∈ran( O)
+
+Ω(ot+1 , s t+1 )U π 
+
+> M
+
+(st+1 , o0: t+1 )
+
+(2)  
+
+> 1
+
+For ease of exposition regarding counting and to be consistent with [1], we omit A
+
+from Ω, which does not make the problem inherently easier to solve [19]. 4 N. N. Karabulut and T. Braun aa ax y aa bx y ab ax y ab bx yba ax y ba bx y bb ax y bb bx y
+
+Fig. 1. Policies at level t = 1 available to agents with actions a, b and observations x, y 
+
+ending with U π 
+
+> M
+
+(s, o0: τ −1) = R(s, π(o0: τ −1)) , where π(o0: t) denotes the joint action at step t (π(⊥): root actions) and o0: t+1 = o0: t ◦ot+1 the updated history. In a DecPOMDP, all agents share a single joint reward function R(S, A) and cooperate to maximize the total expected utility. However, each agent decides what to do next on its own, not being able to observe the full state or the other agents’ observations. Nonetheless, agents are not fully independent since they depend on a joint state and receive the reward jointly. 
+
+2.2 Dynamic Programming 
+
+Dynamic programming is a solution method for multi-agent decision making that is shared between DecPOMDPs and POSGs [16]. It builds increasingly deeper policy trees from sub-trees for individual agents, while eliminating weakly-dom-inated policies at each depth [21]. Algorithm 1 shows the dynamic programming operator which consists of three steps. First, an exhaustive backup is performed to build all possible policies Πti = {πti,j }mt 
+
+> j=1
+
+of depth t from the input policies 
+
+Πt−1 
+
+> i
+
+= {πt−1 
+
+> i,j
+
+}mt−1 
+
+> j=1
+
+for each agent i. Then, for each policy πti,j ∈ Πti , the operator calculates the corresponding value vector V ti,j , representing the value of that policy for each possible combination of state s ∈ ran( S) and policies of the other agents πt 
+
+> −i
+
+∈ Πt
+
+> −i
+
+, which is defined as follows with π = πti,j ◦ π−i
+
+Vi(s, π) = R(s, π(⊥)) + X
+
+> s′∈ran( S)
+
+T (s′, s, π(⊥)) X
+
+> o∈ran( O)
+
+Ω(o, s )Vi(s′, π.o) (3) where π.o denotes the sub-policies after following an observation. During prun-ing, the operator eliminates policies that are weakly-dominated by others (solv-able by a linear programme, see App. A.1), meaning that over the complete space of ran( S) × Πt 
+
+> −i
+
+there is always another policy with at least as high a value, i.e., 
+
+∀s ∈ ran( S), πt 
+
+> −i
+
+∈ Πt
+
+> −i
+
+∃πti,j ′ ∈ Πti : Vi(s, π ti,j ◦ πt
+
+> −i
+
+) ≤ Vi(s, π ti,j ′ ◦ πt
+
+> −i
+
+) (4) 
+
+## 3 A Case of Exploding DecPOMDPs 
+
+The basic idea of lifting DecPOMDPs is that the agent set is partitioned into sets of agents that behave indistinguishably among each other, meaning that The Curious Case of Exploding DecPOMDPs 5
+
+Algorithm 1 Multi-agent Dynamic Programming Operator                                               
+
+> function MA-DP (set of policies Πt−1
+> ifor each agent i∈Iwith value vectors Vt−1
+> i)
+> for each agent i∈Ido
+> Πti←Perform exhaustive backup using Πt−1
+> i
+> Vti←Calculate new value vectors
+> while ∃πti,j ∈Πti:Eq. (4) holds for some i∈Ido
+> Πti←Πti\ { πti,j },Vti←Vti\ { vti,j }
+> return {(Πti,Vti)}i∈I
+
+it does not matter which agent performs which action within a partition, only how many do so [18,13,1]. In such a case, it is enough to count the agents and store the counts in a histogram. To illustrate the point, consider N = 12 
+
+indistinguishable agents with the actions a, b available as an example. Imagine that 8 agents perform a while the remaining 4 perform b. Then, there exist  12 8
+
+ = 12! 8! ·4! = 495 ways to make the 12 agents perform the actions, all of which result in the same outcome ρ. Therefore, we can construct a histogram [4 , 8] 
+
+that maps to ρ, replacing 495 mappings. While this leads to a drastic decrease in model complexity, the policy space explodes in the formalisation chosen in [1]. To understand why, we next discuss the assumptions and design choices, left at times implicit in the original paper. Then, we look at the (in)tractability results. 
+
+3.1 Assumptions & Definitions 
+
+Braun et al. [1] name as their basic assumption indistinguishability among agents. They posit that indistinguishability requires agents to have the same local actions and observations, and that another consequence is that permuta-tions of actions (observations) map to the same outcome in transition, reward, and sensor function, which we posit boils down to two assumptions, which we formalise next. The first assumption is that all agents i, j in a partition I ⊆ I have the same action and observation space: 
+
+ran( Ai) = ran( Aj ) ∧ ran( Oi) = ran( Oj ) (5) which follows the requirement definition in [1]. The second assumption is that the transition, reward, and sensor functions T , R, and Ω are symmetric, meaning that exchanging actions or observations between agents of a partition has no effect on the outcome of T , R, and Ω, which can be formally expressed for the actions of two agents as: 
+
+∀a ∈ ran( A), a = ( ai ◦ aj ◦ a−i, −j ) : 
+
+T (s′, s, a i ◦ aj ◦ a−i, −j ) = T (s′, s, a j ◦ ai ◦ a−i, −j ) (6) The same holds for the actions in R and the observations in Ω. We now gener-alise Eq. (6) to entire partitions, to build interchangeability among agents within 6 N. N. Karabulut and T. Braun 
+
+a partition. The set of agents I is divided into K partitions I1, ..., IK of indis-tinguishable agents. For each partition Ik, let ak = ( ai)i∈Ik and ok = ( oi)i∈Ik
+
+denote the joint action and observation tuples of the agents in that partition. With the extension of symmetric behaviour to partitions, swapping the actions or observations of agents within the same partition does not change a function’s outcome. Formally, for any permutation θ of Ik,
+
+T (s′, s, ak, a−k) = T (s′, s, θ (ak), a−k)o−k, s ). (7) with the same holding for any permutations of actions in T and observations in 
+
+Ω. These assumptions are analogous to those made for counting in POSGs [9]. Equations (5) and (7) allow for encoding actions and observations using his-tograms, which can then be used to compactly encode T , R, and Ω by replacing the individual mappings from all θ(ak) to an outcome ρ with a single mapping 
+
+h 7 → ρ, with h being a histogram of the counts of actions in ak, which is iden-tical for all θ(ak). The same holds for the permutations of observations in ok.Formally, histograms are defined as follows: 
+
+Definition 2. Given a set of n agents I and a set of m values ν = {v1, . . . , v m},a histogram h is defined as h = {(vl, n l)}ml=1 with Pml=1 nl = n where each 
+
+nl denotes the number of instances with value vl. We use h(vl) to refer to nl.
+
+[n1, ..., n m] is used as a shorthand. A counting random variable (CRV) #I [V ]
+
+is a syntactic construct whose range consists of all histograms over the range values of variable V , i.e., ν = ran( V ), that meet P 
+
+> l
+
+nl = |I|.
+
+Considering the shorthand example h = [4 , 8] from above for actions a, b and 
+
+n = 12 , the full version reads h = {(a, 8) , (b, 4) }.Braun et al. [1] then define a partitioned DecPOMDP that uses such his-tograms as range values for actions and observations in each partition for every affected component of the DecPOMDP. 
+
+Definition 3 ([1]). A counting DecPOMDP ¯Mc is a tuple (¯I, ¯S, ¯Ac, ¯T , ¯R, ¯Oc,
+
+¯Ω, τ ), with 
+
+– ¯I a partitioning {Ik}Kk=1 of N agents, with nk = |Ik| and |¯I| = P 
+
+> k
+
+nk = N ,
+
+– S a random variable with a set of states as range, 
+
+– ¯Ac = {#Ik [Ak]}Kk=1 a set of decision CRVs, 
+
+– ¯T (S′, S, ¯Ac) a transition function with counted actions, 
+
+– ¯R(S, ¯Ac) a reward function with counted actions, 
+
+– ¯Oc = {#Ik [Ok]}Kk=1 a set of CRVs, 
+
+– ¯Ω( ¯Oc, S ) a sensor function with counted observations, and 
+
+– τ a horizon. 
+
+The equivalence between a DecPOMDP fulfilling Eqs. (5) and (7) and a counting DecPOMDP can be shown by construction, replacing all mappings with permu-tations of inputs with a single mapping with a histogram and vice versa (see App. B.1). The Curious Case of Exploding DecPOMDPs 7
+
+3.2 (In)Tractability Results 
+
+For a ground DecPOMDP, the model complexity lies in O(s2aN ) for T , O(sa N )
+
+for R, and O(so N ) for Ω with s = |ran( S)|, a = max i∈I |ran( Ai)|, and o =max i∈I |ran( Oi)|, while the cost of evaluating a joint policy lies in O(so N τ ) and the policy space size in O(a N (oτ −1)  
+
+> o−1
+
+) [16]. Using CRVs allows for reducing the model size and evaluation cost from exponential to polynomial. 
+
+Theorem 1 ([1], Thm. 2). A counting DecPOMDP ¯Mc allows for represen-tation [i.e., model] and cost to depend polynomially on N .
+
+The theorem holds by the range sizes of the CRVs, which are capped by N a,
+
+a = max k |ran( Ak)|, and N o, o = max k |ran( Ok)|, as an upper bound on the number of histograms given by the binomial coefficient  N +v−1
+
+> v−1
+
+ ≤ N v , v ∈ { a, o }
+
+[13]. Compared to the ground case, a and o are replaced by N a and N o, while K
+
+replaces N in the exponent, yielding a polynomial dependence on N , assuming that K ≪ N .However, the number of policies explodes: Since the size of the policy space contains o in the exponent, replacing o with N o means that N remains in the exponent, all the while a is replaced with N a, leading to an expression that has 
+
+N in the base as well as the exponent. 
+
+Corollary 1. The policy space of a counting DecPOMDP ¯Mc depends exponen-tially on N .
+
+The crux is the choice of CRVs in the action and observation set used for building policies. In contrast, we use plain variables and count policies instead, which is a small change with profound effects. 
+
+## 4 Containing the Fire by Counting Policies 
+
+For a polynomial dependence on the agent numbers, we keep plain variables in the action and observation sets, enabled by Eq. (5), but use CRVs in the transition, reward, and sensor function, enabled by Eq. (7). With plain variables, there is a set of (representative) policies available in each partition, which allows for structuring the policy space by counting the number of agents following each representative policy and updating the M EU calculations. We first formalise counted policies before renewing the definition of counting DecPOMDPs. Last, we look at the effect of counted policies on the M EU calculation and complexity. 
+
+4.1 Counted Policies 
+
+Let us consider the example from the beginning of Section 3 with 12 agents and actions a, b available. At step t = 1 , assuming two possible observations 
+
+x, y , each of the 12 agents has the same 8 policies available, see Fig. 1. Instead of tracking all possible policies for each individual agent, we can use these 8 policies as representative policies to keep track of agent behaviour in histograms: For 8 N. N. Karabulut and T. Braun 
+
+example, the partition policy in which all agents follow the first policy is encoded by [12 , 0, 0, 0, 0, 0, 0, 0] , while the other configuration in which one agent follows the second policy and the remaining agents follow the first one is encoded by 
+
+[11 , 1, 0, 0, 0, 0, 0, 0] . In this way, all possible partition policies can be compactly encoded. More formally, according to Eq. (5), the set of policies for any two agents i, j 
+
+within a partition Ik is established using the same sets of actions Ai = Aj = Ak
+
+and observations Oi = Oj = Ok. As a result, their local policy space is the same, i.e., Πi = Πj = Πk. These policies are referred to as representative policies Πk
+
+of partition Ik and can be counted for each partition. 
+
+Definition 4. Let the set of J representative policies of a partition Ik be given by Πk = {π1, . . . , π J }. A counted partition policy over Πk is a histogram hΠk =
+
+{(πj , m j )}Jj=1 , where mj ≥ 0 is the number of agents in Ik following policy πj ,and PJj=1 mj = nk. The counted policy space for partition Ik, denoted by HΠk ,is given by the set of all histograms meeting PJj=1 mj = nk. The joint counted policy space over all partitions is given by HΠ = ×Kk=1 HΠk . The counted policy space of all partitions except k is denoted by HΠ 
+
+> −k
+
+and of all agents except some agent i ∈ Ik by HΠ 
+
+> −i
+
+where PJj=1 mj = nk − 1 for HΠk without i.
+
+4.2 A Renewed Definition 
+
+To distinguish the two definitions, we use policy-counted DecPOMDP as a name here, which is still a DecPOMDP with a partitioned agent set fulfilling Eqs. (5) and (7). 
+
+Definition 5. A policy-counted DecPOMDP ¯M is a tuple (¯I, ¯S, ¯A, ¯T , ¯R, ¯O,
+
+¯Ω, τ ), with 
+
+– ¯I a partitioning {Ik}Kk=1 of N agents, nk = |Ik| and |¯I| = P 
+
+> k
+
+nk = N ,
+
+– S a random variable with a set of states as range, 
+
+– ¯A = {Ak}Kk=1 a set of decision random variables, 
+
+– ¯T (S′, S, ¯Ac) a transition function with counted actions, 
+
+– ¯R(S, ¯Ac) a reward function with counted actions, 
+
+– ¯O = {Ok}Kk=1 a set of random variables, 
+
+– ¯Ω( ¯Oc, S ) a sensor function with counted observations, and 
+
+– τ a horizon. where ¯Ac = {#Ik [Ak]}Kk=1 and ¯Oc = {#Ik [Ok]}Kk=1 .
+
+The difference between Def. 3 and Def. 5 only lies in ¯Ac and ¯Oc versus ¯A and 
+
+¯O, which are CRVs in the former and plain variables in the latter case, as the set of actions and observations available. Since Eq. (7) holds in both definitions, 
+
+¯T , ¯R, and ¯Ω are the same with CRVs as inputs for actions and observations. This encoding captures the symmetric behaviour of agents within each partition and helps to reduce the model complexity by operating over counted represen-tations instead of enumerating all individual agents. Theorem 2 establishes the equivalence between the ground DecPOMDP and its counted version of Def. 5. The Curious Case of Exploding DecPOMDPs 9
+
+Theorem 2. A ground DecPOMDP M that meets Eqs. (5) and (7) is equivalent to a policy-counted DecPOMDP ¯M .
+
+The full proof can be found in App. B.2, which is based on the fact that one can be converted into the other by construction and vice versa. Having established the equivalence between ground and counting DecPOMDPs, we now show how the counting formulation affects the model complexity. 
+
+Theorem 3. For a fixed number of partitions K, fixed action and observation spaces, and a fixed horizon τ , the model complexity of a counting DecPOMDP 
+
+¯Mc is polynomial in the number of agents N .
+
+The full proof can be found in App. B.3, where we show that using histograms within agent partitions keeps the model size polynomial in N .
+
+4.3 Counted Utility Calculation 
+
+As the policy space is given by joint counted policies, we can update the seman-tics and M EU calculation. The semantics of the policy-counted DecPOMDP ¯M
+
+is given by the joint counted policy space HΠ . The policy-counted DecPOMDP problem asks for the joint counted policy that yields the maximum expected utility (with horizon τ ), which is again computed by recursively calculating the expected utility over the next states and observations, until reaching τ .However, the sum over observations can now be turned into a sum over counted observations: Given a joint counted policy, each partition is partitioned again into groups following a representative policy according to the counted par-tition policy, with group sizes corresponding to the histogram counts. For a given (representative) observation history, the recursive call to the next utility as well as the remaining sub-policy are the same for these agents, making them indis-tinguishable among themselves. As such, for each of these groups, we can count observations in histograms over the (sub)group with a particular representative policy and observation history, and let the sum go over the cross product of these histograms. Conditioning these groups on their shared observation history means that groups split up further, which can in the worst case lead to singletons if the group size is small to begin with or τ is very large but the overall com-plexity is still going to be only polynomial as we show afterwards. Additionally, we only need this deep recursion for the utility definition here and are able to define policy-counted dynamic programming using a single step. To formalise this setting, we define the space of representative observation histories as well as the space of observation histograms given a representative observation history. 
+
+Definition 6. Given a step t, a representative observation history p0: t,o k of a partition Ik is a sequence of observations ot′
+
+∈ ran( Ok) of length t, t′ ∈{1, . . . , t }, with o0 = ⊥ as an empty observation. Given a representative obser-vation history p0: t,o k , let pt′,o k refer to the entry at point t′ in the sequence and 
+
+p0: t−1,o k refer to the subsequence without the last entry pt,o k . Finally, let P 0: t,o k10 N. N. Karabulut and T. Braun 
+
+denote the space of representative observation histories of length t for the agents in partition Ik, i.e., P 0: t,o k = ⊥ × × tt′=1 ran( Ok).
+
+Definition 7. Given a step t, a counted partition policy hΠk , and a representa-tive policy π ∈ Πk for a partition Ik, a counted partition observation is a set of histograms {ho,π k,p 0: t,o k
+
+}p0: t,o k ∈P 0: t,o k
+
+where 
+
+ho,π k,p 0: t,o k
+
+= {(ol, n l)}ol∈ran( Ok )
+
+with 
+
+X 
+
+> ol∈ran( Ok)
+
+nl =
+
+(ho,π k,p 0: t−1,o k
+
+(ptk) if t > 0
+
+hΠk (π) if t = 0 (8) 
+
+and p0: t,o k = p0: t−1,o k ◦ ptk. Let Ho,π k denote the space of counted partition ob-servations for a given representative policy π, i.e., the set of all possible sets of histograms that fulfil Eq. (8) . Given a joint counted policy hΠ , let Ho,Π k denote the space of counted partition observations over all representative policies Πk,i.e., Ho,Π k = ×π∈Πk Ho,π k , and Ho,Π the space of joint counted observations ,i.e., Ho,Π = ×Kk=1 Ho,Π k .
+
+Note that the observation histogram in Eq. (8) holds counts nl for p0: t,o ◦ ol.Based on these definitions, we can now rewrite Eq. (1) as follows: 
+
+M EU ( ¯M ) = (arg max  
+
+> hΠ∈HΠ
+
+U ¯M (hΠ ), max  
+
+> hΠ∈HΠ
+
+U ¯M (hΠ )) (9) where U ¯M (hΠ ) is calculated recursively over τ steps and weighted according to the prior T (s0, . , . ), i.e., U ¯M (hΠ ) = P 
+
+> s0∈ran( S)
+
+T (s0, . , . )U hΠ 
+
+> ¯M
+
+(s0, ⊥0:0 ) with 
+
+U hΠ 
+
+> ¯M
+
+(st, (ho,Π )0: t) = R(st, ha) + X
+
+> st+1 ∈ran( S)
+
+T (st+1 , s t, ha)
+
+X 
+
+> ho,Π ∈Ho,Π
+
+M ul (ho,Π ) · Ω(ho, s t+1 )U hΠ 
+
+> ¯M
+
+(st+1 , (ho,Π )0: t ◦ ho,Π )
+
+(10) with M ul (ho,Π ) the multinomial coefficient, denoting the number of ground permutations encoded by the histograms [23], where for each partition Ik, the counted partition action hak ∈ ha as input to R and T is given by adding up, for each action a ∈ ran( Ak), how often a is carried out over all representative policies and all representative observation histories using the counts in the latest counted partition observation if the observation history plus the newest observation map to a in the current representative policy, i.e., 
+
+hak = {(al, n l)}al∈ran( Ak ) with 
+
+nl =
+
+X
+
+> π∈
+> Πk
+
+X 
+
+> p∈
+> P0: t−1,o k
+
+X 
+
+> o∈
+> ran( Ok)
+
+ho,Π,t k,p (o)1πk (p◦o)= al if t > 0
+
+X
+
+> π∈Πk
+
+hΠk (π) | π(⊥) = al if t = 0 
+
+(11) The Curious Case of Exploding DecPOMDPs 11 
+
+with ho,Π,t k,p ∈ ho,Π,t k ∈ (ho,Π k )o:t and 1 being the indicator function returning 1
+
+if πk(p ◦ o) = al. The counted observation hok ∈ ran(# Ik [Ok]) as input to Ω is given by adding up, for each observation o ∈ ran( Ok), how often o is observed over all representative policies and all representative observation histories in the latest counted partition observation, i.e., 
+
+hok = {(ol, n l)}ol∈ran( Ok ) with nl = X
+
+> π∈Πk
+
+X 
+
+> p∈P0: t−1,o k
+
+ho,Π,t k,p (ol) (12) The utility calculation for a ground DecPOMDP and an equivalent policy-counted DecPOMDP is equivalent again, leading to the same maximum ex-pected utility. The trick is that calculations that lead to the same result are only performed once in the counted case, which is possible due to the histograms essentially encoding when calculations lead to the same result. 
+
+Theorem 4. The maximum expected utility for a ground DecPOMDP M that meets Eqs. (5) and (7) is equal to the maximum expected utility of the corre-sponding policy-counted DecPOMDP ¯M . That is, M EU (M ) = M EU ( ¯M ).
+
+The full proof can be found in App. B.4, where we show that both models give the same utility by mapping ground policies to counted policies. Next, we look at evaluation cost and policy space size. 
+
+Theorem 5. For a fixed number of partitions K, fixed representative action and observation spaces, and a fixed horizon τ , the cost of evaluating a joint counted policy and the size of the overall joint counted policy space in a policy-counted DecPOMDP depend polynomially on the number of agents N .
+
+The full proof can be found in App. B.5, which relies on the joint counted ob-servation space and the joint counted policy space depending polynomially on the number of agents N , as nk ≤ N agents are distributed onto the different representative observations and policies, which can be characterised using the binomial coefficient. Thus, we have reduced the complexity from an exponen-tial one to a polynomial one for N . As such, a policy-counted DecPOMDP is tractable in the number of agents. 
+
+Corollary 2. Given a fixed number of partitions K, fixed representative action and observation spaces, and a fixed horizon τ , a policy-counted DecPOMDP is tractable in the number of agents N .
+
+With the number of agents N no longer appearing in the exponent, we are able to solve larger problem instances in terms of N compared to the ground case, especially if the number of partitions K is small. Next, we use the counting encoding to speed up dynamic programming for DecPOMDPs. 
+
+## 5 Policy-Counted Dynamic Programming 
+
+In this section, we extend the standard dynamic programming operator for policy-counted DecPOMDPs. Because of the equivalence between the ground 12 N. N. Karabulut and T. Braun 
+
+and policy-counted versions of DecPOMDPs, we can show that the value com-putations are equivalent, allowing for computing values at a partition level as well as pruning representative policies. The policy-counted dynamic programming operator still follows the three general steps of exhaustive backup, value computation, and pruning but on a partition-level. That is, Alg. 1 still applies but computes value vectors and per-forms pruning according to counted versions of those equations for each partition (see Eqs. (13) and (14)). During the exhaustive backup, the operator builds all 
+
+representative policies of depth t based on the policies of depth t − 1 for each partition and then computes their corresponding value vectors. Since the oper-ator builds increasingly deeper policies, the value computation stays at the top level, building its counted joint action from the root actions in the representative policies, i.e., with t = 0 in Eq. (11) to build ha, and uses empty representative histories, i.e., Eq. (8) with t = 0 as well to build Ho,Π . Thus, for a state s and joint counted policy hΠ 
+
+> −i
+
+of the other agents and partitions, the value compu-tation for a given representative policy πk is defined as follows with πk ⊕ hΠ
+
+> −i
+
+adding 1 to the corresponding count in hΠk of hΠ 
+
+> −i
+
+to form a full joint counted policy: 
+
+¯Vk(s, hΠ ) = R(s, ha)+ X
+
+> s′∈ran( S)
+
+T (s′, s, ha)
+
+X 
+
+> ho,Π ∈Ho,Π
+
+M ul (ho,Π ) · Ω(ho, s ′) ¯Vk(s′, hΠ .ho,Π )
+
+(13) where h.ho,Π denotes the policy histogram that follows from the observation histogram ho,Π . Specifically, given depth t of the representative policies Πtk used for hΠ , the joint counted policy hΠ , and the current joint counted observation 
+
+ho,Π , the new policy histogram is calculated by adding up how often a subpol-icy πl ∈ Πt−1 
+
+> k
+
+remains over the different representative policies π ∈ Πtk when following the different observations o ∈ ran( Ok) given the counts in ho,Π k ∈ ho,Π 
+
+for o, i.e., 
+
+h.ho,Π = {(πl, n l)}πl∈Πt−1
+
+> k
+
+with nl = X
+
+> π∈Πtk
+
+X 
+
+> o∈ran( Ok)
+
+ho,Π k (o) | π.o = πl
+
+During pruning, the operator eliminates weakly dominated representative poli-cies πk based on the following equation (solvable by a linear programme, see App. A.2): 
+
+f oralls ∈ ran( S), ht 
+
+> −i
+
+∈ Ht
+
+> −i
+
+∃πtl̸ =k ∈ Πtk : ¯Vk(s, π tk ⊕ ht
+
+> −i
+
+) ≤ ¯Vk(s, π tl ⊕ ht
+
+> −i
+
+)
+
+(14) Equation (14) ensures that, for each state and each counted policy of the other partitions, a representative policy is only pruned if there exists another one with equal or higher value. The Curious Case of Exploding DecPOMDPs 13 
+
+Next, we show that counted dynamic programming using Eqs. (13) and (14) is equivalent to dynamic programming using Eqs. (3) and (4), which is a culmi-nation of the formalisations and theorems so far. 
+
+Theorem 6. Using policy-counted dynamic programming on a policy-counted DecPOMDP ¯M is equivalent to using standard dynamic programming on a ground DecPOMDP M , in which Eqs. (5) and (7) hold. 
+
+The full proof can be found in App. B.6, where we show that each step of the dy-namic programming operator works equivalently in both the ground and counted models. Given the equivalence of the policy-counted and standard version of dy-namic programming, correctness of the policy-counted version follows directly from the correctness of the standard version. 
+
+Corollary 3. Policy-counted dynamic programming using Eqs. (13) and (14) is correct. 
+
+Next, we show that policy-counted dynamic programming depends polynomially on the number of agents assuming a fixed and small number of representative actions and observations and partitions as well as horizon. 
+
+Theorem 7. For a fixed number of partitions K, fixed representative action and observation spaces, and a fixed horizon τ , the runtime of policy-counted dynamic programming in a policy-counted DecPOMDP ¯M depends polynomially on the number of agents N .
+
+The full proof can be found in App. B.7, which analyzes the polynomial runtime of the backup, value calculation, and pruning steps. Appendix C shows the well-known DecTiger model [14] as ground, counting, and policy-counted DecPOMDPs to highlight the similarities and differences be-tween the models. In summary, policy-counted dynamic programming is able to use the compact encoding of policy-counted DecPOMDPs to generate a solution that is equivalent to the ground solution in time polynomial in N instead of exponential in N , assuming all other parameters to be fixed. As the DecTiger example shows, the pay-off only arises if N is sufficiently large, i.e., if the as-sumption of N ≪ K indeed holds. Otherwise the counting of policies introduces too much overhead. Future work is left to deal with the remaining exponent that can still become rather large. 
+
+## 6 Conclusion 
+
+This paper presents policy-counted DecPOMDPs, which exploit a partitioned agent set under certain structural assumptions to reduce the complexity from ex-ponential to polynomial in the number of agents, assuming all other parameters to be fixed. Specifically, we are able to use representative policies per partition, enabling counting how many agents follow which policy, which allows for a com-pact representation and considerably reduces the model’s size, computing cost, 14 N. N. Karabulut and T. Braun 
+
+and policy space, leading to tractability in agent numbers assuming a fixed num-ber of partitions, horizon, and representative action and observation spaces. Ad-ditionally, we present a policy-counted dynamic programming for policy-counted DecPOMDPs that updates policies and values as well as prunes policies directly at the partition level. As a consequence, policy-counted DecPOMDPs offer a lot of potential for large-scale applications such as nanoscale medical systems. In future research, we aim to further enhance scalability by working on policy encodings as well as applying lifting to large state spaces, to enable additional complexity reductions. Another idea is to look at approximations, considering that histograms are rarely needed in count steps of 1.
+
+## References 
+
+1. Braun, T., Gehrke, M., Lau, F., Möller, R.: Lifting in Multi-agent Systems under Uncertainty. In: UAI-22 Proc. of the 38th Conference on Uncertainty in Artificial Intelligence. pp. 1–8. AUAI Press (2022) 2. Carr, S., Jansen, N., Bharadwaj1, S., Spaan, M.T.J., Topcu, U.: Safe policies for factored partially observable stochastic games. In: RSS-21 Proc. of Robotics: Sci-ence and Systems XVII. pp. 1–11. RSS Foundation (2021) 3. Emery-Montemerlo, R., Gordon, G., Schneider, J., Thrun, S.: Approximate solu-tions for partially observable stochastic games with common payoffs. In: AAAMAS-04 Proc. of the 3rd International Joint Conference on Autonomous Agents and Multiagent Systems. pp. 136–143. IEEE (2004) 4. Hansen, E.A., Bernstein, D.S., Zilberstein, S.: Dynamic programming for partially observable stochastic games. In: AAAI-04 Proc. of the 19th National Conference on Artificial Intelligence. vol. 4, pp. 709–715 (2004) 5. Horák, K., Bošansk` y, B.: Solving partially observable stochastic games with public observations. In: Proc. of the AAAI conference on Artificial Intelligence. pp. 547– 552. AAAI Press (2019) 6. Horák, K., Bošansk` y, B., Kiekintveld, C., Kamhoua, C.: Compact Representation of Value Function in Partially Observable Stochastic Games. In: IJCAI-19 Proc. of the 28th International Joint Conference on Artificial Intelligence. pp. 350–356. IJCAI Organisation (2019) 7. Horák, K., Bošansk` y, B., Pěchouček, M.: Heuristic Search Value Iteration for One-sided Partially Observable Stochastic Games. In: AAAI-17 Proc. of the 31st AAAI Conference on Artificial Intelligence. pp. 558–564 (2017) 8. Karabulut, N.N., Braun, T.: Lifting partially observable stochastic games. In: Inter-national Conference on Scalable Uncertainty Management. pp. 201–216. Springer (2024) 9. Karabulut, N.N., Braun, T.: Counting agents in partially observable stochastic games. In: European Conference on Symbolic and Quantitative Approaches with Uncertainty. pp. 207–222. Springer (2025) 10. Koops, W., Jansen, N., Junges, S., Simao, T.D.: Recursive Small-step Multi-agent A* for Dec-POMDPs. In: IJCAI-23 Proceedings of the 32nd International Joint Conference on Artificial Intelligence. pp. 5402–5410. IJCAI Organization (2023) 11. Koops, W., Junges, S., Jansen, N.: Approximate Dec-POMDP Solving Using Multi-agent A*. In: IJCAI-24 Proceedings of the 33nd International Joint Conference on Artificial Intelligence. pp. 6743–6751. IJCAI Organization (2024) The Curious Case of Exploding DecPOMDPs 15 12. Kumar, A., Zilberstein, S.: Dynamic programming approximations for partially observable stochastic games. In: FLAIRS-09 Proc. of the 22nd International Florida Artificial Intelligence Research Society Conference. AAAI Press (2009) 13. Milch, B., Zettelmoyer, L.S., Kersting, K., Haimes, M., Kaelbling, L.P.: Lifted Probabilistic Inference with Counting Formulas. In: AAAI-08 Proc. of the 23rd AAAI Conference on Artificial Intelligence. pp. 1062–1068. AAAI Press (2008) 14. Nair, R., Tambe, M., Yokoo, M., Pynadath, D.V., Marsella, S.: Taming Decentral-ized POMDPs: Towards Efficient Policy Computation for Multiagent Settings. In: IJCAI-03 Proc. of the 18th International Joint Conference on Artificial Intelligence. pp. 705–711. IJCAI Organization (2003) 15. Niepert, M., Van den Broeck, G.: Tractability through Exchangeability: A New Perspective on Efficient Probabilistic Inference. In: AAAI-14 Proc. of the 28th AAAI Conference on Artificial Intelligence. pp. 2467–2475. AAAI Press (2014) 16. Oliehoek, F.A., Amato, C.: A Concise Introduction to Decentralised POMDPs. Springer (2016) 17. Oliehoek, F.A., Whiteson, S., Spaan, M.T.: Lossless Clustering of Histories in De-centralized POMDPs. In: AAMAS-09 Proceedings of the 8th International Con-ference on Autonomous Agents and Multiagent Systems. pp. 577–584. IFAAMAS (2009) 18. Poole, D.: First-order Probabilistic Inference. In: IJCAI-03 Proc. of the 18th In-ternational Joint Conference on Artificial Intelligence. pp. 985–991. IJCAI Orga-nization (2003) 19. Russell, S., Norvig, P.: Artificial Intelligence: A Modern Approach. Pearson (2021) 20. Seuken, S., Zilberstein, S.: Memory-Bounded Dynamic Programming for DEC-POMDPs. In: IJCAI-07 Proceedings of the 21st International Joint Conference on Artificial Intelligence. pp. 2009–2015. IJCAI Organization (2007) 21. Szer, D., Charpillet, F.: Point-based dynamic programming for dec-pomdps. In: AAAI. vol. 6, pp. 1233–1238 (2006) 22. Szer, D., Charpillet, F., Zilberstein, S.: MAA*: A Heuristic Search Algorithm for Solving Decentralized POMDPs. In: UAI-05 Proceedings of the 21st Conference on Uncertainty in Artificial Intelligence. pp. 576–583. ACM (2005) 23. Taghipour, N., Fierens, D., Davis, J., Blockeel, H.: Lifted Variable Elimination: Decoupling the Operators from the Constraint Language. Journal of Artificial In-telligence Research 47 (1), 393–439 (2013) 24. Tomášek, P., Horák, K., Aradhye, A., Bošansk` y, B., Chatterjee, K.: Solving par-tially observable stochastic shortest-path games. In: IJCAI-21 Proc. of the 30th International Joint Conference on Artificial Intelligence. pp. 4182–4189. IJCAI Or-ganisation (2021) 25. Vaidya, P.M.: Speeding-up Linear Programming Using Fast Matrix Multiplication. In: 30th Annual Symposium on Foundations of Computer Science. pp. 332–337. IEEE Computer Society (1989) 26. Wiggers, A.J., Oliehoek, F.A., Roijers, D.M.: Structure in the value function of two-player zero-sum games of incomplete information. In: ECAI-16 Proc. of the 22nd European Conference on Artificial Intelligence. pp. 1628–1629. IOS Press (2016) The Curious Case of Exploding DecPOMDPs: Containing the Fire through Policy Counting (Supplementary Material) 
+
+## A Linear Programmes 
+
+This section provides the linear programmes used during the pruning step in dynamic programming, which repeats the pruning condition from the main paper and then lists the linear programme. 
+
+A.1 Ground DecPOMDP 
+
+Formally, a policy πti,j is pruned if the following holds, 
+
+∀s ∈ ran( S), πt 
+
+> −i
+
+∈ Πt
+
+> −i
+
+∃πti,j ′ ∈ Πti : V ′ 
+
+> i
+
+(s, π ti,j ◦ πt
+
+> −i
+
+) ≤ V ′ 
+
+> i
+
+(s, π ti,j ′ ◦ πt
+
+> −i
+
+)
+
+which can be solved by solving the following linear programme (prune πti,j if 
+
+d < 0): variables: bi(s, π−i), d 
+
+maximise: d
+
+constraints: ∀πti,j ′ ∈ Πti
+
+X
+
+> s∈ran( S)
+
+X
+
+> π−i∈Πt
+> −i
+
+bi(s, π−i)Vi(s, π ti,j , πt
+
+> −i
+
+)
+
+− X
+
+> s∈ran( S)
+
+X
+
+> π−i∈Πt
+> −i
+
+bi(s, π−i)Vi(s, π ti,j ′ , πt
+
+> −i
+
+) − d ≤ 0
+
+X
+
+> s∈ran( S)
+
+X
+
+> π−i∈Πt
+> −i
+
+bi(s, π−i) = 1 , b i(s, π−i) > 0
+
+A.2 Policy-Counted DecPOMDP 
+
+Formally, a representative policy πtk is pruned if the following holds, which can still be solved using a linear program: 
+
+∀s ∈ ran( S), ht 
+
+> −i
+
+∈ Ht
+
+> −i
+
+∃πtl̸ =k ∈ Πtk : ¯V ′ 
+
+> k
+
+(s, π tk ⊕ ht
+
+> −i
+
+) ≤ ¯V ′ 
+
+> k
+
+(s, π tl ⊕ ht
+
+> −i
+
+),
+
+which can be solved by solving the following linear programme (prune πtk,l if 
+
+d < 0): variables: bk(s, h−i), d The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 17 
+
+maximise: d
+
+constraints: ∀πtk,l ′ ∈ Πtk
+
+X
+
+> s∈ran( S)
+
+X
+
+> h−i∈Ht
+> −i
+
+bk(s, h−i)Vk(s, π tk,l ⊕ ht
+
+> −i
+
+)
+
+− X
+
+> s∈ran( S)
+
+X
+
+> h−i∈Ht
+> −i
+
+bk(s, h−i)Vk(s, π tk,l ′ ⊕ ht
+
+> −i
+
+) − d ≤ 0
+
+X
+
+> s∈ran( S)
+
+X
+
+> h−i∈Ht
+> −i
+
+bk(s, h−i) = 1 , b k(s, h−i) > 0
+
+## B Full Proofs 
+
+B.1 Equivalence between a Ground DecPOMDP and a Counting DecPOMDP 
+
+This theorem shows equivalence between a ground DecPOMDP and a counting DecPOMDP based on Eqs. (5) and (7). 
+
+Theorem 1. A ground DecPOMDP M that meets Eqs. (5) and (7) is equivalent to a counting DecPOMDP ¯Mc.Proof. To convert a DecPOMDP M = ( I, S, A, O, T, R, Ω, τ ) into a counting DecPOMDP ¯Mc = ( ¯I, S, ¯Ac, ¯Oc, ¯T , ¯R, ¯Ω, τ ), we apply Eqs. (5) and (7). First, agents within the same partition share the same action and observation spaces, meaning that for any i, j ∈ Ik, Ai = Aj and Oi = Oj , which is provided by Eq. (5). For each partition Ik, we introduce the CRVs #Ik [Ak] and #Ik [Ok]
+
+for actions and observations, whose ranges are all histograms over the local action space ran( Ak) and observation space ran( Ok). To build the transition, sensor, and reward functions, based on Eq. (7), we replace (Ai)i∈Ik and (Oi)i∈Ik
+
+with CRVs #Ik [Ak] and #Ik [Ok] in the inputs of the transition, reward, and sensor function for each partition, with a histogram hk mapping to ρ for all permutations of a partition input ak or ok mapping to ρ for which h is the histogram representation. To convert a counting DecPOMDP into a ground DecPOMDP fulfilling Eqs. (5) and (7), we essentially reverse the steps above: The agent set I is the union of the partitions SKk=1 Ik. The action and observation sets are given by {Ak,i }i∈Ik and 
+
+{Ok,i }i∈Ik , fulfilling Eq. (5). In the transition, reward, and sensor function, the CRV inputs are replaced by the action and observation sets, with a histogram 
+
+h mapping to ρ being replaced by a set of mappings over all permutations of the values that agents can take according to the counts in h, all mapping to ρ,thereby leading to the functions fulfilling Eq. (7). 
+
+B.2 Full Proof for Theorem 2 
+
+We repeat Thm. 2 and then provide its proof. 18 N. N. Karabulut and T. Braun 
+
+Theorem 2. A ground DecPOMDP M that meets Eqs. (5) and (7) is equivalent to a counting DecPOMDP ¯M .Proof. First, we convert a DecPOMDP M = ( I, S, A, O, T, R, Ω, τ ), in which Eqs. (5) and (7) hold, into a counting DecPOMDP ¯M = ( ¯I, ¯S, ¯A, ¯O, ¯T , ¯R, Ω, τ ).Agents that share the same action and observation spaces, meaning Ai = Aj and 
+
+Oi = Oj for i, j ∈ I by Eq. (5), as well as exhibit symmetric behaviour as in Eq. (6) are grouped into a partition, storing for each partition a decision variable 
+
+Ak = Ai = Aj and an observation variable Ok = Oi = Oj . To construct the counted functions ¯T , ¯R, and ¯Ω based on Eq. (7), we replace (Ai)i∈Ik with a CRV 
+
+#Ik [Ak] in the inputs of the transition, reward, and sensor function for each partition. We do the same with the observation variables in the sensor function. For each function and each partition, we then construct from a mapping with a partition action ak (partition observation ok) mapping to an outcome ρ anew mapping with a histogram hk replacing ak (ok), counting how often each 
+
+a ∈ ran( Ak) (o ∈ ran( Ok)) occurs in ak (ok) for the counts in hk, and discard all mappings with permutations of ak (ok). Second, we convert a counting DecPOMDP into a DecPOMDP M that meets Eqs. (5) and (7) by setting I = S 
+
+> k
+
+Ik, Ai = Ak and Oi = Ok for all i ∈ Ik in each partition Ik, making M fulfil Eq. (5), and then essentially expanding the counted functions into their ground versions, i.e., replacing each CRV #Ik [Vk],
+
+V ∈ { A, O }, with a set of variables Vk, 1, . . . , V k,n k as inputs and mapping the different inputs v to an outcome ρ, whenever the histogram representation of v
+
+maps to ρ, which makes M meet Eq. (7). 
+
+B.3 Full Proof of Theorem 3 
+
+We repeat Thm. 3 and then provide its proof. 
+
+Theorem 3. For a fixed number of partitions K, fixed action and observation spaces, and a fixed horizon τ , the model complexity of a counting DecPOMDP 
+
+¯Mc is polynomial in N .Proof. The histogram space of a CRV for partition Ik, k ∈ { 1, . . . , K } of size nk
+
+with m possible values has size  nk +m−1
+
+> m−1
+
+ ≤ nmk [13]. As we assume K is fixed and K ≪ N , nk and N have the same order of magnitude, i.e., nk ≤ N . As such, due to the range sizes of their inputs, the sizes of the functions ¯T , ¯R and 
+
+¯Ω lie in O(s2N Ka ), O(sN Ka ), and O(sN Ko ), respectively, with s = |ran( ¯S)|,
+
+a = max k |ran( Ak)|, and o = max k |ran( Ok)|, depending polynomially on N .
+
+B.4 Full Proof of Theorem 4 
+
+We repeat Thm. 4 and then provide its proof. 
+
+Theorem 4. The maximum expected utility for a ground DecPOMDP M that meets Eqs. (5) and (7) is equal to the maximum expected utility of the corre-sponding policy-counted DecPOMDP ¯M . That is, M EU (M ) = M EU ( ¯M ).The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 19 
+
+Proof. Let ΠM be set of possible joint policies in the ground model M . In the policy-counted model ¯M , we convert any ground joint policy π = ( π1, ..., π N )
+
+into a joint counted policy of histograms hΠ = ( h1, ..., h K ), where each hk counts the number of agents in partition Ik assigned to each representative policy in 
+
+Πk. To establish value equivalence, consider any ground policy π and its corre-sponding policy histogram hΠ and an empty joint (counted observation) at the start. Based on Thm. 2, the reward, transition, and observation functions return the same values between the two models given equivalent inputs. As a result, the immediate rewards in Eqs. (2) and (10) are identical, i.e., R(s, a) = ¯R(s, ha),with the joint action in Eq. (2) and the joint counted action in Eq. (10) be-ing equivalent, since the same policies are followed between the ground and the policy-counted version and thus, the actions in the roots are identical, adding up to the counts in the counted joint action. The following sum over states is iden-tical in both equations with the transition functions returning the same values. The sum over joint (counted) observations is equivalent, since every ground joint observation can be translated into a joint counted observation, with the counted version combining those ground joint observations with the same counted repre-sentation into one summand and multiplying that summand with the number of instances using the multinomial coefficient [23]. The summand value is identical, since the sensor functions return the same value for equivalent inputs. As such, the calculations at the end of the first step are equivalent. Subsequent utility calculations have as the observation history an equivalent in-put as just argued. Thus, with the same arguments as before, the further joint (counted) actions are equivalent, with the action histogram being a counted rep-resentation of the ground joint action, which also holds for further joint (counted) observations. Therefore, the expected utilities UM (π) and U ¯M (hΠ ) are identi-cal. As this can be done for every ground policy with its corresponding policy histogram, the counted policy space HΠ and the ground policy space ΠM yield the same maximum expected utility, that is M EU (M ) = M EU ( ¯M ).
+
+B.5 Full Proof of Theorem 5 
+
+We repeat Thm. 5 and then provide its proof. 
+
+Theorem 5. For a fixed number of partitions K, fixed action and observation spaces, and a fixed horizon τ , the cost of evaluating a joint counted policy and the size of the overall joint counted policy space in a policy-counted DecPOMDP depend polynomially on the number of agents N .Proof. For the cost of evaluating a joint counted policy, consider Eq. (10) with a sum over states, which is of size s = |ran( S)|, and a sum over joint counted observations. With a = max k |ran( Ak)|, o = max k |ran (Ok)|, the space of joint counted observations is structured for each partition by the number of represen-tative policies p and the number of representative observation histories h, which 20 N. N. Karabulut and T. Braun 
+
+are given by [16] 
+
+p = |Πk| = a oτ −1
+
+> o−1
+
+h = |P 0: τ,o k | = oτ
+
+Each representative history can have up to nk ≤ N agents following that par-ticular history with K ≪ N , which are distributed onto o possible observations. Thus, the number of histograms per partition is given by 
+
+H =
+
+N + o − 1
+
+o − 1
+
+
+
+≤ N o
+
+Therefore, the size of the joint counted observation space is given by the size of the cross product of K partitions, p representative policies, and h representative histories, i.e., HKph , which is capped by 
+
+HKph ≤ (N o)Ka oτ
+
+> oτ
+
+= N Kao 2τ +1 
+
+and as such, depends polynomially on N . The size of the joint counting policy space is capped by 
+
+> K
+
+Y
+
+> k=1
+
+nk + p − 1
+
+p − 1
+
+
+
+≤ N Kp = N Ka oτ −1
+
+> o−1
+
+and thereby, also depends polynomially on N .
+
+B.6 Full Proof of Theorem 6 
+
+We repeat Thm. 6 and then provide its proof. 
+
+Theorem 6. Using policy-counted dynamic programming on a policy-counted DecPOMDP ¯M is equivalent to using standard dynamic programming on a ground DecPOMDP M , in which Eqs. (5) and (7) hold. Proof. We show equivalence by considering the different steps of the dynamic programming operator. 
+
+Exhaustive backup: Given Eq. (5), the policies for each agent in a partition Ik
+
+are identical, meaning that the exhaustive backup can be performed using rep-resentative policies for each partition. 
+
+Value computation: Given that M EU ( ¯M ) = M EU (M ) by Thm. 4 and as such 
+
+U hΠ 
+
+> ¯M
+
+= U π 
+
+> M
+
+for equivalent policies hΠ and π, ¯V ′ 
+
+> k
+
+= V ′ 
+
+> i
+
+for all i ∈ Ik as the value computation is a rewriting of the utility computation, meaning that the value calculations can be performed for counted partition policies at each partition. 
+
+Pruning: Since ¯V ′ 
+
+> k
+
+= V ′ 
+
+> i
+
+for all i ∈ Ik, Eq. (4) for pruning is identical for all 
+
+i ∈ Ik given a representative policy πk ∈ Πk, meaning that πk can be checked for pruning once per partition and thus, pruning can be performed for represen-tative policies per partition. Given the equivalence of the three steps, we can conclude that the overall pro-cedure yields an equivalent result. The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 21 
+
+B.7 Full Proof of Theorem 7 
+
+We repeat Thm. 7 and then provide its proof. 
+
+Theorem 7. For a fixed number of partitions K, fixed action and observation spaces, and a fixed horizon τ , the runtime of policy-counted dynamic program-ming in a policy-counted DecPOMDP ¯M depends polynomially on the number of agents N .Proof. Again, we consider the three steps of the dynamic programming opera-tor to show polynomial dependence on the number of agents N , which reuses definitions of Thm. 3. 
+
+Exhaustive backup: With a = max k |ran( Ak)|, o = max k |ran (Ok)|, the number of policies to generate per partition is given by p = a oτ −1 
+
+> o−1
+
+[16], meaning Kp over all partitions, which is independent of N .
+
+Value calculation: Eq. (13) depends polynomially on N since the sum over joint counted observations depends polynomially on N . In contrast to the recursive calculation of U hΠ 
+
+> ¯M
+
+, we do not need to consider representative observation his-tories for t > 0, meaning that the size of the space of histograms is capped by 
+
+(N o)Kp = N Koa (oτ −1)  
+
+> o−1
+
+, which is polynomial in N .
+
+Pruning: Solving the pruning part can be done using a linear programme, which can be solved in time polynomial w.r.t. the number of variables and constraints [25], whose numbers again depends polynomially on N , since the number of vari-ables and constraints depends on the counted policy space HΠ , which depends polynomially on N .Given that each step depends polynomially on N , the overall runtime depends polynomially on N .
+
+## C DecTiger Example 
+
+We provide the different model definitions, look at model and worst-case policy space sizes, and consider the differences when applying the dynamic program-ming operator. 
+
+C.1 Model Definition 
+
+We use the specification of the DecTiger benchmark from the MADP tool box. 
+
+> 1
+
+. Listing 1 shows the original DecTiger version in the MADP input format. The DecPOMDP model reads as follows: 
+
+– I = {agent 1, agent 2},
+
+– S, ran( S) = {tiger-left , tiger-right } = {tl, tr },
+
+– A = {Ai}i∈I , ∀i ∈ I : ran( Ai) = {listen , open-left , open-right } = {li, ol, or },and   
+
+> 1https://github.com/MADPToolbox/MADP/blob/master/problems/dectiger. dpomdp 22 N. N. Karabulut and T. Braun
+
+– O = {Oi}i∈I , ∀i ∈ I : ran( Oi) = {hear-left , hear-right } = {hl, hr }.with T , R, and Ω (= O in Listing 1) in tabular notation in full below (lines are reordered compared to the listing to match the order of the inputs in the definitions). 
+
+S A 1 A2 Ttl Ttr 
+
+tl li li 1 0
+
+tl li ol 0.5 0 .5
+
+tl li or 0.5 0 .5
+
+tl ol li 0.5 0 .5
+
+tl ol ol 0.5 0 .5
+
+tl ol or 0.5 0 .5
+
+tl or li 0.5 0 .5
+
+tl or ol 0.5 0 .5
+
+tl or or 0.5 0 .5
+
+tr li li 0 1
+
+tr li ol 0.5 0 .5
+
+tr li or 0.5 0 .5
+
+tr ol li 0.5 0 .5
+
+tr ol ol 0.5 0 .5
+
+tr ol or 0.5 0 .5
+
+tr or li 0.5 0 .5
+
+tr or ol 0.5 0 .5
+
+tr or or 0.5 0 .5
+
+S A 1 A2 Rtl li li −2
+
+tl li ol −101 
+
+tl li or 9
+
+tl ol li −101 
+
+tl ol ol −50 
+
+tl ol or −100 
+
+tl or li 9
+
+tl or ol −100 
+
+tl or or 20 
+
+tr li li −2
+
+tr li ol 9
+
+tr li or −101 
+
+tr ol li 9
+
+tr ol ol 20 
+
+tr ol or −100 
+
+tr or li −101 
+
+tr or ol −100 
+
+tr or or −50 
+
+S A 1 A2 Ωhl,hl Ωhr,hl Ωhl,hr Ωhr,hr 
+
+tl li li 0.7225 0 .1275 0 .1275 0 .0225 
+
+tl li ol 0.25 0.25 0.25 0.25 
+
+tl li or 0.25 0.25 0.25 0.25 
+
+tl ol li 0.25 0.25 0.25 0.25 
+
+tl ol ol 0.25 0.25 0.25 0.25 
+
+tl ol or 0.25 0.25 0.25 0.25 
+
+tl or li 0.25 0.25 0.25 0.25 
+
+tl or ol 0.25 0.25 0.25 0.25 
+
+tl or or 0.25 0.25 0.25 0.25 
+
+tr li li 0.7225 0 .1275 0 .1275 0 .0225 
+
+tr li ol 0.25 0.25 0.25 0.25 
+
+tr li or 0.25 0.25 0.25 0.25 
+
+tr ol li 0.25 0.25 0.25 0.25 
+
+tr ol ol 0.25 0.25 0.25 0.25 
+
+tr ol or 0.25 0.25 0.25 0.25 
+
+tr or li 0.25 0.25 0.25 0.25 
+
+tr or ol 0.25 0.25 0.25 0.25 
+
+tr or or 0.25 0.25 0.25 0.25 
+
+with Ts′ = T (s′, s, a 1, a 2), s ′ ∈ { tl, tr } and Ωo1,o 2 = Ω(( o1, o 2), s, a 1, a 2), o1, o 2 ∈{hl, hr }. The transition function only states that as long as both agents only listen, the state does not change (identity). When at least one agent opens a door, the game basically restarts with the new state being set according to a uniform distribution. It is basically a way of keeping the game infinite by resetting the state to an arbitrary one whenever the agents end the game by opening a door (to either lose—tiger, or win—gold). One could argue that opening a door only ends the game and might not necessarily imply a restart. In that case, one would keeping the state as is in all cases ( (1 , 0) distribution for all tl lines, (0 , 1) 
+
+distribution for all tr lines) and re-spawn the game with an arbitrary starting state, sampled from a (0 .5, 0.5) distribution, for do-overs. The DecTiger model has the same action and observation sets for both agents and exhibits a counting symmetry. Thus, it can be rewritten into a counting model (Def. 3) with K = 1 . We index the one partition with c.
+
+– ¯I = Ic = {agent 1, agent 2},
+
+– S = {tl, tr },
+
+– ¯Ac = {#Ic [Ac]}, where the local action range is ran( Ac) = ran( Ai) = 
+
+{li, ol, or }, Ai from the ground DecPOMDP definition, 
+
+– ¯T (S′, S, ¯Ac) = P (S′ | S, ¯Ac),The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 23 
+
+– ¯R(S, ¯Ac),
+
+– ¯Oc = {#Ik [Ok]}, where the local observation range is ran( O) = {hl, hr }.
+
+– ¯Ω( ¯Oc, S ) = P ( ¯Oc | S)
+
+with ¯T , ¯R, and ¯Ω following after the specification of the policy-counted DecPOOMDP version. In a policy-counted DecPOMDP (Def. 5), the action and observation vari-ables are plain variables again. The CRVs only occur within the transition, re-ward, and sensor functions. Specifically, for the policy-counted DecTiger exam-ple, the model is defined as follows: 
+
+– ¯I = Ic = {agent 1, agent 2},
+
+– S = {tl, tr },
+
+– ¯A = {Ac}, ran( Ac) = ran( Ai) = {li, ol, or },
+
+– ¯T (S′, S, ¯Ac) = P (S′ | S, ¯Ac),
+
+– ¯R(S, ¯Ac),
+
+– ¯O = {Ok}Kk=1 , ran( Oc) = {hl, hr }.
+
+– ¯Ω( ¯Oc, S ) = P ( ¯Oc | S)
+
+with ¯Ac and ¯Oc defined as for the counting DecPOMDP above. The functions ¯T , ¯R, and ¯Ω are given below in tabular notation with #A short for #Ik [Ak] (histogram positions: [li, ol, or ]) and ¯Ωh for Ω(S, #A, #Ik [Ok] = h):
+
+S #A ¯Ttl ¯Ttr 
+
+tl [2 , 0, 0] 1 .0 0 .0
+
+tl [1 , 1, 0] 0 .5 0 .5
+
+tl [1 , 0, 1] 0 .5 0 .5
+
+tl [0 , 1, 1] 0 .5 0 .5
+
+tl [0 , 2, 0] 0 .5 0 .5
+
+tl [0 , 0, 2] 0 .5 0 .5
+
+tr [2 , 0, 0] 0 .0 1 .0
+
+tr [1 , 1, 0] 0 .5 0 .5
+
+tr [1 , 0, 1] 0 .5 0 .5
+
+tr [0 , 1, 1] 0 .5 0 .5
+
+tr [0 , 2, 0] 0 .5 0 .5
+
+tr [0 , 0, 2] 0 .5 0 .5
+
+S #A ¯Rtl [2 , 0, 0] −2
+
+tl [1 , 1, 0] −101 
+
+tl [0 , 2, 0] −50 
+
+tl [0 , 1, 1] −100 
+
+tl [0 , 0, 2] 20 
+
+tl [1 , 0, 1] 9
+
+tr [2 , 0, 0] −2
+
+tr [1 , 1, 0] 9
+
+tr [0 , 2, 0] 20 
+
+tr [0 , 1, 1] −100 
+
+tr [0 , 0, 2] −50 
+
+tr [1 , 0, 1] −101 
+
+S #A ¯Ω[2 ,0] ¯Ω[1 ,1] ¯Ω[0 ,2] 
+
+tl [2 , 0, 0] 0 .7225 0 .1275 0 .0225 
+
+tl [1 , 1, 0] 0 .25 0.25 0.25 
+
+tl [0 , 2, 0] 0 .25 0.25 0.25 
+
+tl [0 , 1, 1] 0 .25 0.25 0.25 
+
+tl [0 , 0, 2] 0 .25 0.25 0.25 
+
+tl [1 , 0, 1] 0 .25 0.25 0.25 
+
+tr [2 , 0, 0] 0 .7225 0 .1275 0 .0225 
+
+tr [1 , 1, 0] 0 .25 0.25 0.25 
+
+tr [1 , 0, 1] 0 .25 0.25 0.25 
+
+tr [0 , 2, 0] 0 .25 0.25 0.25 
+
+tr [0 , 1, 1] 0 .25 0.25 0.25 
+
+tr [0 , 0, 2] 0 .25 0.25 0.25 
+
+Note that the rows to not add up to one because the histogram [1 , 1] in ¯Ω stands for two joint observations, (hl, hr ) and (hr, hl ), meaning that the probability for 
+
+¯Ω[1 ,1] has to be counted twice for the probability distribution to add up to 1. In general, a multinomial coefficient provides the number of inputs represented by a histogram, i.e., nk!/Q 
+
+> l
+
+nl!.Before moving on to model and policy space sizes, we list the DecTiger spec-ification in the MADP toolbox. 24 N. N. Karabulut and T. Braun 
+
+Listing 1 DecTiger specification in the MADP toolbox (without the comments from the source) 
+
+a g e n t s : 2d i s c o u n t : 1v a l u e s : reward s t a t e s : t i g e r − l e f t t i g e r −r i g h t s t a r t : uniform a c t i o n s : l i s t e n open− l e f t open−r i g h t l i s t e n open− l e f t open−r i g h t o b s e r v a t i o n s : hear− l e f t hear−r i g h t hear− l e f t hear−r i g h t # T r a n s i t i o n p r o b a b i l i t i e s T : ∗ : uniform T : l i s t e n l i s t e n : i d e n t i t y # O b s e r v a t i o n p r o b a b i l i t i e s : <2 a c t i o n s > : <s t a t e > : <2 o b s e r v a t i o n s > : p r o b a b i l i t y O: ∗ : uniform O: l i s t e n l i s t e n : t i g e r − l e f t : hear− l e f t hear− l e f t : 0 . 7 2 2 5 O: l i s t e n l i s t e n : t i g e r − l e f t : hear− l e f t hear−r i g h t : 0 . 1 2 7 5 O: l i s t e n l i s t e n : t i g e r − l e f t : hear−r i g h t hear− l e f t : 0 . 1 2 7 5 O: l i s t e n l i s t e n : t i g e r − l e f t : hear−r i g h t hear−r i g h t : 0 . 0 2 2 5 O: l i s t e n l i s t e n : t i g e r −r i g h t : hear− l e f t hear− l e f t : 0 . 7 2 2 5 O: l i s t e n l i s t e n : t i g e r −r i g h t : hear− l e f t hear−r i g h t : 0 . 1 2 7 5 O: l i s t e n l i s t e n : t i g e r −r i g h t : hear−r i g h t hear− l e f t : 0 . 1 2 7 5 O: l i s t e n l i s t e n : t i g e r −r i g h t : hear−r i g h t hear−r i g h t :0 . 0 2 2 5 # Rewards : <2 a c t i o n s > : <s t a t e > : ∗ : ∗ : reward R: l i s t e n l i s t e n : ∗ : ∗ : ∗ : −2 R: open− l e f t open− l e f t : t i g e r − l e f t : ∗ : ∗ : −50 R: open−r i g h t open−r i g h t : t i g e r −r i g h t : ∗ : ∗ : −50 R: open− l e f t open− l e f t : t i g e r −r i g h t : ∗ : ∗ : 20 R: open−r i g h t open−r i g h t : t i g e r − l e f t : ∗ : ∗ : 20 R: open− l e f t open−r i g h t : t i g e r − l e f t : ∗ : ∗ : −100 R: open− l e f t open−r i g h t : t i g e r −r i g h t : ∗ : ∗ : −100 R: open−r i g h t open− l e f t : t i g e r − l e f t : ∗ : ∗ : −100 R: open−r i g h t open− l e f t : t i g e r −r i g h t : ∗ : ∗ : −100 R: open− l e f t l i s t e n : t i g e r − l e f t : ∗ : ∗ : −101 R: l i s t e n open−r i g h t : t i g e r −r i g h t : ∗ : ∗ : −101 R: l i s t e n open− l e f t : t i g e r − l e f t : ∗ : ∗ : −101 R: open−r i g h t l i s t e n : t i g e r −r i g h t : ∗ : ∗ : −101 R: l i s t e n open−r i g h t : t i g e r − l e f t : ∗ : ∗ : 9R: l i s t e n open− l e f t : t i g e r −r i g h t : ∗ : ∗ : 9R: open−r i g h t l i s t e n : t i g e r − l e f t : ∗ : ∗ : 9R: open− l e f t l i s t e n : t i g e r −r i g h t : ∗ : ∗ : 9The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 25 
+
+C.2 Model and Policy Space Sizes 
+
+The following table characterises the ground, counting, and policy-counted model 
+
+M , ¯Mc, ¯M regarding different parameters: 
+
+– Number of agents: N , number of partitions: K, horizon τ
+
+– State size: s
+
+– Size of a local / partition action: a, that is |ran( Ai)|, |ran(# I[Ac]) |, |ran( Ac)|,respectively 
+
+– Size of the joint (counted) action: a
+
+– Size of a local / partition observation: o, that is |ran( Oi)|, |ran(# I[Oc]) |,
+
+|ran( Oc)|, respectively 
+
+– Size of the joint (counted) action: o
+
+– Size of local / partition policy space per state: p, i.e., local policy π over 
+
+Ai, O i, partition policy over #I[Ac]) , #I[Oc]) , counted policy over represen-tative policies over Ak, O k
+
+– Size of the joint (counted) policy space per state: p
+
+– Size of the transition, reward, and sensor functions by range sizes of the inputs: T , R, Ω
+
+M ¯Mc ¯Ms 2 2 2
+
+a 3  N +3 −13−1
+
+ =  N +2 2
+
+ 3
+
+a 3N  N +2 2
+
+K  N +2 2
+
+K
+
+o 2  N +2 −12−1
+
+ =  N +1 1
+
+ 2
+
+o 2N  N +1 1
+
+K  N +1 1
+
+K
+
+p 3 2τ −12−1
+
+ N +2 2
+
+ (N +1 1 )τ −1
+
+(N +1 1 )−1 N + 3 2τ 
+
+> 2−1
+
+− 13 2τ 
+
+> 2−1
+
+− 1
+
+!
+
+p 3N 2τ −12−1
+
+ N +2 2
+
+K (N +1 1 )τ −1
+
+(N +1 1 )−1 N + 3 2τ 
+
+> 2−1
+
+− 13 2τ 
+
+> 2−1
+
+− 1
+
+!K
+
+T 2 · 2 · 3N 2 · 2 ·  N +2 2
+
+K 2 · 2 ·  N +2 2
+
+K
+
+R 2 · 3N 2 ·  N +2 2
+
+K 2 ·  N +2 2
+
+K
+
+Ω 2 · 2N 2 ·  N +1 1
+
+K 2 ·  N +1 1
+
+K26 N. N. Karabulut and T. Braun 
+
+C.3 Dynamic Programming 
+
+We consider the three steps of dynamic programming (backup, value calculation, pruning) for the levels t = 0 and t = 1 for the three versions of the DecTiger example. 
+
+Level t = 0 
+
+Backup: The operator for the ground version builds three policies for each of its two agents, each policy having a single (root) node for one of the actions 
+
+li, ol, or , building six policies overall. A counting programming operator for the counting version would build six policies for its one partition, each with a sin-gle (root) node for one of the action histograms [2 , 0, 0] , [1 , 1, 0] , [1 , 0, 1] , [0 , 1, 1] ,
+
+[0 , 2, 0] , [0 , 0, 2] . The counted programming operator for the policy-counted ver-sion builds three representative policies for its one partition, each with a single (root) node for one of the actions li, ol, or . With two available agents, there are six counted policies over the three representative ones: [2 , 0, 0] , [1 , 1, 0] , [1 , 0, 1] ,
+
+[0 , 1, 1] , [0 , 2, 0] , [0 , 0, 2] .
+
+Value Computation: For the ground version, the operator calculates the values for each of its two agents for each of its three policies. For each policy, the computation has to be performed for each state tl, tr and each of the other agent’s three policies. For the counting version, the operator calculates the values for its 
+
+one partition for each of its six policies. For each policy, the computation has to be performed for each state tl, tr . For the policy-counted version, the operator calculates the values for its one partition for each of its six counted policies. For each policy, the computation has to be performed for each state tl, tr .
+
+Pruning: In the ground version, the operator checks for each of the two agents, whether one of its three policies is (weakly) dominated by one of the other two policies for each state tl, tr and each of the three policies of the other agent (does not need to be the same policy over all states and policies of the other agent), until there are no more policies to prune. In the counting version, the operator would check for its one partition, whether any of its six policies is (weakly) dominated by one of the other five policies for each state tl, tr , until there are no more policies to prune. In the policy-counted version, the operator checks for its 
+
+one partition, whether any of its three representative policies is dominated by one of the other two policies for each state tl, tr and each of the other counted policies over the remaining partition, which contains only one agent, i.e., [1 , 0, 0] ,
+
+[0 , 1, 0] , [0 , 0, 1] (that is just the three representative policies), until there are no more policies to prune. 
+
+Comment: The difference between the counting and policy-counted versions is not as pronounced at this level, with the ground version also working within the same order of magnitude. The Curious Case of Exploding DecPOMDPs (Supp. Mat.) 27 
+
+Level t = 1 
+
+Backup: With no policies pruned, the operator for the ground version builds for its two agent each 27 policies out of its previous three policies and two possible observations hl, hr , with each policy having a root node and two children, one for each observation. The actions in the nodes are each possible combination of 
+
+li, ol, or . With no policies pruned, the operator for the counting version would build for its one partition 216 policies out of its previous six policies and three possible counted observations [0 , 2] , [1 , 1] , [2 , 0] . The policies would have a root node and three children, one for each possible histogram, with the nodes con-taining each possible combination of the six action histograms. The operator for the policy-counted version builds the same 27 (representative) policies out of its previous three representative policies and two possible observations hl, hr that the ground version has. With two available agents, there are then 378 counted policies. 
+
+Value Computation: For the ground version, the operator performs the same calculations outlined for level t = 0 for its 27 policies for each combination of state tl, tr and policy of the other agent ( 27 as well) for each agent. For the counting version, the operator calculates the values for its one partition for each of its 216 policies for each state tl, tr . For the policy-counted version, the operator calculates the values for its one partition for each of the 378 counted policies. For each policy, the computation has to be performed for each state tl, tr .
+
+Pruning: Pruning again follows the same procedure as outlined above, for two agents and each of their 27 policies in each state and for each of the other agent’s policies in the ground version. In the counting version, the 1296 policies of its one partition get checked for each state tl, tr . In the policy-counted version, the 
+
+27 representative policies of its one partition are checked for each state and each counted policy of the remaining partition, i.e., the 27 representative policies. 
+
+Comment: This numerical example illustrates impressively that policy counting only pays off if the number of agents is large or at least outweighs the number of representative policies. That is the number of agents should at least be an order larger than the number of representative actions and observations available.
