@@ -6,44 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-25
-- 运行时间：2026-08-25 19:22:22 UTC
+- 最新运行日期：2026-08-26
+- 运行时间：2026-08-26 22:10:05 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：4
-- 速读区：4
+- 本次总论文数：4
+- 精读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读4篇、速读4篇，聚焦视觉Transformer高效检测适配与多智能体系统优化；最值得关注的是9.0分的无标签Softmax-to-Linear视觉检测适配，以及8.0分的多智能体不确定性量化方法；建议普通读者优先了解这两项，后续可延伸探索多智能体自动优化与推理诊断方向。
-- 详情：[/202608/25/README](/202608/25/README)
+今日精读1篇、速读3篇，聚焦多智能体网络协作与去中心化决策。  
+最值得看的是《Test-Time Collaborative Classification over Multi-Agent Networks》（8.0），以及两篇7.0分的去中心化协调与Top-K识别代价研究。  
+建议普通读者优先从多智能体协作分类切入，再对比去中心化方法的性能与成本权衡。
+- 详情：[/202608/26/README](/202608/26/README)
 
 ### 精读区论文标签
-1. [DiD It in 87 Minutes: A Label-Free Softmax-to-Linear Adaptation of Vision Transformers for Object Detection](/202608/25/2608.22368v1-did-it-in-87-minutes-a-label-free-softmax-to-linear-adaptation-of-vision-transformers-for-object-detection)  
-   标签：评分：9.0/10、query:ma-la
-   evidence：将Softmax注意力ViT转换为线性注意力用于目标检测
-2. [PropUQ-MAS: Propagation-Aware Uncertainty Quantification for LLM Multi-Agent Systems](/202608/25/2608.22130v1-propuq-mas-propagation-aware-uncertainty-quantification-for-llm-multi-agent-systems)  
+1. [Test-Time Collaborative Classification over Multi-Agent Networks](/202608/26/2608.24787v1-test-time-collaborative-classification-over-multi-agent-networks)  
    标签：评分：8.0/10、query:ma-la
-   evidence：多智能体系统通信及智能体间不确定性传播
-3. [The Collaboration Tax: How Much LLM Multi-Agent Systems Pay to Coordinate](/202608/25/2608.22152v1-the-collaboration-tax-how-much-llm-multi-agent-systems-pay-to-coordinate)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：量化协作型LLM多智能体系统中的协调成本
-4. [The Interaction Tax: When Communication Erases Diversity in Multi-Agent Teams](/202608/25/2608.23541v1-the-interaction-tax-when-communication-erases-diversity-in-multi-agent-teams)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：通信对多智能体团队多样性的影响
+   evidence：通过分布式协议交换局部决策统计实现多智能体协作分类，直接涉及多智能体通信
 
 ### 速读区论文标签
-1. [OptiMAS: Automatically Optimize Multi-Agent System](/202608/25/2608.21918v1-optimas-automatically-optimize-multi-agent-system)  
+1. [Opinion-Guided Layered Strategies for Decentralized Coordination](/202608/26/2608.22104v1-opinion-guided-layered-strategies-for-decentralized-coordination)  
    标签：评分：7.0/10、query:ma-la
-   evidence：利用文本交互轨迹对多智能体系统进行持续优化
-2. [Spine-Branch Coordination for Multi-agent Computer Use](/202608/25/2608.22077v1-spine-branch-coordination-for-multi-agent-computer-use)  
+   evidence：针对多智能体去中心化协调问题，提出意见引导策略，利用非线性意见动态应对多种联合行为
+2. [The Price of Decentralization in Top-$K$ Arm Identification](/202608/26/2608.22120v1-the-price-of-decentralization-in-top-k-arm-identification)  
    标签：评分：7.0/10、query:ma-la
-   evidence：基于主干-分支图的多智能体计算机使用协调
-3. [From Diagnosis to Redesign: Using Quantitative Ethnography to Improve Multi-Agent LLM Reasoning](/202608/25/2608.22566v1-from-diagnosis-to-redesign-using-quantitative-ethnography-to-improve-multi-agent-llm-reasoning)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：通过话语分析研究多智能体交互动态
-4. [Artificial Empathy: Towards a Framework for Unsupervised Agency Detection and Policy Reconstruction](/202608/25/2608.23030v1-artificial-empathy-towards-a-framework-for-unsupervised-agency-detection-and-policy-reconstruction)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：从观察中无监督地识别并建模其他智能体
+   evidence：多智能体协作与去中心化交互
+3. [Social Discounting Enables Fast and Reliable Collective Escape](/202608/26/biorxiv-10-64898-2026-08-14-744984-v1-social-discounting-enables-fast-and-reliable-collective-escape)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：将集体逃跑建模为多智能体证据累积，同伴的飞逃与静止影响群体决策，属于交互动态研究
 
 
 <div class="dpr-home-promo-card">

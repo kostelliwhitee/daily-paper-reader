@@ -1,0 +1,5316 @@
+Title: Test-Time Collaborative Classification over Multi-Agent Networks
+
+URL Source: https://arxiv.org/pdf/2608.24787v1
+
+Published Time: Wed, 26 Aug 2026 01:25:34 GMT
+
+Number of Pages: 39
+
+Markdown Content:
+> 1
+
+# Test-Time Collaborative Classification over Multi-Agent Networks 
+
+Ping Hu, Member, IEEE, Mert Kayaalp, Member, IEEE and Ali H. Sayed, Fellow, IEEE 
+
+Abstract —The increasing heterogeneity of multi-agent systems poses significant challenges for jointly training a global model across agents. At the same time, cooperative inference between agents has long been recognized as a powerful mechanism for distributed decision making over networks. Motivated by these observations, we propose a collaboration framework for distributed binary classification over multi-agent networks, where a set of independently trained agents, potentially differing in architecture, feature space, or modality, coordinate their actions during test time to form collective predictions. This coordination is achieved by exchanging local decision statistics through a distributed learning protocol. We develop a theoretical and experimental study of this independent training and cooperative inference paradigm, and examine its performance under differ-ent communication budgets and distributed learning rules. We establish classification error guarantees under sufficient, finite-round, and finite-precision communication, together with PAC-style generalization bounds. These results capture the influence of model heterogeneity, network topology, combination policy, and communication constraints on prediction accuracy. Taken together with the experimental results, they reveal both the price of independent training and the benefit of collective prediction for the proposed distributed decision making framework with models learned from data. 
+
+Index Terms —Distributed learning and inference, collective intelligence, classification, probability of error, ensemble learning 
+
+I. I NTRODUCTION 
+
+# DISTRIBUTED learning and inference is a key paradigm for large-scale and distributed systems, where data is generated and processed across multiple agents. 1 Within this context, two major lines of research have emerged: distributed inference , extensively studied in the statistics, signal process-ing, and control communities [1]–[3], and distributed machine learning , primarily advanced within the machine learning (ML) and data science communities [4], [5]. In distributed inference, a collection of agents is connected through a communication network. Each agent owns a family of statistical models that describes the distribution of its obser-vations under a common, shared latent variable (e.g., a hidden 
+
+Ping Hu and Ali H. Sayed are with the School of Engineering, ´Ecole Polytechnique F´ ed´ erale de Lausanne (EPFL), 1015 Lausanne, Switzerland (email: ping.hu@epfl.ch; ali.sayed@epfl.ch). Mert Kayaalp is now with the DTI, SUPSI, Dalle Molle Institute for Artificial Intelligence (IDSIA USI-SUPSI), 6962 Lugano, Switzerland, where he is affiliated with the UBS-IDSIA AI Lab (email: mert.kayaalp@idsia.ch). This work was done while he was a Ph.D. student and Post-doc at the Adaptive Systems Laboratory at EPFL. Mert Kayaalp’s work was supported by UBS Switzerland AG and its affiliates through the UBS-IDSIA AI Lab. A preliminary version of this work was presented at the Algorithmic Collective Action Workshop, NeurIPS 2025. 
+
+> 1
+
+Throughout this paper, we use the term “distributed” to describe systems without a central coordinator. Closely related architectures are also termed “decentralized” in the machine learning literature. 
+
+state or hypothesis). The collective objective is to infer this latent variable through local computations and communication. To this end, agents iteratively update their beliefs or estimates by combining private observations with information received from their neighbors. Classical instances of this paradigm in-clude distributed estimation [1]–[3], distributed detection [6]– [8], and social learning [9]. A key feature of these problems is that collaboration takes place during the inference phase. In contrast, distributed ML has mainly focused on collaboration during the training phase, as exemplified by federated learning and decentralized learning. In this setting, agents jointly train a global model on distributed data, which is later deployed for inference either centrally or across devices. The inference stage is thus governed by a single unified model, and the sys-tem operates as a single decision maker. This is fundamentally different from distributed inference, where each agent acts as an autonomous decision maker, and collaboration serves to improve the quality of individual or consensus predictions. While these two research lines have evolved largely inde-pendently, they share some core motivation (e.g., scalability, decentralization, and privacy), and often employ similar tools, particularly those from distributed optimization [10], [11]. Recently, efforts have been made to bridge the two fields in order to leverage their complementary benefits. A promising line of work is inference with machine-learned models, as studied in [12]–[14]. In [12], this idea is examined in the context of hypothesis testing within a centralized setting in-volving a single agent. More relevantly, [13] and [14] study the social learning task where multiple agents train local classifiers on their own data to extract discriminative information for inference in the absence of explicit statistical models. In both cases, inference is performed using a stream of unlabeled observations. In this work, we consider instead a distributed binary classification setting in which each agent has access to only a single local testing sample associated with a common, unknown class label. The agents are collectively tasked with identifying this label from their own observations. This setting naturally arises in applications such as sensor fusion (e.g., vehicles capturing different views of the same object) and multi-view classification (e.g., image and text modalities of the same entity). The goal of this work is to develop a distributed classification framework for this setting. 
+
+A. Our work 
+
+To this end, we propose a collective prediction framework for distributed classification over multi-agent networks, which combines independent local training with collaborative in-ference. Specifically, during the training phase, each agent arXiv:2608.24787v1 [cs.MA] 25 Aug 2026 2
+
+trains a local classifier using its own dataset. This independent training process is motivated by several trends and challenges in modern ML systems. First, it has become increasingly common in large-scale and privacy-sensitive applications, such as edge computing [15] and foundation models [16]. For ex-ample, large language models or domain-specific experts may be trained independently across different entities (e.g., compa-nies, institutions, clients, or devices) and later coordinated at inference time [17]. Second, feature and model heterogeneity often make joint training impractical. For example, agents may process different input modalities or rely on distinct model architectures tailored to their local data. During the 
+
+testing phase, each agent receives a private testing sample and participates in a distributed inference protocol to infer the shared class label by exchanging predictive information with its neighbors. This collaborative framework introduces several challenges that are not present in the standard supervised classification setting: (i) How should agents aggregate predictions at test time? 
+
+Unlike standard ML pipelines that rely on a single trained model, each agent in our setting is equipped with an in-dependently trained local model. This raises the question of how agents can effectively aggregate their individual predictions during inference. (ii) How does agent heterogeneity govern the generalization performance? While classical supervised generalization theory typically analyzes a single learned predictor, our setting involves collective predictions based on multiple independently trained local classifiers. This raises the question of how agents’ inherent heterogeneity and inter-agent interactions shape the generalization behavior of the entire distributed system. (iii) How does limited communication affect prediction? Col-lective prediction typically relies on sufficient information exchange. When communication is limited in either the number of rounds or message precision, the resulting pre-dictions may deviate from the sufficient-communication limit. This raises the question of how communication constraints affect the individual prediction accuracy. To introduce our framework, we assume that agents pro-duce soft predictions using their local classifiers and adopt the classical DeGroot model [18] as an interpretable and analytically tractable mechanism for information aggregation during inference. In this model, agents iteratively update their predictions by taking a weighted average of their neighbors’ predictions according to a combination policy defined over a fixed communication topology [18]. The DeGroot model has been extensively studied in the distributed inference literature and is well known for achieving consensus in multi-agent systems [19], [20]. DeGroot updating has also been examined experimentally in human social networks [21]. Moreover, its linear update structure makes it particularly well-suited for distributed implementation with finite communication rounds. The novelty of the present work is not in proposing a new information aggregation rule, but in formulating and analyzing this inference-time collaboration framework. Accordingly, this work develops a theoretical and experimental study with the following contributions: (i) We establish theoretical guarantees for distributed classi-fication over multi-agent networks under the independent train-ing and collaborative inference paradigm. The derived bounds characterize how network structure, local model quality, and data heterogeneity influence predictive accuracy. (ii) We analyze how communication constraints affect clas-sification, deriving agent-dependent bounds for both finite-round and finite-precision communication. These results char-acterize how incomplete consensus, network topology, combi-nation policy, and communication precision influence predic-tion accuracy. (iii) We evaluate the proposed framework on two comple-mentary benchmarks and empirically demonstrate the benefits of cooperative inference under different observation settings. These contributions provide theoretical foundations for test-time collaboration in distributed classification and highlight connections between distributed inference and distributed ML. 
+
+B. Related Literature 1) Distributed machine learning: Most existing work in this domain has focused on collaboratively training a shared global model using data distributed across multiple devices or computational nodes. Two dominant approaches are federated learning, which relies on a central server to aggregate locally trained updates [22], [23], and decentralized learning, which dispenses with the server and synchronizes models through peer-to-peer communication over a fixed network graph [24], [25]. Variants of these methods address challenges such as non-i.i.d. data [26], [27], agent sampling [28], personaliza-tion [29], and communication efficiency during training [30], [31]. Despite their topological differences, in their canonical forms, both paradigms aim to produce a shared global model during training. At inference time, this model is either exe-cuted on a central server or deployed across devices, so the system effectively operates as a centralized decision maker, even when implementation is distributed. These joint-training frameworks are therefore complementary to the setting studied here: they aim to produce a shared global model during train-ing, whereas our work focuses on inference-time collaboration among independently trained local models. A small body of work has explored collaboration during inference, where a set of independently trained models exchange information with 
+
+each other to improve accuracy via trust-score design [32], [33]. Yet they all assume that all agents observe the same test input, which restricts agents’ heterogeneity to model parame-ters or inductive biases. This setup closely parallels ensemble learning and multiple classifier combination discussed later. In contrast, we study a setting in which each agent receives its own private testing sample, and these samples may be sta-tistically dependent across agents. This formulation naturally accommodates heterogeneous feature spaces (e.g., multimodal sensors or domain-specific models) and enables distributed decision-making without feature alignment. Collaborative in-ference in this setting has received little attention, and our work provides a formal theoretical and experimental treatment. 3
+
+2) Distributed inference: Distributed inference studies how a network of agents collaborates to estimate a latent variable based on private observations and local communication [1]– [3]. Applications include state estimation in smart power grids, cooperative perception in multi-robot systems, and opinion dynamics in social networks. These applications motivate different modeling frameworks depending on the nature of the latent variable. For discrete hypothesis spaces, a widely studied paradigm is social learning (SL), in which agents iteratively exchange local beliefs to identify the true hypothesis. SL nat-urally accommodates heterogeneous agents, since each agent may observe different types of signals modeled by distinct statistical distributions [9]. Classical SL methods assume that agents possess a family of likelihood models, which are used in updating beliefs via Bayes’ rule (or suitable variants) [34]– [38]. While analytically elegant, this assumption is restrictive in real-world problems, where data distributions are complex and rarely admit closed-form models. To address this limita-tion, [13] proposed a social machine learning strategy, where each agent first trains a local classifier using its own labeled examples, and then performs the SL rule based on the trained classifier. The asymptotic and non-asymptotic performance of this strategy has been examined in [13], [14]. Our work follows this data-driven perspective but differs in the task formulation. In SL, agents typically process streams of unlabeled i.i.d. data to infer a shared latent hypothesis. In the supervised classification setting studied here, each agent receives only a single testing sample for collective prediction, and collaboration takes place through a finite-round exchange of learned local decision statistics at test time. This difference changes the operational role of communication and leads to analytical questions that are not directly addressed in existing SL studies or in classical single-agent supervised classification. 
+
+3) Multiple classifier combination: This is a classical line of research in ML that studies how to aggregate the predictions of multiple models to improve performance. While our frame-work is distributed and collaborative in nature, it bears a strong conceptual connection to this literature. Specifically, when all agents follow the DeGroot model for information aggregation at test time, their predictions converge (in the limit of infinite communication) to a consensus that is a weighted average of the local classifier outputs. This resembles the effect of a cen-tralized fusion rule, a central topic in the literature on multiple classifier combination. Classical techniques in this area include voting schemes, bagging, boosting, and stacking [39], [40]. These approaches form the foundation of what is often referred to as ensemble learning , where multiple base classifiers are combined to improve generalization and robustness [41], [42]. More advanced strategies, such as mixture-of-experts models, combine classifiers through input-dependent gating [16]. These approaches, however, typically operate in a centralized setting during test time and assume a common feature representation across experts. In contrast, our framework operates in a fully-distributed en-vironment during both training and testing phases. When com-munication is limited to a finite number of rounds, consensus may not be reached, and predictions remain agent-dependent. This dynamic, iterative process differs fundamentally from the static, one-shot aggregation used in most ensemble methods. 
+
+Notation: We use boldface font to denote random variables and normal font for their realizations, e.g., h and h. E and P
+
+denote the expectation and probability operators, respectively. 
+
+1[·] denotes the indicator function, and 1 denotes the all-ones vector. II. P ROBLEM FORMULATION 
+
+We are given a network of K agents indexed by k and a binary classification task with class label γ. The sets of agents and labels are denoted by K ≜ {1, 2, . . . , K } and Γ ≜
+
+{+1 , −1}, respectively. We assume that the semantic meaning of the labels is fixed and shared across the network during both training and inference. Each agent k holds a local training set 
+
+Dk of Nk labeled examples (hk,n , γk,n ), where hk,n is the 
+
+n-th feature vector and γk,n ∈ Γ is its label. Let Hk denote the feature space of agent k. A network observation consists of one local view from each agent and therefore takes values in the product space 
+
+H ≜ H1 × · · · × HK . (1) For each γ ∈ Γ, let Pγ denote the class-conditional distribution of a network observation h = ( h1, . . . , hK ) ∈ H, and let Pγ,k 
+
+denote its k-th marginal. When this marginal admits a density or probability mass function, we denote it by pk(h|γ).For the binary classification task, we assume a uniform class prior. Then, Pγ induces the joint distribution Q of (h, γ):
+
+PQ(γ = γ) = 12 , h | { γ = γ} ∼ Pγ , γ ∈ Γ. (2) We denote by Qk the corresponding marginal distribution of 
+
+(hk, γ) at agent k. Conditional on γ, the local observations in 
+
+h may be statistically dependent across agents. The agents are 
+
+heterogeneous as they may have different feature spaces Hk
+
+(e.g., different views in multi-view learning) or distinct class-conditional models pk(h|γ) (e.g., different local distributions in personalized federated learning). The posterior log-ratio is sufficient for binary decision making. Under the uniform prior in (2), Bayes’ rule gives 
+
+Λk(h) ≜ log pk(+1 |h)
+
+pk(−1|h) = log pk(h|+ 1) 
+
+pk(h|− 1) , ∀h ∈ Hk (3) where pk(γ|h) denotes the posterior probability. The function 
+
+Λk is also known as the logit function in the literature. 
+
+A. The Training Phase 
+
+In the training phase, each agent k uses its own dataset Dk
+
+to train a local classifier. For each agent k, the samples in Dk
+
+are independently drawn according to Qk. Moreover, samples with the same index n may be statistically dependent across agents, while the corresponding cross-agent sample collections are independent across indices. We denote by fk : Hk → R ageneric real-valued score function from an admissible function class Fk. The function fk serves as an approximation to the logit function Λk in (3). Formally, 
+
+fk(h) = log bpk(+1 |h)
+
+bpk(−1|h) (4) 4
+
+where bpk(γ|h) denotes the estimated posterior probability. Given Dk, the empirical risk associated with a candidate score function fk ∈ Fk is 
+
+Rk, emp (fk) ≜ 1
+
+NkNkX
+
+> n=1
+
+Φ( γk,n fk(hk,n )) (5) where Φ denotes the loss function used for training. Let Ak
+
+denote the local training algorithm at agent k and let Sk collect its internal randomness. The resulting trained score function is denoted by bfk ≜ Ak(Dk, Sk) ∈ Fk. (6) We measure the optimization accuracy of bfk by its empirical optimality gap, namely, the difference between its empirical risk and the infimum empirical risk over Fk:
+
+Gap k, opt ( bfk) ≜ Rk, emp ( bfk) − inf  
+
+> fk∈Fk
+
+Rk, emp (fk) ≥ 0. (7) A zero gap corresponds to exact empirical risk minimization (ERM), while a positive gap quantifies the residual optimiza-tion error of the trained score function. For the theoretical analysis, we use the following assump-tions on the loss function Φ and the function class Fk, which are commonly adopted in statistical learning theory [43], [44]. 
+
+Assumption 1 (Conditions on the loss function ). The loss function Φ : R → R+ is convex, non-increasing and differen-tiable at 0 with Φ′(0) < 0. Also, it is LΦ-Lipschitz. 
+
+Assumption 2 (Boundedness of functions ). There exists a constant β > 0 such that |fk(h)| ≤ β for every k ∈ K,
+
+fk ∈ Fk, and h ∈ Hk.
+
+The training phase is completed by empirically centering the learned score bfk, following [13], [14]. Since independently trained local classifiers may exhibit different empirical offsets, we subtract each score’s empirical training mean to better align the local outputs before collaboration. Specifically, we define the empirical training mean as 
+
+μk, emp (fk) ≜ 1
+
+NkNkX
+
+> n=1
+
+fk(hk,n ), ∀fk ∈ Fk. (8) The resulting classifier generates a centered score: 
+
+ck(h) ≜ bfk(h) − μk, emp ( bfk), ∀h ∈ Hk. (9) Therefore, after training, the sign of ck(h) determines the local prediction at agent k for any unseen feature vector h ∈ Hk.The role of empirical centering is examined in Section III-A. 
+
+B. The Prediction Phase 
+
+In the prediction phase, the network receives a fresh testing example (h∗, γ∗) drawn from Q independently of the training data and local training-algorithm randomness, with each agent 
+
+k observing only its local component h∗ 
+
+> k
+
+∈ Hk. These local views may remain statistically dependent conditioned on γ∗.The goal of the agents is to make a collective prediction about 
+
+γ∗ by collaborating with their neighbors. We use t to index the communication rounds and denote by λk,t the decision statis-tic of agent k at round t, whose sign determines its prediction. Following the DeGroot model, the agents iteratively combine their decision statistics over the network. Upon observing h∗
+
+> k
+
+,agent k initializes its decision statistic using the local classifier 
+
+ck:
+
+λk, 0 ≜ ck(h∗
+
+> k
+
+). (10) Then, each agent communicates with its neighbors and updates its decision statistic by aggregating the local decision statistics in the neighborhood [18]: 
+
+λk,t =
+
+> K
+
+X
+
+> ℓ=1
+
+aℓk λℓ,t −1 (11) where aℓk denotes the combination weight agent k assigns to its neighbor ℓ, which satisfies 
+
+> K
+
+X
+
+> ℓ=1
+
+aℓk = 1 , aℓk > 0 ∀ℓ ∈ Nk, and aℓk = 0 ∀ℓ / ∈ Nk
+
+(12) with Nk denoting the neighboring set of agent k. Communica-tion proceeds in synchronous rounds over this fixed graph, and the exchanged messages are assumed to be delivered reliably. Accordingly, the communication model considered here does not include asynchronous updates, time-varying connectivity, or packet losses. Moreover, we impose the following assump-tion on the topology of the communication network to ensure information diffusion throughout the network. 
+
+Assumption 3 (Strongly-connected graph ). The graph of the communication network is strongly connected. That is, there exist paths with positive combination weights between any two distinct agents in both directions (the two paths need not be the same), and at least one agent has a self-loop, i.e., akk > 0
+
+for some agent k [10]. 
+
+Under this assumption and from the Perron-Frobenius theo-rem [45], the combination matrix A = [ aℓk ] is primitive and admits a Perron vector π satisfying 
+
+Aπ = π, 
+
+> K
+
+X
+
+> k=1
+
+πk = 1 , and πk > 0, ∀k ∈ K. (13) The entries of π quantify the relative influence of the agents following the adopted combination policy. In network science terminology [46], [47], this Perron vector corresponds to the notion of eigenvector centrality associated with the matrix A.Moreover, the second-largest magnitude among all eigenvalues of A, denoted by σA, is strictly smaller than 1. To evaluate the performance of this framework, we first in-troduce a feasibility condition associated with the classification task, defined in terms of the target risk for training. For each agent k, the target risk Rok is the infimum of the expected risk over the local function class Fk:
+
+Rok ≜ inf  
+
+> fk∈Fk
+
+E(hk ,γ)∼Qk Φ( γfk(hk)) . (14) The target risk for the network is defined as a weighted average of the individual target risks involving the Perron vector π:
+
+Ro ≜
+
+> K
+
+X
+
+> k=1
+
+πkRok. (15) 5
+
+The reason for introducing π in defining Ro will be clear in our subsequent analysis for the classification error. The feasibility of the classification task requires the following assumption. 
+
+Assumption 4 (Feasibility). The network target risk satisfies 
+
+Ro < Φ(0) .
+
+We note that Φ(0) represents the expected risk of the model 
+
+fk = 0 , which corresponds to the case where agent k assigns labels +1 and −1 with equal probability to all feature vectors. Hence, Rok = Φ(0) implies that the feature vectors of agent 
+
+k provide no useful information for classification within the prescribed function class Fk. Assumption 4 is a network-level feasibility condition: it does not require every agent to be individually informative, but only that the network target risk satisfies Ro < Φ(0) . Thus, the collective observations available in the network must contain enough class-discriminative infor-mation to outperform random guessing. If this condition fails, then the classification problem is effectively uninformative at the network level. III. P ERFORMANCE GUARANTEES 
+
+This section develops four principal performance guarantees for the proposed framework: sufficient-communication classi-fication, finite-round communication, finite-precision commu-nication, and probably approximately correct (PAC)-style gen-eralization. The analysis of the first three guarantees proceeds in two stages. We first characterize the training performance of the classifier network through an expected network margin .Two supporting propositions are derived for clarifying the role of empirical centering in (9) and establishing when approxi-mate local training attains such a margin with high probability. We then use this common margin event to characterize the pre-diction error under the three communication settings. The final PAC-style theorem provides a complementary guarantee that relates population error directly to the performance observed on the training data. We conclude by clarifying the relation to conventional social learning recursions and summarizing the corresponding results without empirical centering. 
+
+A. Network Margin and Training Guarantee 
+
+To define the expected network margin used throughout the analysis, we first identify the aggregate classifier obtained after sufficient communication. Following the DeGroot averaging rule (11), agents agree on a common decision statistic denoted by λave after sufficient communication [18]. That is, it holds almost surely (a.s.) that 
+
+λave ≜ lim  
+
+> t→∞
+
+λk,t 
+
+> a.s.
+
+=
+
+> K
+
+X
+
+> k=1
+
+πkck(h∗
+
+> k
+
+). (16) Accordingly, the collective prediction under sufficient commu-nication is 
+
+bγ ≜ sgn( λave ) (17) where any fixed tie rule may be used at zero. Equivalently, the distributed rule (11) functions as an aggregate classifier: 
+
+cave (h∗) ≜
+
+> K
+
+X
+
+> k=1
+
+πkck(h∗
+
+> k
+
+). (18) This aggregate classifier resembles a π-weighted soft decision combination of K independently trained local classifiers. The analysis of cave is nontrivial because the informativeness of the local scores may vary across agents and the local views may be statistically dependent. Existing theoretical results on soft decision combination often rely on specific distributional assumptions on the local scores [48]. We therefore develop an analysis that accommodates these heterogeneous and statisti-cally dependent local observations. Since the deployed local scores are empirically centered, we first examine how the empirical centering operation in (9) af-fects the aggregate score relative to the common zero decision threshold. For a generic collection of local score functions 
+
+f = ( f1, . . . , f K ) ∈ F ≜ F1 × · · · × FK , (19) we define the uncentered aggregate score by 
+
+fave (h) ≜
+
+> K
+
+X
+
+> k=1
+
+πkfk(hk). (20) Let μγ
+
+> raw
+
+(f ) ≜ E(γ)fave (h) denote its class-conditional mean, where E(γ) denotes expectation under Pγ . We introduce the following network-level quantities associated with μγ
+
+> raw
+
+(f ):
+
+μmid (f ) ≜ μ+raw (f ) + μ−
+
+> raw
+
+(f )2 , (21) 
+
+D(f ) ≜ μ+raw (f ) − μ−
+
+> raw
+
+(f )2 . (22) Moreover, we define the network empirical training mean by 
+
+μemp (f ) ≜
+
+> K
+
+X
+
+> k=1
+
+πkμk, emp (fk). (23) Under the uniform class prior, for any fixed f independent of the training samples, the training setup in Section II-A implies 
+
+E[μemp (f )] = μmid (f ). Hence, μmid (f ) is the population counterpart of the network empirical training mean. With the above definitions, we establish the following proposition. 
+
+Proposition 1 (Effect of additive centering ). For arbitrary additive centers χk, let χπ ≜ P 
+
+> k
+
+πkχk and define 
+
+sχ,f (h) ≜
+
+> K
+
+X
+
+> k=1
+
+πk
+
+fk(hk) − χk
+
+. (24) 
+
+Its expected margin over both classes at threshold zero is 
+
+∆χ(f ) ≜ min 
+
+n
+
+E(+1) sχ,f (h), −E(−1) sχ,f (h)
+
+o
+
+= D(f ) − | χπ − μmid (f )|. (25) 
+
+Hence the population midpoint χπ = μmid (f ) maximizes this margin. In particular, the margins under raw and empirically centered scores satisfy 
+
+∆raw (f ) = D(f ) − | μmid (f )|, (26) 
+
+∆cen (f ) = D(f ) − | μemp (f ) − μmid (f )|. (27) 
+
+Therefore, empirical centering (9) improves the expected zero-threshold margin if and only if 
+
+|μemp (f ) − μmid (f )| < |μmid (f )|. (28) 6
+
+Moreover, empirical centering is invariant to the agent-specific additive offsets: if f ′
+
+> k
+
+(h) = fk(h) + ok, then 
+
+f ′
+
+> k
+
+(h) − μk, emp (f ′
+
+> k
+
+) = fk(h) − μk, emp (fk). (29) 
+
+Consequently, the centered DeGroot recursion (11) stays un-changed by these offsets at every communication round. Proof. See Appendix A.2. For the learned classifiers ck from Section II-A, Proposition 1 applies with fk = bfk and χk = μk, emp ( bfk). It shows that empirical centering acts as a threshold alignment mechanism that changes the location of the aggregate score relative to the zero decision threshold while leaving the class-conditional mean separation 2D( bf ) unchanged. Its effect on the expected zero-threshold margin depends on how closely the realized empirical training mean μemp ( bf ) aligns with the correspond-ing population midpoint μmid ( bf ), as characterized by (28). Moreover, empirical centering removes agent-specific additive offsets from the local scores and hence from the subsequent collaborative recursion. We next characterize the expected network margin attained by the centered local classifiers. For any fk ∈ Fk, define its empirically centered score 
+
+ck,f k (h) ≜ fk(h) − μk, emp (fk), (30) and the corresponding class-conditional means 
+
+μ+ 
+
+> k
+
+(fk) ≜ E(+1)  
+
+> hk
+
+ck,f k (hk), (31) 
+
+μ− 
+
+> k
+
+(fk) ≜ E(−1)  
+
+> hk
+
+ck,f k (hk), (32) where E(γ) 
+
+> hk
+
+denotes expectation under Pγ,k . The corresponding network means are 
+
+μ+(f ) = 
+
+> K
+
+X
+
+> k=1
+
+πkμ+ 
+
+> k
+
+(fk), μ−(f ) = 
+
+> K
+
+X
+
+> k=1
+
+πkμ− 
+
+> k
+
+(fk). (33) Before conditioning on the training phase, these quantities are random because the deployed local functions and empirical training means μk, emp (fk) depend on the realized training data 
+
+Dk and, when applicable, local optimization randomness Sk.The inclusion of the Perron vector π in (33) is consistent with the collective nature of the prediction phase, where the same weights determine the common decision statistic in (16). For a collection of learned functions bf = ( bf1, . . . , bfK ), we say that the classifier network satisfies the δ-margin consistent training condition if 
+
+μ+( bf ) > δ and μ−( bf ) < −δ (34) where δ ≥ 0 is the prescribed decision margin . In view of (18) and (30)–(33), this condition requires that the class-conditional mean of the aggregate score cave (h∗) lies on the correct side of the zero decision threshold for both classes, with a margin exceeding δ. The performance of the training phase is then characterized by the probability that condition (34) holds for the classifier network. Define the corresponding event 
+
+Cδ ≜
+
+n
+
+μ+( bf ) > δ, μ−( bf ) < −δ
+
+o
+
+, (35) and let 
+
+Pc,δ ≜ P(Cδ ), (36) where the probability is taken over the randomness from training. Analyzing Pc,δ is non-trivial, as it depends on various factors, including the size of the training sets, the complexity of the function class, the loss function, and the combination policy. A lower bound on Pc,δ under exact ERM, i.e., zero optimization gap in (7), was established in [14] using tools from [13]. We next extend it to approximate local optimization. The auxiliary quantities Nmax , α, ρ, EΦ(r, δ ), and δmax (r)
+
+appearing below are defined in Appendix A.1. 
+
+Proposition 2 (δ-margin consistent training under approx-imate optimization ). Suppose that, for every k, there exists a deterministic tolerance εk, opt ≥ 0 such that 
+
+Gap k, opt ( bfk) ≤ εk, opt (37) 
+
+almost surely, and define 
+
+εopt ≜
+
+> K
+
+X
+
+> k=1
+
+πkεk, opt . (38) 
+
+If Ro + εopt < Φ(0) , 0 ≤ δ < δ max (Ro + εopt ), and ρ < 
+
+EΦ(Ro + εopt , δ ), then under Assumptions 1–4, 
+
+Pc,δ ≥ 1 − 2 exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+EΦ(Ro + εopt , δ ) − ρ
+
+2
+
+)
+
+. (39) 
+
+Proof. See Appendix A.3. The key implication of Proposition 2 is that Pc,δ admits an ex-ponential guarantee when the network Rademacher complexity 
+
+ρ is smaller than EΦ(Ro + εopt , δ ). The relevant properties of these auxiliary quantities are collected in Appendix A.1. In particular, for a fixed feasible decision margin δ, EΦ(r, δ )
+
+decreases as the risk argument r increases, while the feasible margin range characterized by δmax (r) also becomes smaller. Consequently, increasing εopt reduces EΦ(Ro +εopt , δ ), making the condition ρ < EΦ(Ro + εopt , δ ) more restrictive. More-over, whenever this condition remains satisfied, the quantity 
+
+EΦ(Ro+εopt , δ )−ρ decreases, thereby reducing the exponential rate in (39). Thus, a larger optimization residual makes it more difficult to certify a prescribed decision margin and weakens the resulting training guarantee. Setting εk, opt = 0 for all agents recovers the exact-ERM specialization in [14]. The bound also helps characterize the statistical cost of in-dependent local training as reflected in the training guarantee, a defining feature of our framework when data pooling or joint training is unavailable. To quantify this cost, we compare independent training with a centralized benchmark under a fixed budget of available training samples. In the homogeneous setting considered in Appendix A.4, under matched optimiza-tion accuracy and when the relevant Rademacher complexity decreases with the number of training samples as described there, specializing Proposition 2 shows that the centralized benchmark yields a tighter lower bound on Pc,δ than an even split of the same samples among independently trained agents. The detailed comparison is provided in Appendix A.4. 7
+
+B. Sufficient-Communication Classification Guarantee 
+
+We next turn to the classification performance of the trained network under sufficient communication. Section III-A char-acterizes the training performance through the probability that the learned network attains a prescribed decision margin δ.We now examine how this margin condition translates into the probability of classification error for a fresh testing example. To distinguish the randomness arising from training from that of prediction, let 
+
+T ≜ σ(D1, . . . , DK , S1, . . . , SK ), (40) which collects the training data and the randomness of the local training algorithms. Conditional on T, the learned classi-fiers ck and their empirical training means are therefore fixed. Moreover, the testing sample (h∗, γ∗) is independent of T.Since the training event Cδ associated with (34) is determined by the training phase, it is T-measurable. From (17), under sufficient communication, the collective prediction bγ is determined by the sign of the aggregate score 
+
+cave (h∗). Let 
+
+M ≜ {γ∗cave (h∗) ≤ 0} (41) denote the event that the signed aggregate score is nonpositive. Under any fixed tie-breaking rule at zero, the actual misclas-sification event is contained in M. With Pe ≜ P(bγ̸ = γ∗), the tower property and the T-measurability of Cδ give 
+
+Pe ≤ P(M) = E[P(M|T)] = E[1[Cδ ]P(M|T)] + E1[Cδ ]P(M|T)
+
+≤ E[1[Cδ ]P(M|T)] + P(Cδ ). (42) This decomposition separates the conditional prediction error for training realizations in Cδ from the probability that training fails to attain the prescribed δ-margin condition in (34). The latter is characterized by Proposition 2. Based on the event Cδ ,the class-conditional mean of the aggregate score cave (h∗) lies on the correct side of the zero decision threshold with a margin greater than δ. The remaining prediction error depends on the variability of the realized aggregate score cave (h∗) around its corresponding class-conditional mean. The local observations h∗
+
+> 1
+
+, . . . , h∗ 
+
+> K
+
+are different views of the same testing example and may therefore remain statistically dependent even after conditioning on the class label. Rather than requiring conditional independence, we allow their joint class-conditional distribution Pγ to satisfy the following ap-proximate tensorization property [49]. For a probability law 
+
+P and a bounded nonnegative function G, define 
+
+Ent P (G) ≜ EP [G log G] − EP [G] log EP [G]. (43) For each k, let h−k collect all components of h except hk,and let P k|− kγ (·| h−k) denote the conditional law of hk given the remaining views under Pγ .
+
+Assumption 5 (Class-conditional approximate tensoriza-tion of entropy (ATE) ). For every γ ∈ Γ, there exists τγ ≥ 1
+
+such that 
+
+Ent Pγ (G) ≤ τγKX
+
+> k=1
+
+EPγ
+
+h
+
+Ent P k|− kγ (·| h−k )
+
+ G(·, h−k)i
+
+(44) 
+
+for every bounded nonnegative measurable G.
+
+Assumption 5 allows statistically dependent local views across agents beyond the product case. The coefficient τγ serves as a dependence parameter for the ATE condition: product class-conditional distributions satisfy the condition with τγ = 1 ,while larger values accommodate greater departures from this product structure. For convenience, define 
+
+τmax ≜ max  
+
+> γ∈Γ
+
+τγ . (45) Together with the training guarantee in Proposition 2, the ATE condition (44) leads to the following sufficient-communication classification guarantee. 
+
+Theorem 1 (Sufficient-communication classification guar-antee ). Suppose Assumptions 2, 3, and 5 hold, and let δ ≥ 0.If the agents label their testing samples h∗ 
+
+> k
+
+with bγ according to (17) , then, almost surely on Cδ ,
+
+P(M|T) ≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
+. (46) 
+
+If, in addition, the conditions of Proposition 2 hold, combining the two guarantees through (42) yields an explicit upper bound on Pe.Proof. See Appendix B.2. Theorem 1 establishes the connection between the training performance and the reliability of subsequent collaborative prediction. On Cδ , the conditional prediction error is controlled by the decision margin δ, the dependence factor τmax , and the Perron weights, while Proposition 2 characterizes the probabil-ity of attaining this favorable training event. Through (42), the two guarantees jointly characterize the overall classification performance. We discuss several implications of this result. 
+
+1) Relation to margin theory: The decision margin δ plays complementary roles in training and prediction. Proposition 2 shows that requiring a larger δ makes the training condition more difficult to attain, whereas Theorem 1 shows that, once it is attained, a larger δ yields a stronger conditional prediction guarantee. This tradeoff is reminiscent of the role of margins in classical margin-based generalization theory [44]. Given the classifier cave from (18), the quantity γ∗cave (h∗) is known as the “margin” associated with the testing sample h∗. The class-conditional expectations of the margin distribution associated with cave are μ+( bf ) under class +1 and −μ−( bf ) under class 
+
+−1. Therefore, the δ-margin condition in (34) provides a first-order statistical characterization of the margin distribution for classifier cave . According to Theorem 1, this characterization leads to a classification guarantee without specifying the exact distributions of the local decision statistics, in contrast to some distribution-specific soft combination analyses [48]. 
+
+2) Role of the Perron weights: From (16), the Perron entries 
+
+πk determine the relative influence of the local classifiers in the sufficient-communication aggregate. Fusion weight design has been widely studied in ensemble learning, typically for classifiers sharing the same feature representation [40], [50], [51]. The extensions to heterogeneous representations are more problem-dependent [39], [40]. Here, rather than optimizing the 8
+
+fusion weights under arbitrary heterogeneity, we characterize the effect of the Perron weights induced by the communication policy. Their role extends beyond the factor P 
+
+> k
+
+π2 
+
+> k
+
+in the conditional prediction bound (46): the training quantities ρ,
+
+Ro, α, and εopt , as well as the achievable decision margin, also depend on π. Consequently, although the uniform Perron vector minimizes P 
+
+> k
+
+π2 
+
+> k
+
+when δ and τmax are fixed, it need not optimize the overall classification performance. Importantly, the simple averaging rule for constructing A, where each agent assigns equal combination weights to all neighbors, does not guarantee uniform π on arbitrary topologies. Several useful rules for constructing doubly-stochastic A are available in [10]. 
+
+3) Benefits of cooperative prediction: To isolate the benefit of cooperation during prediction, suppose that the same target decision margin δ is attained collaboratively and by a non-cooperative agent. The conditional error bound in Theorem 1 is tighter under collaboration whenever 
+
+τmax 
+
+> K
+
+X
+
+> k=1
+
+π2 
+
+> k
+
+< 1. (47) This condition reflects the balance between the gain from averaging the local scores and the penalty induced by their sta-tistical dependence. In particular, for product class-conditional distributions, we may take τmax = 1, and (47) reduces to P 
+
+> k
+
+π2 
+
+> k
+
+< 1, which holds for any nontrivial network satisfying Assumption 3. Cooperation also provides a distinct benefit through the network-level margin condition. The event 
+
+Cδ requires only the π-weighted class-conditional means to attain the prescribed two-sided margin; individual classifiers need not satisfy the same condition. Consequently, agents with weak local evidence can be compensated by sufficiently informative or complementary observations from other agents. This is consistent with Assumption 4, which likewise requires informativeness only at the network level. 
+
+C. Finite-Round Communication 
+
+Theorem 1 characterizes the sufficient-communication limit. When communication is restricted to a finite number of rounds, however, consensus may not yet be reached and the prediction remains agent-dependent. We next characterize how limited communication affects the classification performance at each agent. According to (11), after t communication rounds, agent k
+
+uses the following decision statistic 
+
+λk,t =
+
+> K
+
+X
+
+> ℓ=1
+
+[At]ℓk cℓ(h∗ 
+
+> ℓ
+
+), (48) and predicts the label 
+
+bγk,t ≜ sgn( λk,t ). (49) Define the corresponding event 
+
+Mk,t ≜ {γ∗λk,t ≤ 0}. (50) Under any fixed tie-breaking rule at zero, the misclassification event is contained in Mk,t . Thus, with Pk,t ≜ P(bγk,t ̸ = γ∗),applying the same decomposition as in (42) gives 
+
+Pk,t ≤ P(Mk,t ) ≤ E[1[Cδ ]P(Mk,t |T)] + P(Cδ ). (51) On the event Cδ , a positive decision margin is guaranteed for the π-weighted aggregate under sufficient communication (18). At a finite communication round, from (48), agent k combines the local scores cℓ(h∗ 
+
+> ℓ
+
+) using the weights [At]ℓk . To charac-terize how much of this guaranteed margin is retained after t
+
+rounds, fix any σ ∈ (σA, 1) . Matrix theory ensures that there exists a constant C(A, σ ) > 0 such that [52] 
+
+|[At]ℓk − πℓ| ≤ C(A, σ )σt (52) for all agents k, ℓ and communication rounds t. Accordingly, define the residual finite-round margin 
+
+rt(δ) ≜ δ − 2βKC (A, σ )σt. (53) The second term bounds the possible reduction of the guaran-teed margin after only t communication rounds. 
+
+Theorem 2 (Finite-round classification guarantee ). Suppose Assumptions 2, 3 and 5 hold, and let δ > 0. Fix σ ∈ (σA, 1) 
+
+and a corresponding C(A, σ ). Then, for every agent k and every integer t ≥ 0 such that rt(δ) > 0, almost surely on Cδ ,
+
+P(Mk,t |T) ≤ exp 
+
+(
+
+− r2 
+
+> t
+
+(δ)2τmax β2 PKℓ=1 ([ At]ℓk )2
+
+)
+
+. (54) 
+
+If, in addition, the conditions of Proposition 2 hold, combining the two guarantees through (51) yields an explicit upper bound on Pk,t .Proof. See Appendix C. The condition rt(δ) > 0 provides a sufficient communication horizon for retaining a positive guaranteed margin. In partic-ular, when 2βKC (A, σ ) > δ , it is equivalent to 
+
+t > log δ
+
+> 2βKC (A,σ )
+
+log σ . (55) Thus, faster decay of the transient term C(A, σ )σt allows a positive margin to be guaranteed with fewer communication rounds. The bound in (54) is both round- and agent-dependent. Finite communication affects the prediction guarantee in two ways. First, the residual margin rt(δ) reflects the reduction in the guaranteed decision margin caused by incomplete mixing. Second, the column {[At]ℓk }Kℓ=1 specifies the fusion profile at agent k and determines the corresponding concentration term. Therefore, finite-round performance depends on the full com-bination matrix A, through both the transient fusion weights and their convergence toward the Perron vector. The second-largest eigenvalue magnitude σA determines the admissible geometric rates in (52), while C(A, σ ) captures the associated matrix-power constant. This is consistent with the role of spectral properties in the convergence behavior of distributed averaging [53]. As t → ∞ , At → π1⊤ and rt(δ) → δ.Accordingly, the finite-round conditional bound converges to the sufficient-communication bound in Theorem 1. 9
+
+D. Finite-Precision Communication 
+
+Theorem 2 considers finite-round communication with real-valued messages. In practical implementations, however, trans-mitted scalars are typically represented with finite precision. We therefore introduce a finite-bit version of the prediction-stage communication rule and characterize its effect on classi-fication performance. The local training procedures, empirical centering, and the training event Cδ remain unchanged. Since both a bounded score and its empirical training mean lie in [−β, β ], every centered score satisfies 
+
+|ck,f k (h)| ≤ 2β. (56) Let b ≥ 1 denote the available bits per transmitted scalar, and let 2 ≤ Lb ≤ 2b reconstruction levels be used. Over the interval [−2β, 2β], consider the uniform alphabet 
+
+Vb = {vj = −2β + j∆b : j = 0 , . . . , L b − 1},
+
+∆b = 4βLb − 1 . (57) We consider here an adjacent-level stochastic rounding proto-col [54]. For u ∈ [vj , v j+1 ], j = 0 , . . . , L b − 2, the quantizer 
+
+Qb returns one of the two adjacent reconstruction levels vj
+
+and vj+1 according to 
+
+Qb(u) = 
+
+
+
+vj , with probability vj+1 − u
+
+∆b
+
+,vj+1 , with probability u − vj
+
+∆b
+
+.
+
+(58) An important feature of this protocol is that the quantizer Qb
+
+is unbiased, that is, 
+
+E[Qb(u)|u] = u. (59) Let x(b) 
+
+> k,t
+
+denote the finite-precision decision statistic at agent k
+
+after t communication rounds. Starting from x(b) 
+
+> k, 0
+
+= ck(h∗
+
+> k
+
+),each agent quantizes its current decision statistic before trans-mission, and the receiving agents combine the quantized values according to 
+
+q(b) 
+
+> ℓ,t
+
+= Qb(x(b) 
+
+> ℓ,t
+
+), x(b) 
+
+> k,t +1
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+aℓk q(b) 
+
+> ℓ,t
+
+. (60) The random draws used for stochastic rounding are indepen-dent across agents and communication rounds, with each agent sending the same quantized value to all of its neighbors. After 
+
+t rounds, agent k predicts according to 
+
+bγ(b) 
+
+> k,t
+
+≜ sgn( x(b)
+
+> k,t
+
+). (61) Define the event for the finite-precision decision statistic 
+
+M(b) 
+
+> k,t
+
+≜ {γ∗x(b) 
+
+> k,t
+
+≤ 0}, (62) and let 
+
+P (b) 
+
+> k,t
+
+≜ P(bγ(b)
+
+> k,t
+
+̸ = γ∗) (63) denote the classification error probability. As in the real-valued finite-round case, the decomposition in (42), with M replaced by M(b)
+
+> k,t
+
+, separates the conditional prediction error P(M(b) 
+
+> k,t
+
+|T)
+
+on Cδ from the probability of the unfavorable training event 
+
+Cδ .Since quantization is performed at every communication round, the perturbations introduced at earlier rounds are propa-gated through subsequent neighbor-aggregation steps. To state the resulting finite-precision guarantee compactly, define the accumulated quantization term 
+
+V q 
+
+> k,t
+
+≜ ∆2
+
+> b
+
+4
+
+> t
+
+X
+
+> r=1
+> K
+
+X
+
+> j=1
+
+([ Ar ]jk )2
+
+= 4β2
+
+(Lb − 1) 2
+
+> t
+
+X
+
+> r=1
+> K
+
+X
+
+> j=1
+
+([ Ar ]jk )2. (64) The quantity V q 
+
+> k,t
+
+depends jointly on the communication pre-cision, the number of communication rounds, and the network combination policy. 
+
+Theorem 3 (Finite-precision classification guarantee ). Sup-pose Assumptions 2, 3, and 5 hold, and let δ > 0. Suppose the agents follow the stochastic finite-precision recursion (60) .Fix σ ∈ (σA, 1) and a corresponding C(A, σ ). Then, for every agent k and every integer t ≥ 0 such that rt(δ) > 0, almost surely on Cδ ,
+
+P(M(b) 
+
+> k,t
+
+|T) ≤ exp 
+
+(
+
+− r2 
+
+> t
+
+(δ)2
+
+h
+
+τmax β2 PKℓ=1 ([ At]ℓk )2 + V q
+
+> k,t
+
+i)
+
+.
+
+(65) 
+
+If, in addition, the conditions of Proposition 2 hold, combining the two bounds in (65) and (39) yields an explicit upper bound on P (b) 
+
+> k,t
+
+.Proof. See Appendix D. Theorem 3 extends the real-valued finite-round guarantee (54) established in Theorem 2 by quantifying the additional effect of finite communication precision. The same residual finite-round margin term rt(δ) from (53) appears in both guarantees, while finite precision introduces the additional term V q 
+
+> k,t
+
+in the denominator of the prediction exponent (65). This result also reveals a tradeoff pertaining to the number of communi-cation rounds. Increasing t increases the guaranteed residual margin rt(δ) by reducing the effect of incomplete mixing, but also allows additional quantization effects to accumulate through V q
+
+> k,t
+
+. Moreover, the combination policy A influences both effects through the finite-round fusion weights and the propagation of quantization noise across rounds. Consequently, at fixed precision, the bound need not improve monotonically with the number of communication rounds. The communication precision also determines the commu-nication cost. Let 
+
+Eoff (A) ≜
+
+> K
+
+X
+
+> k=1
+> K
+
+X
+
+> ℓ=1
+> ℓ̸=k
+
+1[aℓk > 0] (66) denote the number of active directed off-diagonal links. If each quantizer index is represented by a fixed-length b-bit word, the per-round and total communication costs per testing example are 
+
+Bround = bE off (A), Btotal (t) = tbE off (A), (67) 10 
+
+respectively, excluding packet headers and coding overhead. Self-loops correspond to the local operations and are therefore not counted. Moreover, for any fixed t, we have from (64) that 
+
+V q 
+
+> k,t
+
+= O (Lb − 1) −2. (68) Here, the O(·) notation describes the decay with respect to 
+
+Lb for fixed t. Under the full-code convention Lb = 2 b, this becomes V q 
+
+> k,t
+
+= O(2 −2b). Therefore, increasing the bit width increases the communication cost linearly, while the finite-precision term in the bound (65) decays as O(2 −2b). For fixed 
+
+t, as b → ∞ , the finite-precision guarantee converges to the corresponding real-valued finite-round guarantee. 
+
+E. PAC-Style Generalization Guarantee 
+
+The preceding results characterize collaborative prediction through the lens of expected network margin. We now con-sider a complementary PAC-style perspective that relates the population classification error of the realized classifiers to their performance observed on the training data. This is the core idea of classical margin-based generalization bounds [44]. Specifically, to quantify this performance, for η > 0, we define the η-margin loss [44] 
+
+Φη (x) = min 
+
+
+
+1, max 
+
+
+
+0, 1 − xη
+
+
+
+. (69) It satisfies 
+
+1[sgn( f (h)) ̸ = γ] ≤ Φη (γf (h)) ≤ 1[γf (h) ≤ η]. (70) The margin parameter η used here is distinct from the decision-margin level δ in (34). For a training set {(hn, γ n)}mn=1 , the empirical margin loss for an arbitrary function f is given by 
+
+P ηe, emp (f ) ≜ 1
+
+m
+
+> m
+
+X
+
+> n=1
+
+Φη (γnf (hn)) . (71) By (70), P ηe, emp (f ) upper bounds the empirical classification error on the same sample. When the classifiers depend on the training data, their classification errors on a fresh example are understood conditionally on the realized training information. Specifically, for a local classifier ck and the aggregate classifier 
+
+cave , respectively, we define 
+
+Pe(ck) ≜ P sgn( ck(h∗
+
+> k
+
+)) ̸ = γ∗ | T, (72) 
+
+Pe(cave ) ≜ P sgn( cave (h∗)) ̸ = γ∗ | T. (73) To evaluate the empirical margin loss of the aggregate clas-sifier cave with (71), the training samples must provide the aligned collection of local views on which cave operates. Therefore, for the PAC analysis, we specialize the training setup to equal local sample sizes Nk = N and aligned network examples. Specifically, let 
+
+D ≜ (hn, γn) Nn=1 (74) consist of N i.i.d. draws from the joint distribution Q, where 
+
+hn = ( h1,n , . . . , hK,n ). The local training set at agent k is the corresponding projection 
+
+Dk ≜ (hk,n , γn) Nn=1 . (75) This specialization leaves the local training procedures in Sec-tion II-A unchanged. The network examples are independent across n, whereas the K views within each example may remain statistically dependent. Based on the network training set D in (74), we establish the following PAC-style generalization bounds for the classifiers 
+
+ck and cave using their empirical margin losses. Here, ρk and 
+
+ρ denote the individual and network Rademacher complexities defined in Appendix A.1, evaluated at the common sample size 
+
+Nk = N .
+
+Theorem 4 (PAC-style margin generalization guarantee ).
+
+Under Assumption 2 and the sampling setup above, fix any 
+
+η > 0. Then, for any ϵ ∈ (0 , 1) and every fixed agent k,
+
+Pe(ck) ≤ P ηe, emp (ck) + 4
+
+η ρk + R(ϵ, N ) (76) 
+
+with probability at least 1 − ϵ. Moreover, 
+
+Pe(cave ) ≤ P ηe, emp (cave ) + 4
+
+η ρ + R(ϵ, N ) (77) 
+
+with probability at least 1 − ϵ, where 
+
+R(ϵ, N ) ≜ 4βη√N 1 + 
+
+r
+
+2 log 1
+
+ϵ
+
+!
+
+. (78) 
+
+Proof. See Appendix E. Theorem 4 provides a complementary guarantee for the trained classifiers without investigating the prescribed network-margin event Cδ . It also does not require Assumption 5: dependence among the local views within each network example is in-corporated through their joint distribution Q. Moreover, the guarantee does not require exact empirical risk minimization or a prescribed optimization gap. Therefore, it holds uniformly 
+
+across classifiers returned by the local training procedures in Section II-A. From (76) and (77), the local and collaborative bounds have the same form, but differ in their empirical margin losses and complexity terms. Structurally, ck operates on a single local feature space Hk, whereas cave operates on the joint feature space H1 × · · · × HK . The empirical margins of cave can therefore reflect how information from different local views is combined. The theorem does not, however, impose a universal ordering between the local and collaborative bounds. Any collaborative advantage must be reflected in the aggregate mar-gin loss P ηe, emp (cave ) relative to the corresponding complexity terms ρ. This differs from the conventional ensemble setting, where multiple models typically operate on the same feature representation and the benefit of combining their outputs is often discussed in terms of variance reduction [44], [55]. 
+
+F. Relation to Social Learning 
+
+The DeGroot rule (11) and conventional social learning (SL) strategies both aggregate information across a network, but differ in how evidence enters the inference process. In the present framework, agents repeatedly communicate decision statistics initialized from a fixed testing example, whereas con-ventional SL recursions continually incorporate newly arriving 11 
+
+observations. To clarify the relation between these two infer-ence mechanisms, Appendix F considers a standard geometric-pooling SL recursion under a static-observation specialization, in which each agent reuses the same local testing observation at every communication round. This specialization places the SL rule in the same single-testing-example setting as the De-Groot rule and enables a direct comparison, while remaining distinct from the conventional streaming operation of SL. Under this specialization, repeated SL updates accumulate the same local evidence rather than new temporal evidence. After normalization by the number of communication rounds, the SL decision statistic converges to the same π-weighted aggregate cave as the DeGroot rule (11). Consequently, when-ever cave (h∗)̸ = 0 , the two strategies yield the same prediction under sufficient communication. Their finite-round decision statistics are generally different, however, and therefore lead to different finite-round guarantees. The complete comparison and the corresponding finite-round SL guarantee are provided in Appendix F. 
+
+Raw-score counterparts. The preceding analysis considers the empirically centered local scores ck(hk) defined in (9). As shown by Proposition 1, centering affects threshold alignment rather than being a structural requirement for collaboration. We refer to the learned scores bfk(hk) used without empirical centering as raw scores . In Appendix G, we provide an analogous analysis for raw scores. This analysis shows that the main collaborative guarantees persist without empirical centering, although the conditions for attaining a prescribed zero-threshold margin and the constants appearing in the finite-round bounds change. Neither representation universally dom-inates the other: centering can improve threshold alignment, whereas raw scores avoid estimating the empirical center and have a smaller worst-case score magnitude than the centered scores. IV. N UMERICAL SIMULATIONS 
+
+We evaluate the proposed test-time collaborative classifica-tion framework under two complementary observation models. The first is a controlled patch-partition benchmark based on CIFAR-10, where each agent observes a spatial patch extracted from a common image. The second is a multi-view benchmark constructed from rendered objects in ModelNet40, where each agent observes the same 3D object from a different viewpoint. The two benchmarks introduce different forms of local hetero-geneity, namely spatial partitioning and viewpoint variation. We further examine dependence across agents, heterogeneous local models, communication topology, quantization, adaptive stopping, and corrupted reports. Unless otherwise stated, all curves are averaged over multiple Monte Carlo repetitions and the error bars indicate 95% confidence intervals. Additional implementation details and extended numerical results are provided in Appendix H. 
+
+A. CIFAR-10 patch-partition benchmark 
+
+We begin with a controlled patch-partition benchmark based on CIFAR-10 [56]. We consider the binary task of distinguish-ing cats from dogs . Each 32 ×32 RGB image is divided into a Agent 1 Agent 2 Agent 3            
+
+> Agent 4 Agent 5 Agent 6
+> Agent 7 Agent 8 Agent 9
+> (a) 123456789(b)
+> Fig. 1. CIFAR-10 patch-partition benchmark. Panel (a) shows the local patch observed by each agent for a representative cat image, and panel (b) shows the communication topology used for collaboration.
+
+3 × 3 grid of non-overlapping spatial patches, yielding K = 9 
+
+agents, and agent k receives only the patch associated with its grid location. In this way, the agents observe different local regions of the same image and collaborate only during infer-ence. The communication network is taken to be a directed Erd¨ os–R´ enyi graph [46], generated randomly at the beginning of the experiment. The observation map of the nine agents and the communication topology are illustrated in Fig. 1. At each agent, a convolutional neural network (CNN) is trained independently on the corresponding patch dataset. For simplicity, we use the same local labeled dataset size N0 for all agents. For each value of N0, we construct balanced local datasets, train the classifiers independently, perform collabo-rative classification at test time, and average the results over multiple repetitions. The detailed training protocol is provided in Appendix H.1. Figure 2 summarizes the main performance results for this CIFAR-10 benchmark. Panel (a) reports the empirical class-conditional decision statistics under different values of N0.In the notation of Section III, these curves correspond to the empirical behavior of μ+( bf ) and μ−( bf ) in (33). As N0
+
+increases, μ+( bf ) moves farther above zero and μ−( bf ) moves farther below zero, so that the separation between the two curves grows overall, consistent with a larger achievable deci-sion margin in the sense of condition (34). This suggests that the network of trained classifiers becomes more informative as more training samples are available, which is beneficial for classification at test time. Panel (b) shows the corresponding classification perfor-mance. We compare the proposed method with several rules from ensemble learning and decision fusion, together with the non-cooperative baseline, an explicit centering ablation 
+
+Ours (no centering) , the VFL-JT baseline, and a central oracle trained on the full image as a full-information benchmark. The VFL-JT baseline uses a score-level joint-training scheme inspired by [57], where the local models and a server-side fu-sion head are optimized jointly using aligned labeled samples. Table I summarizes the training and inference coordination of the methods considered in the main baseline comparison. Since several of these reference rules depend on centralized aggregation of local outputs, the comparison is carried out in the regime of sufficient communication, where the distributed recursion (11) approaches its π-weighted consensus limit given 12 
+
+TABLE I TRAINING AND INFERENCE COORDINATION OF THE METHODS CONSIDERED IN THE MAIN BASELINE COMPARISONS .
+
+Method Training coordination Additional fitting Inference coordination 
+
+Non-cooperative None None None Avg-stat / Vote None None One-shot centralized averaging / voting Learned (simplex) fusion None Fusion rule fitted on aligned validation outputs One-shot centralized fusion AdaBoost Centralized Boosting-based fitting of local predictors One-shot weighted fusion Ours / Ours (no centering) None None Iterative peer-to-peer scalar exchange VFL-JT Joint training on aligned labeled samples Server-side fusion head learned jointly One-shot server fusion Central oracle Centralized full-information training None Centralized full-information prediction 10 3 10 4
+
+N0    
+
+> −0.16
+> −0.08 0.00 0.08
+> Decision margin  μ+(̂f)
+> μ−(̂f)
+
+(a) Decision margin 10 3 10 4
+
+N0 
+
+> 0.30 0.35 0.40 0.45
+> Prob. of error Non-cooperative
+> Pe(Ours) Ours (no centering) Avg-stat Vote Learned fusion Learned simplex fusion AdaBoost VFL-JT Central oracle
+
+(b) Probability of error 0 5 10 15 Communication round t   
+
+> 0.325 0.350 0.375 0.400
+> Prob. of error  (Individual) Pk,t
+> (Average) 1
+> K
+> ∑Kk=1 Pk,t
+
+(c) Instantaneous probability of error 
+
+Fig. 2. Main CIFAR-10 patch-partition results. Panel (a) reports the empirical class-conditional decision statistics, panel (b) compares the probability of error under different values of N0, and panel (c) shows the error evolution over the communication rounds for N0 = 10000 .
+
+in (16). From Fig. 2b, the probability of error decreases as 
+
+N0 increases, consistent with the increased decision margins observed in Fig. 2a. At the same time, the proposed method consistently improves upon non-cooperative prediction and remains competitive with the stronger fusion baselines. With joint training, VFL-JT achieves lower error than the proposed method over the tested range. We also note that under suf-ficient communication, Avg-stat coincides with the proposed method when A is doubly-stochastic, while Ours and Ours (no centering) exhibit similar performance over the tested range. Panel (c) illustrates the evolution of Pk,t during the col-laboration process. As the communication round t grows, the decision statistic λk,t converges to λave , and Pk,t approaches the error of the limiting aggregate classifier. It is worth noting that Pk, 0 at t = 0 corresponds to the error incurred by agent k in the non-cooperative scenario. The light grey dashed horizontal lines in Fig. 2c indicate these baseline error levels for reference. The average of Pk,t across all K agents is also shown in Fig. 2c, which decreases over the communication rounds before stabilizing. This highlights the improvement in the network-wide performance under collective prediction. We next present two additional studies for the CIFAR-10 patch-partition benchmark. 1 2 3 4 5 6 7 8 9Agent k 
+
+> 123456789Agent  `
+
+FFFF FFFF FFF FF FF FFF FF F FF F
+
+> 0.40.60.81.01.2nats
+
+(a) Conditional mutual information matrix Same row (n=9) Same column (n=9) Far (n=18) 0.20.40.60.81.01.21.4
+
+> ICMI (hk, h `) (nats)
+> Pairwise values Mean + 95% CI
+
+(b) Grouped conditional mutual information 
+
+Fig. 3. Conditional mutual information between CIFAR-10 patches. Panel (a) shows the estimated pairwise conditional mutual information matrix across the nine patch agents. White stars mark patch pairs that are adjacent on the 3 × 3
+
+grid shown in Fig. 1a, while red boxes indicate, in each row, the largest off-diagonal entries whose number matches the number of grid neighbors of the corresponding patch. Panel (b) shows the grouped summary over same-row, same-column, and far patch pairs. 13 
+
+1) Conditional mutual information between patches: Since all patches are extracted from the same natural image, nearby patches may remain statistically dependent even after condi-tioning on the class label. To quantify this effect, we estimate the class-conditional mutual information for each label value and then average according to the class probabilities: 
+
+ICMI (hk, h ℓ) ≜ X
+
+> γ∈Γ
+
+P(γ = γ) I(hk; hℓ |γ = γ) (79) where hk denotes the raw pixel vector of the patch observed by agent k, γ denotes the class label, and I(hk; hℓ |γ = γ)
+
+is the mutual information under the conditional distribution given γ = γ. The reported estimates are computed by first reducing the patch dimension through principal component analysis (PCA) [45] and then applying a k-nearest-neighbor (kNN) mutual information estimator [58]. More details about this estimation process are provided in Appendix H.1.3. Figure 3 shows that the estimated conditional mutual infor-mation is clearly nonzero for many patch pairs and tends to be strongest among spatially related patches. Thus, the CIFAR-10 patch-partition benchmark induces a structured observation model in which nearby local views exhibit stronger statistical dependence than distant ones. This observation motivates the dependence-aware prediction analysis in Section III. While the CMI diagnostic is not an estimate of the ATE coefficient in Assumption 5, it does provide empirical evidence that the local views are not independent in this benchmark. 
+
+2) Heterogeneous local model families: We next relax the assumption that all agents use the same local architecture. Different agents are then assigned different local model fami-lies, while the communication graph and the collaboration rule remain unchanged. The local models include the patch-level convolutional network used in the main CIFAR-10 benchmark, a logistic-regression classifier on raw patch pixels, and a small residual convolutional network [59]. The detailed protocol and the precise model specifications are given in Appendix H.1.4. Figure 4 reports a balanced assignment study in which the model families are rotated across the 3 × 3 grid so that each family appears equally often at every spatial location. The results indicate that collaboration remains beneficial across all three model families and across all patch locations, although the magnitude of the improvement varies with both the family and the position. Furthermore, under one representative hetero-geneous assignment, the main performance results summarized in Fig. 5 show that the same qualitative behavior observed in the homogeneous benchmark is preserved here: the empirical decision margins become more separated as N0 increases, the collaborative classifier improves over non-cooperative infer-ence, and most of the performance gain is realized within the first few communication rounds. 
+
+B. ModelNet40 multi-view benchmark 
+
+In this section, we consider a multi-view benchmark derived from ModelNet40 [60]. Unlike the CIFAR-10 patch-partition setting, where the agents observe different spatial regions of the same image, here each agent receives one rendered view of the same 3D object. The heterogeneity across agents therefore arises from viewpoint rather than patch location. For each object, we generate K = 12 RGB renderings from fixed camera positions whose azimuth angles are uniformly spaced around the object, with a common elevation angle of 
+
+30 ◦. One rendered view is then assigned to each agent. In the experiments, we consider the binary task pair of dresser 
+
+and nightstand . The multi-view construction and a randomly-generated communication topology used in our experiments are illustrated in Fig. 6. Each local classifier is a lightweight convolutional network, referred to as MicroCNN ; further ex-perimental details are given in Appendix H.2. Figure 7 summarizes the main performance results for this ModelNet40 benchmark. In panel (a), the empirical statistics 
+
+μ+( bf ) and μ−( bf ) remain separated across N0, indicating that the classifier network remains informative under the viewpoint heterogeneity. Compared with the CIFAR-10 benchmark in Fig. 2, their variation with N0 is milder and exhibits more visi-ble fluctuations, which is consistent with the smaller amount of training data available in this benchmark. The corresponding probability of error curves in Fig. 7b also decrease overall as 
+
+N0 increases, in agreement with the larger decision margins attained at larger values of N0. Meanwhile, the improvement of the proposed method is more limited at smaller N0, where some local training sets may be too small for the agents to learn informative classifiers from their views. In this regime, some non-cooperative agents can achieve lower error when acting alone than under collaboration. The relative ordering of the score-fusion baselines is also more sensitive than in the CIFAR-10 benchmark, which may reflect the fact that classifiers trained on different viewpoints need not produce scores on comparable scales. In particular, since Avg-stat 
+
+corresponds to a special case of the proposed method under sufficient communication when A is doubly-stochastic, the gap between Avg-stat and Ours indicates that the choice of the combination policy A can have a visible effect on collaborative performance. The instantaneous error curves in Fig. 7c further show that most of the performance gain is achieved within the first few communication rounds. 
+
+1) Temperature scaling and score calibration: The sensi-tivity of the score fusion baselines in Fig. 7 suggests that score calibration across viewpoints deserves closer examination. To this end, we consider temperature scaling as a post-hoc calibration step in our experiments [61]. For each agent, a positive temperature is fitted on the local validation set by minimizing the cross-entropy loss of the rescaled logits, as detailed in Appendix H.2.1. The local decision statistic is then formed from the difference between the two calibrated logits, followed by the same centering step (9) as in the uncalibrated setting. Since temperature scaling does not change the pre-dicted class of an individual local classifier, its role here is not to alter the local decisions themselves, but to improve the comparability of the real-valued decision statistics exchanged during collaboration. Figure 8 shows that, relative to Fig. 7, the class-conditional decision statistics become more clearly separated after cali-bration, and the probability of error curve of the proposed method is slightly improved over most of the tested range of N0. This suggests that, under viewpoint heterogeneity, score calibration can improve the alignment of the exchanged 14 1 2 3col 123row                       
+
+> 11.8% 8.4% 13.9% 15.4% 11.2% 15.6% 15.3% 13.1% 14.4%
+> Family A
+> 123col 123
+> 18.4% 14.6% 17.8% 19.6% 19.0% 18.5% 22.7% 23.1% 19.4%
+> Family B
+> 123col 123
+> 6.8% 4.2% 10.5% 11.1% 5.1% 10.9% 14.1% 10.8% 13.4%
+> Family C
+> 5.07.510 .012 .515 .017 .520 .022 .5Gain (%)
+
+Fig. 4. Collaboration gain under heterogeneous local model families on CIFAR-10. Each cell shows the relative gain when the corresponding model family is assigned to that patch location under the balanced rotation protocol. 10 3 10 4    
+
+> N0
+> −0.16
+> −0.08 0.00 0.08
+> Decision margin
+> μ+(̂f)
+> μ−(̂f)
+
+(a) Decision margin 10 3 10 4 
+
+> N0
+> 0.30 0.35 0.40 0.45
+> Prob. of error
+
+(b) Probability of error 0 5 10 15 Communication round t    
+
+> 0.30 0.35 0.40
+> Prob. of error  (Individual) Pk,t
+> (Average) 1
+> K
+> ∑Kk=1 Pk,t
+
+(c) Instantaneous probability of error 
+
+Fig. 5. Performance of heterogeneous local model families on CIFAR-10. The curve labels in panel (b) and the value of N0 in panel (c) are the same as those in Fig. 2. view_00.png vview_04.pngiewview_10.png_01.pn g
+
+(a) 123456789 10 11 12 (b) 
+
+Fig. 6. ModelNet40 multi-view benchmark. Panel (a) shows the 12 rendered views associated with a nightstand object, and panel (b) shows the commu-nication topology used for collaboration. 
+
+decision statistics across agents and thereby improve collabo-rative prediction. VFL-JT is not included in this study because temperature scaling of its local scores is coupled with the jointly optimized fusion head. Additional figures are provided in Appendix H.2.1. 
+
+2) Controlled correlation stress test: In the multi-view set-ting, different agents observe the same underlying object and can therefore produce statistically dependent local decision statistics. To examine how the collaborative classifier behaves as this dependence becomes stronger, we perform a controlled stress test directly on the local decision statistics, with more details provided in Appendix H.2.2. Let xi,k denote the clean local decision statistic produced by agent k for the i-th testing sample. To control the correlation between xi,k across agents, we consider a perturbed local decision statistic at each agent, denoted by x′
+
+> i,k
+
+:
+
+x′ 
+
+> i,k
+
+= xi,k + σpert (ωc(r) ui + ωi(r) ei,k ) (80) where ui ∼ N(0 , 1) is a shared standard Gaussian perturbation for sample i, ei,k ∼ N(0 , 1) are independent standard Gaussian perturbations across samples and agents, and 
+
+ωc(r) = r
+
+√1 + r2 , ωi(r) = 1
+
+√1 + r2 . (81) Here, r ≥ 0 controls the relative strength of the common-mode component, while σpert > 0 controls the overall pertur-bation scale. Since ωc(r)2 + ωi(r)2 = 1 , varying r changes the balance between common and idiosyncratic perturbations without substantially changing the total injected variance. This construction follows a standard common-factor decomposition with shared and idiosyncratic components. At test time, the agents employ the same rule (11), but with the perturbed local decision statistics x′ 
+
+> i,k
+
+in place of the clean statistics xi,k .Figure 9 shows that the average pairwise correlations across agents, both unconditional and label-conditional, increase with 
+
+r. The corresponding collaboration gain, which is measured by the error reduction relative to non-cooperative inference after 
+
+t = 20 communication rounds, decreases with r for each fixed perturbation amplitude. This is consistent with the fact that stronger dependence makes the local decision statistics more redundant and therefore reduces the benefit of information sharing across the network. At the same time, the degradation 15 10 2 2 × 10 2 3 × 10 2 4 × 10 2                        
+
+> N0
+> −0.30
+> −0.15 0.00 0.15 0.30
+> Decision margin
+> μ+(̂f)
+> μ−(̂f)
+> (a) Decision margin 10 22×10 23×10 24×10 2
+> N0
+> 0.20.30.40.5
+> Prob. of error
+> (b) Probability of error 0510 15 Communication round t
+> 0.20.30.40.5
+> Prob. of error  (Individual) Pk,t
+> (Average) 1
+> K
+> ∑Kk=1 Pk,t
+> (c) Instantaneous probability of error
+> Fig. 7. Main ModelNet40 multi-view results. Panel (a) reports the empirical class-conditional decision statistics, panel (b) compares the probability of error under different values of N0, and panel (c) shows the error evolution over the communication rounds for N0= 400 .
+
+is gradual, indicating that the collaborative classifier continues to provide measurable gains over a broad range of dependence levels. 
+
+C. Communication design, adaptive stopping, and robustness 
+
+In this section, we examine several aspects of the commu-nication protocol using the ModelNet40 benchmark. In partic-ular, we study how collaborative performance is influenced by the graph topology, the combination policy, the communication precision, adaptive stopping rules, and corrupted messages. 
+
+1) Topology, combination policy, and communication preci-sion: We begin by examining the impact of the communication design across three graph topologies: ring, grid, and directed Erd¨ os–R´ enyi. For each topology, the combination policy A is constructed using two different schemes: the uniform averag-ing rule and the Metropolis rule. For this quantization study only, we represent the already trained probabilistic classifier by the bounded posterior-probability difference 
+
+gk(h) ≜ bpk(+1 |h) − bpk(−1|h) = tanh bfk(h)2
+
+!
+
+∈ [−1, 1] .
+
+(82) No retraining process is required for this representation. Under this transformation, the resulting centered local score 
+
+cgk(h) ≜ gk(h) − 1
+
+NkNkX
+
+> n=1
+
+gk(hk,n ) (83) satisfies |cgk(h)| ≤ 2. We compare the resulting matched full-precision recursion with 4-, 6-, and 8-bit stochastic communi-cation. Further details of the quantization protocol are provided in Appendix H.3.1. Figure 10 reports the evolution of the average probability of error under these communication designs. All settings benefit from communication in the early rounds, but both the finite-round improvement and the error level eventually reached depend visibly on the topology, the construction rule of A,and the communication precision. Among the graph families considered here, the grid generally attains the lowest error, while the ring also performs competitively. By contrast, the directed Erd¨ os–R´ enyi topology is more sensitive to the choice of combination policy and communication precision. The pre-cision hierarchy is systematic: 8-bit stochastic communication is practically indistinguishable from the matched bounded full-precision reference, 6-bit communication produces a modest intermediate degradation, and 4-bit communication produces the largest loss. More detailed grouped views of these results are provided in Appendix H.3.1. 
+
+2) Adaptive stopping rules: In the previous experiments, the collaboration framework is evaluated under a fixed com-munication budget t chosen in advance. In practice, however, selecting this budget is not straightforward: a larger t increases communication cost, while a smaller t may be insufficient for collaboration. This motivates the study of adaptive stopping rules, in which the communication pattern is allowed to depend on the evolution of local decision statistics. We consider two local event-triggered families: a ∆-trigger rule based on the change in the communicated statistic, and a label-stability with confidence rule based on the local prediction and a confidence threshold (see Appendix H.3.2). Since transmissions may stop at different times for different agents and different samples, we measure the resulting communication cost by the total number of transmissions per testing sample. Figure 11 illustrates the tradeoff between the probability of error and the total communication cost for four values of the maximum communication budget tmax . In each panel, only the Pareto-efficient operating points are shown, namely those for which no alternative configuration attains both lower commu-nication cost and lower probability of error. Both stopping rule families exhibit a clear communication–accuracy tradeoff, but the label-stability rule generally yields a better Pareto frontier than the ∆-trigger rule, especially in the low communication regime. The star markers denote the best points selected from the two families of stopping rules. Their positions indicate that communication can often be terminated well before reaching the maximum communication budget. 
+
+3) Robustness to noisy, faulty, and adversarial agents: 
+
+We next examine how the collaborative inference mechanism behaves when a subset of agents transmits corrupted messages at test time. The perturbation is introduced only at the level of 16 10 2 2 × 10 2 3 × 10 2 4 × 10 2
+
+N0    
+
+> −0.50
+> −0.25 0.00 0.25 0.50
+> Decision margin
+> μ+(̂f)
+> μ−(̂f)
+
+(a) Decision margin 10 2 2 × 10 2 3 × 10 2 4 × 10 2
+
+N0 
+
+> 0.20.30.40.5
+> Prob. of error
+
+(b) Probability of error 0 5 10 15 Communication round t    
+
+> 0.20.30.40.5
+> Prob. of error  (Individual) Pk,t
+> (Average) 1
+> K
+> ∑Kk=1 Pk,t
+
+(c) Instantaneous probability of error 
+
+Fig. 8. Performance of temperature scaling on ModelNet40. The curve labels in panel (b) and the value of N0 in panel (c) are the same as those in Fig. 7. 0 1 2 3 4 5Dependence strength r
+
+0.00.20.40.60.81.0Pairwise correlation 
+
+Unconditional corr Conditional corr 
+
+10 0
+
+10 1
+
+> Noise amplitude  σpert
+
+(a) Average pairwise correlation 0 1 2 3 4 5Dependence strength r
+
+0.00 0.02 0.04 0.06 0.08 0.10 0.12 Collaboration gain         
+
+> Gain at t= 20 Clean gain at t= 20 Zero gain Gain at t= 20 Clean gain at t= 20 Zero gain
+
+10 0
+
+10 1 
+
+> Noise amplitude  σpert
+
+(b) Collaboration gain 
+
+Fig. 9. Controlled correlation stress test on ModelNet40. Panel (a) shows the average pairwise Pearson correlation across agent decision statistics, both unconditional and label-conditional, and panel (b) shows the collaboration gain after t = 20 communication rounds. 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.20 0.22 0.24 0.26 0.28 0.30 0.32 0.34  
+
+> Prob. of error
+> Topology ring grid Erd¨ os–R´ enyi
+> Arule uniform Metropolis Quantization
+> Full precision 8-bit 6-bit 4-bit
+
+Fig. 10. Effect of topology, the construction rule of A, and quantization noise. 
+
+the local decision statistics before communication begins. For each corruption scenario, we compare the resulting probability of error with that of the corresponding clean run obtained from the same trained models, the same testing set, and the same combination policy. The degradation is measured by the paired excess error , namely the increase in probability of error rela-tive to the clean run within the same Monte Carlo repetition. In each repetition, we corrupt exactly m ∈ { 1, . . . , K } agents and consider three families of perturbations: benign Gaussian noise, faulty agents (including stuck-at-zero and constant-bias failures), and adversarial reports modeled by scaled sign flips. Additional details on the perturbation models are provided in Appendix H.3.3. Figure 12 summarizes the robustness results after 20 rounds of communication. In all three perturbation settings, the excess error increases with both the number of corrupted agents and 5 10 15 20 25 30 35 40 45 Transmissions 0.25 0.26 0.27 0.28 0.29 Prob. of error 
+
+> Best local label Best local ∆ Local label-stability Local ∆-trigger
+
+(a) tmax = 2 20 40 60 80 100 120 Transmissions 0.24 0.26 0.28 Prob. of error  
+
+> Best local label Best local ∆ Local label-stability Local ∆-trigger
+
+(b) tmax = 5 0 25 50 75 100 125 150 175 200 Transmissions 0.24 0.26 0.28 Prob. of error 
+
+> Best local label Best local ∆ Local label-stability Local ∆-trigger
+
+(c) tmax = 10 0 50 100 150 200 250 Transmissions 0.24 0.26 0.28 Prob. of error  
+
+> Best local label Best local ∆ Local label-stability Local ∆-trigger
+
+(d) tmax = 20 
+
+Fig. 11. Tradeoff between the probability of error and the total number of transmissions (per testing sample) under local adaptive stopping rules. 
+
+the perturbation severity. Among the three cases, adversarial scaled sign flips are the most damaging, indicating that per-sistently misleading decision statistics can have a particularly strong effect on collaborative prediction. By contrast, benign Gaussian noise and faulty agents yield a more gradual degra-dation, especially when only a few agents are affected. V. C ONCLUDING REMARKS 
+
+In this work, we proposed a distributed test-time collabo-rative classification framework for multi-agent networks. We considered a group of independently trained agents, poten-17 2 4 6 8 10 12          
+
+> Corrupted agents m(out of K)
+> 0.00 0.02 0.04 0.06 0.08
+> Excess error
+> ηnoise = 0
+> ηnoise = 0 .25
+> ηnoise = 0 .5
+> ηnoise = 1
+> ηnoise = 1 .5
+> ηnoise = 2
+
+(a) Benign Gaussian noise 2 4 6 8 10 12               
+
+> Corrupted agents m(out of K)
+> 0.00 0.05 0.10 0.15 0.20 0.25
+> Excess error
+> ηbias =−2
+> ηbias =−1
+> ηbias =−0.5
+> ηbias = 0
+> ηbias = 0 .5
+> ηbias = 1
+> ηbias = 2 stuck-at-0
+
+(b) Faulty agents 2 4 6 8 10 12            
+
+> Corrupted agents m(out of K)
+> 0.00.10.20.30.40.5
+> Excess error  ηadv = 0
+> ηadv = 0 .5
+> ηadv = 1
+> ηadv = 1 .5
+> ηadv = 2
+> ηadv = 3
+> ηadv = 5
+
+(c) Adversarial reports 
+
+Fig. 12. Robustness of collaborative classification to corrupted agents, measured by the paired excess error at the communication round t = 20 . Panel (a) varies the Gaussian noise multiplier ηnoise , panel (b) varies the fault type and the normalized bias level ηbias , and panel (c) varies the adversarial scale ηadv .
+
+tially with heterogeneous feature spaces and model architec-tures, that collaborates at inference time by exchanging local beliefs with graph neighbors to produce collective predic-tions. Our analysis established classification error bounds that characterize the impact of the agent heterogeneity, network topology, combination policies, and communication budgets on collective prediction performance. These bounds provide theoretical insight into the interplay between local training and distributed inference in multi-agent systems, in addition to highlighting the benefits of collaborative classification relative to the non-cooperative scenario. Importantly, this study shows that cooperation can be valuable at test time even when the local models are trained independently, which is becoming an increasingly important paradigm in real-world implementa-tions of distributed machine learning. Future directions include extensions to multi-class settings, theoretical analysis of adap-tive and communication-efficient protocols, privacy-preserving implementations, and more general communication settings, including asynchronous updates, time-varying topologies, and lossy communication. REFERENCES [1] A. H. Sayed, S.-Y. Tu, J. Chen, X. Zhao, and Z. J. Towfic, “Diffusion strategies for adaptation and learning over networks: an examination of distributed strategies and network behavior,” IEEE Signal Processing Magazine , vol. 30, no. 3, pp. 155–171, 2013. [2] S. Kar and J. M. F. Moura, “Consensus + innovations distributed inference over networks: cooperation and sensing in networked systems,” 
+
+IEEE Signal Processing Magazine , vol. 30, no. 3, pp. 99–109, 2013. [3] M. I. Jordan, J. D. Lee, and Y. Yang, “Communication-efficient dis-tributed statistical inference,” Journal of the American Statistical Asso-ciation , vol. 114, no. 526, pp. 668–681, 2019. [4] J. Verbraeken, M. Wolting, J. Katzy, J. Kloppenburg, T. Verbelen, and J. S. Rellermeyer, “A survey on distributed machine learning,” ACM Computing Surveys , vol. 53, no. 2, pp. 1–33, 2020. [5] D. Jin, N. Kannengießer, S. Rank, and A. Sunyaev, “Collaborative distributed machine learning,” ACM Computing Surveys , vol. 57, no. 4, pp. 95:1–95:36, 2024. [6] V. Matta, P. Braca, S. Marano, and A. H. Sayed, “Diffusion-based adaptive distributed detection: Steady-state performance in the slow adaptation regime,” IEEE Transactions on Information Theory , vol. 62, no. 8, pp. 4710–4732, 2016. [7] D. Bajovi´ c, J. M. F. Moura, J. Xavier, and B. Sinopoli, “Distributed in-ference over directed networks: Performance limits and optimal design,” 
+
+IEEE Transactions on Signal Processing , vol. 64, no. 13, pp. 3308–3323, 2016. [8] S. Shahrampour, A. Rakhlin, and A. Jadbabaie, “Distributed detection: Finite-time analysis and impact of network topology,” IEEE Transactions on Automatic Control , vol. 61, no. 11, pp. 3256–3268, 2016. [9] V. Matta, V. Bordignon, and A. H. Sayed, Social Learning: Opinion Formation and Decision-Making over Graphs , ser. NOW Book Series on Information and Learning Sciences. Now Publishers, 2025. [10] A. H. Sayed, “Adaptation, learning, and optimization over networks,” 
+
+Foundations and Trends® in Machine Learning , vol. 7, no. 4-5, pp. 311–801, 2014. [11] A. Nedic, “Distributed gradient methods for convex machine learning problems in networks: Distributed optimization,” IEEE Signal Process-ing Magazine , vol. 37, no. 3, pp. 92–101, 2020. [12] P. Braca, L. M. Millefiori, A. Aubry, S. Marano, A. De Maio, and P. Willett, “Statistical hypothesis testing based on machine learning: Large deviations analysis,” IEEE Open Journal of Signal Processing ,vol. 3, pp. 464–495, 2022. [13] V. Bordignon, S. Vlaski, V. Matta, and A. H. Sayed, “Learning from heterogeneous data based on social interactions over graphs,” IEEE Transactions on Information Theory , vol. 69, no. 5, pp. 3347–3371, 2023. [14] P. Hu, V. Bordignon, M. Kayaalp, and A. H. Sayed, “Non-asymptotic performance of social machine learning under limited data,” Signal Processing , vol. 230, p. 109849, 2025. [15] S. F. Yilmaz, B. Hasircio˘ glu, L. Qiao, and D. G¨ und¨ uz, “Private collabo-rative edge inference via over-the-air computation,” IEEE Transactions on Machine Learning in Communications and Networking , vol. 3, pp. 215–231, 2025. [16] P. Yadav, C. Raffel, M. Muqeeth, L. Caccia, H. Liu, T. Chen, M. Bansal, L. Choshen, and A. Sordoni, “A survey on model MoErging: Recycling and routing among specialized experts for collaborative learning,” Trans-actions on Machine Learning Research , 2025. [17] C. Mavromatis, P. Karypis, and G. Karypis, “Pack of LLMs: Model fusion at test-time via perplexity optimization,” in Conference on Lan-guage Modeling , 2024. [18] M. H. DeGroot, “Reaching a consensus,” Journal of the American Statistical Association , vol. 69, no. 345, pp. 118–121, 1974. [19] R. Olfati-Saber, J. A. Fax, and R. M. Murray, “Consensus and coop-eration in networked multi-agent systems,” Proceedings of the IEEE ,vol. 95, no. 1, pp. 215–233, 2007. [20] D. Acemoglu and A. Ozdaglar, “Opinion dynamics and learning in social networks,” Dynamic Games and Applications , vol. 1, no. 1, pp. 3–49, 2011. [21] A. G. Chandrasekhar, H. Larreguy, and J. P. Xandri, “Testing models of social learning on networks: Evidence from two experiments,” Econo-metrica , vol. 88, no. 1, pp. 1–32, 2020. [22] B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. A. y Arcas, “Communication-efficient learning of deep networks from decentralized data,” in Artificial Intelligence and Statistics . PMLR, 2017, pp. 1273– 1282. [23] J. Koneˇ cn` y, H. B. McMahan, F. X. Yu, P. Richt´ arik, A. T. Suresh, and D. Bacon, “Federated learning: Strategies for improving communication efficiency,” arXiv:1610.05492 , 2016. [24] X. Lian, C. Zhang, H. Zhang, C.-J. Hsieh, W. Zhang, and J. Liu, “Can decentralized algorithms outperform centralized algorithms? A case study for decentralized parallel stochastic gradient descent,” in 
+
+Advances in Neural Information Processing Systems , vol. 30, 2017. [25] Z. Jiang, A. Balu, C. Hegde, and S. Sarkar, “Collaborative deep learning in fixed topology networks,” in Advances in Neural Information Processing Systems , vol. 30, 2017. [26] Y. Zhao, M. Li, L. Lai, N. Suda, D. Civin, and V. Chandra, “Federated learning with non-iid data,” arXiv:1806.00582 , 2018. [27] T. Lin, L. Kong, S. U. Stich, and M. Jaggi, “Ensemble distillation for robust model fusion in federated learning,” in Advances in Neural Information Processing Systems , vol. 33, 2020, pp. 2351–2363. 18 
+
+[28] P. Kairouz, H. B. McMahan, B. Avent, A. Bellet, M. Bennis, A. N. Bhagoji, K. Bonawitz, Z. Charles, G. Cormode, R. Cummings et al. ,“Advances and open problems in federated learning,” Foundations and Trends® in Machine Learning , vol. 14, no. 1–2, pp. 1–210, 2021. [29] A. Fallah, A. Mokhtari, and A. Ozdaglar, “Personalized federated learning with theoretical guarantees: A model-agnostic meta-learning approach,” in Advances in Neural Information Processing Systems ,vol. 33, 2020, pp. 3557–3568. [30] D. Wen, K.-J. Jeon, and K. Huang, “Federated dropout–A simple ap-proach for enabling federated learning on resource constrained devices,” 
+
+IEEE wireless communications letters , vol. 11, no. 5, pp. 923–927, 2022. [31] S. Xie, D. Wen, X. Liu, C. You, T. Ratnarajah, and K. Huang, “Convergence analysis for federated dropout,” in GLOBECOM 2024 -2024 IEEE Global Communications Conference , 2024, pp. 5313–5318. [32] C. Mendler-D¨ unner, W. Guo, S. Bates, and M. I. Jordan, “Test-time collective prediction,” in Advances in Neural Information Processing Systems , vol. 34, 2021, pp. 13 719–13 731. [33] O. A. Alzubi, J. A. A. Alzubi, S. Tedmori, H. Rashaideh, and O. Almo-mani, “Consensus-based combining method for classifier ensembles,” 
+
+The International Arab Journal of Information Technology , vol. 15, no. 1, pp. 76–86, 2018. [34] A. Jadbabaie, P. Molavi, A. Sandroni, and A. Tahbaz-Salehi, “Non-Bayesian social learning,” Games and Economic Behavior , vol. 76, no. 1, pp. 210–225, 2012. [35] A. Lalitha, T. Javidi, and A. D. Sarwate, “Social learning and distributed hypothesis testing,” IEEE Transactions on Information Theory , vol. 64, no. 9, pp. 6161–6179, 2018. [36] A. Nedic, A. Olshevsky, and C. A. Uribe, “Fast convergence rates for distributed non-Bayesian learning,” IEEE Transactions on Automatic Control , vol. 62, no. 11, pp. 5538–5553, 2017. [37] V. Bordignon, V. Matta, and A. H. Sayed, “Adaptive social learning,” 
+
+IEEE Transactions on Information Theory , vol. 67, no. 9, pp. 6053– 6081, 2021. [38] M. Kayaalp, Y. ˙ Inan, E. Telatar, and A. H. Sayed, “On the arithmetic and geometric fusion of beliefs for distributed inference,” IEEE Transactions on Automatic Control , vol. 69, no. 4, pp. 2265–2280, 2024. [39] R. Polikar, “Ensemble based systems in decision making,” IEEE Circuits and Systems Magazine , vol. 6, no. 3, pp. 21–45, 2006. [40] L. I. Kuncheva, Combining Pattern Classifiers: Methods and Algorithms .John Wiley & Sons, 2014. [41] P. L. Bartlett, Y. Freund, W. S. Lee, and R. E. Schapire, “Boosting the margin: A new explanation for the effectiveness of voting methods,” The Annals of Statistics , vol. 26, no. 5, pp. 1651–1686, 1998. [42] Z.-H. Zhou, Ensemble Methods: Foundations and Algorithms , 1st ed. Chapman and Hall/CRC, 2012. [43] P. L. Bartlett, M. I. Jordan, and J. D. McAuliffe, “Convexity, classifica-tion, and risk bounds,” Journal of the American Statistical Association ,vol. 101, no. 473, pp. 138–156, 2006. [44] M. Mohri, A. Rostamizadeh, and A. Talwalkar, Foundations of Machine Learning , 2nd ed. MIT press, 2018. [45] A. H. Sayed, Inference and Learning from Data . Cambridge University Press, 2022. [46] M. Newman, Networks . Oxford University Press, 2018. [47] T. G. Lewis, Network Science: Theory and Applications . John Wiley & Sons, 2011. [48] L. I. Kuncheva, “A theoretical study on six classifier fusion strate-gies,” IEEE Transactions on Pattern Analysis and Machine Intelligence ,vol. 24, no. 2, pp. 281–286, 2002. [49] P. Caputo, G. Menz, and P. Tetali, “Approximate tensorization of entropy at high temperature,” Annales de la Facult´ e des Sciences de Toulouse: Math´ ematiques , vol. 24, no. 4, pp. 691–716, 2015. [50] G. Fumera and F. Roli, “A theoretical and experimental analysis of linear combiners for multiple classifier systems,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 27, no. 6, pp. 942–956, 2005. [51] T. Heskes, “Selecting weighting factors in logarithmic opinion pools,” in Advances in Neural Information Processing Systems , vol. 10, 1997. [52] R. A. Horn and C. R. Johnson, Matrix Analysis , 2nd ed. Cambridge University Press, 2012. [53] L. Xiao and S. Boyd, “Fast linear iterations for distributed averaging,” 
+
+Systems & Control Letters , vol. 53, no. 1, pp. 65–78, 2004. [54] T. C. Aysal, M. J. Coates, and M. G. Rabbat, “Distributed average consensus using probabilistic quantization,” in 2007 IEEE/SP 14th Workshop on Statistical Signal Processing , Madison, WI, USA, Aug. 2007, pp. 640–644. [55] G. Fumera, F. Roli, and A. Serrau, “A theoretical analysis of bagging as a linear combination of classifiers,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 30, no. 7, pp. 1293–1299, 2008. [56] A. Krizhevsky, “Learning multiple layers of features from tiny images,” University of Toronto, Tech. Rep., 2009. [57] Y. Hu, D. Niu, J. Yang, and S. Zhou, “FDML: A collaborative machine learning framework for distributed features,” in Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . ACM, 2019, pp. 2232–2240. [58] A. Kraskov, H. St¨ ogbauer, and P. Grassberger, “Estimating mutual information,” Physical Review E , vol. 69, no. 6, p. 066138, 2004. [59] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2016, pp. 770–778. [60] Z. Wu, S. Song, A. Khosla, F. Yu, L. Zhang, X. Tang, and J. Xiao, “3d shapenets: A deep representation for volumetric shapes,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition ,2015, pp. 1912–1920. [61] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On calibration of modern neural networks,” in Proceedings of the 34th International Conference on Machine Learning , vol. 70, 2017, pp. 1321–1330. 
+
+Ping Hu received her Ph.D. in electrical engineering from EPFL, Switzerland in 2026. She is currently a postdoctoral researcher with the Adaptive Systems Laboratory, EPFL. Her research interests include distributed learning, infer-ence and decision-making over networked systems. 
+
+Mert Kayaalp received his Ph.D. in computer and communication sciences from EPFL, Switzerland in 2025. He is currently a research scientist at Dalle Molle Institute for Artificial Intelligence (IDSIA USI-SUPSI), Switzerland, where he is affiliated with the UBS-IDSIA AI Lab. His research focuses on machine learning and signal analysis in networked and dynamical systems. 
+
+Ali H. Sayed is professor and former dean of engineering at EPFL, Switzer-land, where he also directs the Adaptive Systems Laboratory. He served before as a distinguished professor and chair of electrical engineering with UCLA. He is a member of the US National Academy of Engineering (NAE) and The World Academy of Sciences (TWAS). He served as a president of the IEEE Signal Processing Society in 2018 and 2019. An author of over 650 scholarly publications and 10 books, his research involves several areas including adaptation and learning theories, statistical inference, and multi-agent systems. His work has been recognized with several awards including the 2022 IEEE Fourier Technical Field Award and the 2020 IEEE Wiener Society Award. He is also a fellow of EURASIP and the American Association for the Advancement of Science (AAAS). 1
+
+# Supplementary Material for 
+
+# “Test-Time Collaborative Classification over Multi-Agent Networks” 
+
+Ping Hu, Mert Kayaalp, and Ali H. Sayed 
+
+ORGANIZATION OF THE SUPPLEMENTARY MATERIAL 
+
+This supplementary material provides detailed proofs, aux-iliary results, and additional experimental information sup-porting the main paper. The theoretical appendices follow the order of the main development. Appendix A presents the network margin and training analysis and collects the auxiliary quantities used in the Theorems and subsequent proofs. Ap-pendices B–D establish the sufficient-communication, finite-round, and finite-precision classification guarantees, respec-tively. Appendix E provides the Probably Approximately Cor-rect (PAC)-style generalization analysis, while Appendix F de-velops the relation to social learning. Appendix G collects the corresponding raw score results when the empirical centering step (9) is omitted. Finally, Appendix H presents additional experimental details. Cross-references to theorem, equation, section, and figure numbers in the main paper are retained throughout. APPENDIX ANETWORK MARGIN AND TRAINING GUARANTEE 
+
+This appendix provides the technical details supporting the network margin and training guarantees in Section III-A of the main paper. We first collect the complexity and margin quanti-ties used in the finite-sample analysis. We then prove the effect of additive centering and the δ-margin training guarantee under approximate optimization. The final subsection compares the resulting bound with homogeneous centralized training. 
+
+1. Definitions of Auxiliary Quantities 
+
+This subsection collects the definitions and relevant proper-ties of several auxiliary quantities used throughout the theo-retical analysis. 
+
+a) Rademacher complexity: We begin with introducing the Rademacher complexity of a general function class G. Let 
+
+Z ≜ {z1, z 2, . . . , z m} be a fixed sample set of size m. The empirical Rademacher complexity of G with respect to Z is defined as 
+
+bRZ(G) ≜ Er sup 
+
+> g∈G
+
+1
+
+m
+
+> m
+
+X
+
+> n=1
+
+rng(zn) (A.1) where r1, . . . , rm are independent Rademacher random vari-ables. For an i.i.d. random sample set Z′ of size m, the Rademacher complexity of G is 
+
+Rm(G) ≜ EZ′ bRZ′ (G). (A.2) For the local function class Fk and training set size Nk, we define the individual Rademacher complexity by 
+
+ρk ≜ RNk (Fk), (A.3) and the corresponding network Rademacher complexity by the weighted average involving the Perron vector π:
+
+ρ ≜
+
+> K
+
+X
+
+> k=1
+
+πkρk. (A.4) Here, RNk (Fk) is evaluated for Nk i.i.d. local feature samples drawn from the feature marginal induced by Qk.
+
+b) Sample-size factor: We define two quantities related to the size of local training sets: 
+
+Nmax ≜ max  
+
+> k
+
+Nk, α ≜
+
+> K
+
+X
+
+> k=1
+
+πk
+
+Nmax 
+
+Nk
+
+. (A.5) The factor α captures the effect of unequal local training set sizes. Since Nmax /N k ≥ 1 and P 
+
+> k
+
+πk = 1 , we have α ≥ 1.In particular, α = 1 when all local training sets have the same size. 
+
+c) Function EΦ(r, δ ): Following Eqs. (A.16), (A.18), and (A.20) of [1], we use the same construction with a generic risk level r < Φ(0) . For any prescribed margin δ ≥ 0, let d⋆δ (r)
+
+denote the unique nonnegative solution of 
+
+d − δ − Φ( d) − r
+
+2LΦ
+
+= 0 . (A.6) The corresponding auxiliary function is 
+
+EΦ(r, δ ) ≜ d⋆δ (r) − δ
+
+4 = Φ( d⋆δ (r)) − r
+
+8LΦ
+
+. (A.7) For r = Ro, this reduces to the quantity EΦ(Ro, δ ) introduced in [1]. An important property of the quantity d⋆δ (r) is that, for fixed r, it increases with the prescribed margin δ. Since Φ is non-increasing under Assumption 1, EΦ(r, δ ) decreases as δ
+
+increases. For a fixed feasible δ, the same construction shows that EΦ(r, δ ) decreases as the risk level r increases. 
+
+d) Maximum feasible margin δmax (r): According to the definition in Eq. (A.21) of [1], we have 
+
+dr ≜ inf {x ≥ 0 : Φ( x) ≤ r}, (A.8) with dr = + ∞ if the set is empty. The quantity δmax (r) is defined as the largest prescribed margin for which the solution 
+
+d⋆δ (r) remains below dr , namely, 
+
+δmax (r) ≜ sup {δ ≥ 0 : d⋆δ (r) < d r }. (A.9) From (A.7), d⋆δ (r) < d r is precisely the condition that ensures 
+
+EΦ(r, δ ) > 0. Therefore, 0 ≤ δ < δ max (r) specifies the fea-sible range of prescribed margins. Since dr is non-increasing in r under Assumption 1, this feasible range becomes more restrictive as the risk level r increases. In Proposition 2, the generic risk level is r = Ro + εopt .2
+
+2. Proof of Proposition 1 Proof. Since μ+raw = μmid + D and μ− 
+
+> raw
+
+= μmid − D, the two shifted expected margins in (25) are 
+
+D + ( μmid − χπ ) and D − (μmid − χπ ). (A.10) Their minimum is D − | μmid − χπ |, which proves (25). Since the absolute value term is minimized at zero, ∆χ(f )
+
+is maximized when χπ = μmid . Setting respectively χπ = 0 
+
+and χπ = μemp (f ) gives the two identities in (26), and com-paring them yields the condition (28). Finally, μk, emp (f ′
+
+> k
+
+) = 
+
+μk, emp (fk) + ok, and hence (29) follows directly. Therefore, the centered local scores are identical before and after the additive offsets, and substituting them into (11) gives the same DeGroot iterates at every communication round. 
+
+Remarks on centering. The achieved two-sided expected mar-gin ∆χ(f ) should be distinguished from the prescribed target 
+
+δ ≥ 0 used in the subsequent guarantees. In particular, ∆χ(f )
+
+may be negative. An additive shift changes only the location of the two class means relative to threshold zero and leaves their separation 2D(f ) unchanged. Hence, if D(f ) ≤ 0, no additive center can produce a positive two-sided expected margin. The proposition concerns this expected margin criterion and does not imply that centering universally improves classification accuracy. For example, if the score is already the exact equal-prior log-likelihood ratio, zero is the Bayes threshold and a nonzero shift can worsen the resulting decision rule. 
+
+3. Proof of Proposition 2 
+
+First, we recall the δ-margin consistent training event asso-ciated with condition (34): 
+
+Cδ ≜
+
+n
+
+μ+( bf ) > δ, μ−( bf ) < −δ
+
+o
+
+, (A.11) and Pc,δ ≜ P(Cδ ). The proof extends the exact-ERM analysis of [1], which in turn uses uniform deviation bounds established in [2]. We retain the uniform concentration and margin-to-risk arguments from that analysis, while accounting explicitly for the nonzero empirical optimization gaps of the classifiers returned by the local training algorithms from (6). The key new step is to show that these gaps replace the target risk Ro in the exact-ERM argument by the effective risk level Ro + εopt .
+
+Proof. Uniform deviations. We introduce the empirical and population surrogate risks for the network as 
+
+Remp (f ) ≜
+
+> K
+
+X
+
+> k=1
+
+πkRk, emp (fk), (A.12) 
+
+R(f ) ≜
+
+> K
+
+X
+
+> k=1
+
+πkEΦ( γfk(hk)) . (A.13) Since F = F1 × · · · × FK and the population risk separates across agents, 
+
+inf   
+
+> f∈F
+
+R(f ) = 
+
+> K
+
+X
+
+> k=1
+
+πk inf  
+
+> fk∈Fk
+
+E(hk ,γ)∼Qk Φ( γfk(hk)) = Ro
+
+(A.14) where Ro is defined in (15). Let 
+
+U ≜ sup  
+
+> f∈F
+
+|Remp (f ) − R(f )|, (A.15) 
+
+Vμ ≜ sup  
+
+> f∈F
+
+|μemp (f ) − μmid (f )|. (A.16) The following two uniform deviation bounds are the concen-tration results used in the exact-ERM analysis of [1], recalled there from Theorem 3 of [2]. For every x > 4ρ,
+
+P(Vμ ≥ x) ≤ exp 
+
+
+
+− Nmax (x − 4ρ)2
+
+2α2β2
+
+
+
+, (A.17) and, for every x > 4LΦρ,
+
+P(U ≥ x) ≤ exp 
+
+
+
+− Nmax (x − 4LΦρ)2
+
+2α2β2L2Φ
+
+
+
+. (A.18) We use these established bounds directly. 
+
+Effect of approximate empirical optimization. From the defi-nition in (7), condition (37) is equivalent to 
+
+Rk, emp ( bfk) ≤ inf  
+
+> fk∈Fk
+
+Rk, emp (fk) + εk, opt (A.19) for every agent k. Multiplying by πk and summing gives 
+
+Remp ( bf ) ≤
+
+> K
+
+X
+
+> k=1
+
+πk inf  
+
+> fk∈Fk
+
+Rk, emp (fk) + εopt . (A.20) Because the coordinates fk can be selected independently over the Cartesian product class F, the weighted sum of the local infima is the infimum of the network empirical risk. Hence, 
+
+Remp ( bf ) ≤ inf   
+
+> f∈F
+
+Remp (f ) + εopt . (A.21) The infimum defining Ro need not be attained. By the defini-tion of U , for every f ∈ F, Remp (f ) ≤ R(f ) + U . Hence, using (A.21), 
+
+R( bf ) ≤ Remp ( bf ) + U
+
+≤ inf   
+
+> f∈F
+
+Remp (f ) + εopt + U
+
+≤ inf  
+
+> f∈F
+
+R(f ) + U + εopt + U
+
+= Ro + εopt + 2 U (A.22) where the last equality follows because U does not depend on 
+
+f and Ro = inf f ∈F R(f ). Therefore, 
+
+R( bf ) ≤ Ro + εopt + 2 U. (A.23) For convenience, define the effective risk level 
+
+r ≜ Ro + εopt . (A.24) Thus, 
+
+R( bf ) ≤ r + 2 U. (A.25) This is the step that differs from the exact-ERM analysis, for which r = Ro.
+
+Reduction of margin failure to the deviation events. By Propo-sition 1, 
+
+∆cen ( bf ) = D( bf ) − μemp ( bf ) − μmid ( bf ) . (A.26) 3
+
+Fix any constant d > δ . If D( bf ) > d and Vμ < d − δ hold simultaneously, then 
+
+∆cen ( bf ) > d − (d − δ) = δ. (A.27) Consequently, 
+
+Cδ ⊆ Vμ ≥ d − δ ∪ D( bf ) ≤ d . (A.28) We next use the same surrogate risk reduction as in the proof of the exact-ERM result in [1]. Under the uniform class prior, convexity of Φ and Jensen’s inequality give 
+
+R(f ) = 12
+
+> K
+
+X
+
+> k=1
+
+πk
+
+
+
+E(+1) Φ( fk(hk)) + E(−1) Φ( −fk(hk)) 
+
+
+
+≥ 12
+
+h
+
+Φ μ+raw (f ) + Φ  −μ−
+
+> raw
+
+(f )i
+
+≥ Φ
+
+ μ+raw (f ) − μ−
+
+> raw
+
+(f )2
+
+
+
+= Φ( D(f )) . (A.29) Thus, since Φ is non-increasing, D( bf ) ≤ d implies R( bf ) ≥
+
+Φ( d). Combining this implication with (A.23) yields 
+
+D( bf ) ≤ d ⊆
+
+
+
+U ≥ Φ( d) − r
+
+2
+
+
+
+. (A.30) Using (A.28) and (A.30), followed by the established deviation bounds in (A.17)–(A.18), gives 
+
+P(Cδ ) ≤ exp 
+
+(
+
+− Nmax (d − δ − 4ρ)2
+
+2α2β2
+
+)
+
++ exp 
+
+(
+
+− Nmax 
+
+2α2β2L2Φ
+
+ Φ( d) − r
+
+2 − 4LΦρ
+
+2)
+
+,
+
+(A.31) for every d > δ satisfying d − δ > 4ρ and (Φ( d) − r)/2 >
+
+4LΦρ.
+
+Balancing the two deviations. We now use the same balancing construction as in [1], with the exact target risk Ro replaced by the effective risk r defined in (A.24). Specifically, choose 
+
+d = d⋆δ (r) from Appendix A.1, which satisfies 
+
+d − δ = Φ( d) − r
+
+2LΦ
+
+. (A.32) Under the conditions of Proposition 2, this choice is admissi-ble. By (A.7), the two terms in (A.31) are then equal, and 
+
+P(Cδ ) ≤ 2 exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+EΦ(r, δ ) − ρ
+
+2
+
+)
+
+. (A.33) Since Pc,δ = 1 − P(Cδ ) and r = Ro + εopt , we obtain (39). When εopt = 0 , the effective risk reduces to r = Ro, which recovers the exact-ERM result of [1]. 
+
+Interpretation of the optimization-gap condition. Proposition 2 is conditional on the empirical optimality gap bounds in (37) for the score functions bfk returned by local training. It does not provide an algorithm-specific guarantee that a prescribed 
+
+εk, opt is attained. In particular, when Fk is parameterized by a neural network, convexity of the scalar surrogate loss Φ does not imply convexity of the empirical training objective with respect to the network parameters. Any optimization guarantee for a particular training algorithm is therefore separate from the statistical statement of Proposition 2. Once such tolerances are available, their effect enters the bound through the quantity 
+
+εopt .
+
+4. Homogeneous Centralized-Training Comparison 
+
+While the bound in Proposition 2 is derived for independent local training, where each agent trains its own classifier with-out exchanging model updates, it is instructive to compare this setup against a centralized benchmark. For clarity, we focus on the homogeneous case where all agents share the same feature space, model class, and local population distribution. In the heterogeneous case, different agents may observe different feature distributions or spaces and use distinct architectures, so a single centralized model is not directly comparable without introducing additional modeling choices. For this comparison, suppose a total of Ntot i.i.d. training samples from the common local population is available. A centralized learner uses all Ntot samples to train one classifier, whereas independent training partitions the same sample bud-get across K agents. For a symmetric comparison, we consider an even split, 
+
+Nk = Ntot 
+
+K , k = 1 , . . . , K. (A.34) We next examine the quantities that enter the bound in (39). (i) Network complexity ρ: For many standard base models, such as feedforward neural networks with norm-constrained weights and kernel methods over bounded balls in reproducing kernel Hilbert spaces, the Rademacher complexity admits the standard O(1 /√m) dependence on the training set size m [2]– [4]. For the homogeneous setting with an even split, all local complexities are identical and therefore 
+
+ρind = RNtot /K (F), ρcen = RNtot (F) (A.35) where F denotes the common function class. Hence, for model classes whose Rademacher complexity decreases with sample size as above, 
+
+ρcen ≤ ρind . (A.36) (ii) Function EΦ(Ro + εopt , δ ): Because the local population distribution and model class are common, the individual target risks are identical, and hence the target risk Ro is the same for centralized and independent training. The loss function Φ
+
+is also unchanged. Let εcen opt denote the empirical optimization tolerance of the centralized learner and let 
+
+εind opt ≜
+
+> K
+
+X
+
+> k=1
+
+πkεk, opt (A.37) denote the corresponding π-weighted tolerance for indepen-dent training. If the two procedures are compared at matched optimization accuracy, 
+
+εcen opt = εind opt ≜ ε, (A.38) then EΦ(Ro + ε, δ ) is identical in the two bounds. If their optimization tolerances differ, the corresponding effective risk 4
+
+levels must instead be retained separately. The theory does not presume that either training procedure solves its empirical objective more accurately. (iii) Admissible margin range : At matched optimization accuracy, the effective risk Ro + ε and the loss Φ are the same under the two setups. Consequently, δmax (Ro + ε), and hence the admissible range of δ, is also identical. The common model class also yields the same score bound 
+
+β. Suppose now that δ lies in the common admissible range and that 
+
+ρind < EΦ(Ro + ε, δ ). (A.39) Under the dependence of training set size described above, 
+
+ρcen ≤ ρind , so Proposition 2 applies to both training setups. For centralized training, taking K = 1 , Nmax = Ntot , and 
+
+α = 1 gives 
+
+P cen  
+
+> c,δ
+
+≥ 1−2 exp 
+
+(
+
+− 8Ntot 
+
+β2
+
+
+
+EΦ(Ro +ε, δ )−ρcen 2
+
+)
+
+. (A.40) For independent training with the even split, Nmax = Ntot /K 
+
+and α = 1 , which gives 
+
+P ind  
+
+> c,δ
+
+≥ 1 − 2 exp 
+
+(
+
+− 8Ntot 
+
+Kβ 2
+
+
+
+EΦ(Ro + ε, δ ) − ρind 2
+
+)
+
+. (A.41) Therefore, under this homogeneous comparison with matched optimization accuracy, the centralized benchmark benefits from both a larger effective size of training set in the exponent and, for the model classes considered above, a Rademacher complexity that is no larger. Consequently, it yields a tighter lower bound on Pc,δ than that obtained by evenly splitting the same sample budget among independently trained models. This comparison makes explicit a statistical cost associated with independent training. APPENDIX BSUFFICIENT COMMUNICATION 
+
+This appendix provides the prediction argument underlying the sufficient-communication guarantee in Section III-B of the main paper. We first record the bounded-difference concentra-tion inequality obtained by combining the class-conditional approximate tensorization of entropy (ATE) assumption with the entropy method. We then apply this inequality under each class-conditional testing law Pγ and combine the resulting pre-diction bound with the training guarantee from Proposition 2. The same ATE concentration tool will also be used in the subsequent prediction analyses of other appendices. We recall the σ-field generated by the training data and local training randomness in (40): 
+
+T ≜ σ(D1, . . . , DK , S1, . . . , SK ). (B.1) 
+
+1. Bounded-Difference Inequality under ATE 
+
+We first record the bounded-difference concentration con-sequence of ATE used throughout the prediction analysis. It follows by applying the standard entropy-method bounded-difference argument of [5] with the approximate tensorization inequality of [6] in place of exact tensorization. We use this established consequence without reproving it. 
+
+Lemma B.1 (Bounded differences under ATE ). Let X =(X1, . . . , X K ) have law P satisfying ATE with coefficient τ ,in the sense of (44) . Suppose a bounded measurable function 
+
+F satisfies 
+
+|F (x) − F (x′)| ≤ dk (B.2) 
+
+whenever x and x′ differ only in coordinate k. Then, for every 
+
+θ ∈ R,
+
+log E exp {θ(F (X) − EF (X)) } ≤ τ θ 2
+
+8
+
+> K
+
+X
+
+> k=1
+
+d2
+
+> k
+
+. (B.3) 
+
+Consequently, if PKk=1 d2 
+
+> k
+
+> 0, then, for every u ≥ 0,
+
+P F (X) − EF (X) ≤ − u ≤ exp 
+
+(
+
+− 2u2
+
+τ PKk=1 d2
+
+> k
+
+)
+
+. (B.4) 
+
+The same bound holds for the upper tail. If PKk=1 d2 
+
+> k
+
+= 0 ,then F is constant and the concentration statement is trivial. 2. Proof of Theorem 1 
+
+Fix a realization of the training phase that belongs to Cδ .Conditional on T, the learned score functions and empirical training means are fixed, whereas the fresh testing pair remains independent of the training phase. Conditional on γ∗ = γ, the joint testing observation h∗ therefore has law Pγ . We bound the prediction error separately under the two class-conditional laws and then average over the uniform class prior. To lighten notation, throughout this proof we write bfk, ck, and cave for the corresponding realized training-dependent quantities; the same convention will be used in the later prediction proofs. 
+
+Proof. Suppose first that γ∗ = +1 . From the definition of the aggregate classifier cave in (18), 
+
+E(+1)  
+
+> h∗
+
+cave (h∗) = 
+
+> K
+
+X
+
+> k=1
+
+πkE(+1) 
+
+> h∗
+> k
+
+ck(h∗
+
+> k
+
+)= μ+( bf ) > δ (B.5) where the last inequality follows because the fixed training realization belongs to Cδ .Now consider another observation collection bh that differs from h∗ only in coordinate k. From (9) and Assumption 2, 
+
+cave (h∗) − cave (bh) = πk ck(h∗
+
+> k
+
+) − ck(bhk)
+
+= πk bfk(h∗
+
+> k
+
+) − bfk(bhk)
+
+≤ 2βπ k. (B.6) This reveals that the coordinate oscillations of cave are dk =2βπ k. Conditional on γ∗ = +1 and T, the testing observation has law P+1 , which satisfies ATE with coefficient τ+1 . Hence, following (B.5), Lemma B.1 gives 
+
+P
+
+
+
+cave (h∗) ≤ 0 γ∗ = +1 , T
+
+
+
+= P
+
+
+
+cave (h∗) − E(+1)  
+
+> h∗
+
+cave (h∗) ≤ − μ+( bf ) γ∗ = +1 , T
+
+5
+
+≤ exp 
+
+(
+
+− δ2
+
+2τ+1 β2 PKk=1 π2
+
+> k
+
+)
+
+. (B.7) The final inequality follows from μ+( bf ) > δ on Cδ . For γ∗ =
+
+−1, we similarly have 
+
+E(−1)  
+
+> h∗
+
+cave (h∗) = μ−( bf ) < −δ (B.8) on Cδ , and the same coordinate oscillations dk = 2 βπ k apply. Accordingly, we have 
+
+P
+
+
+
+cave (h∗) ≥ 0 γ∗ = −1, T
+
+
+
+≤ exp 
+
+(
+
+− δ2
+
+2τ−1β2 PKk=1 π2
+
+> k
+
+)
+
+.
+
+(B.9) Since γ∗ is independent of T and has the uniform prior, the following holds 
+
+P(M|T) = 12 P
+
+
+
+cave (h∗) ≤ 0 γ∗ = +1 , T
+
+
+
++ 12 P
+
+
+
+cave (h∗) ≥ 0 γ∗ = −1, T
+
+
+
+≤ 12
+
+X
+
+> γ∈Γ
+
+exp 
+
+(
+
+− δ2
+
+2τγ β2 PKk=1 π2
+
+> k
+
+)
+
+≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
+(B.10) almost surely on Cδ . This proves the conditional bound (46) in Theorem 1. Since Cδ is T-measurable and the preceding conditional bound holds almost surely on Cδ , we have 
+
+E[1[Cδ ]P(M|T)] ≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
+P(Cδ )
+
+≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
+. (B.11) Combining (B.11) with the decomposition in (42) gives 
+
+Pe ≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
++ P(Cδ ). (B.12) If the assumptions of Proposition 2 also hold, substituting the bound on P(Cδ ) from (39) into (B.12) gives 
+
+Pe ≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
++ 2 exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+EΦ(Ro + εopt , δ ) − ρ
+
+2
+
+)
+
+. (B.13) This is the explicit classification error bound under sufficient communication. APPENDIX CFINITE -R OUND COMMUNICATION 
+
+Appendix B establishes the classification guarantee for the limiting case of sufficient communication. At a finite com-munication round, a similar concentration argument applies. The proof below reuses the conditioning convention and ATE bounded-difference inequality from Appendix B 
+
+Proof. Fix a realization of the training phase that belongs to 
+
+Cδ . As in Appendix B.2, the learned functions, their empirical training means, and therefore the centered score functions are fixed conditional on T. We proceed first with the case γ∗ =+1 . From (50), we have 
+
+P
+
+
+
+Mk,t γ∗ = +1 , T
+
+
+
+= P
+
+
+
+λk,t (h∗) ≤ 0 γ∗ = +1 , T
+
+
+
+(C.1) where the argument of h∗ in the notation λk,t (h∗) emphasizes the dependence on the testing observation collection. Consider another observation collection bh that differs from h∗ only in coordinate ℓ, (48) gives 
+
+λk,t (h∗) − λk,t (bh) = [At]ℓk 
+
+ cℓ(h∗ 
+
+> ℓ
+
+) − cℓ(bhℓ)
+
+≤ 2β[At]ℓk . (C.2) Thus, the coordinate oscillation associated with the ℓth testing view is dℓ = 2 β[At]ℓk .We next control the deviation in the class-conditional mean caused by incomplete mixing. Since | bfℓ| ≤ β and its empirical training mean lies in [−β, β ], the realized centered class mean satisfies |μ+ 
+
+> ℓ
+
+( bfℓ)| ≤ 2β. Hence, using (52), 
+
+E(+1)  
+
+> h∗
+
+λk,t (h∗) − μ+( bf )
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+ [At]ℓk − πℓ
+
+μ+ 
+
+> ℓ
+
+( bfℓ)
+
+≤ 2β
+
+> K
+
+X
+
+> ℓ=1
+
+[At]ℓk − πℓ
+
+≤ 2βKC (A, σ )σt. (C.3) Therefore, we have μ+( bf ) > δ when Cδ is true. Consequently, for every t satisfying rt(δ) > 0, the following holds: 
+
+E(+1)  
+
+> h∗
+
+λk,t (h∗) > δ − 2βKC (A, σ )σt
+
+= rt(δ) > 0. (C.4) Conditional on γ∗ = +1 and T, the testing observation has law P+1 . Therefore, using the similar arguments used in (B.7) yields 
+
+P
+
+
+
+Mk,t γ∗ = +1 , T
+
+
+
+≤ exp 
+
+(
+
+− r2 
+
+> t
+
+(δ)2τ+1 β2 PKℓ=1 
+
+ [At]ℓk 
+
+2
+
+)
+
+.
+
+(C.5) Repeating the steps in (C.3)–(C.5) for the case γ∗ = −1, we can show that almost surely on Cδ ,
+
+P(Mk,t |T) ≤ exp 
+
+(
+
+− r2 
+
+> t
+
+(δ)2τmax β2 PKℓ=1 
+
+ [At]ℓk 
+
+2
+
+)
+
+, (C.6) which proves the bound in (54). If the conditions of Proposi-tion 2 also hold, substituting the bound on P(Cδ ) from (39) gives the following explicit upper bound for classification after 
+
+t communication rounds: 
+
+Pk,t ≤ exp 
+
+(
+
+− r2 
+
+> t
+
+(δ)2τmax β2 PKℓ=1 
+
+ [At]ℓk 
+
+2
+
+)6
+
++ 2 exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+EΦ(Ro + εopt , δ ) − ρ
+
+2
+
+)
+
+. (C.7) This completes the proof of Theorem 2. APPENDIX DFINITE -P RECISION COMMUNICATION 
+
+Appendix C establishes the finite-round classification guar-antee under exact real-valued message exchange. Theorem 3 additionally accounts for stochastic finite-precision communi-cation. Relative to the finite-round analysis, two new issues must be controlled: i) quantization errors accumulate as they propagate through the network, and ii) their distributions are input-dependent, so that the resulting errors need not be independent across rounds or from the fresh testing views. We first derive a conditional sub-Gaussian bound for the accumu-lated quantization perturbation by unrolling the recursion and conditioning on the quantization history. We then combine this bound with the finite-round concentration bound established in Appendix C. 
+
+Proof. For t = 0 , no quantization has yet occurred: x(b) 
+
+> k, 0
+
+=
+
+ck(h∗
+
+> k
+
+) = λk, 0 and V q 
+
+> k, 0
+
+= 0 . The claimed conditional bound therefore reduces to the corresponding real-valued finite-round bound. We henceforth consider t ≥ 1.To isolate the effect of stochastic quantization, we condition on the training realization and the fresh testing example, so that only the rounding randomness remains. Let 
+
+x(b) 
+
+> t
+
+≜ (x(b)1,t , . . . , x (b)
+
+> K,t
+
+)⊤, xfp  
+
+> t
+
+≜ (xfp 1,t , . . . , x fp 
+
+> K,t
+
+)⊤ (D.1) where xfp  
+
+> t
+
+corresponds to the matched full-precision recursion obtained from the same initialization by replacing Qb with the identity map. In particular, 
+
+xfp  
+
+> k,t
+
+= λk,t (D.2) where λk,t is defined in (48). Before analyzing the rounding errors, note that the prescribed quantization range is preserved by the recursion. From (56), x(b) 
+
+> k, 0
+
+= ck(h∗
+
+> k
+
+) ∈ [−2β, 2β].The outputs of the quantizer Qb remain in the same interval, and (60) forms each subsequent decision statistic as a convex combination of the transmitted values. Hence, by induction, 
+
+x(b) 
+
+> k,s
+
+∈ [−2β, 2β] for every agent k and round s. (D.3) This indicates that the input to the stochastic quantizer remains within its prescribed range at every round. Define the sender-level rounding errors 
+
+εq 
+
+> ℓ,s
+
+≜ q(b) 
+
+> ℓ,s
+
+− x(b) 
+
+> ℓ,s
+
+, εq 
+
+> s
+
+≜ (εq1,s , . . . , ε q
+
+> K,s
+
+)⊤. (D.4) Let W = A⊤. The finite-precision and matched full-precision recursions satisfy 
+
+x(b) 
+
+> s+1
+
+= W x(b) 
+
+> s
+
++ W εq 
+
+> s
+
+, xfp  
+
+> s+1
+
+= W xfp  
+
+> s
+
+, (D.5) with the same initialization. Expanding the recursion therefore gives 
+
+x(b) 
+
+> t
+
+− xfp  
+
+> t
+
+=
+
+> t−1
+
+X
+
+> s=0
+
+W t−sεq 
+
+> s
+
+. (D.6) Therefore, a rounding error generated at round s is propagated through W t−s before contributing to the decision statistic at round t.Let Qs denote the σ-field generated by T, the fresh testing pair (h∗, γ∗), and all quantizer randomness through round 
+
+s − 1. Conditional on Qs, the current decision statistics of each agent and therefore the active quantization bins are fixed. Following the stochastic rounding protocol (58), the sender-level rounding errors at round s are conditionally independent across senders, satisfy 
+
+E
+
+h
+
+εq 
+
+> ℓ,s
+
+Qs
+
+i
+
+= 0 , (D.7) and each takes values in an interval of length at most ∆b.Hence, for any Qs-measurable weights w1, . . . , w K , Hoeffd-ing’s lemma [7] gives, for every θ ∈ R,
+
+E
+
+"
+
+exp θ
+
+> K
+
+X
+
+> ℓ=1
+
+wℓεq
+
+> ℓ,s
+
+!
+
+Qs
+
+#
+
+≤ exp 
+
+(
+
+θ2∆2
+
+> b
+
+8
+
+> K
+
+X
+
+> ℓ=1
+
+w2
+
+> ℓ
+
+)
+
+. (D.8) Given a fixed terminal pair (k, t ), the kth coordinate of (D.6) can be written as 
+
+x(b) 
+
+> k,t
+
+− xfp  
+
+> k,t
+
+=
+
+> t−1
+
+X
+
+> s=0
+
+Us, Us ≜
+
+> K
+
+X
+
+> j=1
+
+[At−s]jk εq
+
+> j,s
+
+. (D.9) Applying (D.8) with wj = [ At−s]jk gives 
+
+EeθU s Qs
+
+ ≤ exp 
+
+(
+
+θ2∆2
+
+> b
+
+8
+
+> K
+
+X
+
+> j=1
+
+([ At−s]jk )2
+
+)
+
+. (D.10) It is worth noting that the errors at different rounds need not be independent because the quantization bin at a later round depends on the preceding randomized updates. For this reason, in the following, we accumulate the bounds through repeated conditioning rather than by multiplying unconditional moment generating functions (MGFs). According to the law of total expectation, conditioning first on Qt−1 gives 
+
+E
+
+"
+
+exp θ
+
+> t−1
+
+X
+
+> s=0
+
+Us
+
+!
+
+T, h∗, γ∗
+
+#
+
+= E
+
+"
+
+exp θ
+
+> t−2
+
+X
+
+> s=0
+
+Us
+
+!
+
+EeθU t−1 Qt−1
+
+ T, h∗, γ∗
+
+#
+
+≤ exp 
+
+
+
+θ2∆2
+
+> b
+
+8
+
+> K
+
+X
+
+> j=1
+
+([ A]jk )2
+
+ E
+
+"
+
+exp θ
+
+> t−2
+
+X
+
+> s=0
+
+Us
+
+!
+
+T, h∗, γ∗
+
+#
+
+.
+
+(D.11) Repeating the same conditioning step for Ut−2, . . . , U 0 yields 
+
+E
+
+h
+
+exp 
+
+
+
+θ[x(b) 
+
+> k,t
+
+− xfp 
+
+> k,t
+
+]
+
+
+
+T, h∗, γ∗i
+
+≤ exp 
+
+
+
+θ2∆2
+
+> b
+
+8
+
+> t
+
+X
+
+> r=1
+> K
+
+X
+
+> j=1
+
+([ Ar ]jk )2
+
+
+
+= exp 
+
+( θ2V q
+
+> k,t
+
+2
+
+)
+
+(D.12) where V q 
+
+> k,t
+
+is defined in (64). This derivation requires con-ditional independence only among the sender-level rounding 7
+
+draws within each round; temporal independence of the round-ing errors is not needed. We now combine the accumulated quantization perturbation with the fluctuation induced by the fresh testing views. Fix 
+
+γ ∈ Γ and a training realization in Cδ , and define 
+
+μ(γ) 
+
+> k,t
+
+≜ E
+
+h
+
+γx fp  
+
+> k,t
+
+T, γ∗ = γ
+
+i
+
+, Y (γ) 
+
+> k,t
+
+≜ γx fp  
+
+> k,t
+
+−μ(γ) 
+
+> k,t
+
+. (D.13) Since xfp  
+
+> k,t
+
+= λk,t , the finite-round mean argument leading to (C.4) in Appendix C, applied to either class, gives 
+
+μ(γ) 
+
+> k,t
+
+≥ rt(δ). (D.14) For fixed T and γ∗ = γ, changing only the ℓth testing view changes γx fp  
+
+> k,t
+
+by at most 2β[At]ℓk . Applying the MGF form of Lemma B.1, namely (B.3), under Pγ therefore gives 
+
+E
+
+h
+
+eθY (γ) 
+
+> k,t
+
+T, γ∗ = γ
+
+i
+
+≤ exp 
+
+(
+
+θ2
+
+2 τγ β2
+
+> K
+
+X
+
+> ℓ=1
+
+([ At]ℓk )2
+
+)
+
+(D.15) for any θ ∈ R. Define the signed quantization perturbation: 
+
+Zq,γ k,t ≜ γ x(b) 
+
+> k,t
+
+− xfp 
+
+> k,t
+
+. (D.16) Although the quantizer uses fresh auxiliary randomness, the distribution of Zq,γ k,t depends on the realized testing example through the input-dependent quantization bins. Thus, Zq,γ k,t and 
+
+Y (γ) 
+
+> k,t
+
+are not assumed to be independent. Instead, we condition first on the complete fresh testing example. Since Y (γ) 
+
+> k,t
+
+is then fixed, the tower property and (D.12) give 
+
+E
+
+h
+
+eθ(Y (γ)   
+
+> k,t +Zq,γ k,t )
+
+T, γ∗ = γ
+
+i
+
+= E
+
+h
+
+eθY (γ) 
+
+> k,t
+
+E
+
+h
+
+eθZ q,γ k,t T, h∗, γ∗ = γ
+
+i
+
+T, γ∗ = γ
+
+i
+
+≤ exp 
+
+( θ2V q
+
+> k,t
+
+2
+
+)
+
+E
+
+h
+
+eθY (γ) 
+
+> k,t
+
+T, γ∗ = γ
+
+i
+
+≤ exp 
+
+(
+
+θ2
+
+2
+
+"
+
+τγ β2
+
+> K
+
+X
+
+> ℓ=1
+
+([ At]ℓk )2 + V q
+
+> k,t
+
+#) 
+
+. (D.17) Therefore, the sub-Gaussian variance proxies associated with the testing views and quantization errors add in the conditional MGF bound. In particular, no unconditional independence between the two fluctuations is required. Suppose rt(δ) > 0.Since 
+
+γx (b) 
+
+> k,t
+
+= μ(γ) 
+
+> k,t
+
++ Y (γ) 
+
+> k,t
+
++ Zq,γ k,t , (D.18) the event M(b) 
+
+> k,t
+
+= {γ∗x(b) 
+
+> k,t
+
+≤ 0} defined in (62), conditional on γ∗ = γ, together with (D.14), implies 
+
+Y (γ) 
+
+> k,t
+
++ Zq,γ k,t ≤ − rt(δ). (D.19) Let 
+
+V (γ) 
+
+> k,t
+
+≜ τγ β2
+
+> K
+
+X
+
+> ℓ=1
+
+([ At]ℓk )2 + V q
+
+> k,t
+
+. (D.20) For any λ > 0, Chernoff’s method and (D.17) give 
+
+P
+
+
+
+Y (γ) 
+
+> k,t
+
++ Zq,γ k,t ≤ − rt(δ) T, γ∗ = γ
+
+
+
+≤ exp 
+
+
+
+−λr t(δ) + λ2
+
+2 V (γ)
+
+> k,t
+
+
+
+. (D.21) Optimizing at λ = rt(δ)/V (γ) 
+
+> k,t
+
+yields 
+
+P(M(b) 
+
+> k,t
+
+T, γ∗ = γ)
+
+≤ exp 
+
+− r2 
+
+> t
+
+(δ)2
+
+h
+
+τγ β2 PKℓ=1 ([ At]ℓk )2 + V q
+
+> k,t
+
+i . (D.22) Since the fresh label is independent of T and has the uniform prior, averaging the two class-conditional bounds gives, almost surely on Cδ ,
+
+P(M(b) 
+
+> k,t
+
+T) ≤ 12
+
+X
+
+> γ∈Γ
+
+exp 
+
+− r2 
+
+> t
+
+(δ)2
+
+h
+
+τγ β2 PKℓ=1 ([ At]ℓk )2 + V q
+
+> k,t
+
+i
+
+≤ exp 
+
+− r2 
+
+> t
+
+(δ)2
+
+h
+
+τmax β2 PKℓ=1 ([ At]ℓk )2 + V q
+
+> k,t
+
+i ,
+
+(D.23) which proves (65). Using the decomposition in (42) with M
+
+replaced by M(b)
+
+> k,t
+
+, if the conditions of Proposition 2 also hold, substituting its bound on P(Cδ ) gives 
+
+P (b) 
+
+> k,t
+
+≤ exp 
+
+− r2 
+
+> t
+
+(δ)2
+
+h
+
+τmax β2 PKℓ=1 ([ At]ℓk )2 + V q
+
+> k,t
+
+i
+
++ 2 exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+EΦ(Ro + εopt , δ ) − ρ
+
+2
+
+)
+
+.
+
+(D.24) This is the explicit unconditional finite-precision classification bound referred to in Theorem 3 and completes the proof. APPENDIX EPAC-S TYLE GENERALIZATION GUARANTEE 
+
+This appendix proves Theorem 4 of the main paper. Unlike the prediction guarantees in Appendices B–D, the PAC-style result does not rely on the expected margin event Cδ or the class-conditional ATE assumption. Its sampling requirement is instead that the network examples (hn, γn) are i.i.d. across 
+
+n, while the K local views within one example may remain statistically dependent. The main technical issue is the empirical centering operation in (9), which leads the resulting classifier class to be sample-dependent. The proof handles this issue in three steps. We first bound the sensitivity of the uniform population–empirical risk gap to replacing one network example. We then embed every realized centered aggregate in a fixed offset-augmented function class and control its expected uniform deviation by Rademacher complexity. Finally, McDiarmid’s inequality yields a high-probability bound, which is specialized to the 
+
+η-margin loss Φη in Section III-E. 
+
+Proof. We prove the collaborative bound in (77), with the local bound following from the same argument by taking a single agent. Recall that 
+
+D = {(hn, γn)}Nn=1 (E.1) 8
+
+contains N i.i.d. complete network examples drawn from Q,and that Dk = {(hk,n , γn)}Nn=1 is its projection at agent 
+
+k. The proof treats each complete network example as one independent sample coordinate and therefore never requires independence among the local views within an example. For fk ∈ Fk, we define its empirical training mean on Dk
+
+and centered score by 
+
+¯fk(Dk) ≜ 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+fk(hk,n ), (E.2) 
+
+cfk ,Dk (hk) ≜ fk(hk) − ¯fk(Dk). (E.3) For f = ( f1, . . . , f K ) ∈ F, let 
+
+cD 
+
+> ave ,f
+
+(h) ≜
+
+> K
+
+X
+
+> k=1
+
+πkcfk ,Dk (hk), (E.4) and, for a generic LΦ-Lipschitz loss Φ, define 
+
+RD
+
+> emp
+
+(f ) ≜ 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+Φ γncD 
+
+> ave ,f
+
+(hn) , (E.5) 
+
+RD(f ) ≜ E(h,γ)∼QΦ γc D 
+
+> ave ,f
+
+(h) . (E.6) The superscript D emphasizes that, even for fixed f , the de-ployed centered aggregate score associated with cave depends on the training sample. We therefore study 
+
+Ω( D) ≜ sup  
+
+> f∈F
+
+RD(f ) − RD
+
+> emp
+
+(f ) . (E.7) 
+
+a) Bounded difference of Ω( D): Let D′ be obtained from D by replacing only the j-th complete network example 
+
+(hj , γj ) by (h′ 
+
+> j
+
+, γ′ 
+
+> j
+
+). Using 
+
+sup 
+
+> f
+
+|af | − sup 
+
+> f
+
+|bf | ≤ sup 
+
+> f
+
+|af − bf | (E.8) and the triangle inequality, we obtain 
+
+Ω( D) − Ω( D′) ≤ sup  
+
+> f∈F
+
+RD(f ) − RD′
+
+(f )
+
++ sup  
+
+> f∈F
+
+RD
+
+> emp
+
+(f ) − RD′
+
+> emp
+
+(f ) . (E.9) Since only one observation changes in each projection Dk and 
+
+|fk| ≤ β by Assumption 2, one gets from (E.2) that 
+
+¯fk(Dk) − ¯fk(D′
+
+> k
+
+) ≤ 2βN . (E.10) For any f ∈ F and any h, it follows that 
+
+cD 
+
+> ave ,f
+
+(h) − cD′ 
+
+> ave ,f
+
+(h) =
+
+> K
+
+X
+
+> k=1
+
+πk
+
+  ¯fk(D′
+
+> k
+
+) − ¯fk(Dk)
+
+≤
+
+> K
+
+X
+
+> k=1
+
+πk ¯fk(D′
+
+> k
+
+) − ¯fk(Dk)
+
+≤ 2βN (E.11) where we used PKk=1 πk = 1 . By the triangle inequality and the Lipschitz property of Φ,
+
+sup  
+
+> f∈F
+
+RD(f ) − RD′
+
+(f ) ≤ 2βL Φ
+
+N . (E.12) For the empirical risk, we distinguish the unchanged samples from the replaced one. For an unchanged coordinate n̸ = j,we have (hn, γn) = ( h′
+
+> n
+
+, γ′
+
+> n
+
+), and therefore 
+
+γncD 
+
+> ave ,f
+
+(hn) − γ′
+
+> n
+
+cD′ 
+
+> ave ,f
+
+(h′
+
+> n
+
+)
+
+= cD 
+
+> ave ,f
+
+(hn) − cD′ 
+
+> ave ,f
+
+(hn)
+
+≤ 2βN . (E.13) At the replaced coordinate, |fk| ≤ β and | ¯fk(Dk)| ≤ β imply 
+
+|cD 
+
+> ave ,f
+
+(h)| ≤ 2β. (E.14) Hence, we have 
+
+γj cD 
+
+> ave ,f
+
+(hj ) − γ′ 
+
+> j
+
+cD′ 
+
+> ave ,f
+
+(h′ 
+
+> j
+
+)
+
+≤ cD 
+
+> ave ,f
+
+(hj ) + cD′ 
+
+> ave ,f
+
+(h′ 
+
+> j
+
+)
+
+≤ 4β. (E.15) Applying the Lipschitz property of Φ to these two cases yields 
+
+RD
+
+> emp
+
+(f ) − RD′
+
+> emp
+
+(f ) ≤ LΦ
+
+N
+
+
+
+(N − 1) 2βN + 4 β
+
+
+
+≤ 6βL Φ
+
+N , (E.16) for every f ∈ F. Combining the two terms in (E.12) and (E.16) gives 
+
+Ω( D) − Ω( D′) ≤ 8βL Φ
+
+N . (E.17) This replacement argument uses only bounded local scores and independence across complete network examples. No factorization of the joint law Q across agents is required, which implies that the conditional independence assumption of the local views across agents is not required. 
+
+b) Expectation of Ω( D): A direct symmetrization of the function class consisting of cD 
+
+> ave ,f
+
+, ∀f ∈ F would incorrectly treat a sample-dependent class as fixed. To address this issue, we instead embed every realized centered classifier cD 
+
+> ave ,f
+
+in a deterministic augmented class. Define 
+
+af (D) ≜
+
+> K
+
+X
+
+> k=1
+
+πk ¯fk(Dk). (E.18) Since |af (D)| ≤ β and 
+
+cD 
+
+> ave ,f
+
+(h) = fave (h) − af (D), fave (h) ≜
+
+> K
+
+X
+
+> k=1
+
+πkfk(hk),
+
+(E.19) every realized centered classifier belongs to the fixed class 
+
+Goff ≜
+
+n
+
+h 7 → fave (h) − a : f ∈ F, a ∈ [−β, β ]
+
+o
+
+. (E.20) Define the corresponding fixed-class uniform deviation 
+
+∆off (D) ≜ sup 
+
+> g∈Goff
+
+EΦ( γg(h)) − 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+Φ( γng(hn)) .
+
+(E.21) Then 
+
+Ω( D) ≤ ∆off (D). (E.22) 9
+
+To apply the contraction inequality in its standard form, define 
+
+eΦ( u) ≜ Φ( u) − Φ(0) . (E.23) Then eΦ(0) = 0 , eΦ remains LΦ-Lipschitz, and replacing Φ by 
+
+eΦ does not change any population–empirical risk difference. Let 
+
+Dg ≜ (hg
+
+> n
+
+, γg
+
+> n
+
+) Nn=1 (E.24) be an independent ghost sample drawn from the same joint distribution Q. Since Goff is independent of both D and Dg,Jensen’s inequality gives 
+
+ED∆off (D)= ED sup 
+
+> g∈Goff
+
+EDg
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+heΦ( γg
+
+> n
+
+g(hg
+
+> n
+
+)) − eΦ( γng(hn)) 
+
+i
+
+≤ ED,Dg sup 
+
+> g∈Goff
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+heΦ( γg
+
+> n
+
+g(hg
+
+> n
+
+)) − eΦ( γng(hn)) 
+
+i
+
+.
+
+(E.25) Introducing N independent Rademacher variables r1, . . . , rN
+
+and using the usual symmetrization argument, we obtain 
+
+EΩ( D) ≤ E∆off (D)
+
+≤ 2ED,r sup 
+
+> g∈Goff
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rn eΦ( γng(hn)) 
+
+≤ 4LΦED,r sup 
+
+> g∈Goff
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rnγng(hn) (E.26) where the last step follows from the contraction inequality for Rademacher averages [3], [7]. For g(h) = fave (h) − a ∈ Goff ,using the definition of fave in (19), we further have 
+
+sup 
+
+> g∈Goff
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rnγng(hn)
+
+≤
+
+> K
+
+X
+
+> k=1
+
+πk sup  
+
+> fk∈Fk
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rnγnfk(hk,n )
+
++ β 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rnγn . (E.27) Conditional on the sample set D, the variables rnγn are again independent Rademacher signs. Therefore, using the definition 
+
+ρ = P 
+
+> k
+
+πkρk from Appendix A.1, 
+
+ED,r sup 
+
+> g∈Goff
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rnγng(hn)
+
+≤ ρ + βEr
+
+1
+
+N
+
+> N
+
+X
+
+> n=1
+
+rn
+
+≤ ρ + β
+
+√N (E.28) Thus, 
+
+EΩ( D) ≤ 4LΦρ + 4βL Φ
+
+√N . (E.29) 
+
+c) High-probability bound: Applying McDiarmid’s in-equality [8] to (E.17) gives, for every x > 0,
+
+P Ω( D) − EΩ( D) ≥ x ≤ exp 
+
+
+
+− N x 2
+
+32 β2L2Φ
+
+
+
+. (E.30) Taking 
+
+x = 4 βL Φ
+
+r 2 log(1 /ϵ )
+
+N (E.31) and combining with (E.29), we obtain, with probability at least 
+
+1 − ϵ, uniformly for all f ∈ F,
+
+RD(f ) − RD
+
+> emp
+
+(f ) ≤ 4LΦρ + 4βL Φ
+
+√N
+
++ 4 βL Φ
+
+r 2 log(1 /ϵ )
+
+N . (E.32) We now take Φ = Φ η , the η-margin loss in (69), for which 
+
+LΦ = 1/η . Using the definition of R(ϵ, N ) in (78), the preceding display becomes 
+
+RD(f ) − RD
+
+> emp
+
+(f ) ≤ 4ρη + R(ϵ, N ). (E.33) For a given training set D, RD(f ) is the expected η-margin loss of the deployed classifier cD 
+
+> ave ,f
+
+, while RD
+
+> emp
+
+(f ) denotes its empirical value. Hence (70) gives 
+
+Pe(cD 
+
+> ave ,f
+
+) ≤ P ηe, emp (cD 
+
+> ave ,f
+
+) + 4ρη + R(ϵ, N ). (E.34) The high-probability event is uniform over f ∈ F and depends only on the aligned network training set D. Therefore, given a fixed D, (E.34) may be evaluated at any data-dependent outputs bfk = Ak(Dk, Sk) ∈ Fk, for every realization of the local training randomness, without any empirical optimality condition. This establishes (77). Applying the same argument to the projected sample Dk for a fixed agent k gives (76) and completes the proof. 
+
+Remark on a refinement. The preceding proof is formulated for a generic LΦ-Lipschitz loss and controls the effect of replacing one complete network example through the bounded score range. This produces the factor βL Φ in the confidence term. For the η-margin loss Φη , a sharper concentration argument is available because 0 ≤ Φη ≤ 1.Specifically, after embedding the empirically centered clas-sifiers in the fixed offset-augmented class Goff , define the one-sided population–empirical deviation 
+
+∆off ,+(D) ≜ sup 
+
+> g∈Goff
+
+(
+
+EΦη (γg(h)) − 1
+
+N
+
+> N
+
+X
+
+> n=1
+
+Φη (γng(hn)) 
+
+)
+
+.
+
+(E.35) Standard one-sided symmetrization and the non-absolute con-traction inequality in [7] give 
+
+E∆off ,+(D) ≤ 2
+
+η
+
+
+
+ρ + β
+
+√N
+
+
+
+. (E.36) Moreover, replacing one complete network example changes this fixed-class uniform deviation by at most 1/N , since the η-margin loss takes values in [0 , 1] . Thus, the bounded-difference constant for ∆off ,+(D) is 1/N , and McDiarmid’s inequality 10 
+
+yields the alternative confidence term 
+
+r log(1 /ϵ )2N . (E.37) Consequently, the collaborative bound associated with the η-margin loss can be refined to 
+
+Pe(cave ) ≤ P ηe, emp (cave ) + 2ρη + 2βη√N +
+
+r log(1 /ϵ )2N . (E.38) The analogous refinement for a local classifier is 
+
+Pe(ck) ≤ P ηe, emp (ck) + 2ρk
+
+η + 2βη√N +
+
+r log(1 /ϵ )2N . (E.39) These refinements use the boundedness of Φη and a one-sided fixed-class argument. Theorem 4 retains the bound obtained from the generic Lipschitz-loss argument above. APPENDIX FRELATION TO SOCIAL LEARNING 
+
+This appendix returns to the prediction dynamics and relates the DeGroot collaboration rule (11) used in the main paper to social learning (SL) based on geometric pooling. We will first formulate the corresponding static-observation specialization. Then, we establish its finite-round classification guarantee, and compare the two update mechanisms. 
+
+1. Static Observation Specialization 
+
+A defining feature of the DeGroot model (11) is that agents update their opinions λk,t solely by averaging those of their neighbors, without acquiring new observations over time. In contrast, SL rules are designed for inference in streaming envi-ronments, where agents continuously receive new observations and combine them with information aggregated from their neighbors. To connect these two inference mechanisms, we consider the geometric-pooling SL mechanism [9], specialized to the learned local decision statistics used in social machine learning [1], [2]: 
+
+λSL  
+
+> k,t
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+aℓk 
+
+ λSL  
+
+> ℓ,t −1
+
++ cℓ(hℓ,t ) (F.1) where hℓ,t denotes the private observation received by agent 
+
+ℓ at round t. The linear recursion in (F.1) is the log-domain form of the corresponding geometric SL update. Unrolling it gives 
+
+λSL  
+
+> k,t
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+[At]ℓk λSL  
+
+> ℓ, 0
+
++
+
+> t
+
+X
+
+> i=1
+> K
+
+X
+
+> ℓ=1
+
+[At+1 −i]ℓk cℓ(hℓ,i ). (F.2) We assume no prior information about the class label, so that 
+
+λSL  
+
+> k, 0
+
+= 0 . In the static observation specialization, hℓ,t = h∗
+
+> ℓ
+
+for every t, and therefore 
+
+λSL  
+
+> k,t
+
+=
+
+> K
+
+X
+
+> ℓ=1
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk cℓ(h∗ 
+
+> ℓ
+
+). (F.3) As the same testing example is reused at every round, the re-peated terms in (F.3) do not represent new temporal evidence. Instead, they repeatedly accumulate the statistics associated with the same K local views. Since [Ai]ℓk → πℓ, its Ces` aro averages satisfy 
+
+lim 
+
+> t→∞
+
+1
+
+t λSL  
+
+> k,t
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+lim 
+
+> t→∞
+
+1
+
+t
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk cℓ(h∗ 
+
+> ℓ
+
+)=
+
+> K
+
+X
+
+> ℓ=1
+
+πℓcℓ(h∗ 
+
+> ℓ
+
+) = cave (h∗). (F.4) Hence, whenever cave (h∗)̸ = 0, the prediction of every agent eventually agrees with the collective prediction based on the aggregate classifier cave . The sufficient-communication guarantee of Theorem 1 therefore applies to the limiting SL prediction as well. For the finite-round analysis, we define 
+
+bγSL  
+
+> k,t
+
+= sgn( λSL 
+
+> k,t
+
+), MSL  
+
+> k,t
+
+= {γ∗λSL  
+
+> k,t
+
+≤ 0}. (F.5) Similar to Theorems 1–3, we analyze the conditional proba-bility P[MSL  
+
+> k,t
+
+|T]. To quantify the cumulative deviation of the finite-round weights from the Perron vector, define 
+
+BA ≜ max 
+
+> k∈K
+> ∞
+
+X
+
+> i=1
+> K
+
+X
+
+> ℓ=1
+
+|[Ai]ℓk − πℓ|, (F.6) which is finite under Assumption 3. For every σ ∈ (σA, 1) 
+
+and corresponding C(A, σ ) in (52), it holds that 
+
+BA ≤ KC (A, σ )σ
+
+1 − σ . (F.7) With this definition, we establish the classification guarantee for the SL rule. 
+
+Proposition F.1 (Static-observation SL classification guar-antee ). Suppose Assumptions 2, 3, and 5 hold, and let δ > 0.Define 
+
+κ ≜ 2βBA. (F.8) 
+
+Almost surely on Cδ , for every agent k ∈ K and every integer 
+
+t > κ/δ ,
+
+P(MSL  
+
+> k,t
+
+| T) ≤ exp 
+
+(
+
+− (tδ − κ)2
+
+2τmax β2 PKℓ=1 
+
+ P ti=1 [Ai]ℓk 
+
+2
+
+)
+
+.
+
+(F.9) 
+
+This bound converges to the sufficient-communication bound for cave as t → ∞ .2. Proof of Proposition F.1 Proof. The proof reuses the conditioning convention and ATE bounded-difference inequality from Appendix B. Relative to the finite-round DeGroot analysis presented in Appendix C, the only change is that the SL statistic uses the cumulative weights Pti=1 [Ai]ℓk rather than the single-round weights [At]ℓk .Fix a realization of the training phase in Cδ . Conditional on T, the trained classifiers are fixed, while the fresh testing vector follows Pγ under γ∗ = γ. Since the same testing view is reused at every round, its repeated appearances are not treated as independent coordinates. Instead, changing view ℓ
+
+changes all of its accumulated contributions simultaneously. 11 
+
+From (F.3), changing only coordinate ℓ of the testing vector changes the statistic by at most 
+
+λSL 
+
+> k,t
+
+(h∗) − λSL 
+
+> k,t
+
+(bh) ≤
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk cℓ(h∗ 
+
+> ℓ
+
+) − cℓ(bhℓ)
+
+≤ 2β
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk . (F.10) Thus Lemma B.1 applies with coordinate oscillations 
+
+dSL  
+
+> ℓ,k,t
+
+= 2 β
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk . (F.11) We next control the class-conditional mean. For either γ ∈ Γ,
+
+E(γ) 
+
+> h∗
+
+λSL 
+
+> k,t
+
+(h∗) − tμ γ ( bf )
+
+=
+
+> t
+
+X
+
+> i=1
+> K
+
+X
+
+> ℓ=1
+
+ [Ai]ℓk − πℓ
+
+μγℓ ( bfℓ)
+
+≤ 2β
+
+> t
+
+X
+
+> i=1
+> K
+
+X
+
+> ℓ=1
+
+[Ai]ℓk − πℓ
+
+≤ 2βBA = κ (F.12) where |μγℓ ( bfℓ)| ≤ 2β follows from |cℓ| ≤ 2β. For γ∗ = +1 ,the event Cδ implies μ+( bf ) > δ , so for t > κ/δ ,
+
+E(+1)  
+
+> h∗
+
+λSL 
+
+> k,t
+
+(h∗) > tδ − κ > 0. (F.13) The lower-tail form of Lemma B.1 therefore gives 
+
+P MSL  
+
+> k,t
+
+γ∗ = +1 , T
+
+≤ exp 
+
+(
+
+− (tδ − κ)2
+
+2τ+1 β2 PKℓ=1 
+
+ P ti=1 [Ai]ℓk 
+
+2
+
+)
+
+. (F.14) A similar bound is obtained for the case γ∗ = −1 by replacing 
+
+τ+1 with τ−1. The inequality in (F.9) is then established using the definition of τmax in (45). Finally, 
+
+lim 
+
+> t→∞
+
+1
+
+t
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk = πℓ, (F.15) which implies 
+
+lim 
+
+> t→∞
+
+1
+
+t2
+
+> K
+
+X
+
+> ℓ=1
+
+ tX
+
+> i=1
+
+[Ai]ℓk 
+
+2
+
+=
+
+> K
+
+X
+
+> ℓ=1
+
+π2 
+
+> ℓ
+
+. (F.16) Since (tδ − κ)2/t 2 → δ2, we obtain 
+
+lim 
+
+> t→∞
+
+(tδ − κ)2
+
+2τmax β2 PKℓ=1 
+
+ P ti=1 [Ai]ℓk 
+
+2 = δ2
+
+2τmax β2 PKℓ=1 π2
+
+> ℓ
+
+,
+
+(F.17) which is the exponent that appears in the bound (46) for the aggregate classifier cave under sufficient communication. This completes the proof. 
+
+3. Comparison with the DeGroot Rule 
+
+By Jensen’s inequality, the following holds: 
+
+> K
+
+X
+
+> ℓ=1
+
+ tX
+
+> i=1
+
+[Ai]ℓk 
+
+2
+
+≤ t
+
+> K
+
+X
+
+> ℓ=1
+> t
+
+X
+
+> i=1
+
+ [Ai]ℓk 
+
+2
+
+≤ t
+
+> K
+
+X
+
+> ℓ=1
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk = t2 (F.18) where the last equality uses left-stochasticity of A. Hence, for every agent, 
+
+P MSL  
+
+> k,t
+
+| T ≤ exp 
+
+(
+
+− (tδ − κ)2
+
+2τmax β2t2
+
+)
+
+(F.19) almost surely on Cδ whenever t > κ/δ .The finite-round DeGroot and static observation SL statistics are generally different: the former uses the weights [At]ℓk 
+
+in (48), whereas the latter accumulates Pti=1 [Ai]ℓk in (F.3). Accordingly, neither finite-round analytical bound is asserted to vary monotonically with t, because its denominator depends on the corresponding finite-round mixing weights. Neverthe-less, (16) and (F.4) show that, whenever cave (h∗)̸ = 0 , both mechanisms eventually yield the same collective prediction bγ
+
+in (17). Their error bounds likewise converge to the sufficient-communication bound. A particularly transparent connection arises for the fully connected consensus matrix A = π1⊤. In this case, Am = A
+
+for every integer m ≥ 1, and for every t ≥ 1,
+
+λk,t =
+
+> K
+
+X
+
+> ℓ=1
+
+πℓcℓ(h∗ 
+
+> ℓ
+
+) = cave (h∗), (F.20) whereas 
+
+λSL  
+
+> k,t
+
+= t
+
+> K
+
+X
+
+> ℓ=1
+
+πℓcℓ(h∗ 
+
+> ℓ
+
+) = tcave (h∗). (F.21) Therefore, the two statistics have the same sign and produce the same prediction after one communication round. Moreover, exact mixing is achieved after one communication round, since 
+
+[At]ℓk = πℓ, t ≥ 1. (F.22) Hence, for t ≥ 1, using the exact identity [At]ℓk = πℓ directly in the finite-round DeGroot argument makes the transient mean error identically zero, and the resulting specialized con-centration bound coincides with the sufficient-communication bound. For the SL rule, BA = 0 and hence κ = 0 , while 
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk = tπ ℓ. (F.23) Its finite-round bound therefore reduces to the same sufficient-communication bound for every t ≥ 1. Finally, the two recur-sions use different initial conditions because they represent different inference semantics. For SL, λSL  
+
+> k, 0
+
+= 0 is the state before the first observation is incorporated. For the DeGroot rule, λk, 0 = ck(h∗
+
+> k
+
+) is the local decision statistic available before communication. This discrepancy at t = 0 does not affect the preceding finite-round or limiting comparison. APPENDIX GRAW -S CORE COUNTERPARTS 
+
+The main analysis uses the empirically centered local scores 
+
+ck in (9). As discussed in Proposition 1, empirical centering acts as a threshold alignment mechanism rather than a struc-tural requirement for collaboration. This appendix provides 12 
+
+the corresponding results when the learned scores bfk are used directly, without empirical centering. The raw aggregate score fave and its class-conditional means 
+
+μγ 
+
+> raw
+
+are already defined in (20). Moreover, the raw expected zero-threshold margin is ∆raw (f ) in (26). Since the arguments closely parallel those developed for the centered scores cave 
+
+in Appendices A–F, we state only the changes needed for the raw-score counterparts. 
+
+1. Raw-Score Training Guarantee 
+
+For 0 ≤ δ < β and a generic risk level r, we define 
+
+Eraw Φ (r, δ ) ≜ Φ( δ) + Φ( β) − 2r
+
+16 LΦ
+
+. (G.1) For the learned functions bf = { bf1, . . . , bfK }, we denote the raw-score δ-margin training event by 
+
+Craw  
+
+> δ
+
+≜ ∆raw ( bf ) > δ 
+
+= μ+raw ( bf ) > δ, μ−
+
+> raw
+
+( bf ) < −δ (G.2) where the equality follows from (21), (22) and (26). This is the raw-score counterpart of the centered condition (34). Similar to Proposition 2, we can establish a bound on the achievability of (G.2) as follows. 
+
+Corollary G.1 (Raw-score δ-margin consistent training ).
+
+Suppose Assumptions 1–3 hold and the approximate optimiza-tion condition (37) is satisfied. Let 
+
+r ≜ Ro + εopt (G.3) 
+
+where εopt is defined in (38) . If 
+
+0 ≤ δ < β, r < Φ( δ) + Φ( β)2 , ρ < Eraw Φ (r, δ ) (G.4) 
+
+then 
+
+P(Craw  
+
+> δ
+
+) ≥ 1 − exp 
+
+(
+
+− 8Nmax 
+
+α2β2
+
+
+
+Eraw Φ (r, δ ) − ρ
+
+2
+
+)
+
+. (G.5) 
+
+Proof. The analysis on the approximate optimization remains unchanged from the proof of Proposition 2. With the argument in Appendix A.3, we have 
+
+R( bf ) ≤ r + 2 U, r = Ro + εopt (G.6) where U is the uniform risk deviation in (A.15). It remains to relate failure of the δ-margin condition (G.2) to the pop-ulation surrogate risk. We introduce the following two class-conditional risks: 
+
+R+(f ) ≜
+
+> K
+
+X
+
+> k=1
+
+πkE(+1) Φ( fk(hk)) , (G.7) 
+
+R−(f ) ≜
+
+> K
+
+X
+
+> k=1
+
+πkE(−1) Φ( −fk(hk)) . (G.8) Under the uniform class prior, R(f ) = [ R+(f ) + R−(f )] /2.By the same Jensen argument used in (A.29), 
+
+R+(f ) ≥ Φ μ+raw (f ), R−(f ) ≥ Φ −μ−
+
+> raw
+
+(f ). (G.9) Moreover, Assumption 2 and the non-increasing property of 
+
+Φ imply 
+
+R+(f ) ≥ Φ( β), R−(f ) ≥ Φ( β). (G.10) If Craw  
+
+> δ
+
+fails, one of the two class-conditional risks is at least 
+
+Φ( δ), while the other is at least Φ( β). Therefore, 
+
+Craw  
+
+> δ
+
+⊆
+
+
+
+R( bf ) ≥ Φ( δ) + Φ( β)2
+
+
+
+. (G.11) Combining (G.11) with (G.6) gives, on Craw  
+
+> δ
+
+,
+
+U ≥ Φ( δ) + Φ( β) − 2r
+
+4 = 4 LΦEraw Φ (r, δ ). (G.12) Applying the uniform deviation bound (A.18) at this threshold proves (G.5). Compared with Proposition 2, the change in the bound (G.5) occurs in the reduction from margin event failure to population risk. The centered analysis additionally controls the empirical training mean, whereas the raw margin in (26) is determined directly by the two raw class-conditional means. 
+
+2. Sufficient-Communication Counterpart 
+
+Set f = bf in the raw aggregate score (20), and define 
+
+Mraw ≜ {γ∗fave (h∗) ≤ 0}. (G.13) This is the raw-score counterpart of the event M in (42). When 
+
+Craw  
+
+> δ
+
+is true, the class-conditional mean of fave (h∗) lies on the correct side of zero by more than δ. Moreover, changing only testing view k changes fave (h∗) by at most 2βπ k, which is the same coordinate oscillation used for the centered aggregate in Appendix B.2. Applying Lemma B.1 under the two class-conditional laws Pγ and using the definition of τmax gives 
+
+P(Mraw |T) ≤ exp 
+
+(
+
+− δ2
+
+2τmax β2 PKk=1 π2
+
+> k
+
+)
+
+(G.14) almost surely on Craw  
+
+> δ
+
+. Thus, for the same prescribed margin 
+
+δ, the prediction-side bound (G.14) has exactly the same form as its centered counterpart in (46). Applying the same tower-property decomposition as in (42), with M and Cδ replaced by Mraw and Craw  
+
+> δ
+
+, respectively, gives 
+
+P(Mraw ) = E[P(Mraw |T)] 
+
+≤ E[1[Craw  
+
+> δ
+
+]P(Mraw |T)] + P(Craw  
+
+> δ
+
+). (G.15) Combining (G.15) with (G.14) and the raw-score training guar-antee (G.5) gives the corresponding unconditional guarantee. 
+
+3. Finite-Round Counterpart 
+
+Without empirical centering, the finite-round statistic corre-sponding to (48) becomes 
+
+λraw  
+
+> k,t
+
+≜
+
+> K
+
+X
+
+> ℓ=1
+
+[At]ℓk bfℓ(h∗ 
+
+> ℓ
+
+), (G.16) with 
+
+Mraw  
+
+> k,t
+
+≜ {γ∗λraw  
+
+> k,t
+
+≤ 0}. (G.17) 13 
+
+The finite-round mixing argument pertaining to λraw  
+
+> k,t
+
+follows Appendix C. The coordinate oscillation remains 2β[At]ℓk . The only change in the expectation term follows from 
+
+E(γ) bfℓ(hℓ) ≤ β, (G.18) instead of the bound 2β for empirically centered scores cℓ(hℓ).Using the matrix-power estimate in (52), 
+
+E(γ)λraw  
+
+> k,t
+
+− μγ
+
+> raw
+
+( bf ) ≤ βKC (A, σ )σt. (G.19) Accordingly, define the raw-score counterpart of the residual margin in (53) by 
+
+rraw  
+
+> t
+
+(δ) ≜ δ − βKC (A, σ )σt. (G.20) Repeating the argument used to establish Theorem 2 gives, for every agent k and every t ≥ 0 such that rraw  
+
+> t
+
+(δ) > 0,
+
+P(Mraw  
+
+> k,t
+
+|T) ≤ exp 
+
+(
+
+− [rraw  
+
+> t
+
+(δ)] 2
+
+2τmax β2 PKℓ=1 ([ At]ℓk )2
+
+)
+
+(G.21) almost surely on Craw  
+
+> δ
+
+. Therefore, relative to the bound in (54), only the residual margin changes: 
+
+rt(δ) = δ−2βKC (A, σ )σt −→ rraw  
+
+> t
+
+(δ) = δ−βKC (A, σ )σt.
+
+(G.22) The corresponding unconditional guarantee follows by com-bining (G.21) with (G.5), in the same manner as the centered finite-round decomposition (51). 
+
+4. Finite-Precision Counterpart 
+
+We next consider the raw-score counterpart of the finite-precision recursion (60). Since | bfk(h)| ≤ β by Assumption 2, the raw inputs can be quantized over [−β, β ] rather than the centered range [−2β, 2β] in (56). Accordingly, we employ a narrower raw-score alphabet 
+
+Vraw  
+
+> b
+
+≜ vraw  
+
+> j
+
+= −β + j∆raw  
+
+> b
+
+: j = 0 , . . . , L b − 1 (G.23) where 
+
+∆raw  
+
+> b
+
+≜ 2βLb − 1 = ∆b
+
+2 . (G.24) We apply the same adjacent-level stochastic rounding protocol as in (58) using this raw-score alphabet. The initialization and all quantizer outputs lie in [−β, β ], and the update in (60) is a convex combination. Therefore, this interval is preserved throughout the recursion. The accumulated perturbation term corresponding to (64) is 
+
+V q,raw  
+
+> k,t
+
+≜ (∆ raw  
+
+> b
+
+)2
+
+4
+
+> t
+
+X
+
+> r=1
+> K
+
+X
+
+> j=1
+
+([ Ar ]jk )2
+
+= β2
+
+(Lb − 1) 2
+
+> t
+
+X
+
+> r=1
+> K
+
+X
+
+> j=1
+
+([ Ar ]jk )2
+
+= 14 V q
+
+> k,t
+
+. (G.25) Let x(b),raw  
+
+> k,t
+
+denote the recursion (60) initialized by 
+
+x(b),raw  
+
+> k, 0
+
+= bfk(h∗
+
+> k
+
+) (G.26) and using the raw quantization range above. Define 
+
+M(b),raw  
+
+> k,t
+
+≜ {γ∗x(b),raw  
+
+> k,t
+
+≤ 0}. (G.27) The conditional-MGF argument in Appendix D is unchanged. Replacing rt(δ) and V q 
+
+> k,t
+
+in (65) respectively by rraw  
+
+> t
+
+(δ) and 
+
+V q,raw  
+
+> k,t
+
+therefore gives 
+
+P(M(b),raw  
+
+> k,t
+
+| T)
+
+≤ exp 
+
+(
+
+− [rraw  
+
+> t
+
+(δ)] 2
+
+2
+
+h
+
+τmax β2 PKℓ=1 ([ At]ℓk )2 + V q,raw 
+
+> k,t
+
+i)
+
+(G.28) almost surely on Craw  
+
+> δ
+
+whenever rraw  
+
+> t
+
+(δ) > 0. Thus, relative to the centered result (65), the raw-score counterpart changes only the residual finite-round margin rraw  
+
+> t
+
+(δ) and the quanti-zation proxy V q,raw  
+
+> k,t
+
+. The unconditional guarantee follows by combining (G.28) with (G.5), as in Theorem 3. 
+
+5. PAC-Style Generalization Counterpart 
+
+We next consider the PAC-style result under the aligned network training set (74) and its local projections (75). The raw aggregate fave in (20) does not contain the sample-dependent empirical training mean that appears in the centered aggregate. Therefore, the fixed-class refinement technique described at the end of Appendix E applies directly without the additional offset variable. For the raw local and aggregate scores, respectively, define 
+
+Pe(fk) ≜ P sgn( fk(h∗
+
+> k
+
+)) ̸ = γ∗ | T, (G.29) 
+
+Pe(fave ) ≜ P sgn( fave (h∗)) ̸ = γ∗ | T. (G.30) We establish the analogous PAC-style bounds for fave and fk
+
+as follows. 
+
+Corollary G.2 (Raw-score margin generalization bound ).
+
+Under the sampling setup of Theorem 4, fix η > 0 and ϵ ∈
+
+(0 , 1) . Then, with probability at least 1 − ϵ, uniformly for all 
+
+f ∈ F,
+
+Pe(fave ) ≤ P ηe, emp (fave ) + 2ρη +
+
+r log(1 /ϵ )2N . (G.31) 
+
+Moreover, for every fixed agent k, with probability at least 
+
+1 − ϵ, uniformly for all fk ∈ Fk,
+
+Pe(fk) ≤ P ηe, emp (fk) + 2ρk
+
+η +
+
+r log(1 /ϵ )2N . (G.32) 
+
+Proof. Following (E.35), we define the one-sided deviation 
+
+∆raw + (D) ≜ sup  
+
+> f∈F
+
+n
+
+EΦη (γfave (h)) − P ηe, emp (fave )
+
+o
+
+(G.33) where Φη and P ηe, emp are defined in (69) and (71), respectively. Since the function class consisting of fave , ∀f ∈ F is fixed, the one-sided symmetrization and contraction argument used in the refinement of Appendix E gives 
+
+E∆raw + (D) ≤ 2
+
+η
+
+> K
+
+X
+
+> k=1
+
+πkρk = 2ρη . (G.34) 14 
+
+Moreover, 0 ≤ Φη ≤ 1, so replacing one complete network example changes ∆raw + (D) by at most 1/N . McDiarmid’s inequality therefore gives, with probability at least 1 − ϵ,
+
+∆raw + (D) ≤ 2ρη +
+
+r log(1 /ϵ )2N . (G.35) Using (70) proves (G.31). Since this high-probability event is uniform over f ∈ F, it may be evaluated at f = bf for every realization of the local training randomness. Applying the same argument to the projected sample Dk gives (G.32). Relative to the centered refinement in Appendix E, the offset-complexity term is absent in Corollary G.2 because the raw-score classifier does not contain an empirical training mean. As already characterized by (26) and (27), this difference does not imply a universal ordering of the resulting classifiers, since empirical centering also changes their margins relative to the zero decision threshold. 
+
+6. Static-Observation Social Learning Counterpart 
+
+Replacing the centered decision statistic λSL  
+
+> k,t
+
+in (F.3) by the learned raw scores gives 
+
+λSL ,raw  
+
+> k,t
+
+≜
+
+> K
+
+X
+
+> ℓ=1
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk bfℓ(h∗ 
+
+> ℓ
+
+). (G.36) We define 
+
+MSL ,raw  
+
+> k,t
+
+≜ {γ∗λSL ,raw  
+
+> k,t
+
+≤ 0}. (G.37) Using the cumulative mixing constant BA in (F.6), we denote 
+
+κraw ≜ βBA = κ
+
+2 (G.38) where κ = 2 βBA is defined in (F.8). The proof of Propo-sition F.1 carries over directly. The cumulative coordinate oscillations are unchanged, while |E(γ) bfℓ(hℓ)| ≤ β reduces the cumulative mean-transient term in (F.12) from κ to κraw .Consequently, almost surely on Craw  
+
+> δ
+
+, for every agent k and every integer t > κ raw /δ ,
+
+P(MSL ,raw  
+
+> k,t
+
+| T) ≤ exp 
+
+(
+
+− (tδ − κraw )2
+
+2τmax β2 PKℓ=1 
+
+Pti=1 [Ai]ℓk 
+
+2
+
+)
+
+.
+
+(G.39) This is the direct raw-score counterpart of (F.9). Since 
+
+lim 
+
+> t→∞
+
+1
+
+t
+
+> t
+
+X
+
+> i=1
+
+[Ai]ℓk = πℓ, (G.40) the bound (G.39) converges to the bound associated with raw scores under sufficient communication (G.14). APPENDIX HADDITIONAL EXPERIMENTAL DETAILS 
+
+This appendix provides additional implementation details and supplementary figures for the experiments conducted in Section IV. The presentation is grouped into the CIFAR-10 benchmark, the ModelNet40 benchmark, and the communica-tion and robustness studies. Agent 1 Agent 2 Agent 5 Agent 8 Agent 9  
+
+> ……………… ………………………………………………………
+> Fig. H.1. Illustration of the local labeled datasets in the CIFAR-10 patch-partition benchmark. The highlighted columns illustrate two representative images from the two classes contributing different local patches to all agents.
+
+1. CIFAR-10 Benchmark 1) Experimental Protocol: This subsection provides addi-tional implementation details for the CIFAR-10 patch-partition benchmark introduced in Section IV-A. Each agent trains a convolutional neural network (CNN) independently on the patch associated with its grid location. The network consists of two convolutional layers followed by fully connected layers and produces a two-dimensional output zk(hk) ∈ R2 for each input patch hk [1]. Its two entries, denoted by zk, +1 (hk)
+
+and zk, −1(hk), are the logits associated with the two classes, which define the class-posterior probabilities through the soft-max rule: 
+
+bpk(γ|hk) = exp( zk,γ (hk)) exp( zk, +1 (hk)) + exp( zk, −1(hk)) (H.1) for γ ∈ { +1 , −1}. Here, these logits refer to the raw outputs of the neural network, and should not be confused with the theoretical logit function in (3). In the binary case, their difference satisfies 
+
+zk, +1 (hk) − zk, −1(hk) = log bpk(+1 |hk)
+
+bpk(−1|hk) . (H.2) Therefore, in this implementation, the scalar quantity used for collaboration is first formed by taking the difference between the two logits. This logit difference is then centered according to (9) to obtain the local decision statistic ck(hk).For each value of N0, we first sample a balanced set of CIFAR-10 images containing equal numbers of cats and dogs. The same selected images are then used across all agents, with each agent retaining only the patch corresponding to its own grid location. In this way, N0 denotes the size of the local labeled dataset at each agent before the train/validation split. We reserve 20% of each local dataset for validation and use the remaining 80% for training. Figure H.1 illustrates this construction: each row corresponds to the local dataset of one agent, and each column shows the local patches extracted from a common image across agents. Each local CNN classifier is trained independently using the Adam optimizer with learning rate 10 −4, mini-batch size 256 ,and cross-entropy loss for at most 100 epochs. Early stopping is applied in all CIFAR-10 experiments: training is monitored on the validation set and terminated once the validation loss ceases to improve over several consecutive validation checks, 15 
+
+and the model parameters corresponding to the best validation loss are retained. For each value of N0, all reported quantities in Fig. 2 are averaged over 200 Monte Carlo repetitions. In each repetition, the balanced image set is resampled, the train/validation split is regenerated, and all local classifiers are retrained from scratch. In the main baseline comparison, the communication graph is generated once and then kept fixed across repetitions. Each agent is also assumed to have a self-loop in the communi-cation graph, which is omitted from Fig. 1b for clarity. The corresponding combination policy A is constructed using the uniform averaging rule: 
+
+aℓk = 1
+
+|Nk| , ∀ℓ ∈ Nk (H.3) where |Nk| denotes the cardinality of Nk.
+
+2) Baselines: Figure 2b compares the following methods. 
+
+a) Non-cooperative: Each agent predicts independently from its own local decision statistic, without any communica-tion or aggregation. 
+
+b) Avg-stat: The local decision statistics are averaged uniformly across agents, and the final prediction is obtained by thresholding the resulting aggregate. This provides a simple averaging reference, and coincides with the proposed method when the combination policy A is doubly-stochastic and the communication is sufficient. 
+
+c) Vote: Each agent first generates a hard class prediction based on its local decision statistic. The final output is then determined by majority vote across the agents. 
+
+d) Learned fusion: A centralized affine fusion rule is fitted on a held-out validation set. If c(h) ∈ RK denotes the vector of local decision statistics for sample h, the baseline predicts according to the sign of 
+
+w⊤c(h) + bfus (H.4) where both the fusion weights w ∈ RK and the bias bfus ∈ R
+
+are learned from validation data. 
+
+e) Learned simplex fusion: This baseline also learns a centralized linear fusion rule from validation data, but under the structural constraints 
+
+wk ≥ 0,
+
+> K
+
+X
+
+> k=1
+
+wk = 1 , (H.5) with no additive bias term. It may therefore be interpreted as a learned convex combination of the local decision statistics. 
+
+f) AdaBoost: A centralized boosting model is trained using the local predictors as constituent learners. Unlike the proposed method, this baseline introduces cooperation during training rather than only at test time. 
+
+g) VFL-JT: To provide a task-matched joint training comparator for the partitioned CIFAR-10 data, we implement a score-level vertical federated joint-training scheme inspired by the feature-distributed learning framework in [10]. For an aligned example, branch k receives the same local patch as the corresponding independently trained agent and outputs a            
+
+> TABLE H.1 COMMUNICATION COST OF VFL-JT AND THE PROPOSED SCHEME .
+> Method Training Inference per sample
+> VFL-JT KE VFL (2 Ntr +Nval )K
+> Proposed 0tE off (A)
+
+scalar binary score sk. The coordinating server forms 
+
+uVFL = bVFL +
+
+> K
+
+X
+
+> k=1
+
+wksk, (H.6) and the branch parameters together with the fusion head are optimized jointly using the global binary logistic loss. During training, the local scores are sent to the server and the corresponding loss derivatives with respect to the local scores are returned to the branches. Raw patches and local parameter tensors are not exchanged, and no parameter averaging is performed. Because VFL-JT and the proposed method communicate at different stages, we report their training- and inference-time communication separately. Let EVFL denote the realized num-ber of VFL-JT training epochs, and Ntr and Nval the numbers of aligned training and validation samples, respectively. Recall that Eoff (A) defined in (66) denotes the number of directed non-self communication links. The resulting communication costs, measured by the number of transmissions, are summa-rized in Table H.1. For VFL-JT, each training sample involves the transmission of K local scores to the server and the return of K correspond-ing loss derivatives, while each validation sample requires the K forward score transmissions. For the proposed method, communication occurs only during test-time collaboration over the directed non-self links of the network. If each communi-cated scalar is represented using b bits, the corresponding bit costs are obtained by multiplying the entries in Table H.1 by 
+
+b.
+
+h) Central oracle: A centralized classifier from the same CNN family is trained on the full 32 × 32 CIFAR-10 image. In this implementation, the first convolutional layer is adapted to the full-image input, and the first fully connected layer is resized accordingly to match the resulting feature dimension. This baseline is included only as a full-information reference and is not constrained by the distributed observation model. 
+
+i) Ours (no centering): This ablation implements the same collaboration rule as the proposed method, but removes the centering step in (9). In other words, each agent uses the trained score bfk rather than the centered decision statistic ck.
+
+3) Conditional Mutual Information: In Section IV-A1, the estimation of the mutual information I(hk; hℓ |γ = y) appear-ing in (79) is carried out in two stages. For the reported results in Figs. 3a and 3b, the conditional mutual information is es-timated on the training split using all 10 ,000 selected training samples. We also repeated the same analysis on the testing split and obtained the same qualitative conclusions. First, for each agent k, the raw patch vectors are stacked into a data matrix whose rows correspond to samples and whose columns corre-spond to pixel values, and principal component analysis (PCA) 16 
+
+is then applied to this matrix [11]. A reduced representation of dimension 20 is retained. The PCA transformation is fitted once per agent on the chosen split, and the resulting reduced coordinates are then partitioned according to the class label. Second, for each class y ∈ {− 1, +1 }, the mutual information between the two reduced patch representations is estimated by a k-nearest-neighbor (kNN) estimator with neighborhood parameter kNN = 5 [12]. The two class-conditional estimates are then combined according to (79). All reported values are given in nats. We also evaluated PCA dimensions 10 , 20 , and 
+
+30 , together with neighborhood parameters kNN = 3 , 5, and 
+
+10 . Across these choices, the same qualitative conclusions are found. 
+
+4) Heterogeneous Models: This subsection provides addi-tional details for the heterogeneous version of the CIFAR-10 patch-partition benchmark in Section IV-A2. We consider three local model families: 1) Family A: the patch-level CNN adopted in the main CIFAR-10 experiments; 2) Family B: logistic regression on the flattened raw patch pixels; 3) Family C: a small residual convolutional network with adaptive pooling [13]. All other aspects of the experiment remain unchanged from the homogeneous CIFAR-10 benchmark, including the local datasets, the train/validation splitting protocol, the communi-cation graph, the combination policy, and the training hyper-parameters. Because different patch locations are not equally informa-tive, the placement of a model family on the 3 × 3 grid can affect its apparent performance. To reduce this spatial bias, we use a balanced assignment protocol based on the base layout: 
+
+F(1) =      
+
+> ABCBCACAB
+
+(H.7) where A, B, and C denote the three model families. A cyclic shift of this pattern yields two additional layouts: 
+
+F(2) =      
+
+> BCACABABC
+
+, F(3) =      
+
+> CABABCBCA
+
+. (H.8) In the study of collaboration gain at a fixed N0 illustrated by Fig. 4, the values are averaged over these three layouts so that each family appears equally often at each spatial location. In the N0-sweep of Fig. 5, the base layout F(1) is kept fixed. For each agent k, we quantify the performance gain from collaboration at round t by 
+
+∆k(t) ≜ Pk, 0 − Pk,t (H.9) where we recall that Pk,t denotes the probability of error of agent k at communication round t. For the heatmap shown in Fig. 4, we report the corresponding relative error reduction at the representative communication round t = 15 :
+
+∆(%)  
+
+> k
+
+(15) ≜ 100 · ∆k(15) max {Pk, 0, ϵ safe } (H.10) where ϵsafe = 10 −6 is a small numerical safeguard. 
+
+2. ModelNet40 Benchmark 
+
+The ModelNet40 experiments follow the same general pipeline as the CIFAR-10 benchmark in Appendix H.1, except for the differences described below. The dataset is constructed from CAD models by rendering multiple views of each object using Blender. For each object, we generate K = 12 RGB views from fixed camera positions whose azimuth angles are uniformly spaced around the object, with a common elevation angle of 30 ◦. All rendered images are generated at resolution 224 ×224 with transparent background. The local classifier is a lightweight convolutional network, referred to as MicroCNN . It consists of a single convolutional layer with kernel size 7 × 7 and stride 4, followed by a ReLU nonlinearity, global average pooling, an optional dropout layer, and a final linear layer producing two logits. As in the CIFAR-10 experiments, the local score is formed from the difference between two logits and then centered according to (9). For each value of N0, we sample a balanced set of objects containing N0/2 examples from each class and split it into training and validation subsets using the same 20% validation fraction as in the CIFAR-10 study. The local models are trained independently using cross-entropy loss and validation-based early stopping, but with SGD optimizer and learning rate 0.05 .For the VFL-JT comparison, we use the same score-level joint-training construction described in Appendix H.1.2, with K =12 view-specific MicroCNN branches. 
+
+a) Centralized full-observation reference: In the Model-Net40 benchmark, the central oracle has access to all 12 views of the same object. The model consists of K view-specific MicroCNN backbones, one for each rendered view, whose feature vectors are concatenated and passed to a centralized multilayer head for final prediction. The oracle is initialized from the independently trained local models and then trained in two stages. In the first stage, all backbone parameters are frozen and only the fusion head is optimized. In the second stage, all parameters are unfrozen and the full model is fine-tuned jointly using a smaller learning rate. Both training stages use cross-entropy loss, the Adam optimizer, and validation-based early stopping. 
+
+1) Temperature Scaling: For each agent k, we denote by 
+
+zk(hk) ∈ R2 the two-dimensional output of its local classifier for feature vector hk, whose entries are the logits associated with the two classes. A positive scalar temperature Tk > 0
+
+is fitted on the validation set by minimizing the cross-entropy loss of the rescaled logits: 
+
+min  
+
+> Tk>0
+
+1
+
+Nval 
+
+> Nval
+
+X
+
+> n=1
+
+ℓCE 
+
+ zk(hk,n )
+
+Tk
+
+, γ n
+
+
+
+(H.11) where ℓCE denotes the cross-entropy loss, and (hk,n , γ n)
+
+denotes the n-th labeled example in the validation set. In the implementation, we optimize over log Tk in order to enforce 17 10 2 2 × 10 2 3 × 10 2 4 × 10 2               
+
+> N0
+> 246
+> Temperature scaling  Mean run-wise std of Tk
+> Mean of Tkover agents
+> Fig. H.2. Temperature scaling diagnostics for the ModelNet40 benchmark. The orange curve shows the average of Tkover agents, with error bars indicating 95% confidence intervals across Monte Carlo repetitions. The blue curve shows the average run-wise standard deviation of {Tk}Kk=1 , which quantifies the variability of the fitted temperatures across agents. 10 310 4
+> N0
+> 0246810
+> Temperature scaling  Mean run-wise std of Tk
+> Mean of Tkover agents
+> Fig. H.3. Temperature scaling diagnostics for the CIFAR-10 benchmark.
+
+positivity. After fitting Tk, the classifier output is replaced by zk(hk)/T k. The local score used for collaboration is then formed by taking the difference between the two calibrated logits and is subsequently centered according to (9). 
+
+a) Additional temperature scaling diagnostics: Fig-ure H.2 summarizes the fitted temperature parameters on the ModelNet40 benchmark across training set sizes N0. For each value of N0, we report the average of Tk over the agents together with a 95% confidence interval across 200 Monte Carlo repetitions, as well as the average run-wise standard deviation of {Tk}Kk=1 . A learned temperature Tk = 1 leaves the logits unchanged, Tk > 1 softens them by reducing their magnitude, and Tk < 1 sharpens them. The figure shows that the fitted temperatures are generally greater than one, and that both their average level and their variability across agents decrease as N0 increases. This trend supports the conclusion that calibration is most critical in data-constrained regimes and becomes more stable as local classifier’s reliability improves with additional training data. Figure H.3 reports the corresponding temperature diag-nostics for the CIFAR-10 benchmark considered in Fig. 2. Similar to ModelNet40, the fitted temperatures are larger and more variable at smaller training set sizes. As N0 increases, however, they move closer to one, indicating that the logits require less rescaling in the higher-data regime. The corre-sponding results of decision margin and probability of error with temperature scaling are shown in Figs. H.4a and H.4b, respectively. Compared with Figs. 2a and 2b, temperature scaling tends to increase the achieved decision margin and slightly lowers the probability of error, with the effect being most visible at smaller N0.10 3 10 4      
+
+> N0
+> −0.12
+> −0.06 0.00 0.06 0.12
+> Decision margin  μ+(̂f)
+> μ−(̂f)
+> (a) Decision margin 10 310 4
+> N0
+> 0.30 0.35 0.40 0.45
+> Prob. of error
+> (b) Probability of error
+> Fig. H.4. Performance of temperature scaling on CIFAR-10.
+
+2) Correlation Stress Test: This subsection provides addi-tional details for the controlled correlation stress test studied in Section IV-B2. The perturbed decision statistics {x′
+
+> i,k
+
+} are generated from the clean centered statistics {xi,k } using the perturbation model in (80) and (81). After perturbation, the decision statistics over the test set are collected into a matrix 
+
+X ∈ RNtest ×K , (H.12) whose (i, k )-th entry is the perturbed decision statistic of agent 
+
+k for the i-th testing sample, where Ntest denotes the number of testing samples. To quantify the induced dependence, we compute the unconditional average pairwise Pearson correla-tion across agents: 
+
+corr uncond (X) ≜ 2
+
+K(K − 1) 
+
+X
+
+> 1≤k<ℓ ≤K
+
+brkℓ (X) (H.13) where brkℓ (X) denotes the sample Pearson correlation between columns k and ℓ of X. The label-conditional counterpart is obtained by restricting X to each class separately and then averaging the corresponding pairwise correlations over the two classes. In addition to these dependence measures, Fig. 9 reports the collaboration gain after t communication rounds, measured by 
+
+P0 − Pt = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+(Pk, 0 − Pk,t ) (H.14) where P0 denotes the average probability of error across agents in the non-cooperative setting and Pt is the correspond-ing average probability of error after t rounds of collaboration at the same perturbation level. For completeness, Fig. H.5 reports the corresponding non-cooperative and collaborative probabilities of error as functions of the dependence strength r. For a fixed perturbation ampli-18 0 1 2 3 4 5Dependence strength r                               
+
+> 0.25 0.30 0.35 0.40 0.45 0.50 Prob. of error
+> Non-coop (injected, t= 0) Ours (injected, t= 20) Non-coop (clean) Ours ( t= 20, clean) Non-coop (injected, t= 0) Ours (injected, t= 20) Non-coop (clean) Ours ( t= 20, clean)
+> 10 0
+> 10 1
+> Noise amplitude  σpert
+> Fig. H.5. Probability of error under the controlled correlation stress test. For each perturbation amplitude σpert , the figure compares the non-cooperative error at t= 0 and the collaborative error after t= 20 communication rounds as functions of the dependence strength r. The clean non-cooperative and collaborative error levels are also shown for reference. 12345678910 11 12
+> (a) Ring 12345678910 11 12 (b) Grid
+> Fig. H.6. Ring and grid communication topologies used in Fig. 10. Self-loops are omitted from the plots for visual clarity.
+
+tude σpert , varying r changes the balance between the shared and idiosyncratic perturbation components while preserving the marginal perturbation distribution at each agent. This explains why the non-cooperative error remains approximately constant as r varies. In contrast, the collaborative error gener-ally increases with r, since a stronger shared component makes the perturbations across agents more correlated and reduces the benefit of combining their information. Consequently, the gap between the non-cooperative and collaborative curves narrows as r increases, consistent with the reduction in collaboration gain observed in Fig. 9. Increasing σpert , on the other hand, increases the perturbation magnitude and raises the overall er-ror levels. The clean reference curves show the corresponding performance without the injected perturbations. 
+
+3. Communication and Robustness 
+
+This subsection collects the implementation details for the communication design, adaptive stopping, and robustness stud-ies in Section IV-C of the main paper. 
+
+1) Topology and Quantization: This subsection provides additional implementation details for the communication de-sign study in Section IV-C. Figure H.6 illustrates the ring and grid communication topologies used in the experiments. For each topology-rule pair, the graph and the corresponding combination policy A are generated once and then kept fixed throughout the Monte Carlo study. In this study, we choose N0 = 400 , which corresponds to all available training samples for the selected class pair. The training and testing sets are therefore kept fixed across repetitions, while the train/validation split and the training randomness are varied. For each finite-bit condition, the results are additionally aver-aged over 30 independent quantizer realizations within each of the 200 training repetitions. In this way, the comparison iso-lates the effect of the communication design from variability due to changes in the underlying graph or data. For the Metropolis rule used in the simulations, the com-munication weights are defined by 
+
+aℓk =
+
+  
+
+> 1max {| Nk|,|Nℓ|}
+
+, if ℓ̸ = k, ℓ ∈ Nk,
+
+1 − P  
+
+> m∈Nk\{ k}
+
+amk , if ℓ = k, 
+
+0, otherwise. (H.15) For the undirected ring and grid topologies, this is the standard Metropolis rule in the literature [14], which ensures that the resulting combination policy A is doubly-stochastic. In the case of the directed Erd¨ os–R´ enyi topology, the inclusion of self-loops at all agents guarantees that A is well defined and left-stochastic by construction (H.15). However, because the graph is directed, the policy does not generally remain doubly-stochastic. For the finite-precision study, we use the bounded posterior-probability difference gk(h) defined in (82). This statistic is obtained directly from the same trained classifier, and no retraining is performed. Its empirical training mean μk, emp (gk)
+
+is recomputed from the training statistics in this representation, so that the centered statistic lies in [−2, 2] . For b ∈ { 4, 6, 8},we use Lb = 2 b uniformly spaced reconstruction levels on 
+
+[−2, 2] , with step size 
+
+∆b = 42b − 1 . (H.16) The adjacent-level stochastic rounding protocol Qb and the quantize-before-average recursion (60) are those defined in Section III-D. Quantization is applied at each sender before averaging, including the first exchange. For each testing sam-ple and communication round, every sender draws one fresh quantization outcome independently across senders, rounds, and samples, and broadcasts the same quantized value to all of its outgoing neighbors. Since both stochastic quantization and left-stochastic averaging preserve the interval [−2, 2] , no overload clipping is required. The matched full-precision reference uses the same trained classifiers, bounded scores, empirical centers, graph, and com-bination policy, but replaces the stochastic quantizer by the identity map. Thus, the finite-bit branches differ from the full-precision reference only through stochastic quantization. For the finite-bit branches, the per-round communication cost is measured in transmitted bits per testing sample: 
+
+Bround = bE off (A) (H.17) where Eoff (A) is defined in (66) and excludes self-loops from the communication count. 
+
+a) Additional discussion of Fig. 10: Figures H.7–H.9 provide alternative views of the results in Fig. 10, organized according to graph family, the construction rule of A, and 19 
+
+communication precision. These views help separate the role of each factor in collaborative classification. Across the graph families considered here, the uniform averaging rule and the Metropolis rule generally produce different combination matrices A. One exception is the ring graph, for which the two rules generate the same matrix A. Accordingly, Fig. H.7a presents coincident trajectories at all tested precisions. For the grid graph, Fig. H.7b shows that the uniform averaging rule performs better than the Metropolis rule, although the gap becomes small in the heavily quantized (4-bit) regime. For the tested directed Erd¨ os–R´ enyi graph, Fig. H.7c shows that uniform averaging performs better than the Metropolis rule under the matched full-precision reference and all three finite-bit settings. Figure H.8 relates these performance differences to the spectral properties of the corresponding combination matri-ces. In our experiments, across both construction rules, the second-largest eigenvalue magnitude σA is largest for the ring graph, intermediate for the grid, and smallest for the directed Erd¨ os–R´ enyi graph. Since σA governs the speed of linear mixing associated with the local decision statistics in (11), this ordering helps explain the convergence behaviors observed in Figs. H.8a and H.8b: the ring trajectories approach their limiting regime more slowly than those of the grid or Erd¨ os– R´ enyi graphs. This spectral comparison concerns the transient mixing behavior. The classification performance also depends on the Perron vector of A and the distribution of heterogeneous local scores. The precision-specific views in Fig. H.9 further clarify the role of quantization. Since the ring and grid graphs are undi-rected, the Metropolis rule yields doubly-stochastic matrices for both graph families, and hence the same uniform Per-ron vector. Therefore, in the matched bounded full-precision setting, their decision statistics converge to the same limit. This is reflected in Fig. H.9a, where the corresponding curves approach nearly the same long-run error level. However, the ring graph exhibits a slower transient due to its larger σA. As the communication precision decreases, this coincidence is no longer exact. The finite-bit results exhibit a gradual precision hierarchy: the 8-bit trajectories remain close to full precision, 6-bit communication produces an intermediate degradation, and 4-bit communication produces the largest loss. Finally, although the ring graph converges more slowly in the early rounds, it attains a lower long-run error than the directed Erd¨ os–R´ enyi graph in these experiments. In particular, the two graphs have the same number of communication links, and hence the same per-round communication cost at a fixed bit-width following (H.17). This comparison further illustrates the importance of graph topology in collaborative inference. 
+
+2) Adaptive Stopping: This subsection provides additional details for the adaptive stopping study in Section IV-C2. Our implementation follows a local event-triggered communication protocol. For the i-th testing sample and each agent k, let 
+
+xsent  
+
+> i,k
+
+(t) denote the last value that agent k has transmitted up to round t. At the next round, agent k computes a candidate statistic given by 
+
+xnew  
+
+> i,k
+
+(t) = X
+
+> ℓ∈Nk
+
+aℓk xsent  
+
+> i,ℓ
+
+(t − 1) . (H.18) At initialization, we set xsent  
+
+> i,k
+
+(0) = xi,k (0) , where xi,k (0) is the local decision statistic before communication. The stopping decision is then made from xnew  
+
+> i,k
+
+(t) together with the agent’s local memory. If the trigger fires, the stored communicated value is updated; otherwise the previous transmitted value is kept. Therefore, an agent that remains silent at one round still computes a fresh candidate statistic and may become active again later if the trigger condition is violated. We investigate two local stopping-rule families. The first is a ∆-trigger rule, which is based directly on the change in the communicated statistic. Under this rule, agent k transmits the candidate statistic xnew  
+
+> i,k
+
+(t) to its neighbors at round t only if 
+
+xnew  
+
+> i,k
+
+(t) − xsent  
+
+> i,k
+
+(t − 1) > ε send (H.19) where εsend > 0 denotes the threshold parameter. The second is a label-stability with confidence rule. Let 
+
+ynew  
+
+> i,k
+
+(t) = sign  xnew  
+
+> i,k
+
+(t) (H.20) be the label induced by the candidate statistic, and let si,k (t)
+
+denote the number of consecutive rounds up to round t over which this induced label has remained unchanged. In the implementation, the counter is updated by comparing the induced labels at two consecutive rounds. Thus, L = 1
+
+corresponds to one unchanged transition, L = 2 to two consecutive unchanged transitions, and so on. Agent k does not transmit sample i at round t when 
+
+si,k (t) ≥ L, |xnew  
+
+> i,k
+
+(t)| ≥ τconf (H.21) where L is a patience parameter and τconf is a confidence threshold. To evaluate the performance of the two stopping rules, we sweep εsend over a dense grid for the ∆-trigger rule, and sweep 
+
+(L, τ conf ) over dense grids for the label-stability rule. Since transmissions may stop at different times for different agents and different samples, the communication cost for each rule is measured by the total number of transmissions per testing sample, obtained by counting the realized transmissions over directed non-self links across the communication rounds. The Pareto-efficient operating points shown in Fig. 11 are then extracted in the plane of probability of error versus the total number of transmissions. 
+
+3) Robustness: This subsection provides additional details for the robustness study in Section IV-C3. For the i-th testing sample, let xi,k (0) denote the local decision statistic of agent 
+
+k before communication. The collaborative recursion then evolves according to 
+
+xi,k (t) = X
+
+> ℓ∈Nk
+
+aℓk xi,ℓ (t − 1) . (H.22) For each perturbation scenario, we replace the initial statistics 
+
+{xi,k (0) } by corrupted values {xcorr  
+
+> i,k
+
+(0) } and compare the resulting performance with the corresponding clean trajectory. In each repetition, m ∈ { 1, . . . , K } agents are corrupted, 20 0 5 10 15 20 25 30  
+
+> Communication round t
+> 0.225 0.250 0.275 0.300 0.325
+> Prob. of error
+> Unif, Full Unif, 8bits Unif, 6bits Unif, 4bits Metro, Full Metro, 8bits Metro, 6bits Metro, 4bits
+
+(a) Ring topology 0 5 10 15 20 25 30   
+
+> Communication round t
+> 0.200 0.225 0.250 0.275 0.300 0.325
+> Prob. of error
+> Unif, Full Unif, 8bits Unif, 6bits Unif, 4bits Metro, Full Metro, 8bits Metro, 6bits Metro, 4bits
+
+(b) Grid topology 0 5 10 15 20 25 30   
+
+> Communication round t
+> 0.225 0.250 0.275 0.300 0.325
+> Prob. of error
+> Unif, Full Unif, 8bits Unif, 6bits Unif, 4bits Metro, Full Metro, 8bits Metro, 6bits Metro, 4bits
+
+(c) Directed Erd ¨ os–R ´ enyi topology 
+
+Fig. H.7. Effect of the construction rule of A and quantization on classification performance under different graph topologies. 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.200 0.225 0.250 0.275 0.300 0.325 
+
+> Prob. of error
+> ring, Full ring, 8bits ring, 6bits ring, 4bits grid, Full grid, 8bits grid, 6bits grid, 4bits Erd¨ os–R´ enyi, Full Erd¨ os–R´ enyi, 8bits Erd¨ os–R´ enyi, 6bits Erd¨ os–R´ enyi, 4bits
+
+(a) Uniform averaging rule 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.225 0.250 0.275 0.300 0.325  
+
+> Prob. of error
+> ring, Full ring, 8bits ring, 6bits ring, 4bits grid, Full grid, 8bits grid, 6bits grid, 4bits Erd¨ os–R´ enyi, Full Erd¨ os–R´ enyi, 8bits Erd¨ os–R´ enyi, 6bits Erd¨ os–R´ enyi, 4bits
+
+(b) Metropolis rule 
+
+Fig. H.8. Effect of graph topology and quantization on classification performance under different construction rules of A.
+
+chosen uniformly without replacement, and kept fixed through-out that repetition. We consider three perturbation families. 
+
+a) Benign noisy agents: For each corrupted agent k,independent Gaussian perturbations are injected into the initial statistics: 
+
+xcorr 
+
+i,k (0) = xi,k (0) + αnoise ζi,k , ζi,k ∼ N(0 , 1) . (H.23) To normalize the perturbation level αnoise , we first compute the sample standard deviation of {xi,k (0) }Ntest 
+
+i=1 for each agent 
+
+k, and then take the median of these values across agents. Denoting the resulting scale estimate by bs, we set 
+
+αnoise = ηnoise bs, (H.24) with a dimensionless multiplier ηnoise .
+
+b) Faulty agents: We consider both stuck-at-zero failures and constant-bias failures. In the stuck-at-zero model, 
+
+xcorr 
+
+i,k (0) = 0 , (H.25) whereas in the constant-bias model, 
+
+xcorr 
+
+i,k (0) = xi,k (0) + bfault , bfault = ηbias bs. (H.26) Here, ηbias is the dimensionless bias multiplier varied in the experiments. 
+
+c) Adversarial reports: For each corrupted agent k, we apply a scaled sign flip, 
+
+xcorr 
+
+i,k (0) = −ηadv xi,k (0) , ηadv ≥ 0. (H.27) This model includes several special cases: ηadv = 0 corre-sponds to silencing, ηadv = 1 to a pure sign flip, and ηadv > 1
+
+to an amplified wrong-sign report. REFERENCES [1] P. Hu, V. Bordignon, M. Kayaalp, and A. H. Sayed, “Non-asymptotic performance of social machine learning under limited data,” Signal Processing , vol. 230, p. 109849, 2025. [2] V. Bordignon, S. Vlaski, V. Matta, and A. H. Sayed, “Learning from heterogeneous data based on social interactions over graphs,” IEEE Transactions on Information Theory , vol. 69, no. 5, pp. 3347–3371, 2023. [3] P. L. Bartlett and S. Mendelson, “Rademacher and Gaussian complexi-ties: Risk bounds and structural results,” Journal of Machine Learning Research , vol. 3, no. Nov, pp. 463–482, 2002. [4] B. Neyshabur, R. Tomioka, and N. Srebro, “Norm-based capacity control in neural networks,” in Conference on Learning Theory . PMLR, 2015, pp. 1376–1401. [5] S. Boucheron, G. Lugosi, and P. Massart, “Concentration inequalities using the entropy method,” The Annals of Probability , vol. 31, no. 3, pp. 1583–1614, 2003. [6] P. Caputo, G. Menz, and P. Tetali, “Approximate tensorization of entropy at high temperature,” Annales de la Facult´ e des Sciences de Toulouse: Math´ ematiques , vol. 24, no. 4, pp. 691–716, 2015. [7] M. Mohri, A. Rostamizadeh, and A. Talwalkar, Foundations of Machine Learning , 2nd ed. MIT press, 2018. [8] C. McDiarmid, “On the method of bounded differences,” in Surveys in Combinatorics, 1989 , ser. London Mathematical Society Lecture Note Series, J. Siemons, Ed. Cambridge University Press, 1989, vol. 141, pp. 148–188. [9] A. Lalitha, T. Javidi, and A. D. Sarwate, “Social learning and distributed hypothesis testing,” IEEE Transactions on Information Theory , vol. 64, no. 9, pp. 6161–6179, 2018. [10] Y. Hu, D. Niu, J. Yang, and S. Zhou, “FDML: A collaborative machine learning framework for distributed features,” in Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining . ACM, 2019, pp. 2232–2240. [11] A. H. Sayed, Inference and Learning from Data . Cambridge University Press, 2022. [12] A. Kraskov, H. St¨ ogbauer, and P. Grassberger, “Estimating mutual information,” Physical Review E , vol. 69, no. 6, p. 066138, 2004. [13] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for image recognition,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2016, pp. 770–778. [14] A. H. Sayed, “Adaptation, learning, and optimization over networks,” 
+
+Foundations and Trends® in Machine Learning , vol. 7, no. 4-5, pp. 311–801, 2014. 21 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.200 0.225 0.250 0.275 0.300 0.325 
+
+> Prob. of error
+> ring, Unif ring, Metro grid, Unif grid, Metro Erd¨ os–R´ enyi, Unif Erd¨ os–R´ enyi, Metro
+
+(a) Full-precision communication 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.200 0.225 0.250 0.275 0.300 0.325  
+
+> Prob. of error
+> ring, Unif ring, Metro grid, Unif grid, Metro Erd¨ os–R´ enyi, Unif Erd¨ os–R´ enyi, Metro
+
+(b) 8-bit communication 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.225 0.250 0.275 0.300 0.325 
+
+> Prob. of error
+> ring, Unif ring, Metro grid, Unif grid, Metro Erd¨ os–R´ enyi, Unif Erd¨ os–R´ enyi, Metro
+
+(c) 6-bit communication 0 5 10 15 20 25 30 
+
+Communication round t
+
+0.26 0.28 0.30 0.32 0.34  
+
+> Prob. of error
+> ring, Unif ring, Metro grid, Unif grid, Metro Erd¨ os–R´ enyi, Unif Erd¨ os–R´ enyi, Metro
+
+(d) 4-bit communication 
+
+Fig. H.9. Effect of graph topology and the construction rule of A under different communication precisions.
