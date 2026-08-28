@@ -6,34 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-26
-- 运行时间：2026-08-26 22:10:05 UTC
+- 最新运行日期：2026-08-28
+- 运行时间：2026-08-28 02:55:30 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：1
-- 速读区：3
+- 本次总论文数：6
+- 精读区：4
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读1篇、速读3篇，聚焦多智能体网络协作与去中心化决策。  
-最值得看的是《Test-Time Collaborative Classification over Multi-Agent Networks》（8.0），以及两篇7.0分的去中心化协调与Top-K识别代价研究。  
-建议普通读者优先从多智能体协作分类切入，再对比去中心化方法的性能与成本权衡。
-- 详情：[/202608/26/README](/202608/26/README)
+今日精读4篇、速读2篇，聚焦多智能体系统协作与共识机制。
+最值得关注：资源感知共识的控制论方法，以及信念级联在LLM智能体网络中的说服效应。
+下一步可深入探索多智能体协作中资源分配与信息传播的相互作用。
+- 详情：[/202608/28/README](/202608/28/README)
 
 ### 精读区论文标签
-1. [Test-Time Collaborative Classification over Multi-Agent Networks](/202608/26/2608.24787v1-test-time-collaborative-classification-over-multi-agent-networks)  
+1. [A Control-Theoretic Approach for Resource-Aware Consensus in Multi-Agent AI](/202608/28/2608.25099v1-a-control-theoretic-approach-for-resource-aware-consensus-in-multi-agent-ai)  
    标签：评分：8.0/10、query:ma-la
-   evidence：通过分布式协议交换局部决策统计实现多智能体协作分类，直接涉及多智能体通信
+   evidence：面向多智能体信念动态与通信拓扑的控制论共识
+2. [Belief Cascades Drive Persuasion in LLM Agent Networks](/202608/28/2608.25152v1-belief-cascades-drive-persuasion-in-llm-agent-networks)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：LLM智能体网络中的说服动态与信念级联实证
+3. [Cooperative Multi-Agent Reinforcement Learning for Adaptive Aggregation in Semi-Supervised Federated Learning with non-IID Data](/202608/28/2608.25794v1-cooperative-multi-agent-reinforcement-learning-for-adaptive-aggregation-in-semi-supervised-federated-learning-with-non-iid-data)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：联邦学习中用于自适应聚合的协作多智能体强化学习
+4. [Risks and Controls for Multi-Agent Systems: an analytical framework for deployment of AI agents across organisational boundaries](/202608/28/2608.26626v1-risks-and-controls-for-multi-agent-systems-an-analytical-framework-for-deployment-of-ai-agents-across-organisational-boundaries)  
+   标签：评分：8.0/10、query:ma-la
+   evidence：分析AI代理跨组织边界交互产生的风险与管控措施
 
 ### 速读区论文标签
-1. [Opinion-Guided Layered Strategies for Decentralized Coordination](/202608/26/2608.22104v1-opinion-guided-layered-strategies-for-decentralized-coordination)  
+1. [SIGMA: Structured Noise-Effect-Aware Grouped Multi-Agent Aggregation](/202608/28/2608.26683v1-sigma-structured-noise-effect-aware-grouped-multi-agent-aggregation)  
    标签：评分：7.0/10、query:ma-la
-   evidence：针对多智能体去中心化协调问题，提出意见引导策略，利用非线性意见动态应对多种联合行为
-2. [The Price of Decentralization in Top-$K$ Arm Identification](/202608/26/2608.22120v1-the-price-of-decentralization-in-top-k-arm-identification)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：多智能体协作与去中心化交互
-3. [Social Discounting Enables Fast and Reliable Collective Escape](/202608/26/biorxiv-10-64898-2026-08-14-744984-v1-social-discounting-enables-fast-and-reliable-collective-escape)  
+   evidence：合作多代理强化学习中的结构化噪声效应与协同交互
+2. [AgentRoom: Concurrent Multi-Agent Coding in a CRDT-Backed Shared Workspace](/202608/28/2608.23740v1-agentroom-concurrent-multi-agent-coding-in-a-crdt-backed-shared-workspace)  
    标签：评分：6.0/10、query:ma-la
-   evidence：将集体逃跑建模为多智能体证据累积，同伴的飞逃与静止影响群体决策，属于交互动态研究
+   evidence：通过共享工作空间CRDT协议实现并发多智能体编码协调
 
 
 <div class="dpr-home-promo-card">

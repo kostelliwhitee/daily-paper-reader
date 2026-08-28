@@ -1,0 +1,586 @@
+Title: Cooperative Multi-Agent Reinforcement Learning for Adaptive Aggregation in Semi-Supervised Federated Learning with non-IID Data
+
+URL Source: https://arxiv.org/pdf/2608.25794v1
+
+Published Time: Thu, 27 Aug 2026 01:20:04 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# COOPERATIVE MULTI-AGENT REINFORCEMENT LEARNING FOR ADAPTIVE AGGREGATION IN SEMI-SUPERVISED FEDERATED LEARNING WITH NON-IID DATA 
+
+# Rene Glitza, Luca Becker and Rainer Martin 
+
+# Institute of Communication Acoustics, Ruhr-Universit¨ at Bochum, Bochum, Germany 
+
+ABSTRACT 
+
+Federated Learning (FL) enables distributed training of machine learning models while preserving data privacy. However, FL strug-gles with heterogeneous, non-IID client data distributions, resulting in sub-optimal and biased global models. In this paper, we propose pFedMARL, a novel approach leveraging Multi-Agent Reinforce-ment Learning (MARL) with Twin Delayed Deep Deterministic Policy Gradient (TD3) to dynamically adapt aggregation strategies in FL settings. Our method employs a server-side agent adjust-ing client contributions to optimize global model robustness and client-side agents balancing global and local updates to personalize models effectively without pre-training. We demonstrate superior performance of pFedMARL for training a semi-supervised audio spectrogram transformer, matching or outperforming FedAvg, Ditto, and local training approaches across multiple non-IID scenarios and in the presence of adversarial clients. Our results indicate that pFedMARL actively improves accuracy, robustness, and fairness, making it suitable for real-world deployments. 
+
+Index Terms — deep reinforcement learning, personalized learning, anomaly detection, data heterogeneity, adversarial clients 
+
+1. INTRODUCTION 
+
+The rise of IoT devices with AI accelerators has enabled the deploy-ment of deep neural networks (DNNs) directly on consumer hard-ware. Running DNNs locally reduces latency and addresses growing privacy concerns, especially under data protection laws such as the EU GDPR [1]. However, to achieve high performance in real-world applications, access to diverse and authentic data remains critical. Federated Learning (FL) [2] offers a promising solution by al-lowing edge devices to collaboratively train models without sharing raw data. Clients train locally and send model updates to a central server, which aggregates them into a global model and redistributes this model to clients. While effective in principle, FL struggles with non-independent and non-identically distributed (non-IID) data. Due to diverse environments and usage patterns, the distributions of client data may vary significantly [3, 4]. To overcome these issues, prior work has explored client selec-tion, data weighting [5], aggregation adjustments [6], and cluster-ing [7]. Yet, standard FL methods like Federated Averaging (Fe-dAvg) [2] often result in high performance on average but are incon-sistent across individual clients. Therefore, personalized FL aims to jointly optimize global and local models [8], or embed shared knowl-edge into clients [9]. Also, adversarial clients may send malicious model updates that threaten the robustness and performance of the global model. Server-side Deep Reinforcement Learning (DRL) like in FedAA [10] and FedDRL [11] can be used to adaptively weigh client contributions, filtering out adversarial clients and improving convergence and fairness, but does not improve personalization. In this work, we propose pFedMARL – Personalized Fed erated Learning with Multi-Agent Off-Policy Reinforcement Learning – a novel multi-agent RL-based FL framework that simultaneously cre-ates a robust global model and personalized client models tailored to heterogeneous environments. A server-side DRL agent dynami-cally adjusts client aggregation weights to enhance global model ro-bustness against non-IID data distribution and adversarial behaviors. Each client deploys a DRL agent locally to personalize its model by balancing individual learning with global knowledge. We em-ploy Twin Delayed DDPG (TD3) [12], trained online without pre-training, for both server and client agents. Finally, we evaluate our method on a semi-supervised audio spectrogram transformer pre-training, benchmarking against FedAvg, Ditto, local-only training, and a global oracle system. By training masked-patch reconstruction and patch-level classification simultaneously, the transformer model learns rich and transferable audio representations that are well-suited for fine-tuning on various downstream applications, such as anomaly detection and condition monitoring [13], sound event detection [14], and speaker verification [15], where both generalization and accu-racy are essential. Here, pFedMARL provides a flexible and scal-able solution to FL under non-IID conditions, offering strong perfor-mance in global cooperation and local personalization. 
+
+2. RELATION TO PRIOR WORK 
+
+We situate pFedMARL within research on non-IID federated aggre-gation with adversarial clients, personalized FL, and DRL. 
+
+2.1. Federated Learning 
+
+FL enables collaborative training of a global model by having a cen-tral server aggregate weight updates from multiple clients in an it-erative fashion, each of which trains locally on its private data. A common aggregation strategy is FedAvg [2], defined as 
+
+θ⟨τ ⟩ 
+
+> g
+
+=
+
+> M
+
+X
+
+> i=1
+
+ag,i θ⟨τ ⟩ 
+
+> i
+
+, with θ⟨τ ⟩ 
+
+> i
+
+= θ⟨τ −1⟩ 
+
+> i
+
++ ∆ θ⟨τ ⟩ 
+
+> i
+
+, (1) where θ⟨τ ⟩ 
+
+> g
+
+and θ⟨τ ⟩ 
+
+> i
+
+represent server and client model weights of communication round τ , respectively, and ag,i are the aggregation weights summing to 1. Although FedAvg works well in general, it struggles under non-IID data conditions [4]. Ditto [8] is a framework for personalized FL that attempts to enhance FL regarding fairness in non-IID scenarios and robustness against label poisoning, random-update, and model-replacement at-tacks. It does so by jointly training a global model and client-specific models via a global-regularized multi-task objective. Each client i
+
+learns a personalized model by solving 
+
+min  
+
+> θ⟨τ⟩
+> i
+
+Fi(θ⟨τ ⟩ 
+
+> i
+
+) + λ
+
+2 θ⟨τ ⟩ 
+
+> i
+
+− θ⟨τ ⟩
+
+> g
+> 22
+
+(2) 
+
+© 2026 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses, in any current or future media, including reprinting/republishing this material for advertising or promotional purposes, creating new collective works, for resale or redistribution to servers or lists, or reuse of any copyrighted component of this work in other works. 
+
+DOI:10.1109/ICASSP55912.2026.11462172 arXiv:2608.25794v1 [cs.LG] 26 Aug 2026 Value Policy 
+
+∇θQ L TD Error ∇θπ J DPG 
+
+ππ′
+
+π(o⟨τ ⟩)
+
+εε a⟨τ ⟩
+
+> Environ.
+
+
+
+o⟨τ ⟩, a⟨τ ⟩, r ⟨τ ⟩, o⟨τ +1 ⟩
+
+
+
+update 
+
+ρ-update 
+
+B
+
+baQ1(o, a)
+
+Q1
+
+Q′
+
+> 1
+
+Q2
+
+Q′
+
+> 2
+
+upd. 
+
+ρ-upd. 
+
+min 
+
+y
+
+Fig. 1 : Illustration of the TD3 agent with an experience replay buffer 
+
+B, two main (red) and soft-updated target (blue) values networks Qk
+
+and Q′ 
+
+> k
+
+, a main π and target π′ policy network updated off-policy with noise added to target action a′ + ε. π(o⟨τ ⟩) interacts based on observation o⟨τ ⟩ in FL round τ with the environment for storing new trajectories b.where Fi is the local objective and λ trades off local adaptation against proximity to the global solution. When λ = 0 , Ditto sim-plifies to training local models, and with λ → ∞ , it reverts to the global model objective. Ditto alternates per round between updating the global model with a standard FedAvg solver as in (1) and taking additional local steps on the personalized objective using the current global weights as described in (2). 
+
+2.2. Challenging non-IID data distributions 
+
+Following [4, 11], our study investigates non-IID data category combinations of quantity, label, and cluster skew to realistically address FL challenges. Quantity Skew (QS): Clients hold different amounts of data, frequently observed in user-generated datasets. 
+
+Label Skew (LS): Clients have distinct label distributions arising naturally from user-specific environments. Cluster Skew (CS): 
+
+Clients form groups with similar within-cluster but different across-cluster label distributions. This scenario closely reflects real-world conditions, capturing inter-client correlations prevalent in health-care, regional deployments, and social settings [11]. 
+
+2.3. Deep Reinforcement Learning 
+
+In Deep Reinforcement Learning (DRL), an agent learns to interact with an environment that has a state s⟨τ ⟩ ∈ S at timestamp τ . The agent selects an action a⟨τ ⟩ ∈ A based on s⟨τ ⟩ to interact with the environment. Subsequently, it receives a next state s⟨τ +1 ⟩, and a 
+
+reward r⟨τ ⟩, representing the quality of the action. We instantiate an actor–critic architecture with Twin Delayed Deep Deterministic Policy Gradient (TD3) [12] as illustrated in Fig. 1. The actor is a θπ -parameterized deterministic policy πθπ (s)
+
+(abbreviated as π(s)) that maximizes the expected cumulative dis-counted return for an infinite horizon (J (θπ )) using the determin-istic policy algorithm [16]. Two critics Q(s, a) with parameters θQk , k ∈ 1, 2, are trained with temporal difference (TD) with clipped smoothing noise ε ∼N (0, σ 2I) on the target action during training to estimate the ex-pected return 
+
+
+
+L
+
+
+
+θQk
+
+ 
+
+.Target networks Q′ 
+
+> 1,2
+
+and π′, used for a stable reference in the training process, follow the soft update θ′ ← ρθ + (1 − ρ)θ′ with 
+
+ρ ∈ (0 , 1) . TD3 also applies a policy-delay update for stability [12]. 
+
+Training Training 
+
+DM
+
+D1
+
+Model aggregation Model aggregation Model aggregation Agent M
+
+Agent 1
+
+Agent g
+
+a1
+
+aM
+
+ag
+
+o1, r 1
+
+oM , r M
+
+og , r g
+
+{θ1, . . . , θM }
+
++ supp. info 
+
+θg
+
+... ...
+
+> z }|  {z }|  {
+> Clients  Server
+
+Environment 
+
+Fig. 2 : Overview of the proposed pFedMARL framework, where the server holds one type of agent (green) and every client incorporates another type of agent locally (blue). They return action a for model aggregation based on observation o and update θπ regarding reward 
+
+r on the device. The environment illustrates the usual interaction separation in the DRL paradigm. In Multi-Agent Reinforcement Learning (MARL), each agent typically observes o⟨τ ⟩ ∈ O (a partial view of s⟨τ ⟩), instead of s⟨τ ⟩.
+
+3. PROPOSED METHOD 
+
+By deploying RL agents at both the server and client levels, pFed-MARL achieves improved robustness, fairness, and overall per-formance while generating personalized models aligned with each client’s unique data distribution. We formulate the FL aggregation as a MARL problem, summarized in Algorithm 1: 
+
+Environment: The environment is represented by an FL sys-tem with one server and M clients i ∈ M = {1, . . . , M }. Each client i holds a local dataset Di and a model θi. In each communi-cation round τ , a single RL step proceeds as follows: 1) The server computes observation o⟨τ ⟩ 
+
+> g
+
+and queries its RL agent. 2) The agent returns a raw action vector a∗ 
+
+> g
+
+, which is normalized via softmax to obtain the impact factors a⟨τ ⟩ 
+
+> g
+
+in (1). 3) The global model θ⟨τ ⟩ 
+
+> g
+
+is broadcasted to all clients. 4) Each client computes its observation 
+
+o⟨τ ⟩ 
+
+> i
+
+and sends it to its local agent. 5) The agent outputs an impact factor a⟨τ ⟩ 
+
+> i
+
+to mix the global with the locally trained model (3). 6) Clients train their new local models θ⟨τ ⟩ 
+
+> i
+
+with global model regular-ization as in (1) and send them, along with the observations, to the server. 7) The next round τ + 1 begins. 
+
+Agent: We propose a MARL approach inspired by TD3 [12], with two types of agents: a server agent and client agents. The server’s main policy network π(s) dynamically adjusts impact fac-tors for creating a robust global model, while each client policy bal-ances the global and local models for personalization. Both agents follow the same TD3-inspired training process (Fig. 1), using off-policy updates with experience replay buffers B, where transition vectors b are saved. They differ only in the action A and observa-tion space O.
+
+State and Observation: The server agent’s observation o⟨τ ⟩
+
+> g
+
+consists of four ( M )-dimensional vectors and the current round in-dex τ , including combined client validation losses L(θ⟨τ ⟩ 
+
+> i
+
+; Dval ,i )
+
+(l⟨τ ⟩) as described in Section 4.1, cosine similarities c⟨τ ⟩ between client ∆θ⟨τ ⟩ 
+
+> i
+
+and global model updates ∆θ⟨τ ⟩ 
+
+> g
+
+, l2-norm distances 
+
+d⟨τ ⟩ between global θ⟨τ ⟩ 
+
+> g
+
+and client models ∆θ⟨τ ⟩ 
+
+> i
+
+, and the number 2Algorithm 1: pFedMARL Loop 
+
+Input: Server g, clients i ∈ M with Di, model θ⟨0⟩,communication rounds τmax 
+
+for τ ∈ { 1, . . . , τ max } do 
+
+a⟨τ ⟩ 
+
+> g
+
+← Softmax( πg (o⟨τ ⟩ 
+
+> g
+
+) + ε)
+
+θ⟨τ ⟩ 
+
+> g
+
+← P 
+
+> i∈M
+
+a⟨τ ⟩ 
+
+> g,i
+
+θ⟨τ −1⟩ 
+
+> i
+
+global model update (1) 
+
+r⟨τ ⟩ 
+
+> g
+
+= − log L(θ⟨τ ⟩ 
+
+> g
+
+; Dval ) reward (4) 
+
+for i ∈ M clients in parallel do 
+
+a⟨τ ⟩ 
+
+> i
+
+← πi(o⟨τ ⟩ 
+
+> i
+
+) + εθ⟨τ ⟩ 
+
+> i
+
+← Adam( θ⟨τ −1⟩ 
+
+> i
+
+; θ⟨τ ⟩ 
+
+> g
+
+, Di) with reg. (3) 
+
+r⟨τ ⟩ 
+
+> i
+
+= − log L(θ⟨τ ⟩ 
+
+> i
+
+; Dval ,i ) reward (4) 
+
+o⟨τ +1 ⟩ 
+
+> i
+
+← (li, c i, d i, τ )
+
+end 
+
+o⟨τ +1 ⟩ 
+
+> g
+
+← (l, c, d, n, τ )
+
+for g and i ∈ M in parallel do 
+
+Store (s⟨τ ⟩, a⟨τ ⟩, r ⟨τ ⟩, s⟨τ +1 ⟩) in B
+
+Sample transition b batch from buffer B
+
+Update θπ , θQk , see Fig. 1 
+
+Soft update θπ′
+
+, θQ′ 
+
+> k
+
+via θ′ ← ρθ + (1 − ρ)θ′
+
+end end 
+
+n⟨τ ⟩ of mini-batches per client. The client agent’s observation o⟨τ ⟩
+
+> i
+
+consists of seven single values: cosine similarity, l2-norm distance, and round τ (as above), the local and global models’ separate recon-struction losses LMSE (θ⟨τ ⟩ 
+
+> i/g
+
+; Dval ,i ) and their classification F1-scores 
+
+LF1 (θ⟨τ ⟩ 
+
+> i/g
+
+; Dval ,i ) on local data, combined to l⟨τ ⟩ 
+
+> i
+
+.
+
+Action: The server agent’s main policy outputs a vector a∗ 
+
+> g
+
+=
+
+π(o⟨τ ⟩ 
+
+> g
+
+) + ε, a⟨∗⟩  
+
+> g
+
+∈ [−1, 1] M with Gaussian exploration noise, converted via softmax into impact factors for aggregation including batch-norm statistics, see (1): a⟨τ ⟩ 
+
+> g
+
+= Softmax (a⟨∗⟩  
+
+> g
+
+). The client agents output a scalar ai clipped to [0 , 1] with applied exploration noise, determining the proportion between global regularization and personalized model in the training loss LpFedMARL  
+
+> i
+
+(θi; θ⟨τ ⟩ 
+
+> g
+
+, Di),
+
+LpFedMARL  
+
+> i
+
+= 1
+
+|D i|
+
+X
+
+> (x,y)∈D i
+
+ℓ(fθi (x), y)+ ai
+
+2 θi − θ⟨τ ⟩
+
+> g
+> 22
+
+, (3) where ℓ(fθi (x), y) is an arbitrary model loss. 
+
+Reward: The reward incentivizes the validation losses without regularization after each aggregation step as 
+
+r⟨τ ⟩ = − log L(θ⟨τ ⟩; Dval ), (4) implicitly penalizing performance degradation and compensating for high initial improvements. Furthermore, due to the same objective, clients and server collaboratively optimize a shared global model that performs well for all clients’ data. 
+
+4. EXPERIMENTS 
+
+We evaluate our method on a semi-supervised federated learning task for training a small audio spectrogram transformer (AST) regarding patch reconstruction and classification accuracy. The goal is to train an AST that is effective for data typical for a client’s environment while maintaining robust performance on unseen data. 
+
+1 4 7 10 13 Client i
+
+1
+
+4
+
+7
+
+10 
+
+13 Class 
+
+QS 
+
+1 4 7 10 13 Client i
+
+LS 
+
+1 4 7 10 13 Client i
+
+CS 
+
+Fig. 3 : Visualization of three data partitioning strategies (QS: low quantity & label skew, LS: high quantity & label skew, CS: cluster skew) across 14 clients, where the circle size indicates the number of samples per client and the red color adversarial clients. 
+
+4.1. Network architecture and training procedure 
+
+We employ a compact, fully connected vision transformer [17, 18] with approximately 450k parameters, suitable for federated sce-narios. The model is optimized to minimize the mean squared error (MSE) between patch-masked original and reconstructed log-mel band energy audio features in an unsupervised fash-ion ℓrecon (fθi (x), x), and the negative log-likelihood loss of a fully-connected classification head attached to the latent space 
+
+ℓclass (fθi (x), y), combined to a single loss ℓ = ℓrecon + 2 .0 ℓclass .Our TD3 agents are implemented as fully-connected networks with two layers each for the policy ( π) and critic ( Q), and with 256 units per hidden layer and tanh activation functions. Training uses a batch size of 8, limited to 64 batches per epoch, learning rates of 
+
+1 × 10 −2 and 1 × 10 −4 for policy and critic respectively, discount factor γ = 0 .80 , soft-update rate ρ = 0 .99 , and policy delay of 4 epochs. The Gaussian exploration noise covariance parameter ( σ2)linearly decreases from 0.40 to 0.05 across 80 epochs. A replay buffer [19] prioritizing samples with higher TD error is used with parameters α = 0 .7 and β = 0 .5.
+
+4.2. Dataset 
+
+We use 10% of the DCASE challenge Task 2 development dataset [20,21], containing single-channel laboratory recordings of machine sounds mixed with environmental noise. It includes audio signals from 14 machine classes (e.g., ToyCar, Fan, Gearbox) sampled at 
+
+16 kHz , with audio durations of 6 s to 18 s . Each class has 990 nor-mal training clips from the source domain, 10 from the target do-main, and 200 test clips (100 normal, 100 anomalous) mixed from both domains, mimicking realistic data drift. 
+
+4.3. Experimental Procedure 
+
+We benchmark pFedMARL against FedAvg [2], Ditto [8] with the optimal tested λ = 0 .5, local-only training, and an oracle baseline trained centrally on the raw data of all clients for τmax = 100 FL rounds. Our evaluation compares reconstruction MSE and classifi-cation F1-score performance, standard deviation (std) across clients’ metrics, and l2-norm between the clients and global model for: client models on local test data (L), the global server model on all client test sets (global data) (S), and client models on global test data (G). The centralized baseline is always tested on global data. The dataset is divided between M = 15 clients to simulate three non-IID scenarios: low quantity and label skew (QS, α = 5 .0), high quantity and label skew (LS, α = 0 .4), and cluster skew (CS) with 3Table 1 : Comparison of the FL techniques for the data partitions, shown in Figure 3. Mean client performance and standard deviation across clients on own local test set (L) and all client test sets (G), and mean l2-norm between client and global model at the end of τmax .Algorithm pFedMARL Ditto FedAvg Local Data L G L G L G L GQS MSE Mean ↓ 0.10 0.11 0.17 0.17 1.17 1.17 0.10 0.10 MSE Std ↓ 0.00 0.01 0.01 0.01 0.02 0.00 0.01 0.01 F1 Mean ↑ 0.77 0.73 0.75 0.71 0.17 0.17 0.84 0.80 F1 Std ↓ 0.05 0.02 0.04 0.01 0.03 0.00 0.03 0.02 L2-Norm ↓ 3.32 4.52 2.39 3.25 LS MSE Mean ↓ 0.10 0.11 0.17 0.18 0.96 0.96 0.08 0.11 MSE Std ↓ 0.02 0.02 0.02 0.03 0.08 0.00 0.02 0.03 F1 Mean ↑ 0.87 0.60 0.69 0.34 0.13 0.13 0.92 0.59 F1 Std ↓ 0.05 0.08 0.07 0.06 0.09 0.00 0.04 0.08 L2-Norm ↓ 3.31 6.17 2.35 3.22 CS MSE Mean 0.06 0.12 0.15 0.19 1.25 1.25 0.03 0.07 MSE Std ↓ 0.03 0.07 0.05 0.07 0.10 0.00 0.03 0.06 F1 Mean ↑ 0.96 0.21 0.91 0.19 0.02 0.02 0.98 0.21 F1 Std ↓ 0.04 0.01 0.09 0.02 0.04 0.00 0.04 0.01 L2-Norm ↓ 3.32 4.69 2.40 3.19 
+
+Table 2 : Comparison of the FL techniques server model on all client test sets for the three non-IID scenarios at the end of τmax .Metric F1 Mean ↑ MSE Mean ↓
+
+Scenario CS LS QS CS LS QS pFedMARL 0.22 0.38 0.61 0.18 0.24 0.24 
+
+Ditto 0.11 0.07 0.22 2.07 79.19 2.17 FedAvg 0.03 0.12 0.17 1.34 1.02 1.23 Baseline 0.97 0.01 low label imbalance (manual assignment, α = 2 .0). Class distribu-tion probabilities per client are set via a normalized Dirichlet distri-bution with parameter α, enabling realistic data imbalance and vari-ability as illustrated in Figure 3. To evaluate the robustness against adversarial clients, we select two clients that apply additive Gaussian noise with σ2 = 0 .5 to the transmitted model updates ∆θi while the client’s local model remains unchanged, simulating a corrupted transmission or mali-cious weight injection. In the observation o⟨τ ⟩ only c⟨τ ⟩ 
+
+> i
+
+and d⟨τ ⟩
+
+> i
+
+of the adversarial clients are calculated on corrupted updates, while the losses are based on the non-corrupted models. This does not ap-ply to the baseline and local training conditions, whose performance will therefore not be degraded by adversarial clients. 
+
+5. EXPERIMENTAL RESULTS 
+
+Table 1 summarizes the final performance of each client and algo-rithm on their local test sets (L) and the test sets of all clients (G) for the three non-IID scenarios. Local-only training excels in per-sonalization and also performs well in reconstructing global data, where data diversity is less critical, but falters in classifying unseen classes. With adversarial clients, pFedMARL consistently surpasses FedAvg and Ditto in both MSE and F1-score for the local and global evaluation. As pFedMARL optimizes for local performance, it con-verges towards local-only training, nearly matching its global perfor-mance yet falling short on local data due to the adversarial influence. Across scenarios, we observe the expected personalization/generali-zation trade-off, where gains in L coincide with losses in G.            
+
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0 Accuracy
+> Client
+> 0.1
+> 0.2
+> 0.3 Server
+> 025 50 75 100 Communication round τ
+> 0.0
+> 0.2
+> 0.4
+> 0.6 Action  ¯a
+> 025 50 75 100 Communication round τ
+> pFedMARL
+> Ditto
+> FedAvg
+> Local
+> Adversarial pFedMARL
+> Initial Collect Steps
+
+Fig. 4 : Mean validation client on local data and server F1-accuracy on all client sets, along with mean actions a⟨τ ⟩ separated into adver-sarial clients and the other clients for the CS non-IID scenario. Server models shown in Table 2 underperform compared to client models on global data (G) because adversarial updates cor-rupt the aggregated weights more. pFedMARL does mitigate this by down-weighting adversarial clients but cannot exclude them en-tirely. The baseline is unaffected by data heterogeneity or adversarial weight injection due to the availability of all data at a centralized server and serves as the overall upper bound. Figure 4 illustrates these dynamics. After the initial collection phase, the average contribution of benign clients to the global model stabilizes near 0.5, whereas adversarial influence drops to ≈ 0.1.This rapid suppression coincides with a steady rise in server accu-racy after the initial transition. On the client side, adversarial partic-ipants choose almost no global regularization, while benign clients initially leverage the global model (actions near the Ditto optimum of λ ≈ 0.5) to exploit shared knowledge and, after ≈ 50 rounds, reduce reliance on the server model to personalize further. Corre-spondingly, pFedMARL’s local F1-accuracy tracks Ditto until about round 50 and then increases beyond it, approaching local training. 
+
+6. CONCLUSIONS 
+
+In this paper, we introduce pFedMARL 1 , an adaptive FL frame-work utilizing multi-agent reinforcement learning to address non-IID challenges and adversarial client behavior effectively. By em-ploying TD3-based agents on both server and client sides, our ap-proach achieves a robust global model while ensuring personalized client models without pre-training the agents. Empirical evalua-tions in an audio spectrogram transformer training task across var-ious data skew scenarios with adversaries demonstrate that pFed-MARL may outperform traditional aggregation methods such as Fe-dAvg, Ditto and local-only training. Particularly, pFedMARL shows consistent performance in adversarial scenarios and matches Ditto in non-adversarial settings, delivering high accuracy with improved fairness among clients and robustness while bypassing Ditto’s need for a second local training. Thus, our results highlight the poten-tial of collaborative multi-agent reinforcement learning to enhance FL practices in real-world applications. Future research will explore the extension of pFedMARL to other data modalities and evaluate scalability in federations with significantly more clients. 
+
+> 1Code available under: github.com/NexuFed/pFedMARL
+
+47. ACKNOWLEDGEMENT 
+
+This work has been supported by the German Federal Ministry of Research, Technology and Space (BMFTR) (grant 02L19C200, ”HUMAINE”) and by the German Research Foundation (DFG) (project numbers 429873205 and 549576906). 
+
+8. REFERENCES 
+
+[1] European Parliament and Council, “Regulation (EU) 2016/679 of the European Parliament and of the Council of 27 April 2016 on the protection of natural persons with regard to the process-ing of personal data and on the free movement of such data, and repealing Directive 95/46/EC (General Data Protection Regu-lation),” 2016. [2] Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hamp-son, and Blaise Aguera y Arcas, “Communication-Efficient Learning of Deep Networks from Decentralized Data,” in Pro-ceedings of the 20th International Conference on Artificial In-telligence and Statistics . Apr. 2017, pp. 1273–1282, PMLR. [3] Tian Li, Anit Kumar Sahu, Manzil Zaheer, Maziar Sanjabi, Ameet Talwalkar, and Virginia Smith, “Federated Optimiza-tion in Heterogeneous Networks,” Proceedings of Machine Learning and Systems , vol. 2, pp. 429–450, Mar. 2020. [4] Kevin Hsieh, Amar Phanishayee, Onur Mutlu, and Phillip Gib-bons, “The Non-IID Data Quagmire of Decentralized Machine Learning,” in Proceedings of the 37th International Confer-ence on Machine Learning . Nov. 2020, pp. 4387–4398, PMLR. [5] Hongda Wu and Ping Wang, “Fast-Convergent Federated Learning With Adaptive Weighting,” IEEE Transactions on Cognitive Communications and Networking , vol. 7, no. 4, pp. 1078–1088, Dec. 2021. [6] Sai Praneeth Karimireddy, Satyen Kale, Mehryar Mohri, Sashank Reddi, Sebastian Stich, and Ananda Theertha Suresh, “SCAFFOLD: Stochastic Controlled Averaging for Federated Learning,” in Proceedings of the 37th International Confer-ence on Machine Learning . Nov. 2020, pp. 5132–5143, PMLR. [7] Felix Sattler, Klaus-Robert M¨ uller, and Wojciech Samek, “Clustered Federated Learning: Model-Agnostic Distributed Multitask Optimization Under Privacy Constraints,” IEEE Transactions on Neural Networks and Learning Systems , vol. 32, no. 8, pp. 3710–3722, Aug. 2021. [8] Tian Li, Shengyuan Hu, Ahmad Beirami, and Virginia Smith, “Ditto: Fair and Robust Federated Learning Through Personal-ization,” in Proceedings of the 38th International Conference on Machine Learning . July 2021, pp. 6357–6368, PMLR. [9] Ziwen Huang and Nikolaos M. Freris, “Reinforcement Learning-Based Layer-Wise Aggregation for Personalized Federated Learning,” IEEE Internet of Things Journal , vol. 12, no. 7, pp. 8614–8625, 2025. [10] Jialuo He, Wei Chen, and Xiaojin Zhang, “FedAA: A Re-inforcement Learning Perspective on Adaptive Aggregation for Fair and Robust Federated Learning,” Proceedings of the AAAI Conference on Artificial Intelligence , vol. 39, no. 16, pp. 17085–17093, Apr. 2025. [11] Nang Hung Nguyen, Phi Le Nguyen, Thuy Dung Nguyen, Trung Thanh Nguyen, Duc Long Nguyen, Thanh Hung Nguyen, Huy Hieu Pham, and Thao Nguyen Truong, “Fed-DRL: Deep Reinforcement Learning-based Adaptive Aggrega-tion for Non-IID Data in Federated Learning,” in Proceedings of the 51st International Conference on Parallel Processing ,New York, NY, USA, Jan. 2023, ICPP ’22, pp. 1–11, Associa-tion for Computing Machinery. [12] Scott Fujimoto, Herke Hoof, and David Meger, “Addressing Function Approximation Error in Actor-Critic Methods,” in 
+
+Proceedings of the 35th International Conference on Machine Learning . July 2018, pp. 1587–1596, PMLR. [13] Kevin Wilkinghoff, “Self-Supervised Learning for Anoma-lous Sound Detection,” in ICASSP 2024 - 2024 IEEE Interna-tional Conference on Acoustics, Speech and Signal Processing (ICASSP) , Apr. 2024, pp. 276–280. [14] Yusun Shul and Jung-Woo Choi, “CST-Former: Transformer with Channel-Spectro-Temporal Attention for Sound Event Localization and Detection,” in ICASSP 2024 - 2024 IEEE In-ternational Conference on Acoustics, Speech and Signal Pro-cessing (ICASSP) , Apr. 2024, pp. 8686–8690. [15] B. Desplanques, J. Thienpondt, and K. Demuynck, “ECAPA-TDNN: Emphasized channel attention, propagation and aggre-gation in TDNN based speaker verification,” in Proc. Inter-speech 2020 , 2020, pp. 3830–3834. [16] Timothy P. Lillicrap, Jonathan J. Hunt, Alexander Pritzel, Nicolas Heess, Tom Erez, Yuval Tassa, David Silver, and Daan Wierstra, “Continuous control with deep reinforcement learn-ing,” July 2019, arXiv:1509.02971 [cs]. [17] Yuan Gong, Cheng-I. Lai, Yu-An Chung, and James Glass, “SSAST: Self-Supervised Audio Spectrogram Transformer,” 
+
+Proceedings of the AAAI Conference on Artificial Intelligence ,vol. 36, no. 10, pp. 10699–10709, June 2022, Number: 10. [18] Alan Baade, Puyuan Peng, and David Harwath, “MAE-AST: Masked Autoencoding Audio Spectrogram Transformer,” Mar. 2022, arXiv:2203.16691 [cs, eess]. [19] Tom Schaul, John Quan, Ioannis Antonoglou, and David Silver, “Prioritized Experience Replay,” Feb. 2016, arXiv:1511.05952 [cs]. [20] Kota Dohi, Tomoya Nishida, Harsh Purohit, Ryo Tanabe, Takashi Endo, Masaaki Yamamoto, Yuki Nikaido, and Yohei Kawaguchi, “MIMII DG: Sound dataset for malfunctioning in-dustrial machine investigation and inspection for domain gen-eralization task,” in Proceedings of the 7th detection and clas-sification of acoustic scenes and events workshop (DCASE) ,Nancy, France, Nov. 2022. [21] Noboru Harada, Daisuke Niizumi, Daiki Takeuchi, Yasunori Ohishi, Masahiro Yasuda, and Shoichiro Saito, “Toy-ADMOS2: Another dataset of miniature-machine operating sounds for anomalous sound detection under domain shift con-ditions,” in Proceedings of the detection and classification of acoustic scenes and events workshop (DCASE) , Barcelona, Spain, Nov. 2021, pp. 1–5. 5

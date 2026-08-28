@@ -1,0 +1,938 @@
+Title: A Control-Theoretic Approach for Resource-Aware Consensus in Multi-Agent AI
+
+URL Source: https://arxiv.org/pdf/2608.25099v1
+
+Published Time: Thu, 27 Aug 2026 00:10:05 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# A Control-Theoretic Approach for Resource-Aware Consensus in Multi-Agent AI 
+
+James Flagg and Esteban A. Hernandez-Vargas 
+
+Abstract — Large language model multi-agent systems (LLM-MAS) rely on inter-agent communication to solve complex reasoning tasks, yet rigorous guarantees relat-ing consensus performance to computational resources remain limited. Here, we present a novel way to character-ize collective belief dynamics as a discrete-time switched system in which communication topologies have distinct consensus-contraction rates and token costs. By augment-ing the belief dynamics with the remaining computational budget, we define a consensus safe set that jointly cap-tures agreement and resource feasibility. We derive explicit bounds on consensus time and token expenditure and con-struct a consensus-budget certificate region guaranteeing finite-time convergence without resource exhaustion. We further establish conditions under which adaptive topol-ogy switching achieves a trade-off between convergence speed and communication cost relative to fixed-topology strategies. Numerical experiments and live LLM-MAS de-ployments show the predicted consensus-cost trade-offs, demonstrating how control-theoretic certificates can en-able resource-aware coordination in AI systems. 
+
+Index Terms — Switched systems, Intelligent systems, Consensus, Multi-agent systems, Modeling 
+
+I. I NTRODUCTION 
+
+# LARGE Language Models (LLMs) are transforming so-ciety as rapidly as they are evolving technically. The base unit of measurement for LLM computational cost is the token [1]. Tokens are vectors which encode inputs, outputs, and thought processes [2]. Token expenditures for Chat-GPT alone, though not publicly disclosed, could reach into the quadrillions as Chat-GPT processes 2.5 billion prompts every day [3]. Experts document repercussions from these high computational costs. Training GPT-5 required 1 billion liters of water [3]. AI electricity consumption in 2025 reached 93TWh, enough to supply Nigeria for two years [3]. The data centers which power LLMs are taking their position among nations in the global economy. By 2030, data centers are projected to rank 6th globally in electricity consumption, just behind Japan [3]. The projected water use of data centers, amounting to 9.3 trillion liters, could meet the domestic needs of Sub-Saharan Africa’s 1.3 billion population. 
+
+Submitted on Aug. 17, 2026. Supported by NSF Grant No. DMS-2315862. James Flagg is with the Dept. of Mathematics and Statisti-cal Science, University of Idaho, Moscow, ID 83843 USA. (e-mail: flag1779@vandals.uidaho.edu). Esteban A. Hernandez-Vargas is with the Dept. of Mathematics and Statistical Science, University of Idaho, Moscow, ID 83843 USA. (e-mail: esteban@uidaho.edu). 
+
+These resource demands become particularly consequential in agentic AI, where solving a single task may require repeated LLM inference, tool calls, and communication across multiple reasoning cycles. This shift from one-shot inference toward iterative autonomous reasoning is exemplified by the ReAct 
+
+framework, which advanced LLMs to autonomous agents through a closed-loop reasoning-acting cycle [9]. First, the model reasons about the current state. Based on its assessment, the model issues a tool call. Finally, the model observes the results before restarting the loop. Multi-Agent Systems (MAS) extend this paradigm by coordinating multiple LLM agents to complete long and complex tasks. These systems build upon and scale the core ideas of ReAct, incorporating new architectures for inter-agent relationships and maintaining persistent memory across the team [10]. Reaching consensus is the goal of coordination for MAS. When agents in the system achieve consensus, their individual belief states align. In practice, consensus is achieved when the difference between individual belief and the collective average is less than a given tolerance ε > 0. While we use the term MAS to refer specifically to teams of LLMs, it should be noted that there are many types of Multi-Agent Systems, spanning a variety of contexts. MAS consensus is a wide field of research with deep classical roots [11]–[13]. Despite rapid empirical progress, the theoretical foundations of agentic AI remain underdeveloped [14]–[16]. As agentic systems form the basis for an increasing range of applications, from software development to policy simulation [20], the development of a theoretical framework for robust safety constraints is correspondingly necessary. Unsafe behaviors in MAS include hallucinations, infinite reasoning regressions, and high computational costs due to repeated tool calls and long generations. Amodei et al. [21] enumerate concrete failure modes—reward misspecification, distributional shift, safe exploration, and robustness to distributional shift—and call for formal methods to address them. Dalrymple et al. [22] articulate a framework for “guaranteed safe AI” requiring machine-checkable safety proofs, but note that no general formal model for LLM-based agents yet exists at the required level of rigor. In Table I, we summarize the distinguishing features of the frontier LLM platforms, with a special interest in their aptitude for consensus-driven MAS. Adherence to academ-ically standard metrics for LLM performance is essential when evaluating a model. The GPQA Diamond database contains 448 multiple-choice questions in biology, physics, and chemistry; PhD experts average 65% accuracy, while non-arXiv:2608.25099v1 [math.OC] 25 Aug 2026 2
+
+TABLE I : Comparative Summary of Frontier Large Language Models (2026)                  
+
+> Model Technical Focus & Capabilities Major Applications Benchmarks
+> (GPQA / SWE)
+> GPT-5.5
+> (OpenAI) The GPT-5 generation performs 3x better than previous models in the area of sycophancy, enabling more effective collaboration among agents [4]. Wide range of personal and corporate tasks, including coding and writing 93.18% / 82.6%
+> Gemini 3.1 Pro
+> (Google) With a 1M token context-window, Gemini 3.1 specializes in solving large problems in a cross-modal context [5]. Tasks involving video and audio 95.45% / 78.8%
+> Claude Opus 4.8
+> (Anthropic) Dynamic workflows deploy multiple agents in parallel to complete large tasks from planning to execution [6]. Agentic coding 92.42% / 88.6%
+> DeepSeek R1
+> (DeepSeek) Advanced problem-solving capabilities stem from an RL (reinforcement learning) frame-work which rewards correct outcomes achieved via explorative reasoning processes [7]. Cost-effective math and logic 71.5% / 49.2%
+> LLaMa 4 Mav.
+> (Meta) Mixture-of-Experts (MoE) framework dele-gates sub-layers of agents to analyze up to 10M tokens [8]. LLaMa’s weights are publicly accessible, en-abling reproducibility in simulations. 67.1% / 21.04%
+
+experts with internet access achieve 34% [17]. The GPQA Diamond score evaluates a model’s reasoning and logic skills. To measure a model’s ability to carry out a task, an essential skill for agentic coding, we use the SWE-bench score. Jimenez et al. introduced their testing framework of 2,294 software engineering problems in 2024 [18]. Because resolving bugs requires complex interaction with an agent’s environment, nuanced analysis of large repositories, and involved planning, the SWE-bench is an accurate marker of an agent’s viability. The benchmark scores are sourced from the frontier rankings on the Vals AI Leaderboard [19]. Individual LLMs operate as open-loop systems, mapping an input prompt to an output token sequence without internal monitoring or feedback. An LLM-MAS, on the other hand, self-evaluates at every iteration of a closed-loop workflow. The harness, which is the architecture that unifies the agents, acts as a controller that receives internal assessments and adjusts the system trajectory accordingly. These internal assessments could be the number of failed unit tests (in the context of agentic coding), a transcript which an “evaluator” LLM generates, or simply the internal belief states of the agents in the system. The MAS evolves in discrete time, where each cycle of the workflow increments a discrete-time index which chronologizes policy changes, completion of communication rounds, and input from the harness. Zhang et al. establish how the harness architecture unites multiple agents into a dynamical system, demonstrating how a change in the harness can greatly effect overall performance [23]. Recent work has led to the development of many harness architectures with specific optimization goals. The VeRO harness enables agents to improve other agents by modifying their source code, working within a computational budget [24]. Due to the complexity of MAS, current research focuses on a subset of the system state to model as a dynamical system. For instance, Eslami et al. focus on runtime agency and interactions between system modifications, characterizing stability as delay times beneath a certain threshold [25]. 
+
+Contributions: This paper develops a control-theoretic framework for resource-aware consensus in LLM-based multi-agent systems. We incorporate token budget directly into the system state and study whether a multi-agent reasoning process can be certified to reach practical consensus before exhausting its available resources. The main contributions are as follows. 
+
+i) LLM-MAS coordination is formulated as a discrete-time switched system in which each mode represents a communi-cation topology with an associated consensus-contraction rate and token cost. The harness acts as a supervisory controller that selects the active communication topology according to the collective disagreement among agents. 
+
+ii) A consensus-budget certificate region is constructed to provide a sufficient condition, in terms of initial disagree-ment and available budget, for finite-time convergence to ε-consensus without resource exhaustion. We further establish conditions under which adaptive topology switching achieves a trade-off between the convergence speed of dense commu-nication and the lower cost of sparse communication. 
+
+iii) The theoretical predictions are evaluated through nu-merical simulations and live LLM-MAS deployments in a software-architecture planning task. Adaptive, dense, and sparse communication strategies are compared to characterize the interplay among disagreement contraction, communication topology, and computational cost. To the best of our knowledge, this is the first control-theoretic formulation that jointly models consensus and computational-budget dynamics in LLM-MAS and provides explicit certificates linking communication topology, conver-gence, and token expenditure. 3
+
+II. P RELIMINARIES AND PROBLEM FORMULATION 
+
+Throughout, R denotes the field of real numbers. Rd de-notes the set of vectors of dimension d whose entries are real numbers. Similarly, RN ×N denotes the set of N × N
+
+matrices whose entries are real numbers. Z denotes the ring of integers, while Z≥0 = {x ∈ Z : x ≥ 0} denotes the subset of nonnegative integers. N is the set of natural numbers 
+
+{1, 2, 3, ... }. For a matrix M , M ⊤ represents the transpose of 
+
+M. We denote the N -dimensional column vector of ones in bold: 1 ∈ RN . In a directed graph G with edge-set E and vertices-set V , we use V × V = {(v, u )|u ∈ V and v ∈ V }
+
+to denote the set of ordered pairs where each pair corresponds to an edge from vertex v to vertex u. 
+
+We use three norms in the framework that follows. For a vector v ∈ Rd, we write ∥v∥2 to denote the standard Euclidean distance norm, defined as: 
+
+∥v∥2 =
+
+vuut dX
+
+> i=1
+
+v2 
+
+> i
+
+.
+
+For a matrix M ∈ RN ×N , the Frobenius norm ∥M ∥F
+
+measures the overall size of the matrix. It is an extension to matrices of the Euclidean norm, defined as: 
+
+∥M ∥F =
+
+vuut NX
+
+> i=1
+> N
+
+X
+
+> j=1
+
+a2 
+
+> ij
+
+.
+
+The spectral norm of a matrix M ∈ RN ×N quantifies how much M can stretch or amplify a vector x ∈ RN :
+
+∥M ∥2 = max 
+
+> x̸=0
+
+∥M x ∥2
+
+∥x∥2
+
+.
+
+Notice that the norms on the right hand side of this equivalence are both Euclidean, since M x is a column vector of dimension 
+
+N. For an action matrix W and subspace s, we write W s to show that we are restricting W to s. For a ∈ R, we write ⌈a⌉
+
+to apply the ceiling function to a. 
+
+A. Problem Statement 
+
+To model consensus-budget dynamics, we exploit a key architectural feature of LLM-MAS: the harness can regulate inter-agent communication by activating different communi-cation topologies during the reasoning process. We therefore model the MAS as a discrete-time switched system, where the discrete-time index k represents communication rounds and the switching signal σk selects the active communication topology. Under mode σk, the communication topology is represented by the directed graph Gσk = (V, E σk ) and its associated weight matrix Wσk , which determines how agents incorporate the belief states of their neighbors. Different communication modes induce different rates of disagreement contraction and incur different computational costs. The harness acts as a supervisory controller that selects σk according to the aggre-gate disagreement D(k), thereby steering the evolution of the collective belief state. The resulting closed-loop architecture is illustrated in Fig. 1. Disagreement 𝐷 (0)          
+
+> Budget 𝑏 (0)
+> Policy
+> harness steers
+> Action
+> agents communicate
+> Evaluation
+> 𝐷 (𝑘 +1), 𝑏 𝑘 +1update Token Budget
+> 𝑏 𝑘 +1=𝑏 𝑘 −𝑐 𝜎 𝑘
+
+𝜎 𝑘 
+
+G𝜎 𝑘 , 𝑐 𝜎 𝑘 
+
+Fig. 1: MAS communication loop as a hybrid switched feedback control system. The harness selects a communica-tion topology (switching signal σk) based on disagreement level D(k) and remaining token-budget bk; the agents debate according to graph Gσk , accruing computational cost cσk ;evaluation of the updated disagreement D(k + 1) and budget 
+
+bk+1 drives the next policy. Token consumption is dictated by the communication topology. 𝑎 1
+
+𝑎 2
+
+𝑎 3𝑎 4
+
+𝑎 5
+
+Mode 𝜎 = 1 (Complete) 
+
+𝑎 1
+
+𝑎 2
+
+𝑎 3𝑎 4
+
+𝑎 5
+
+Mode 𝜎 = 2 (Ring) 
+
+𝑐 1 = cost when 𝜎 = 1 > 𝑐 2 = cost when 𝜎 = 2
+
+𝐷 (𝑘 ) ≤ 𝜂 
+
+Fig. 2 : Five LLM agents under norm-threshold switching. Mode 1 (complete K5, costlier) is activated when the ag-gregate disagreement satisfies D(k) > η ; Mode 2 (ring C5,cheaper) is activated when D(k) ≤ η.The control objective is to drive the MAS to practical consensus, D(k) ≤ ε, without exhausting the initial token budget b0. This introduces a fundamental trade-off: dense communication topologies may contract disagreement rapidly but incur higher token costs, whereas sparse topologies reduce communication cost at the expense of slower convergence. We address this trade-off through norm-threshold switching: a dense communication mode is activated when D(k) > η ,while a lower-cost sparse mode is used once D(k) ≤ η, as illustrated in Fig. 2. Accordingly, the problem addressed in this paper is to determine conditions under which the switching policy guar-4
+
+antees that the MAS reaches an ε-consensus state before its computational budget is exhausted. To this end, we augment the collective belief state with the remaining budget and define the ε-consensus safe set Ωε. We then characterize a consensus-budget certificate region Ωcert whose states possess sufficient computational resources to guarantee finite-time reachability of Ωε.
+
+III. M ULTI -AGENT SYSTEMS CONSENSUS FRAMEWORK 
+
+We work under the following assumptions: (i) synchronous activation , which means that all agents participate in every communication cycle, (ii) zero communication delay , ensuring that belief states communicated among the agents are current, and (iii) exogenous switching mechanism , where the harness architecture determines the communication topologies, not the agents themselves. We begin by describing an agent in terms of its belief state. Since we define consensus (the reconciliation of all belief states) as the “goal” state of the MAS, this definition is appropriate for our framework. 
+
+Definition 1 (Agent): In a team of N ∈ N agents, each 
+
+agent is a reasoning unit ai where i ∈ { 1, . . . , N }, equipped with an internal belief state xi(k) ∈ Rd at communication round k ∈ Z≥0. We index the discrete time evolution of the system by k, which updates every time the agents commu-nicate according to a given topology. Communication among agents includes sharing information, registering disagreement, and proposing modifications. The vector xi(k) represents the current d-dimensional assessment, proposal, preference vector, or structured reasoning state of agent ai, for some d ∈ N.The collective state of the multi-agent system is the matrix 
+
+Xk =
+
+
+
+x1(k)⊤
+
+x2(k)⊤
+
+...
+
+xN (k)⊤
+
+ ∈ RN ×d.
+
+While Xk denotes an internal summary of the MAS, it does not contain information about the external organizing architecture of the harness. We describe subsystems of this architecture as communication topologies, which we model as communication graphs. 
+
+Definition 2 (Communication Graph): A communication graph is a directed graph Gσ = (V, E σ ), where 
+
+σ ∈ Σ := {1, . . . , m } for m ∈ N. The vertices 
+
+V = {a1, . . . , a N } are the set of agents and edges 
+
+Eσ ⊆ V × V are the set of communication links active under mode σ. Σ is the set of topologies, where each topology patterns a mode of communication. Each graph Gσ is encoded by a nonnegative weight matrix Wσ = [w(σ) 
+
+> ij
+
+] ∈ RN ×N ,
+
+where w(σ) 
+
+> ij
+
+> 0 means that agent ai incorporates information from agent aj under mode σ. In graphical terms, the ij -th entry in Wσ determines the edge between vertex ai and vertex aj .
+
+Definition 3 (Doubly Stochastic): A real matrix M is dou-bly stochastic if all its entries are nonnegative, and the sum of the entries in every row and every column is exactly 1. We assume that each Wσ is doubly stochastic. Hence, elementary properties of matrix multiplication guarantee that 
+
+Wσ 1 = 1, W ⊤ 
+
+> σ
+
+1 = 1,
+
+where 1 ∈ RN is the homogeneous vector of all ones. Now we formally define consensus, the central coordination objective of the harness. 
+
+Definition 4 (Consensus): The agents are said to be in 
+
+consensus at round k if there exists a vector ¯xk ∈ Rd such that x1(k) = x2(k) = · · · = xN (k) = ¯xk. Equivalently, 
+
+Xk = 1 ¯x⊤ 
+
+> k
+
+. The set 
+
+C = X ∈ RN ×d : X = 1c⊤, c ∈ Rd
+
+is called the consensus manifold . The consensus manifold describes the set of all possible MAS aggregate belief matrices where each of the rows, representing individual agentic belief states, are the same. By this definition, the agents have reached consensus when their individual belief vectors xi(k) are all equivalent. Until the MAS reaches consensus, the aggregate disagreement level of the system is > 0.
+
+Definition 5 (Disagreement): We define disagreement as the collective difference between each agent’s belief state and the average of all the agents’ belief states. The system state 
+
+Xk, therefore, can be decomposed as: 
+
+Xk = Average + Disagreement. 
+
+Mathematically, we write this as 
+
+Xk = 1
+
+N 11 ⊤Xk + P Xk (1) where P Xk is the disagreement component of Xk. Notice that 
+
+11 ⊤ yields a N ×N matrix where every entry is 1. Multiplying this matrix by Xk and then dividing every entry by N results in homogeneous column vectors v1, ...v N , where each entry in vj corresponds to the average of all entries in column j of 
+
+Xk. We define the disagreement subspace 
+
+1⊥ = {v ∈ RN : 1⊤v = 0 }. (2) This subspace consists of vectors whose entries sum to 0. Because the sum of deviations from a mean must be 0, the disagreement matrix 
+
+P = I − 1
+
+N 11 ⊤ (3) is the orthogonal projection matrix onto the disagreement subspace. The aggregate disagreement level measures the total dis-agreement among all the agents in the MAS. We define it as 
+
+D(k) = 1
+
+√N ∥P Xk∥F . (4) The Frobenius norm quantifies the size of the disagreement component, and we normalize by 1√N to prevent the number of agents N from distorting the disagreement level. Then D(k) = 0 if and only if Xk ∈ C , that is, if and only if the agents are in consensus. The harness drives the aggregate disagreement level be-neath a tolerance ε > 0 through communication between 5
+
+the agents. Differences in communication topologies effect the speed at which consensus is reached. When each agent can communicate with every other agent, consensus can be reached faster. The graph designating this topology would be a connected graph KN , as shown in Fig. 2. Clearly, in a topology where none of the agents communicated with each other, the aggregate disagreement level would remain the same, and the system would not reach consensus. We call the rate at which a particular communication topology changes the aggregate disagreement level the consensus-contraction rate. 
+
+Definition 6 (Consensus-Contraction Rate): For a commu-nication mode σ ∈ Σ, the consensus-contraction rate λσ ∈ R
+
+is defined as 
+
+λσ := Wσ 1⊥ 2 .
+
+Equivalently, λσ is the smallest constant satisfying 
+
+∥Wσ v∥2 ≤ λσ ∥v∥2, ∀v ∈ 1⊥.
+
+The communication mode σ is called consensus contracting 
+
+if λσ < 1. In this case, one communication round under mode 
+
+σ strictly contracts the disagreement component. Now we model how the collective belief state Xk (Defini-tion 1) evolves at each communication round k. We capture the belief dynamics via a switched affine map: 
+
+Xk+1 = Wσk Xk, k ∈ Z≥0, (5) where σk ∈ Σ is the active communication mode. 
+
+Remark 1 (Interpretation as Agentic Deliberation): The switched system (5) provides an abstract model of a multi-agent reasoning process. At each communication round, the active graph Gσk determines which agents exchange information and how strongly neighboring opinions influence one another through the weight matrix Wσk . Because Wσk
+
+is doubly stochastic, each update preserves the collective average belief while reducing disagreement among agents. The switching signal σk therefore acts as a communication policy that dynamically selects the interaction topology according to the current level of disagreement. In the context of agentic AI, different modes may correspond to sparse communication among a small set of agents or dense deliberation involving the entire team, thereby trading communication cost against consensus speed. 
+
+Remark 2 (Invariance of Wσ ): Since each matrix Wσ is doubly stochastic, every row of (5) is a weighted average of the beliefs received from neighboring agents in the communication graph Gσk . Furthermore, the disagreement subspace 1⊥ is invariant with respect to Wσ . We can see this as follows. The disagreement subspace 1⊥ is the orthogonal complement space to the agreement subspace, which is span (1). Thus, 
+
+∀v ∈ 1⊥, w ⊤v = 0 , where w ∈ span (1). But w = c1 for some constant scalar c ∈ R. Therefore, c1⊤(Wσ v) = ( c1⊤Wσ )v =
+
+c(W ⊤ 
+
+> σ
+
+1)⊤v = c1⊤v = 0 . Thus, Wσ maps vectors inside 
+
+1⊥ back into 1⊥. Note that we already know that span (1)
+
+is invariant with respect to Wσ because the doubly stochastic property guarantees that Wσ 1 = 1.
+
+By (4) the disagreement at k + 1 satisfies 
+
+D(k + 1) = 1
+
+√N ∥P Xk+1 ∥F .
+
+Substituting (5), we see 
+
+D(k + 1) = 1
+
+√N ∥P W σk Xk∥F .
+
+The matrix P projects Xk onto the disagreement subspace 
+
+1⊥. But because 1⊥ and span (1) are invariant with respect to 
+
+Wσk , we can commute P and Wσk :
+
+D(k + 1) = 1
+
+√N ∥Wσk P Xk∥F .
+
+Now we can directly apply Def. 6, because P Xk ∈ 1⊥.D(k + 1) ≤ 1
+
+√N λσk ∥P Xk∥F .
+
+So by (4) we obtain 
+
+D(k + 1) ≤ λσk D(k), (6) where one communication round modifies the distance to the consensus manifold by at least the factor λσk . Note that λσ
+
+shrinks as the disagreement reduction potency of mode σ
+
+grows. 
+
+Remark 3 (Beyond Consensus-Contracting Modes): The assumption λσ < 1 for every communication mode is sufficient but not necessary for consensus. More generally, consensus may still occur when some modes are non-contracting or even locally expansive, provided that the overall switching sequence produces a net reduction of disagreement. Such situations can be analyzed using average-contraction or switched-system stability conditions. The present work focuses on the simpler case in which each communication mode is individually consensus contracting, enabling explicit expressions for the consensus time and certified budget. A core principle of our framework is the incorporation of resource-management into the control objective. We begin by defining the budget and cost variables. 
+
+Definition 7 (Token Budget Dynamics): Let bk ∈ R≥0 de-note the remaining token budget at communication round k.Each communication mode σ ∈ Σ incurs a token cost cσ > 0.The budget evolves according to 
+
+bk+1 = bk − cσk , b0 > 0. (7) As illustrated in Figure 2, we optimize between speed and cost through norm-threshold switching. 
+
+Definition 8 (Norm-Threshold Switching): Let η > 0 be a prescribed disagreement threshold. The active communication mode is selected according to 
+
+σk =
+
+
+
+1, D(k) > η, 
+
+2, D(k) ≤ η. 
+
+(8) Mode 2 is activated whenever the disagreement falls beneath the threshold η, while Mode 1 is activated as long the disagreement exceeds it. The aggregate belief state Xk of the MAS does not include budget dynamics. This deficiency motivates an augmented state description of the MAS system. 
+
+Definition 9 (Augmented State): The augmented state of the multi-agent system is 6
+
+zk = ( Xk, b k) ∈ RN ×d × R≥0. (9) The first component represents collective beliefs, while the second component represents the remaining token budget. Now we mathematically formulate what it means for a MAS to be “safe.” The ε-Consensus Safe Set unifies all the previous aspects of the framework into a rigorous characterization of successful goal states. This definition also lays theoretical foundations for the discussion of boundary conditions and certificate regions that follows in the next section. 
+
+Definition 10 ( ε-Consensus Safe Set): Let ε > 0 denote an acceptable consensus tolerance. The ε-consensus safe set is 
+
+Ωε = (X, b ) ∈ RN ×d × R≥0 : D(X) ≤ ε, b ≥ 0 . (10) A state (X, b ) ∈ Ωε satisfies two properties: 1) The collective disagreement among agents is bounded by 
+
+ε, that is, D(X) ≤ ε, so the agent network has reached practical consensus. 2) The remaining token budget is nonnegative, b ≥ 0,ensuring that no computational resource constraint has been violated. Consequently, (10) represents the set of states for which the collaborative reasoning task is considered successfully com-pleted while remaining within the available communication budget. 
+
+Remark 4 (Interpretation for Multi-Agent AI Systems): 
+
+The parameter ε designates a tolerance for the degree of agreement required before the system terminates deliberation. For example, in a network of LLM-based agents performing software architecture planning, each row of Xk may encode an agent’s preferences regarding deployment strategy, database selection, authentication mechanisms, scalability, cost, and observability. The condition D(Xk) ≤ ε implies that all agents have converged to sufficiently similar proposals, even if their belief vectors are not exactly identical. Similarly, in scientific discovery, collaborative theorem proving, multi-agent code generation, or autonomous planning, exact consensus is rarely necessary. Instead, practical agree-ment within a tolerance ε is sufficient for selecting a final decision and terminating further communication. The budget constraint bk ≥ 0 reflects finite computational resources, such as token limits, API costs, inference credits, wall-clock con-straints, or energy consumption. Therefore, Ωε characterizes successful completion of a multi-agent reasoning task with both consensus and resource feasibility guarantees. 
+
+IV. C ONSENSUS AND BUDGET CERTIFICATES 
+
+We derive boundary conditions for a consensus-budget certificate region and prove its forward invariance. We assume for the sake of simplicity that there are two communication arrangements, as in Fig. 2. We express these arrangements as two switching modes, σ = 1 and σ = 2 . We assume that the consensus-contraction rates λ1, λ 2 associated with G1 and G2
+
+are both less than one. By (6), our assumption that λσ < 1 implies that the aggregate disagreement is strictly decreasing under every active communication mode. Because λσk is a rate , we can formulate exact expressions for the number of rounds in which we can reach consensus from an initial disagreement level D0. Moreover, given the computational cost cσ of each communication topology σ for a given round, we can predict the total cost. 
+
+Theorem 1 (Resource-Aware Consensus): Assume D(0) >η > ε > 0. Define 
+
+K1 := 
+
+ log( η/D (0)) log λ1
+
+
+
+, K2 := 
+
+ log( ε/η )log λ2
+
+
+
+, (11) for consensus-contraction rates 0 < λ 1, λ 2 < 1, and let K∗ =
+
+K1 + K2.Then: 1) During the high-disagreement phase, 
+
+D(k) ≤ λk 
+
+> 1
+
+D(0) , 0 < k < K 1.
+
+2) During the low-disagreement phase, 
+
+D(k) ≤ λ k−K1 
+
+> 2
+
+η, k ≥ K1 > 0.
+
+3) The trajectory reaches ε-consensus in at most K∗
+
+rounds: 
+
+D(K∗) ≤ ε. 
+
+4) The corresponding communication cost is 
+
+B∗ = K1c1 + K2c2,
+
+where c1, c 2 are the per-round token costs of modes 1 and 2 respectively. 
+
+Proof: To derive the expression for K1, observe that repeated application of (6) yields D(K1) ≤ λK1 
+
+> 1
+
+D(0) for 
+
+K1 > 0. The switching rule activates mode 1 while D(k) >η and mode 2 otherwise. K1 is an upper bound on the number of rounds until D(k) ≤ η. To solve for K1, set 
+
+η = λK1 
+
+> 1
+
+D(0) =⇒ λK1 
+
+> 1
+
+= ηD(0) =⇒ K1 = log λ1
+
+ ηD(0) 
+
+
+
+.Changing base, K1 = log( η/D (0)) log λ1 . Since we are counting discrete communication rounds, we must have K1 ∈ Z≥0.We also want to guarantee D(K1) ≤ η. Thus, we apply the ceiling function K1 =
+
+l log( η/D (0)) log λ1
+
+m
+
+. The expression for K2 is derived similarly. Due to the construction of K1, K 2, repeated application of (6) yields the bounds in (1) and (2). The definition of K1 implies λK1 
+
+> 1
+
+D(0) ≤ η, while the definition of K2 implies λK2 
+
+> 2
+
+η ≤ ε. Combining both estimates yields 
+
+D(K∗) ≤ ε.Finally, the total token expenditure equals the number of rounds spent in each mode multiplied by the corresponding communication cost, giving B∗ = K1c1 + K2c2.
+
+Corollary 1 (Topology Trade-Off): Define 
+
+Kcmpl =
+
+ log( ε/D (0)) log λ1
+
+
+
+, K ring =
+
+ log( ε/D (0)) log λ2
+
+
+
+.
+
+Then if λ1 < λ 2,Kcmpl ≤ K∗ ≤ Kring .
+
+Moreover, if c1
+
+c2
+
+≥ log λ1
+
+log λ2
+
+,7
+
+then 
+
+Kring c2 ≤ B∗ ≤ Kcmpl c1.
+
+Therefore, the adaptive communication policy achieves a compromise between communication speed and token expen-diture: it is faster than a ring-only strategy and cheaper than a complete-graph strategy. 
+
+Definition 11 (Consensus-Budget Certificate Region): Let 
+
+B∗(D) = 
+
+ log( η/D )log λ1
+
+
+
+c1 +
+
+ log( ε/η )log λ2
+
+
+
+c2.
+
+The set 
+
+Ωcert = (X, b ) ∈ RN ×d × R≥0 : b ≥ B∗(D(X)) 
+
+is called the consensus-budget certificate region. 
+
+Theorem 2 (Consensus-Budget Certificate): If 
+
+(X0, b 0) ∈ Ωcert ,
+
+then the corresponding trajectory reaches the ε-consensus safe set Ωϵ as in (10) in at most K∗ communication rounds. Equivalently, D(XK∗ ) ≤ ε and bK∗ ≥ 0.
+
+Proof: Membership in Ωcert implies b0 ≥ B∗(D(X0)) .
+
+By Theorem 1, the trajectory reaches D(XK∗ ) ≤ ε after at most K∗ rounds and consumes at most B∗(D(X0)) tokens. Therefore bK∗ = b0 − B∗(D(X0)) ≥ 0, which yields 
+
+(XK∗ , b K∗ ) ∈ Ωε.
+
+Remark 5 (Operational Interpretation): The boundary of the certificate region is given by b = B∗(D(X)) . States above this surface possess sufficient communication budget to guarantee ε-consensus, while states below it do not admit such a certification. Consequently, before launching a multi-agent reasoning workflow, an operator can compute the initial disagreement 
+
+D(X0) and verify b0 ≥ B∗(D(X0)) .
+
+If the inequality holds, finite-time consensus is guaranteed before the available token budget is exhausted. 
+
+Remark 6 (Calculating λσ ): In the numerical results sec-tion, we will calculate λσ for weight matrices Wσ which we design to be symmetric and circulant. Given these two properties, it is easy to calculate the consensus contraction rates. Because Wσ is symmetric, the value for λσ is the largest eigenvalue of Wσ . Because Wσ is circulant, we can calculate its eigenvalues by computing the Discrete Fourier Transform of the first row. For an N × N symmetric matrix W , its eigenvectors form an orthonormal basis for RN . Let {v1, v 2, ..., v N } be the or-thogonal basis of normalized eigenvectors, with corresponding eigenvalues {λ1, λ 2, ..., λ N } ordered such that |λ1| ≥ | λ2| ≥ 
+
+... ≥ | λN |. Take any vector v ∈ 1⊥. Since the disagreement space 1⊥ is a subspace of RN , v = a1v1 + a2v2 + ...a nvn for some a1, a 2, ..., a N ∈ R.
+
+We defined λ = ∥W |1⊥ ∥2. By the definition of the spectral norm, 
+
+λ = max  
+
+> v̸=0
+
+∥W v ∥2
+
+∥v∥2
+
+∀v ∈ 1⊥.
+
+Note that W v i = λivi since vi is an eigenvector of W. Then, 
+
+∥W v ∥2 = ∥W (a1v1 + a2v2 +· · · + aN vN )∥2
+
+= ∥a1λ1v1 + a2λ2v2 +· · · + anλN vN ∥2
+
+=
+
+q a1λ1v1 + a2λ2v2 +· · · + anλN vN
+
+2
+
+=
+
+q
+
+a21λ21 +· · · a2 
+
+> N
+
+λ2
+
+> N
+
+≤
+
+q
+
+λ21(a21 +· · · + a2 
+
+> N
+
+)= λ1
+
+q
+
+(a21 +· · · + a2 
+
+> N
+
+) = λ1∥v∥2
+
+=⇒ ∥ W v ∥2 ≤ λ1∥v∥2.
+
+Thus λ = λ1.
+
+We apply the Discrete Fourier Transform to the first row of our circulant matrix W to obtain the eigenvalues. Recall that the rows of a circulant matrix preserve the ordering of a sequence of elements w0, w 1, w 2, . . . , w N −1 while starting at a different element in each row. For an N × N circulant matrix W and an N -dimensional vector x, we define 
+
+y = W x =
+
+
+
+w0 w1 w2 · · · wN −1
+
+wN −1 w0 w1 w2 · · · 
+
+. . . . . . . . . . . . . . .
+
+w1 w2 . . . wN −1 w0
+
+
+
+x0
+
+x1
+
+...
+
+xN −1
+
+ .
+
+Then we can compactly represent the lth element of the vector y as yl = PN −1 
+
+> j=0
+
+wj−lxj , where we count j − l
+
+mod n. For every circulant matrix, the kth eigenvector x(k)
+
+for k = 0 , 1, . . . , N − 1 is 
+
+x(k) =
+
+
+
+ω0kN
+
+ω1kN
+
+ω2kN
+
+...
+
+ω(N −1) kN
+
+
+
+where ωN = e2πi/N is the primitive N th root of unity. If we combine these eigenvectors into a matrix, we get the matrix 
+
+F = x(0) x(1) x(2) · · · x(N −1) 
+
+where Fjk = x(k) 
+
+> j
+
+= ωjk N . F x yields the Discrete Fourier Transform of x. To see how we can use this to calculate our eigenvalues, consider the eigenvector x(k) and let y(k) =
+
+W x (k). Using the summation above, the lth component is 
+
+y(k) 
+
+> l
+
+= 
+
+> N−1
+
+X
+
+> j=0
+
+wj−lωjk N = ωlk NN −1X
+
+> j=0
+
+wj−lω(j−l)kN .
+
+Since ωlk N is the lth component of x(k) and the summation is unchanged by starting location within N − 1,
+
+W x (k) = λkx(k)
+
+where the eigenvalue λk = PN −1 
+
+> j=0
+
+wj ωjk N . Therefore, if the vector ˆw = λ0 λ1 λ2 . . . λN −1
+
+ lists all the eigenval-ues of W , then 
+
+ˆw = F w 
+
+where w is the first row of W. 8
+
+V. N UMERICAL RESULTS 
+
+The next two sections demonstrate how our control-theoretic framework provides mathematical handles for consensus-driven LLM-MAS. First we will illustrate the dynamics of our switched-system through simulations where the weighted-average update Xk+1 = Wσk Xk in (5) is the algebraic surrogate for LLM debate. Then, we will present a live LangGraph deployment with major AI platforms to show that the framework accurately captures the behavior of real MAS, agnostic to LLM choice. We use the same MAS configuration across simulations and LangGraph validations. We commission 5 agents to reach consensus on a plan for a cloud software architecture. Each agent assumes a distinct professional role whose proposals reflect specialist priorities, listed in Table II. The biases of each role will not effect the simulations, but will be crucial later in determining the behavior of the LLMs. Each agent 
+
+TABLE II : Agent Roles             
+
+> Agent Role Dominant bias
+> a1Planner Balanced; timeline feasibility
+> a2Architect Microservices, containers, scalability
+> a3Sec. Reviewer Authentication, compliance, tracing
+> a4Cost Optimizer Simpler stack, NoSQL, lower cost
+> a5DevOps Eng. CI/CD, observability, K8s
+
+holds a design-preference vector xi ∈ [0 , 1] 6 encoding its position on six architectural axes: (1) service coupling, (2) API style, (3) database strategy, (4) deployment, (5) authentication, (6) observability. The design preference vector xi represents the belief state of agent ai. The state matrix Xk ∈ R5×6 stacks all agent vectors row-wise. The agents reach consensus through debating in one of two communication modes, where each mode is encoded by a weight matrix Wσ . The two modes, summarized in Table III, correspond to the topologies in Fig. 2. We chose the 
+
+TABLE III : Weight Matrices                              
+
+> Mode Graph Wσcσ
+> σ= 1 Complete K5wii = 0 .4,wij = 0 .15 (i̸=j)c1> c 2
+> σ= 2 Ring C5wii = 0 .6,wij = 0 .2(j=i±1)c2< c 1
+
+values wij semi-arbitrarily. Our framework assumes that the weight matrices are doubly stochastic. Furthermore, we gave the highest weight to the agent’s own opinion to preserve the agent’s original goals while compromising with the team. This is why wii > w ij . We also designed Wσ to be circulant and symmetric, so that we could easily calculate the consensus contraction rates λσ . Apart from these two principles, the parameter values were chosen for arithmetic convenience. We can calculate the consensus-contraction rates for each weight matrix: λ2 ≈ 0.724 and λ1 = 0 .25 . Token costs cσ
+
+reflect the lower cost of ring systems exchanging compact per-neighbor messages vs. the higher cost of complete-graph systems broadcasting full proposals to all peers. 
+
+Algorithm 1 Norm-Threshold Adaptive Consensus 
+
+Require: X0, b0, η, ε, W1, W 2, c2 < c 1
+
+Ensure: XK∗ (consensus) or B UDGET FAIL 
+
+k ← 0
+
+while D(k) > ε do 
+
+σk ← 1 if D(k) > η , else σk ← 2
+
+if bk < c σk then return BUDGET FAIL 
+
+end if 
+
+Xk+1 ← Wσk Xk; bk+1 ← bk − cσk ; k ← k + 1 
+
+end while return Xk
+
+Algorithm 1 implements the switching policy. Communica-tion rounds continue until D(k) ≤ ϵ or the token budget bk
+
+is less than the cost of the next communication round cσk .
+
+In the LangGraph deployments, cost cσk was dynamic and impossible to predict before the communication round, and so we returned B UDGET FAIL once bk < 0.
+
+A. Illustrative Example of Algorithm 1 
+
+For each agent ai, we sample every entry in its initial belief state x0 from a normal distribution centered at 0.5 with a standard deviation of 0.15, truncated at the endpoints 0 and 1. Each entry in x0 denotes the agent’s original position on one of the six architectural features. The MAS belief state X0 is shown in Table IV. The initial disagreement among the agents 
+
+TABLE IV : Initial belief state X0                                    
+
+> Agent / Feature (1) (2) (3) (4) (5) (6)
+> a10.57 0.54 0.57 0.13 0.55 0.52
+> a20.39 0.22 0.57 0.09 0.74 0.57
+> a30.56 0.31 0.46 0.58 0.48 0.75
+> a40.79 0.44 0.40 0.28 0.64 0.56
+> a50.33 0.63 0.37 0.49 0.53 0.66
+
+is D(0) ≈ 0.30 . We set the switching threshold η = 0 .1, and the consensus tolerance ε = 0 .03 , with an initial token budget 
+
+b0 = 2000 . Because these simulations do not expend tokens, we set constant token costs based on the number of edges in a given communication graph: c2 = 100 (5 × 2 × 10 tok) vs. 
+
+c1 = 600 (5×4×30 tok), giving c1/c 2 = 6 . Theorem 1 predicts 
+
+K2 = 1 , K1 = 4 , K∗ = 5 , B∗ = 1000 as upper bounds. The corollary condition c1/c 2 = 6 ≥ log λ1/ log λ2 ≈ 4.29 holds, so Corollary 1 applies. Algorithm 1 selects the topology at each round, updates beliefs via (5), and decrements the budget by cσ . The complete execution is traced in Table V. 
+
+TABLE V : Execution of Algorithm 1 
+
+k D(k) σk cσk bk Decision 0 0.3009 2 600 2000 D > η : complete K5
+
+1 0.0752 1 100 1400 D ≤ η: ring C5
+
+2 0.0381 1 100 1300 D > ε : ring continues 3 0.0254 — — 1200 D ≤ ε: consensus 9                  
+
+> (a) 0123456
+> Round k
+> 0.05 0.10 0.15 0.20 0.25 0.30
+> Disagreement D(k)
+> MAS Disagreement vs. Communication Round Adaptive Ring Complete Threshold ( = 0.1 )
+> Target Convergence ( = 0.03 )(b) 0123456
+> Round k
+> 0250 500 750 1000 1250 1500 1750 2000
+> Remaining Tokens  bk
+> budget exhausted
+> Token Budget vs. Communication Round
+> Adaptive Ring Complete Adaptive ( b0= 650 )
+> bk= 0 boundary
+
+Fig. 3 : Panel (a) presents the disagreement dynamics across the three well-funded strategies. Panel (b) compares the budget dynamics between the well-funded strategies and the tight-budget run. Theorem 1 yields theoretical verification of the execution. The spectral bound of Theorem 1 gives: D(1) ≤ λ1D(0) = 0.25 × 0.3009 = 0.0752 (achieved exactly, since W2 has eigenvalue λ1 = 0 .25 with multiplicity N −1 on 1⊥); D(3) ≤
+
+λ1λ22D(0) = 0.25 × 0.724 2 × 0.3009 = 0.0394 (actual 
+
+0.0254 < 0.0394 , faster due to energy in the faster eigenspace 
+
+λ = 0 .276 of W1). Since the final budget b3 = 1200 ≥ 0 and 
+
+D(3) ≤ ϵ, we have (X3, b 3) ∈ Ωε. Since B∗ = 1000 ≤ b0 =2000 , the success of this execution confirms the guarantees given by Theorem 2. 
+
+B. Illustrative Example of Budget-Failure Run 
+
+We consider the MAS path to consensus under three com-munication strategies. Strategy 1 (adaptive) : norm-threshold switching, b0 = 2000 . This strategy follows the switching policy given in the framework, where agents communicate globally under Mode 1 while D(k) > η, and then communi-cate with their immediate neighbors under Mode 2. We expect this strategy to optimize between speed and cost. Strategy 2 (complete-only) : Mode 2 throughout, b0 = 2000 . Agents com-municate globally at every round, reaching consensus faster but spending more tokens. Strategy 3 (ring-only) : Mode 1 throughout, b0 = 2000 . Agents only communicate with their two neighbors, saving tokens but increasing the number of rounds required for consensus. All three strategies begin with an initial budget of 2000 tokens. 
+
+TABLE VI : Execution summary. Strategies 1–3 reach Ωε
+
+(bfinal ≥ 0). Tight-budget run exhausts budget before ε-consensus, confirming Theorem 1(iv).                       
+
+> Strategy Rounds Tokens Dfinal In Ωε?1: Adaptive 3800 0.0254 ✓
+> 2: Complete-only 21200 0.0188 ✓
+> 3: Ring-only 6600 0.0274 ✓
+> Tight ( b0= 650 )—600 0.0752 ×
+
+We also show how the MAS exhibits unsafe behavior when the initial budget falls outside of the bounds given by Definition 11. Tight-budget run : adaptive with b0 = 650 <B∗ = 1000 . Because the initial token budget is less than the 
+
+B∗ given by Theorem 1, we expect this strategy to trigger BUDGET FAIL . We summarize the results in Table VI. We ran this simulation with the same initial belief vector X0
+
+given in Table IV, so D(0) , B ∗, etc. We plot the disagreement trajectories in Fig. 3a. Complete (Strategy 2) converges fastest: 
+
+D(k) = 0 .25 k · 0.3009 reaches 0.0188 ≤ ε in 2 rounds. We would expect this because the matrix Wcomplete averages the belief states of all the agents in the system at each com-munication round. The matrix Wring only averages adjoining belief vectors, so ring (Strategy 3) requires 6 rounds. Adaptive (Strategy 1) exhibits the characteristic two-slope trajectory: one steep drop under Mode 1 ( D falls from 0.3009 to 0.0752 
+
+at round 1), then three gentler Mode-2 steps to D = 0 .0254 —3 rounds total, beating the worst-case bound of K∗ = 5 .We present the budget dynamics for the three well-funded strategies and the tight-budget run in Fig. 3b. Strategies 1–3 remain strictly within the safe region ( bk ≥ 0), confirming forward invariance (Theorem 2). The kink in the adaptive curve at k = 1 marks the Mode 1 → 2 switch, where the per-round cost drops from 600 to 100 tokens. The tight-budget curve exits Ωε during the Mode-2 step: b0 = 650 > c 1 = 600 
+
+succeeds at k = 0 (b1 = 50 ) but then b1 = 50 < c 2 = 100 ,triggering B UDGET FAIL at k = 2 .This simulation illustrates the chain in Corollary 1: Kcmpl =2 ≤ K∗ = 5 ≤ Kring = 8 and Bring = 800 ≤ B∗ = 1000 ≤
+
+Bcmpl = 1200 . The data in Table VI fits the bounds from the Corollary. Adaptive saves 3 rounds vs. ring-only (at a cost of 200 extra tokens) and saves 400 tokens vs. complete-only (at a cost of 1 extra round). This Pareto efficiency is the core practical message: when both latency and token cost carry weight, the adaptive policy dominates both single-topology alternatives. 10 
+
+C. AI Platform Implementation 
+
+We deploy three popular LLM models, GPT-5.4-Mini, Gemini-2.5-Flash, and Claude Opus-4.8, on a LangGraph implementation of our framework. We used the benchmarks in Table I as a guideline for selecting these models. Due to the high token costs and longer compute times of GPT-5.5 and Gemini 3.1-Pro, we selected GPT-5.4-Mini and Gemini 2.5-Flash as capable representatives of their respective model families. LangGraph is a low-level orchestration framework for build-ing MAS workflows. In our scenario, the LangGraph architec-ture is the harness for the LLM agents. LangGraph represents a multi-agent workflow as a StateGraph : nodes transform a shared state object, and conditional edges route execution based on state values. The shared ArchState TypedDict encodes the complete system state (Xk, b k, D (k), σ k) of Definitions 1–8. Five specialized agents—Planner, Architect, Security Reviewer, Cost Optimizer, and DevOps Engineer— are LangGraph nodes that read their neighbors’ current pro-posals and output an updated d-dimensional design vector as a text string. The key insight is that the weighted-average aggregation step in (5) can be applied by any LLM that implements a doubly stochastic blending of its neighbors’ proposals, so all theoretical guarantees of Theorems 1–2 hold independently of which specific model is deployed at each node. Table VII summarizes the theory-to-code correspondence. When live LLM agents are substituted for the matrix-multiply step (5), the LangGraph implementation inherits all guarantees of Theorems 1–2: forward invariance of Ωε is enforced by the 
+
+should continue guard; consensus time K∗ and budget sufficiency B∗ are certified offline from λσ , cσ , and D(0) 
+
+before any inference call is made. It is important to clarify that we did not calculate K∗, B ∗ in our deployments, because the parameters λ1, λ 2, c 1, c 2 depend on hidden design features of the LLM. 
+
+TABLE VII : Theory-to-LangGraph correspondence.                                      
+
+> Mathematical object LangGraph component
+> Xk∈RN×dproposals in ArchState
+> bkbudget in ArchState
+> D(k) = ∥PXk∥F/√NDin ArchState
+> σk(Def. 8) router conditional edges
+> Xk+1 =WσXkring round /complete round
+> bk+1 =bk−cσkbudget update node Thm. 2 should continue guard
+> K∗,B∗(Thm. 1) offline certificate before compile
+
+Through a text prompt, we assign the MAS a project where the agents must plan to launch an emergency medical tracking app. To increase initial disagreement and combat sycophancy, we exaggerate the urgency of the task, specifying a tiny infrastructure budget, top-secret data with maximum security, a two week launch period, and millions of requests. Then we assign roles to each of the agents through text prompts, giving each agent a specific priority (e.g. “You are the Project Planner. You demand compromises in scalability to meet the deadline...” etc.). To preserve our assumption that each switching mode is consensus-contracting, we prompt the agents to adjust their preferences towards consensus at every round, without compromising their core values. At each communication round k, the agents communicate according to the topology activated under switching signal 
+
+σk. If agent ai communicates with agent aj , we include the response which agent ai generated at round k−1 in the prompt of agent aj at round k. Each response is a text compilation of (i) the design-preference vector xi ∈ [0 , 1] 6 of agent ai,(ii) the reasoning string which agent ai generated to justify its decision, and (iii) the influence weight which weight matrix 
+
+Wσ assigns to agent ai.The influence weight of agent ai on agent aj is the entry 
+
+wij in the weight matrix Wσ . The weight matrices for Modes 1 and 2 are specified in Table III. In a complete graph topology 
+
+K5, every agent communicates with every other agent. In a ring graph topology C5, agent ai communicates with agent 
+
+ai−1 and agent ai+1 . The relevant entries in each weight matrix, as listed in Table III, were included in the prompt as a guideline for how much agent aj should incorporate ai’s feedback. Agent aj updated its preference vector xj with no algebraic manipulation from the harness. Hence, the influence weights served as instructions for the agents rather than as means of direct modification. We calculate disagreement D(k) algebraically from the MAS aggregate belief matrix Xk using Definition 5. To track token expenditure, we extract the number of input-tokens from the metadata of each agent’s response. The “input” of a response is the aggregate prompt, composed of the reasoning strings, design-preference vectors, and influence weights which agent aj receives from every agent ai that communicates with it. Hence, input-tokens accurately mea-sure communication cost. We calculate bk at each round by subtracting the tokens expended at round k from bk−1.
+
+We set the communication switching threshold η = 0 .2 and the consensus tolerance ε = 0 .05 . The initial token budget is 
+
+b0 = 100,000. We track MAS disagreement and token expen-diture across three strategies (i) adaptive, switching between Mode 1 and Mode 2 when D(k) ≤ 0.2, (ii) complete-only (Mode 1), and (iii) ring-only (Mode 2). Except for differences in the parameters ε, η , these strategies are the exact same as the strategies from the simulations. We summarize the executions across strategies and choice of LLM in Table VIII. In the adaptive and ring strategies, the MAS debate sequences reflect our assumption that each com-munication mode is consensus-contracting, as D(k) decreases with every round. It is worthwhile to mention that, during tests where we did not explicitly instruct the agents to compromise on each round, they would often increase D(k), leading to significantly more rounds, or even budget failures. We noticed that the faster GPT-5.4-Mini model used less tokens than the Gemini 2.5-Flash and the Claude Opus-4.8. For the Gemini deployments, we scaled all token expenditures by a constant 0.75 for both the complete and ring modes, so that the Gemini deployment could fit within the same 100,000 token budget as the GPT deployment. The method for counting tokens is unique to the LLM, and we are not interested in comparing expenses across models. Instead, we are identifying 11 
+
+TABLE VIII : Execution summary across all models and strategies. We list the total number of communication rounds and total token expenditure from the initial disagreement D(0) to the final disagreement Df inal .
+
+GPT-5.4-Mini Gemini 2.5-Flash Claude Opus-4.8 
+
+Adaptive Complete Ring Adaptive Complete Ring Adaptive Complete Ring 
+
+Rounds 9 12 17 14 9 18 11 9 13 
+
+Tokens 41,727 67,593 60,858 92,129 94,984 88,141 84,944 108,227 81,364 
+
+D(0) 0.7778 0.8019 0.7570 0.7361 0.7158 0.7430 0.7240 0.6864 0.7193 
+
+Dfinal 0.0409 0.0450 0.0285 0.0403 0.0430 0.0419 0.0456 0.0549 0.0401 (a) 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 
+
+> Round k
+> 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8
+> Disagreement D(k)
+
+(a)    
+
+> GPT-5.4-Mini Disagreement Gemini-2.5-Flash Disagreement Claude-Opus-4.8 Disagreement Threshold ( = 0.2 )
+> Target Convergence ( = 0.05 )
+
+(b) 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 
+
+> Round k
+> 020K 40K 60K 80K 100K
+> Remaining Tokens  bk
+> budget exhausted
+
+(b)   
+
+> GPT-5.4-Mini Budget Gemini-2.5-Flash Budget Claude-Opus-4.8 Budget
+> bk= 0 boundary
+
+(c) 0 1 2 3 4 5 6 7 8 9 10 11 12 
+
+> Round k
+> 020K 40K 60K 80K 100K
+> Remaining Tokens  bk
+> budget exhausted
+
+(c)    
+
+> GPT-5.4-Mini Budget Gemini-2.5-Flash Budget Claude-Opus-4.8 Budget
+> bk= 0 boundary
+
+(d) 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 
+
+> Round k
+> 020K 40K 60K 80K 100K
+> Remaining Tokens  bk
+> budget exhausted
+
+(d)   
+
+> GPT-5.4-Mini Budget Gemini-2.5-Flash Budget Claude-Opus-4.8 Budget
+> bk= 0 boundary
+
+Fig. 4 : Analysis of budget and disagreement dynamics across different architectural strategies. Panels (a) and (b) examine the adaptive strategy, while (c) and (d) examine token costs for the complete-only and ring-only strategies. behavioral traits of MAS that extend across models, and so a constant scaling merely makes these traits easier to see. Anthropic’s Claude Opus-4.8 consumed drastically more tokens than Gemini and GPT, so we scaled all token costs by 0.45. This scaling allowed us to plot the token expenditures from all three deployments on the same graph. Note that we applied the same constant scalings across deployments under the adaptive, complete-only, and ring-only strategies. Fig. 4a plots the disagreement level for all three models under the adaptive strategy. Disagreement levels decline in two distinct stages under the adaptive strategy. When Mode 1 is activated ( D(k) > η ), global communication brings the MAS toward consensus rapidly, and the slope of the D(k)
+
+curve is steep. In Mode 2, limited communication under the ring topology causes slower progress towards consensus, with a correspondingly gentle slope. All three LLMs exhibit this two-stage behavior before eventually crossing the dotted ε
+
+threshold and reaching consensus. The Gemini MAS takes 14 rounds to reach consensus, while the GPT agents agree much more quickly after 9 rounds. The Claude agents reach consensus after 11 rounds. Under the adaptive strategy, none of the models exit Ωε by triggering B UDGET FAIL .In Fig. 4b, we plot budget dynamics under the adaptive strategy. For all three MAS, switching communication modes precipitates a decisive change in token costs. Because Mode 1 is significantly more expensive, the slopes of the budget plots are very steep for the early rounds. After the system passes the switching threshold (round 4 for GPT, round 5 for Claude 12 
+
+and Gemini), the cost per round decreases under Mode 2. Table VIII summarizes the executions for the complete-only strategy. We show the budget trajectories in Fig. 4c. Token expenditures increased significantly for all three models, and the Claude MAS triggered B UDGET FAIL on the final round and exited the safe set Ωε. While the Gemini MAS reached consensus faster (9 rounds under complete-only vs. 15 under the adaptive strategy), GPT took longer to reach consensus (12 rounds under complete-only vs. 9 under adaptive). Differences in how the LLMs processed feedback from fellow agents could account for this difference. Gemini agents found the extra communication afforded by the complete topology helpful for aligning their positions to the rest of the group, and so they reached consensus faster. On the other hand, feedback from the entire group only confused and hampered the GPT agents once they had reached the point where slight adjustments in their belief vectors were needed. The logs from this run show that the GPT MAS disagreement level rose after rounds 7 and 9 (rounds which would have used the ring topology (Mode 2) under the adaptive strategy). Even with our instruction to compromise at every round, the consensus contraction rates for these rounds were > 1. While we derived boundary expressions for the simple case where consensus rates are strictly contracting, the dynamics of real MAS are often more complicated. In Fig. 4d, we show the budget trajectories under the ring-only strategy; we list the total execution summary for all three models in Table VIII. Due to the cheaper cost of Mode 2, the MAS reach consensus within the budget for all three LLMs. The number of rounds required for this strategy, however, is significantly higher than for the previous two strategies: 17 for the GPT MAS, 18 for the Gemini MAS, and 13 for Claude the MAS. These result aligns with out expectations from the simulations: Mode 2 uses less tokens than Mode 1, but takes longer to reach consensus. Due to the increased number of rounds, the token savings from the ring-only strategy were minimal for the GPT and Gemini MAS. These experiments validate the intuition given by Theo-rems 1–2 and the earlier simulations. Unsafe behavior occurs when (X0, b 0) /∈ Ωcert , as with the Claude MAS under the complete-only strategy. For that deployment, the consensus-contraction rate for every round λσk remained roughly con-stant, with an average value of λ1 ≈ 0.7574 across all 9 rounds. Since this experiment involved Mode 1 only, η =
+
+ε = 0 .05 =⇒ K∗ = K1 ≈ 10 . Token costs per round also remained roughly constant, and we can average them to estimate c1 ≈ 12,025. Then B∗(D(0)) ≈ 10 · 12025 = 120250 > 100000 = b0. Thus, (X0, b 0) /∈ Ωcert . As Theorem 2 predicts, (X9, b 9) /∈ Ωε, and so the MAS triggered BUDGET FAIL .Debate among real LLMs introduces dynamics not captured by the algebraic surrogate step (5). The fact that the GPT MAS achieved consensus with the least time and expense under the adaptive strategy suggests that the level of disagreement changes the consensus-contraction rate of a communication topology. When the system is close to consensus, only slight adjustments to each agent’s preference vector xi are needed. At this point, too much information sharing among the agents can be counter-productive because it leads to unnecessarily drastic modifications. The agents are trying to accommodate the entire team, when they only need to adjust based on their nearest neighbors. The Claude MAS B UDGET FAIL in the complete-only de-ployment demonstrates how a competent switching policy is necessary to steer the MAS trajectory into the safe set 
+
+Ωε. Under the ring-only strategy, Gemini MAS needed 18 rounds to achieve consensus, with only slight token savings. The adaptive switching policy, however, reaped performance benefits in both speed and cost. 
+
+VI. C ONCLUSIONS 
+
+We presented a switched system framework for LLM multi-agent consensus with norm-threshold switching, a forward-invariance theorem, budget safety certificate, and a Resource-Aware Consensus Theorem (2) linking spectral contraction rates, consensus time, and minimum token budget. Corollary 1 certifies when the adaptive policy Pareto-dominates single-topology strategies. Live deployments of LLMs in a realistic software-architecture planning workflow ( N = 5 agents, d = 6 
+
+design dimensions) illustrates all theoretical predictions and demonstrates the efficiency gain of adaptive communication over both ring-only and complete-only alternatives. Future directions include dynamic consensus-contraction rates and communication costs. The preceding analysis treats the communication costs c1 and c2 as fixed constants. In practi-cal multi-agent AI systems, however, both communication cost and collective disagreement depend on the number of agents participating in the deliberation process. As the number of agents N increase, communication complexity and costs also increase. Examining the competing mechanisms which arise in larger teams would be an important step in generalizing the results we present here. The consensus-contraction rate λσ of a given communica-tion mode σ depends on N . A larger team can contribute additional perspectives, specialized knowledge, and alternative reasoning paths. However, these benefits are accompanied by greater heterogeneity in the initial belief state, and increased difficulty in reaching consensus. As we saw in the live LLM deployments, the disagreement level D(k) also effects λσk . Developing an optimal switching policy that balances the complex relationships between team size N , disagreement level D(k), consensus-contraction rate 
+
+λσk , and communication cost cσk would extend the concept of “safe” MAS beyond simplified scenarios. Developing a method for estimating λσ and cσ for a given MAS configuration would be an essential step for applying our formulations of safe regions in real time. In this work, we estimated parameters by averaging their values for agiven deployment, and then reverse-engineered the boundary conditions for Ωcert . In actual practice, however, one would need to know these parameters before the deployment to predict whether the MAS would remain within Ωε given an initial disagreement D(0) and budget b0. We expect that team size N , choice of LLM, and the pre-set temperature of the LLM would heavily effect λσ and cσ .13 
+
+REFERENCES 
+
+[1] Q. Zhu, ”AI Tokenomics: The Economics of Tokens, Computation, and Pricing in Foundation Models,” arXiv preprint , Jun. 2026, doi: 10.48550/arXiv.2606.24616. [2] R. Baptista, A. Stuart, and S. Tran, ”Large Language Mod-els: A Mathematical Formulation,” arXiv preprint , Jan. 2026, doi: 10.48550/arXiv.2601.22170. [3] M. Aczel, S. Chamanara, M. Matin, A. Farsi, T. Marwala, and K. Madani, ”Environmental Cost of AI’s Energy Use: Carbon, Water and Land Footprints.” United Nations University Institute for Water, Environment and Health (UNU-INWEH) , Jun. 2026, Richmond Hill, Ontario, Canada. doi: 10.53328/INR26RMA002. [4] A. Singh et al., ”OpenAI GPT-5 System Card,” arXiv preprint , May 2026, doi: 10.48550/arXiv.2601.03267. [5] Google DeepMind, “Gemini 3.1 Pro Model Card,” Google DeepMind Research, Feb. 2026. [Online]. Available: https: [6] Anthropic, “Introducing Claude Opus 4.8” May 2026. [Online]. Avail-able: https://www.anthropic.com/news/claude-opus-4-8. [7] D. Guo et al., ”DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning,” Nature , vol. 645, pp. 633–638, Sep. 2025. doi: 10.1038/s41586-025-09422-z. [8] A. A. Abdullah, A. Zubiaga, S. Mirjalili, A. H. Gandomi, F. Daneshfar, M. Amini, A. S. Mohammed, and H. Veisi, “Evolution of Meta’s LLaMA models and parameter-efficient fine-tuning of large language models: A survey,” arXiv preprint , Oct. 2025, doi: 10.48550/arXiv.2510.12178. [9] S. Yao, J. Zhao, D. Yu, N. Du, I. Shafran, K. Narasimhan, and Y. Cao, “ReAct: Synergizing reasoning and acting in language models,” presented at the 11th International Conference on Learning Representa-tions , Kigali, Rwanda, May 1-5, 2023, doi: 10.48550/arXiv.2210.03629. [10] K.-T. Tran, D. Dao, M.-D. Nguyen, Q.-V. Pham, B. O’Sullivan, and H. D. Nguyen, “Multi-agent collaboration mechanisms: A survey of LLMs,” 
+
+arXiv preprint , Jan. 2025, doi: 10.48550/arXiv.2501.06322. [11] B. Xu, C. Wang, J. Xi, X. Xie, “A survey of consensus control methods and applications in multi-agent systems,” in MCAI , Guangzhou, China, 2025, pp. 302-312, doi: 10.1109/MCAI66356.2025.11381975. [12] G. Wen and V. Ugrinovskii, “Distributed consensus of linear multi-agent systems with switching directed topologies,” in AUCC , Canberra, ACT, Australia, 2014, pp. 146-151, doi: 10.1109/AUCC.2014.7358704. [13] W. Ren and R. W. Beard, ”Consensus seeking in multiagent systems under dynamically changing interaction topologies,” IEEE Transactions on Automatic Control , vol. 50, no. 5, pp. 655-661, May 2005, doi: 10.1109/TAC.2005.846556. [14] I. Yazici, M. Kayaalp, S. Taga, and A. H. Sayed, “Opinion consensus formation among networked large language models,” in Proc. ICASSP ,pp. 976-980, May 2026, doi: 10.1109/ICASSP55912.2026.11460959. [15] A. Mehdizadeh and M. Hilbert, “Exploring the topology and mem-ory of consensus: How LLM agents agree, fragment, or set-tle when forming conventions,” arXiv preprint , Jun. 2026, doi: 10.48550/arXiv.2606.04197. [16] H. Yoon, M. Malekzadeh, S.-J. Lee, F. Kawsar, and L. Qendro, “ConSensus: Multi-agent collaboration for multimodal sensing,” in 
+
+Findings of the Association for Computational Linguistics: ACL 2026 , San Diego, California, USA, pp. 32950–32969, Jul. 2026, doi: 10.18653/v1/2026.findings-acl.1649. [17] D. Rein, B. L. Hou, A. C. Stickland, J. Petty, R. Y. Pang, J. Dirani, J. Michael, and S. R. Bowman, “GPQA: A graduate-level google-proof Q&A benchmark,” in COLM 2024 , Philadelphia, Pennsylvania, USA, Oct. 2024. [18] C. E. Jimenez, J. Yang, A. Wettig, S. Yao, K. Pei, O. Press, and K. R. Narasimhan, “SWE-bench: Can language models resolve real-world GitHub issues?” in ICLR , 2024. [19] Vals AI, “Vals AI Public Model Leaderboard — Model Guide,” [On-line]. Available: https://www.vals.ai/model-guide/public-leaderboard. Accessed on: Jun. 8, 2026. [20] T. Guo, X. Chen, Y. Wang, R. Chang, S. Pei, N. V. Chawla, O. Wiest, and X. Zhang, “Large language model based multi-agents: A survey of progress and challenges,” in Proc. IJCAI , Jeju, Korea, Aug. 2024, pp. 8048-8057, doi: 10.24963/ijcai.2024/890. [21] D. Amodei, C. Olah, J. Steinhardt, P. Christiano, J. Schulman, and D. Man´ e, “Concrete problems in AI safety,” arXiv preprint , Jul. 2016, doi: 10.48550/arXiv.1606.06565. [22] D. Dalrymple, J. Skalse, Y. Bengio, S. Russell, M. Tegmark, S. Seshia, S. Omohundro, C. Szegedy, B. Goldhaber, N. Ammann, et al., “Towards guaranteed safe AI: A framework for ensuring robust and reliable AI systems,” arXiv preprint , Jul. 2024, doi: 10.48550/arXiv.2405.06624. [23] Y. Zhang, J. Wang, Y. Ge, W. Xu, J. Hamm, and C. K. Reddy, “Stop comparing LLM agents without disclosing the harness,” arXiv preprint ,May 2026, doi: 10.48550/arXiv.2605.23950. [24] V. Ursekar, A. Shanker, V. Chatrath, Y. Xue, and S. Denton, “VeRO: A harness for agents to optimize agents,” in Proc. ICML , Seoul, South Korea, Jul. 2026, doi: 10.48550/arXiv.2602.22480. [25] A. Eslami and J. Yu, “A control-theoretic foundation for agentic sys-tems,” arXiv preprint , Mar. 2026, doi: 10.48550/arXiv.2603.10779. [26] Z. Xi, W. Chen, X. Guo, et al., “The rise and potential of large language model based agents: A survey,” Sci. China Inf. Sci , vol. 68, Art. no. 121101, Jan. 2025, doi: 10.1007/s11432-024-4222-0.
