@@ -1,20 +1,23 @@
 # 日报 · 2026-08-29
 
-- 生成时间：2026-08-29 03:09:17 UTC
+- 生成时间：2026-08-29 22:37:29 UTC
 - 当次推荐总数：4
-- 精读区：1
-- 速读区：3
+- 精读区：2
+- 速读区：2
 
 ## 今日简报（AI）
-今日精读1篇、速读3篇，聚焦集体创新中的自适应传输程序与多智能体协同新方法。最值得关注的是《Discovering Adaptive Transmission Programs for Collective Innovation》（8.0/10），它在传输机制设计上提供了高价值洞察；速读中的角色混合与质量-成本路由也值得一瞥。建议普通读者优先精读该论文，再按兴趣浏览多智能体工作流的两篇速读。
+- 今日共生成 4 篇推荐（精读 2 篇，速读 2 篇）
+- 精读：《SPFR: Semantic Potential Field Routing for the Distributed Internet of Agents》（8.0/10）, 《One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles》（8.0/10）
+- 速读：《ProgRouter: Online Progress-Guided Orchestration for Multi-Agent LLM Workflows under Quality-Cost Tradeoffs》（7.0/10）, 《Ludi${}_{\scriptscriptstyle 0.1}$: An Agentic System for Socially Intelligent Robots》（6.0/10）
+- 这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。
 
 ## 精读区
-1. [Discovering Adaptive Transmission Programs for Collective Innovation](/202608/29/2608.24545v1-discovering-adaptive-transmission-programs-for-collective-innovation) （8.0/10）
+1. [SPFR: Semantic Potential Field Routing for the Distributed Internet of Agents](/202608/29/2608.25396v1-spfr-semantic-potential-field-routing-for-the-distributed-internet-of-agents) （8.0/10）
+2. [One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles](/202608/29/2608.27338v1-one-model-many-minds-unlocking-multi-agent-synergy-in-a-single-agent-via-mixture-of-roles) （8.0/10）
 
 ## 速读区
-1. [Mahalanobis-Based Multi-Head Attention for Complex State Propagation](/202608/29/2608.24462v1-mahalanobis-based-multi-head-attention-for-complex-state-propagation) （6.0/10）
-2. [ProgRouter: Online Progress-Guided Orchestration for Multi-Agent LLM Workflows under Quality-Cost Tradeoffs](/202608/29/2608.25992v1-progrouter-online-progress-guided-orchestration-for-multi-agent-llm-workflows-under-quality-cost-tradeoffs) （6.0/10）
-3. [One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles](/202608/29/2608.27338v1-one-model-many-minds-unlocking-multi-agent-synergy-in-a-single-agent-via-mixture-of-roles) （6.0/10）
+1. [ProgRouter: Online Progress-Guided Orchestration for Multi-Agent LLM Workflows under Quality-Cost Tradeoffs](/202608/29/2608.25992v1-progrouter-online-progress-guided-orchestration-for-multi-agent-llm-workflows-under-quality-cost-tradeoffs) （7.0/10）
+2. [Ludi${}_{\scriptscriptstyle 0.1}$: An Agentic System for Socially Intelligent Robots](/202608/29/2608.22035v1-ludiscriptscriptstyle-01-an-agentic-system-for-socially-intelligent-robots) （6.0/10）
 
 ---
 使用键盘方向键可在日报/论文之间快速切换。
