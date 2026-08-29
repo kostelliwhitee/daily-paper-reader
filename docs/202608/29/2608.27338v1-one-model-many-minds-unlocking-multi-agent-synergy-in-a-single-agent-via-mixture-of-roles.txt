@@ -1,0 +1,587 @@
+Title: One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles
+
+URL Source: https://arxiv.org/pdf/2608.27338v1
+
+Published Time: Fri, 28 Aug 2026 01:29:28 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles 
+
+## Zhichen Zeng 1, Huiyuan Chen 2, Jingru Cheng 2, Juan Zha 2, Ming Liu 2, Ying Chen 2,Xiyuan Yang 1, Chaosheng Dong 2, Haiyang Zhang 2, Hanghang Tong 1
+
+> 1
+
+## University of Illinois Urbana-Champaign, 2Amazon 
+
+## zhichenz@illinois.edu 
+
+## Abstract 
+
+Specializing Large Language Models (LLMs) toward distinct abilities underpins successes ranging from personalized assistants to multi-agent systems (MAS). Single-agent paradigms rely on pre-defined personas or steering vec-tors to induce specialization, yet they impose a single fixed specialization that fails to adapt to diverse queries. Conversely, MAS achieves dy-namic multi-perspective problem solving by or-chestrating agents with distinct text-based roles, but fusing these specializations requires multi-turn interactions that inflate context length and inference cost. To address these limitations, we propose Mixture of Roles ( MoRe ), which adaptively composes multiple specializations into a single steering vector for single-turn in-ference. Specifically, MoRe learns a diversified 
+
+codebook of steering vectors, each of which encodes a latent role. A query-aware router 
+
+dynamically fuses the codebook into a steer-ing vector that encompasses multiple roles. By steering the backbone LLM with the composed vector, MoRe enables multi-perspective special-ization in a single-agent, single-turn inference process. The proposed MoRe can be efficiently trained via a three-stage SFT curriculum and GRPO post-training, while the backbone LLM remains frozen. Experiments across reasoning and personality benchmarks show that MoRe 
+
+outperforms single-agent baselines by 2.2% on average, and achieves performance on par with MAS while reducing token cost by 20 ×.
+
+## 1 Introduction 
+
+Large Language Models (LLMs) have demon-strated remarkable capabilities across diverse natu-ral language tasks (Achiam et al., 2023; Grattafiori et al., 2024; Comanici et al., 2025; Guo et al., 2025). Beyond general-purpose competence, recent stud-ies show that LLMs benefit substantially from be-ing specialized toward distinct behaviors, cognitive modes, or expert roles (Chen et al., 2025b; Wei et al., 2026c; Sun et al., 2025). Conditioning a model on a specialization elicits targeted exper-tise and reasoning styles that a generic prompt fails to evoke, powering applications from role-conditioned reasoning to personalized assistance. The single-agent paradigm induces LLM specialization primarily through explicit role-playing (Chen et al., 2024a; Shanahan et al., 2023; Shao et al., 2023) or implicit activation steer-ing (Turner et al., 2024; Li et al., 2023b). Specif-ically, role-playing assigns textual role descrip-tions, whereas activation steering directly injects a pre-computed steering vector into the hidden layers to elicit targeted behaviors. While compu-tationally efficient, both approaches rely on pre-defined specializations, i.e., textual personas or pre-computed steering vectors, that enforce a single static perspective (Wei et al., 2026c; Sun et al., 2025). Consequently, the single-agent paradigms lack the capacity for query-specific adaptivity or multi-perspective reasoning. In contrast, multi-agent systems (MAS) dynami-cally integrate multi-perspective specialization via multi-turn interactions (Liang et al., 2024; Du et al., 2023; Liu et al., 2024c; Wu et al., 2023). By in-stantiating agents with distinct roles via explicit text-based prompts across agents, agents exchange and refine their perspectives over multi-turn inter-actions. Yet this superiority comes at a steep price: MAS involve multiple agents and multi-turn inter-actions that induces heavy computation and long context (Kim et al., 2025; Tran and Kiela, 2026). The two paradigms thus present a dilemma be-tween computational cost and reasoning capability. As the example shown in Figure 1, we are required to solve a complex task that requires mathematical derivation, algorithmic coding, and rigorous test-ing. A single agent with the fixed mathematician specialization may fall short on the remaining ca-pabilities. Conversely, MAS allows agents with different specializations to collaborate, but the col-laboration pipeline requires multi-turn inference arXiv:2608.27338v1 [cs.MA] 27 Aug 2026 Figure 1: Comparison between single agent , MAS and MoRe . MoRe achieves dynamic multi-perspective specializa-tion within single-turn inference, outperforming single-agent methods while achieving higher efficiency than MAS. 
+
+with high computation. Therefore, we ask the fol-lowing research question: 
+
+Can a single agent acquire dynamic multi-perspective specialization within single-turn inference? 
+
+To answer this question, we introduce Mixture of Roles ( MoRe ) to dynamically compose multiple roles into a single steering vector for single-turn inference. To move beyond static steering, MoRe pa-rameterizes steering vectors into a learnable code-book, where each entry corresponds to a candidate specialization optimized end-to-end. A lightweight router selects and combines these candidates into a query-specific composed steering vector. By steer-ing with the composed vector, we equip the single agent with a dynamic multi-perspective specializa-tion, eliminating the textual communication over-head of MAS entirely. Our proposed MoRe is a lightweight module that can be efficiently trained via a three-stage SFT and GRPO post-training with the backbone LLM completely frozen. Our contributions are summarized as follows: • Framework. We enable dynamic multi-perspective specialization within single-agent inference by replacing multi-turn textual coor-dination with activation-space composition. • Method. We propose a lightweight module named MoRe to generate query-specific steer-ing vectors with minimal computational over-head. MoRe is efficiently trained via curricu-lum SFT followed by GRPO post-training with the backbone LLM entirely frozen. • Evaluation. Extensive experiments show that 
+
+MoRe outperforms single-agent specialization baselines by 2.2% on average and achieves performance competitive with MAS baselines while reducing the cost cost by 20 ×.
+
+## 2 Related Works 
+
+2.1 Specialized Agent 
+
+Specializing LLMs toward targeted behaviors, do-main expertise, or cognitive modes has become a foundational paradigm for solving complex tasks. Early approaches predominantly rely on textual prompting (Shanahan et al., 2023; Shao et al., 2023; Chen et al., 2024a), prepending hand-crafted role descriptions to condition the generation trajectory. Recent works have shifted from explicit prompt engineering to implicit representation engineering, where activation steering has emerged as an effi-cient alternative, directly modulating the model’s hidden activations at inference time. Foundational works (Rimsky et al., 2024; Turner et al., 2024; Li et al., 2023b) derive steering vectors from con-trastive activations to guide the residual stream to-ward desired traits. This paradigm has been ex-tended to persona control (Chen et al., 2025b), with recent efforts targeting persona-related neu-rons (Sun et al., 2025; Wei et al., 2026c) or at-tention heads (Izawa et al., 2026). More recent studies attempt to refine vector construction via preference learning (Cao et al., 2024) or select pre-defined vectors based on situational contexts (Wei et al., 2026c). However, these methods share common limita-tions: either the specialization is pre-defined, or only a single fixed role is applied uniformly. In contrast, MoRe learns a codebook of steering vector and composes them per query via a lightweight router, synthesizing hybrid specializations that no single fixed vector can express. 
+
+2.2 Multi-Agent System 
+
+Multi-agent system (MAS) tackle complex tasks by orchestrating multiple LLM agents with dis-tinct, prompt-defined roles. CAMEL (Li et al., 2023a) pioneered role-playing between commu-nicative agents, and AutoGen (Wu et al., 2023) pro-vides a general conversational programming frame-work for composing agents. AgentVerse (Chen et al., 2024b) dynamically recruits collaborator agents and studies emergent group behaviors, and DyLAN (Liu et al., 2024c) adaptively selects agent teams and interaction structures on the fly. Multi-agent debate frameworks (Du et al., 2023; Liang et al., 2024) improve factuality and reasoning by letting agents critique and revise others answers. Across these designs, the gains stem from fusing multiple specialized perspectives, yet the fusion is realized via expensive multi-turn text communi-cation, where inference cost grows with the num-ber of agents and rounds. Besides, the inflated context may degrade reasoning quality (Liu et al., 2024a). In contrast, MoRe pursues the same multi-perspective principle but in a single-turn inference: specializations live as steering directions and are fused in activation space by a query-aware router. 
+
+## 3 Methodology 
+
+3.1 Problem Formulation 
+
+Consider a frozen LLM with L layers and hidden dimension d. Given a query Q = ( q1, . . . , q T ),where qi is the i-th token, LLM produces hidden states h(ℓ) 
+
+> t
+
+∈ Rd for token position t at layer ℓ. Ac-tivation steering intervenes on the residual stream of an intermediate layer ℓ⋆ by adding a steering vector v ∈ Rd (Rimsky et al., 2024): 
+
+˜h(ℓ⋆) 
+
+> t
+
+= h(ℓ⋆) 
+
+> t
+
++ α ∥h(ℓ⋆) 
+
+> t
+
+∥2
+
+∥v∥2
+
+v, (1) where α is the steering strength. To construct the steering vector, prior works (Rimsky et al., 2024; Turner et al., 2024) utilize contrastive pairs that do and do not exhibit the target behavior, e.g., persona-conditioned vs. plain queries, and set the steering vector as the mean difference of their activations, that is 
+
+v = EQ
+
+h
+
+h(ℓ⋆)(p+ ⊕ Q) − h(ℓ⋆)(p− ⊕ Q)
+
+i
+
+(2) where p+, p − denote positive and negative prompts, respectively. h(ℓ⋆)(·) is the hidden state of layer-ℓ⋆
+
+mean-pooled over answer tokens. The expectation is taken over all queries Q. However, the generated vector is heuristically pre-defined and uniformly applied regardless of the input query. To overcome these drawbacks, we propose shift-ing from static single steering to dynamic multi-perspective composition. We aim to learn a com-poser Cϕ, which maps an input query Q to a dy-namic, query-specific steering vector vQ via mix-ture of roles , that is, 
+
+Cϕ : Q 7 → vQ =
+
+> N
+
+X
+
+> n=1
+
+wn(Q) · en,
+
+where {en}Nn=1 denotes a learnable codebook of latent roles, and wn(Q) is the routing weight. This formulation enables a single frozen LLM to ac-quire learnable, query-adaptive, multi-perspective capabilities on the fly. 
+
+3.2 Composer Design 
+
+Our proposed MoRe includes two key modules: a specialization codebook consisting of candidate vectors, and a query-aware router that selects and fuses the candidates. 
+
+Specialization codebook. To move beyond pre-defined specialization, we maintain a learnable codebook {en}Nn=1 , where each entry en ∈ Rd
+
+is a candidate vector that encodes a specialization as a direction in the residual stream. Rather than random initialization, we warm-start the codebook with contrastive activation directions. Specifically, we adopt Eq. (2) to extract M different vectors as the initialization for {en}Mn=1 . Details on the construction of CAA prompts are provided in Ap-pendix B.1. For the remaining N − M entries, we initialize them as the convex mixtures of {en}Mn=1 .This anchors the codebook in behaviorally mean-ingful regions of activation space, which subse-quent training refines end-to-end. 
+
+Query-aware router. To dynamically compose multiple roles, a router is designed score candi-date vectors accordingly given the input query. Specifically, we associate each expert en with a learnable probe vector un ∈ Rd, concatenating which formulates the probe matrix U ∈ RN ×d.Given the token embeddings of the input query 
+
+X = Emb( Q) ∈ RT ×d, a multi-head cross-attention module utilizes the expert probe U as the query to attend the token embeddings X that serve as the keys and values, that is 
+
+Z = MHA  U W Q, XW K , XW V , (3) where W Q, W K , W V ∈ Rd×d are the projection matrices. Such design enables each candidate vec-tor to attend the query tokens, forming a query-aware representation Z ∈ RN ×d that is further processed by a MLP layer fθ : RN ×d → RN to generate a routing logit g = fθ(Z) ∈ RN .We further adopt Top-K sparse routing to gener-ate a composed vector vQ, that is 
+
+vQ = X
+
+> n∈T K
+
+wnen, wn = exp( gn)
+
+P 
+
+> j∈T K
+
+exp( gj ) , (4) where TK is the index set of the Top-K logits in 
+
+g. Note that for unselected experts ( n / ∈ T K ), the routing weight is strictly zero. By restricting the fusion to K ≪ N experts, we compose a few 
+
+distinct roles per query, rather than averaging the whole codebook into an indiscriminate direction. Substituting the composed vector vQ into Eq. (1) gives our final steering operation: 
+
+˜h(ℓ⋆) 
+
+> t
+
+= h(ℓ⋆) 
+
+> t
+
++ α ∥h(ℓ⋆) 
+
+> t
+
+∥2
+
+∥vQ∥2
+
+vQ,
+
+In MoRe , we steer the last token of the input query, i.e., t = T , at the middle layer ℓ∗ = ⌊L/ 2⌋.
+
+3.3 Curriculum Supervised Fine-Tuning 
+
+We first optimize the composer via supervised fine-tuning (SFT) with the backbone LLM frozen. How-ever, direct joint optimization of the codebook and router can be suboptimal. First, an untrained router distributes noisy, near-random routing weights, causing query-specific gradients to be propagated to arbitrary candidates. Second, an untrained code-book lacks stable and distinct semantic anchors, making it difficult for the router to identify appro-priate candidates for each query. To avoid these, we propose a three-stage curriculum for SFT training. In stage 1 , we only optimize the codebook to ensure that each candidate is individually effective before composition. Specifically, for each query, we uniformly sample a single candidate en from the codebook and optimize the selected candidate with the next-token prediction loss LCE .In stage 2 , we freeze the codebook and train the router to select and compose candidates via Top-K
+
+routing. To prevent the router from collapsing onto a few candidates, an auxiliary load-balancing loss is adopted (Fedus et al., 2022), that is 
+
+Llb = N
+
+> N
+
+X
+
+> n=1
+
+fnpn,
+
+        
+
+> fn=1
+> BK
+> X
+> b
+> 1[n∈ T K(gQb)]
+> pn= 1
+> B
+> X
+> b
+> Softmax( gQb)n
+> Figure 2: Comparison between (a) conventional GRPO and (b) GRPO for MoRe . Our policy is defined on the candidate role space, and the rollout only depends on the composed vector generated from the composer, making the credit assignment clear and optimization efficient.
+
+where B is the batch size, and 1(n ∈ T K (gQ)) is the indicator function denoting whether candidate 
+
+en is among the Top-K for query Q. The stage-2 objective is LCE + λlb Llb .In stage 3 , after both codebook and router are warmed up, we jointly optimize both, allowing the candidate vectors to adapt to the query-dependent compositions learned by the router. 
+
+3.4 GRPO Post-Training 
+
+Although SFT equips the composer with basic rout-ing capabilities via teacher forcing, such static imi-tation fails to discover optimal persona synergies. Therefore, we utilize Group Relative Policy Opti-mization (GRPO) (Shao et al., 2024) to post-train the router, encouraging the explorations of better reasoning trajectories. Conventional GRPO optimizes an LLM’s token-level policy by sampling stochastic text trajectories and reinforcing those with high group advantages. However, this standard protocol can not be directly applied to our setting. To train the lightweight router while keeping the backbone LLM frozen, the trajectory advantage must be attributed solely to the generated steering vector , rather than the LLM’s decoding randomness. 
+
+Policy. To decouple the reward from the LLM and fully attribute it to the router, we formulate the frozen LLM as a black-box environment. Con-sequently, we shift the RL action space from the token space to the persona space. As defined in Eq. (4), the composed steering vector relies on the candidates and their softmax fusion. Therefore, we define the action space as the space of all possible unordered Top-K-subset 
+
+S = {S ⊂ { e1, . . . , eN } | | S| = K}. To enable exploration for GRPO rollout, we adopt a stochas-tic relaxation by defining the routing policy as a stochastic mapping from query space Q to the ac-tion space S, i.e., π : Q 7 → S . Instead of taking the top-k logits, we randomly draw K experts based on corresponding Softmax probabilities without replacement. As the composed vector is order-invariant, the probability of sampling a specific unordered subset S given a query Q marginalized over all possible permutations, that is 
+
+π(S | Q) = X
+
+> s∈perm( S)
+
+Pr( s|Q)= X
+
+> s∈perm( S)
+> K
+
+Y
+
+> n=1
+
+softmax( g 
+
+> τ
+
+)n
+
+P 
+
+> j / ∈{ s1,...,s n−1}
+
+softmax( g 
+
+> τ
+
+)j
+
+,
+
+(5) where g is the routing logit, τ is the temperature, and perm( ·) is the set of all possible permutations. Note that the policy π(S | Q) is governed en-tirely by the lightweight router and remains in-dependent of the backbone LLM. Therefore, the downstream reward is uniquely attributable to the router’s action, yielding precise credit assignment uncontaminated by LLM sampling noise. Besides, such independence offers substantial computational efficiency as rollouts are executed entirely without gradient tracking. GRPO only evaluates the router on the query representations, thereby eliminating the massive memory and computational overhead associated with LLM. 
+
+Group-relative update. For each query Q, we sample G steering vector sets {vjQ}Gj=1 , and steer the frozen LLM with each vector to produce the responses. We adopt verifiable task reward to score each response, and collect the rewards 
+
+{r1, . . . , r G} for all steering vectors. Details on re-ward designs are provided in Appendix B.2. With the group-normalized advantages Aj = (rj −
+
+¯r)/(std( r) + ε), together with the policy probabil-ity in Eq. (5), the router is updated by the clipped surrogate LGRPO (Shao et al., 2024)                       
+
+> LGRPO =−1
+> G
+> GX
+> j=1
+> min
+> 
+> ρjAj,clip( ρj,1−ϵ, 1 + ϵ)Aj
+> 
+> +RKL
+> ρj=πnew (Sj|Q)
+> πold (Sj|Q),RKL =βKL( πnew ∥πref ).
+
+## 4 Experiments 
+
+4.1 Experimental Setup Models and baselines. We consider two LLMs: 
+
+Llama-3.1-8B-Instruct (Grattafiori et al., 2024) and Qwen3-8B (Yang et al., 2025). We consider sin-gle agent baselines including Vanilla LLM , Text Role , Contrastive Activation Addition ( CAA ) (Rim-sky et al., 2024), ActAdd (Turner et al., 2024), 
+
+Prompt FT (Lester et al., 2021), Billy (Pai et al., 2026), NPTI (Deng et al., 2025), and IRIS (Wei et al., 2026c). We also evaluate MAS base-lines including LLM Debate (Du et al., 2023), 
+
+AutoGen (Wu et al., 2023), AgentVerse (Chen et al., 2024b), and DyLAN (Liu et al., 2024c). More details on baselines are provided in Appendix B.3. 
+
+Datasets. We assess task-oriented specializa-tion on five reasoning benchmarks spanning general knowledge ( MMLU (Hendrycks et al., 2020), TriviaQA (Joshi et al., 2017)), mathematics (MATH (Hendrycks et al., 2021), GSM8K (Cobbe et al., 2021)), and domain expertise ( MedQA (Jin et al., 2021)). We adopt LLM-as-judge (Chen et al., 2025a) for evaluation. We also evaluate personality-oriented specialization on Personali-tyBench (Deng et al., 2025), covering Openness, 
+
+Conscientiousness, Extraversion, Agreeableness, and Neuroticism. For each personality trait, meth-ods are steered to activate ( high pole) and deac-tivate ( low poles) the trait on open-ended ques-tions. Following the standard evaluation protocol, we adopt Claude (Anthropic, 2024) to score each response on two 1–5 scales, and report the sum and standard deviation of both high and low poles. 
+
+Experiment pipeline. We adopt 7 candidate roles, including mathematician , software engineer , data scientist , logician , teacher , skeptic , and doctor . De-tails on text role design are provided in Appendix B. Candidate roles are utilized as the “System Role” for Text ; for steering vector extraction in CAA ,
+
+ActAdd and Billy , and codebook initialization for 
+
+MoRe . For Text , CAA and ActAdd , we report the average performance over all roles, per-role perfor-mance is reported in Appendix B. All experiments are conducted on 8 NVIDIA 40G A100 GPU. 
+
+4.2 Reasoning Results 
+
+Table 1 summarizes results on reasoning bench-marks. A comparison of model performance and token consumption is shown in Figure 3. Overall, 
+
+MoRe ranks Top-2 on two backbone LLMs with sig-nificantly fewer token consumption, demonstrating Table 1: Benchmark results on reasoning tasks. We highlight Top-1 , Top-2, and Top-3 performance for each dataset.                                                                                                                                                                  
+
+> Method MMLU TriviaQA MATH GSM8K MedQA AvgAcc AvgRank
+> Llama3.1-8B-Instruct Vanilla 61.80 74.80 52.60 80.40 60.00 65.92 8.80
+> Text 61.00 75.57 56.09 80.06 60.31 66.61 8.60
+> CAA 61.34 73.77 56.31 82.69 61.06 67.03 7.60
+> ActAdd 61.74 79.00 56.46 82.89 61.71 68.36 5.00
+> Prompt FT 62.80 77.60 58.60 78.00 63.20 68.04 4.60
+> Billy 61.00 74.20 57.00 81.20 59.80 66.64 8.40
+> LLM Debate 62.20 74.60 58.40 85.80 62.20 68.64 4.20
+> AutoGen 63.80 73.60 54.80 81.20 61.40 66.96 6.80
+> AgentVerse 62.40 79.40 59.00 83.80 61.80 69.28 2.60
+> DyLAN 63.00 76.00 54.40 82.40 61.00 67.36 6.40
+> MoRe 63.20 79.00 59.20 83.40 61.80 69.32 2.20
+> Qwen3-8B Vanilla 68.80 61.60 70.20 88.80 59.20 69.72 8.40
+> Text 67.74 61.43 70.43 90.11 59.26 69.79 7.80
+> CAA 69.57 62.23 69.83 89.09 59.54 70.05 7.40
+> ActAdd 69.74 62.63 70.11 90.00 60.09 70.51 6.00
+> Prompt FT 70.40 60.00 69.80 87.80 58.80 69.96 8.00
+> Billy 70.40 63.40 67.80 88.20 60.00 69.96 5.40
+> LLM Debate 69.80 63.00 72.00 92.40 60.80 71.60 3.20
+> AutoGen 70.20 58.80 72.60 86.60 60.00 69.64 6.40
+> AgentVerse 69.80 63.00 75.40 91.80 62.00 72.40 2.40
+> DyLAN 69.40 62.00 70.80 82.20 61.60 69.20 6.80
+> MoRe 70.20 63.20 72.40 90.80 60.80 71.48 2.80
+
+Figure 3: Performance vs tokens. Optimal value lies at the upper left corner. MoRe matches MAS performance while only consuming tokens of single-agent methods. 
+
+great balance between performance and efficiency. Specifically, we make the following observations. 
+
+Specialization improves LLM performance. 
+
+Comparing with Vanilla , specialization helps LLM achieve higher average accuracy and better average rank. Moreover, the per-role results in Ta-bles 3–5 reveal that different roles affect reasoning performance in distinct ways. For example, mathe-matician performs well on math datasets (MATH and GSM8K), but is less effective on general knowl-edge tasks such as TriviaQA. These results suggest that no single role is universally optimal and that selecting appropriate specializations is important for downstream tasks. 
+
+MoRe outperforms single-agent baselines. On average, MoRe outperforms the best single-agent baselines ActAdd , by 0.96 and 0.97 on Llama and Qwen, respectively. Such improvement is more pronounced on tasks requiring longer reasoning chains. Since longer reasoning involves more inter-mediate decisions, this provides more opportunities for specializations to influence the reasoning tra-jectory. In contrast, tasks dominated by short-form recall provide fewer stages at which such special-ized reasoning patterns can take effect. 
+
+MoRe matches MAS performance with signifi-cantly lower inference cost. Despite using only single-agent, single-turn inference, MoRe achieves performance comparable to MAS, ranking the first and second on two backbone LLMs, respectively. Unlike MAS approaches, which rely on repeated model calls, iterative discussions, and communica-tion among multiple agents, MoRe only requires a single model call. As shown in Figures 1 and 3, 
+
+MoRe uses only approximately 1/20 as many tokens as the MAS baselines on average. It therefore pro-vides a favorable balancing between performance and efficiency, matching the reasoning quality of substantially more expensive multi-agent pipelines while avoiding their large token overhead. 
+
+4.3 Personality Results 
+
+Table 2 reports the results on PersonalityBench, covering the Big Five personality traits. Overall, Table 2: Benchmark results on PersonalityBench. We highlight Top-1 and Top-2 performance for each dataset.                                                                               
+
+> Method OCEANAvgScore AvgRank
+> Llama3.1-8B-Instruct Text 8.12±1.90 7.06±1.25 9.21±0.77 8.15±1.68 9.00±1.76 8.31±0.85 4.6
+> CAA 8.79±0.47 7.84±1.02 9.56±0.42 7.40±1.15 8.77±0.88 8.47±0.86 4.4
+> NPTI 9.15±0.71 9.86±0.13 9.72±0.20 9.29±0.40 9.84±0.00 9.57±0.33 2.6
+> IRIS 9.29±0.36 9.84±0.13 9.76±0.27 9.06±0.66 9.92±0.00 9.57±0.38 2.4
+> MoRe 9.47±0.44 9.87±0.14 9.81±0.15 9.88±0.11 9.98±0.02 9.80±0.20 1.0
+> Qwen3-8B Text 8.31±1.68 6.70±1.01 9.39±0.44 8.05±1.6 9.12±0.94 8.31±1.06 3.4
+> CAA 7.89±1.38 8.47±1.28 9.47±0.93 8.60±1.24 9.81±0.17 8.85±0.78 2.6
+> NPTI 8.00±1.25 7.98±0.94 7.89±1.53 7.88±0.78 9.17±0.68 8.18±0.55 3.8
+> IRIS 8.20±1.13 7.87±0.93 8.24±1.73 7.86±0.76 8.87±0.83 8.21±0.55 4.2
+> MoRe 8.92±1.43 9.49±0.54 9.51±0.32 9.47±0.36 9.91±0.00 9.46±0.35 1.0
+> (a) Last token embedding. (b) Codebook similarity.
+
+Figure 4: Studies on the learned codebook. 
+
+MoRe achieves state-of-the-art performance across backbone LLMs and different personalities. Comparing with the best competitor, MoRe 
+
+achieves an average outperformance of 0.23 on Llama and 0.61 on Qwen, and consistently ranks the first. In contrast, existing methods exhibit pro-nounced preferences across personality traits and model families. For example, Text roles perform well on linguistically salient traits, e.g., Extraver-sion and Neuroticism, while scores lower on Con-scientiousness and Agreeableness. IRIS performs well on Llama (AvgRank 2.4) but degrades substan-tially on Qwen (AvgRank 4.2). Such cross-model degradation suggests that the personality directions identified by existing methods may be closely tied to the internal representation geometry of a partic-ular model. In contrast, MoRe consistently outper-forms all baselines across both backbones and ex-hibits the lowest variation in average performance. These results demonstrate that MoRe induces the desired personalities both effectively and consis-tently, with stronger robustness to model-specific representations and better generalization across per-sonality dimensions and LLM families.  
+
+> (a) Avg. routing weight (b) Routing weight per dataset
+
+Figure 5: Studies on the learned router. 
+
+4.4 Studies 4.4.1 On the Learned Codebook 
+
+We first investigate the learned codebook. Figure 4a visualizes the hidden states of the final prompt token after applying different candidate steering vectors. The embeddings form compact clusters, indicating that different candidate vectors redirect model representations towards distinct role-specific regions. We further report the pairwise cosine sim-ilarities among the learned candidates in Figure 4b. Most off-diagonal entries exhibit low similarity, showing that the candidates learn diverse steering directions even without an explicit diversity regu-larizer. This suggests that the end-to-end training objective naturally encourages functional differenti-ation among the latent experts. Moreover, the high dimensionality of the steering space provides suf-ficient capacity for different candidates to occupy distinct directions, thereby reducing redundancy within the codebook. 
+
+4.5 On the Learned Router 
+
+Figure 5a visualizes the routing weights averaged across all datasets. In general, weights are dis-tributed across most experts rather than collapsing onto a single one, while still exhibiting meaning-ful preferences. In particular, Experts 0 and 4, (a) Router and Codebook (b) Steering Position     
+
+> Figure 6: Ablation studies. (a) Performance gain with
+> base ,+router ,+codebook , and MoRe ; (b) Performance gain with different steering positions. Both figures use
+> Vanilla performance as the baseline.
+
+initialized from the high-performing mathemati-cian and teacher roles (see Table 3), receive no-ticeably higher weights, suggesting that the router effectively exploits the useful inductive biases in-troduced by role-based initialization. Meanwhile, expert 7 remains nearly inactive, potentially indicat-ing an under-utilized or overlapping specialization. Figure 5b presents the routing weights for each dataset. Different datasets exhibit distinct routing preferences, whereas related datasets share similar patterns. For example, the two math benchmarks (MATH and GSM8K), heavily utilize Experts 0 initialized from the mathematician. MedQA in-stead combines Experts 4–6, initialized from the teacher, skeptic, and doctor. In contrast, the broad disciplinary coverage of MMLU leads to a more dispersed routing pattern involving Experts 5, 6, 8, 9. These results indicate that the router learns trans-ferable specializations shared across related tasks and dataset-specific expert compositions, thereby adaptively matching different reasoning require-ments with complementary roles. 
+
+4.5.1 Ablation Study 
+
+We first study the benefits of two key modules: the learnable codebook and the router . We consider four variants, including: (1) base , which ablates both modules and uniformly fuse fixed CAA vec-tors, (2) +router , which ablates the codebook and uses the learned router to fuse the fixed CAA vec-tor, (3) +codebook , which ablates the router and uniformly fuse the learned vectors, and (4) MoRe ,which jointly employs both learned modules. The results are shown in Figure 6a. First, even uniform fusion of fixed CAA vectors ( base ) outperforms 
+
+Vanilla , which validates the necessity of adopt multi-perspective specialization to enhance LLM 
+
+> Figure 7: Hyperparameter study on Llama+GSM8K.
+
+reasoning. Second, both modules contribute to the final performance: +codebook achieves more significant improvement than +router , suggest-ing that learning task-adaptive steering is more ef-fective than dynamic selection among pre-defined ones. Third, MoRe significantly outperforms both ablated variants: the codebook provides diverse steering directions, while the router adaptively se-lects and combines them according to each input. We further examine the effects of steering posi-tion using four variants, including: (1) Resp that steers the response tokens; (2) Prmt that steers all prompt tokens, (3) Prmt-First that steers the first prompt token, and Prmt-Last that steers the last prompt token. The results are shown in Figure 6b. First, we observe that steering one single prompt token is more effective than steering all prompt or response tokens. This suggests that a local in-tervention is sufficient to redirect model behav-iors, whereas repeated perturbations may interfere with the original semantic representations. Second, steering prompt is more effective than steering re-sponse, which indicates that steering before gen-eration can better propagate throughout the entire reasoning process. Third, the optimal position to steer is the final prompt token, as it summarizes the preceding context and serves as the starting point for subsequent generation. Therefore, the fi-nal prompt token acts as an effective bridging point for controlling the subsequent reasoning trajectory. 
+
+4.5.2 Hyperparameter Study 
+
+Figure 7 studies the sensitivity of MoRe to the steer-ing strength α, codebook size N , router top-K,and load-balancing weight λlb . Overall, MoRe re-mains stable across a broad range of configura-tions. For the steering strength α, a small α is sufficient to redirect model behavior, whereas an excessively strong α over-perturbs the original rep-resentations. Similarly, a moderate codebook size 
+
+N provides sufficient diversity, while an overly small codebook limits its diversity and a larger one introduces redundancy. Moreover, we observe that a moderate routing K generally performs well: too sparse routing (e.g., Top-1) loses the power of multi-perspective fusion, while too dense routing (e.g., Top-10) fails to achieve adaptivity to queries hence diluting expert specialization. Finally, a mod-erate λlb yields the best result, suggesting a favor-able trade-off between preventing routing collapse and preserving expert specialization. 
+
+## 5 Conclusion 
+
+In this work, we introduced MoRe , a lightweight module to enable dynamic multi-perspective spe-cialization within a single-agent, single-turn infer-ence process. MoRe learns a diversified codebook of specializations and employs a router to adaptively compose them into a multi-perspective steering vector for each input. This design combines the efficiency of single-agent steering with the adap-tivity of multi-agent collaboration. Experiments on reasoning and personality benchmarks demon-strate that MoRe consistently outperforms existing single-agent specialization methods and reduces token cost by 20 × compared to MAS. 
+
+## Limitations 
+
+While MoRe achieves consistent gains on reason-ing quality and efficiency, we acknowledge a few limitations. First, the proposed MoRe requires ac-cess to the internal hidden states of the backbone LLM and is therefore not directly applicable to black-box API models. Second, although the code-book is initialized from interpretable text prompts, the learned candidate vectors are latent. Improv-ing the interpretability of the learned vectors could provide a better understanding of how different can-didates contribute to model behavior. Third, MoRe 
+
+composes a query-level persona and keeps it fixed throughout generation. More fine-grained routing at the token or reasoning-step level may enable ad-ditional adaptivity, although it could also introduce extra computational overhead. 
+
+## References 
+
+Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, and 1 others. 2023. Gpt-4 techni-cal report. arXiv preprint arXiv:2303.08774 .Mengting Ai, Tianxin Wei, Yifan Chen, Zhichen Zeng, Ritchie Zhao, Girish Varatkar, Bita Darvish Rouhani, Xianfeng Tang, Hanghang Tong, and Jingrui He. 2025. Resmoe: Space-efficient compression of mix-ture of experts llms via residual restoration. In Pro-ceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 , pages 1–12. Anthropic. 2024. The claude 3 model family: Opus, sonnet, haiku. Technical report. Rishi Bommasani, Drew A Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S Bernstein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, and 1 others. 2021. On the opportuni-ties and risks of foundation models. arXiv preprint arXiv:2108.07258 .Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, and 1 others. 2020. Language models are few-shot learners. Advances in neural information processing systems , 33:1877–1901. Yuanpu Cao, Tianrong Zhang, Bochuan Cao, Ziyi Yin, Lu Lin, Fenglong Ma, and Jinghui Chen. 2024. Per-sonalized steering of large language models: Versa-tile steering vectors through bi-directional preference optimization. Advances in Neural Information Pro-cessing Systems , 37:49519–49551. Ding Chen, Qingchen Yu, Pengyuan Wang, Mengting Hu, Wentao Zhang, Zhengren Wang, Bo Tang, Feiyu Xiong, Xinchi Li, Chao Wang, and 1 others. 2025a. xverify: Efficient answer verifier for reasoning model evaluations. arXiv preprint arXiv:2504.10481 .Jiangjie Chen, Xintao Wang, Rui Xu, Siyu Yuan, Yikai Zhang, Wei Shi, Jian Xie, Shuang Li, Ruihan Yang, Tinghui Zhu, Aili Chen, Nianqi Li, Lida Chen, Caiyu Hu, Siye Wu, Scott Ren, Ziquan Fu, and Yanghua Xiao. 2024a. From persona to personalization: A sur-vey on role-playing language agents. Transactions on Machine Learning Research . Survey Certification. Runjin Chen, Andy Arditi, Henry Sleight, Owain Evans, and Jack Lindsey. 2025b. Persona vectors: Mon-itoring and controlling character traits in language models. arXiv preprint arXiv:2507.21509 .Weize Chen, Yusheng Su, Jingwei Zuo, Cheng Yang, Chenfei Yuan, Chi-Min Chan, Heyang Yu, Yaxi Lu, Yi-Hsin Hung, Chen Qian, and 1 others. 2024b. Agentverse: Facilitating multi-agent collaboration and exploring emergent behaviors. In International Conference on Learning Representations , volume 2024, pages 20094–20136. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, and 1 others. 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 .Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Mar-cel Blistein, Ori Ram, Dan Zhang, Evan Rosen, and 1 others. 2025. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 .Chengming Cui, Tianxin Wei, Ziyi Chen, Ruizhong Qiu, Zhichen Zeng, Zhining Liu, Xuying Ning, Duo Zhou, and Jingrui He. 2026. Adafuse: Adaptive ensemble decoding for large language models. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 42644–42657. Damai Dai, Chengqi Deng, Chenggang Zhao, RX Xu, Huazuo Gao, Deli Chen, Jiashi Li, Wangding Zeng, Xingkai Yu, Yu Wu, and 1 others. 2024. Deepseek-moe: Towards ultimate expert specialization in mixture-of-experts language models. In Proceedings of the 62nd annual meeting of the association for computational linguistics (volume 1: Long papers) ,pages 1280–1297. Jia Deng, Tianyi Tang, Yanbin Yin, Xin Zhao, Ji-Rong Wen, and 1 others. 2025. Neuron based personality trait induction in large language models. In Inter-national Conference on Learning Representations ,volume 2025, pages 85059–85083. Nan Du, Yanping Huang, Andrew M Dai, Simon Tong, Dmitry Lepikhin, Yuanzhong Xu, Maxim Krikun, Yanqi Zhou, Adams Wei Yu, Orhan Firat, and 1 oth-ers. 2022. Glam: Efficient scaling of language mod-els with mixture-of-experts. In International confer-ence on machine learning , pages 5547–5569. PMLR. Yilun Du, Shuang Li, Antonio Torralba, Joshua B Tenen-baum, and Igor Mordatch. 2023. Improving factual-ity and reasoning in language models through multia-gent debate. arXiv preprint arXiv:2305.14325 .William Fedus, Barret Zoph, and Noam Shazeer. 2022. Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity. Journal of Machine Learning Research , 23(120):1–39. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, and 1 others. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, and 1 others. 2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 .Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. 2020. Measuring massive multitask language under-standing. arXiv preprint arXiv:2009.03300 .Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Ja-cob Steinhardt. 2021. Measuring mathematical prob-lem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2021. Lora: Low-rank adap-tation of large language models. arXiv preprint arXiv:2106.09685 .Yoshihiro Izawa, Gouki Minegishi, Koshi Eguchi, So-suke Hosokawa, and Kenjiro Taura. 2026. Steering at the source: Style modulation heads for robust per-sona control. In Forty-third International Conference on Machine Learning .Albert Q Jiang, Alexandre Sablayrolles, Antoine Roux, Arthur Mensch, Blanche Savary, Chris Bam-ford, Devendra Singh Chaplot, Diego de las Casas, Emma Bou Hanna, Florian Bressand, and 1 oth-ers. 2024. Mixtral of experts. arXiv preprint arXiv:2401.04088 .Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. 2021. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Ap-plied Sciences , 11(14):6421. Mandar Joshi, Eunsol Choi, Daniel S Weld, and Luke Zettlemoyer. 2017. Triviaqa: A large scale distantly supervised challenge dataset for reading comprehen-sion. arXiv preprint arXiv:1705.03551 .Yubin Kim, Ken Gu, Chanwoo Park, Chunjong Park, Samuel Schmidgall, A Ali Heydari, Yao Yan, Zhihan Zhang, Yuchen Zhuang, Yun Liu, and 1 others. 2025. Towards a science of scaling agent systems. arXiv preprint arXiv:2512.08296 .Dmitry Lepikhin, HyoukJoong Lee, Yuanzhong Xu, Dehao Chen, Orhan Firat, Yanping Huang, Maxim Krikun, Noam Shazeer, and Zhifeng Chen. 2020. Gshard: Scaling giant models with conditional com-putation and automatic sharding. arXiv preprint arXiv:2006.16668 .Brian Lester, Rami Al-Rfou, and Noah Constant. 2021. The power of scale for parameter-efficient prompt tuning. In Proceedings of the 2021 conference on empirical methods in natural language processing ,pages 3045–3059. Dengchun Li, Yingzi Ma, Naizheng Wang, Zheng-mao Ye, Zhiyuan Cheng, Yinghao Tang, Yan Zhang, Lei Duan, Jie Zuo, Cal Yang, and 1 others. 2024. Mixlora: Enhancing large language models fine-tuning with lora-based mixture of experts. arXiv preprint arXiv:2404.15159 .Guohao Li, Hasan Hammoud, Hani Itani, Dmitrii Khizbullin, and Bernard Ghanem. 2023a. Camel: Communicative agents for" mind" exploration of large language model society. Advances in neural information processing systems , 36:51991–52008. Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, and Martin Wattenberg. 2023b. Inference-time intervention: Eliciting truthful answers from a language model. Advances in Neural Information Processing Systems , 36:41451–41530. Zihao Li, Zhichen Zeng, Xiao Lin, Feihao Fang, Yanru Qu, Zhe Xu, Zhining Liu, Xuying Ning, Tianxin Wei, Ge Liu, and 1 others. 2026. Flow matching meets biology and life science: a survey. npj Artificial Intelligence , 2(1):17. Mingfu Liang, Xi Liu, Rong Jin, Boyang Liu, Qiul-ing Suo, Qinghai Zhou, Song Zhou, Laming Chen, Hua Zheng, Zhiyuan Li, and 1 others. 2025. Exter-nal large foundation model: How to efficiently serve trillions of parameters for online ads recommenda-tion. In Companion Proceedings of the ACM on Web Conference 2025 , pages 344–353. Tian Liang, Zhiwei He, Wenxiang Jiao, Xing Wang, Yan Wang, Rui Wang, Yujiu Yang, Shuming Shi, and Zhaopeng Tu. 2024. Encouraging divergent thinking in large language models through multi-agent debate. In Proceedings of the 2024 conference on empiri-cal methods in natural language processing , pages 17889–17904. Xiao Lin, Philip Li, Zhichen Zeng, Tingwei Li, Tianxin Wei, Xuying Ning, Gaotang Li, Yuzhong Chen, and Hanghang Tong. 2026a. Alert: Zero-shot llm jail-break detection via internal discrepancy amplifica-tion. arXiv preprint arXiv:2601.03600 .Xiao Lin, Zhicheng Tang, Weilin Cong, Mengyue Hang, Kai Wang, Yajuan Wang, Zhichen Zeng, Ting-Wei Li, Hyunsik Yoo, Zhining Liu, and 1 others. 2026b. Mix-ture of sequence: Theme-aware mixture-of-experts for long-sequence recommendation. In Proceedings of the ACM Web Conference 2026 , pages 6469–6480. Nelson F Liu, Kevin Lin, John Hewitt, Ashwin Paran-jape, Michele Bevilacqua, Fabio Petroni, and Percy Liang. 2024a. Lost in the middle: How language models use long contexts. Transactions of the associ-ation for computational linguistics , 12:157–173. Qidong Liu, Xian Wu, Xiangyu Zhao, Yuanshao Zhu, Derong Xu, Feng Tian, and Yefeng Zheng. 2024b. When moe meets llms: Parameter efficient fine-tuning for multi-task medical applications. In Pro-ceedings of the 47th international ACM SIGIR con-ference on research and development in information retrieval , pages 1104–1114. Zijun Liu, Yanzhe Zhang, Peng Li, Yang Liu, and Diyi Yang. 2024c. A dynamic llm-powered agent network for task-oriented agent collaboration. In First Con-ference on Language Modeling .Xuying Ning, Katherine Tieu, Dongqi Fu, Tianxin Wei, Zihao Li, Yuanchen Bei, Jiaru Zou, Mengting Ai, Zhining Liu, Ting-Wei Li, and 1 others. 2026. Code as agent harness. arXiv preprint arXiv:2605.18747 .Tsung-Min Pai, Jui-I Wang, Li-Chun Lu, Shao-Hua Sun, Hung-Yi Lee, and Kai-Wei Chang. 2026. Billy: Steering large language models via merging persona vectors for creative generation. In Proceedings of the 19th Conference of the European Chapter of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 7870–7915. Nina Rimsky, Nick Gabrieli, Julian Schulz, Meg Tong, Evan Hubinger, and Alexander Turner. 2024. Steer-ing llama 2 via contrastive activation addition. In 
+
+Proceedings of the 62nd Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers) , pages 15504–15522. Murray Shanahan, Kyle McDonell, and Laria Reynolds. 2023. Role play with large language models. Nature ,623(7987):493–498. Yunfan Shao, Linyang Li, Junqi Dai, and Xipeng Qiu. 2023. Character-llm: A trainable agent for role-playing. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing ,pages 13153–13187. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, and 1 others. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 .Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. 2017. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. arXiv preprint arXiv:1701.06538 .Seungjong Sun, Seo Yeon Baek, and Jang Hyun Kim. 2025. Personality vector: Modulating personality of large language models by model merging. In Pro-ceedings of the 2025 Conference on Empirical Meth-ods in Natural Language Processing , pages 24667– 24688. Dat Tran and Douwe Kiela. 2026. Single-agent llms out-perform multi-agent systems on multi-hop reasoning under equal thinking token budgets. arXiv preprint arXiv:2604.02460 .Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Ulisse Mini, and Monte MacDiarmid. 2024. Activation addition: Steering language models without optimization. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, and 1 others. 2022. Chain-of-thought prompting elic-its reasoning in large language models. Advances in neural information processing systems , 35:24824– 24837. Tianxin Wei, Ting-Wei Li, Zhining Liu, Xuying Ning, Ze Yang, Jiaru Zou, Zhichen Zeng, Ruizhong Qiu, Xiao Lin, Dongqi Fu, and 1 others. 2026a. Agentic reasoning for large language models. arXiv preprint arXiv:2601.12538 .Tianxin Wei, Zhichen Zeng, Ruizhong Qiu, Zhining Liu, Xuying Ning, Xinrui He, Wenxuan Bao, Xiao Lin, Qi He, Xianfeng Tang, Hanghang Tong, and Jingrui He. 2026b. Inference scaling of LLM ensembling: Bridging token spaces with token translation. In 
+
+Third Conference on Language Modeling .Zesheng Wei, Mengxiang Li, Zilei Wang, and Yang Deng. 2026c. Beyond static personas: Situational personality steering for large language models. In 
+
+Findings of the Association for Computational Lin-guistics: ACL 2026 , pages 19185–19210. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, and 1 others. 2023. Autogen: Enabling next-gen llm applica-tions via multi-agent conversation. arXiv preprint arXiv:2308.08155 .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, and 1 others. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Hanqing Zeng, Yinglong Xia, Zhuokai Zhao, Chuan Jiang, Qiang Zhang, Jiayi Liu, Qunshu Zhang, Lizhu Zhang, Xiangjun Fan, and Benyu Zhang. 2026a. S’more: Structural mixture of residual experts for parameter-efficient llm fine-tuning. Advances in Neural Information Processing Systems , 38:81441– 81478. Zhichen Zeng, Wenxuan Bao, Xiao Lin, Ruizhong Qiu, Tianxin Wei, Xuying Ning, Yuchen Yan, Chen Luo, Monica Xiao Cheng, Jingrui He, and 1 others. 2026b. Subspace alignment for vision-language model test-time adaptation. arXiv preprint arXiv:2601.08139 .Zhichen Zeng, Mengyue Hang, Xiaolong Liu, Xiaoyi Liu, Xiao Lin, Ruizhong Qiu, Tianxin Wei, Zhining Liu, Siyang Yuan, Chaofei Yang, and 1 others. 2025a. Hierarchical lora moe for efficient ctr model scaling. 
+
+arXiv preprint arXiv:2510.10432 .Zhichen Zeng, Xiaolong Liu, Mengyue Hang, Xiaoyi Liu, Qinghai Zhou, Chaofei Yang, Yiqun Liu, Yichen Ruan, Laming Chen, Yuxin Chen, and 1 others. 2025b. Interformer: Effective heterogeneous inter-action learning for click-through rate prediction. In 
+
+Proceedings of the 34th ACM International Confer-ence on Information and Knowledge Management ,pages 6225–6233. Zhichen Zeng, Qi Yu, Xiao Lin, Ruizhong Qiu, Xuying Ning, Tianxin Wei, Yuchen Yan, Jingrui He, and Hanghang Tong. 2026c. Harnessing consistency for robust test-time llm ensemble. In Findings of the Association for Computational Linguistics: EACL 2026 , pages 3528–3545. Yuheng Zhang, Dian Yu, Tao Ge, Linfeng Song, Zhichen Zeng, Haitao Mi, Nan Jiang, and Dong Yu. 2026. Improving llm general preference alignment via optimistic online mirror descent. Advances in Neural Information Processing Systems , 38:160165– 160187. Appendix A Additional Experiment Results 
+
+A.1 Per-role Performance 
+
+To better understand the effect of roles on perfor-mance, we report the per-role results in Tables 3–5 and summarize their performance in Figure 8. We first observe that role effectiveness is highly task-dependent. Some roles exhibit intuitive align-ment with particular tasks: for example, the math-ematician role performs strongly on mathemati-cal reasoning benchmarks, while the doctor role achieves the best Text performance on MedQA for both backbones. However, such alignment is not universal. Roles emphasizing general reasoning strategies, e.g., teacher, skeptic, and logician, can outperform domain-matched roles on several tasks, and the best role often changes across backbone LLMs and steering methods. These results suggest that roles induce complementary reasoning biases rather than fixed, task-specific capabilities, and that no single predefined role is consistently optimal. In contrast, MoRe generally performs near the upper bound of the per-role ranges or even sur-passes the best predefined role. Such improvements can not be solely achieved by selecting a globally strong role, but instead validates that MoRe benefits from query-dependent selection and composition of complementary candidate steering vectors. Con-sequently, MoRe produces composed specializations that are not restricted to any single predefined role. 
+
+A.2 Balancing Performance–Efficiency 
+
+Figure 9 compares model performance against the number of tokens consumed. Across different mod-els and datasets, MoRe consistently occupies the upper-left region, indicating a favorable balance between accuracy and inference cost. For example, 
+
+MoRe achieves the best performance on MATH with Llama while using substantially fewer tokens than all MAS baselines, and remains highly competitive on TriviaQA and GSM8K across both backbones. Compared with single-agent methods, MoRe con-sumes a similar number of tokens but generally achieves stronger performance, with particularly clear gains on MATH and GSM8K. This suggests that query-dependent composition is especially ben-eficial for tasks involving longer reasoning trajec-tories and multiple intermediate decisions. In con-trast, fixed textual roles or steering vectors may provide useful but limited specialization. 
+
+Table 3: Per-role performance on Text .                                                                                     
+
+> Role MMLU TriviaQA MATH GSM8K MedQA AvgAcc
+> Llama-8B-Instruct
+> Math. 64.00 73.60 58.40 81.40 61.00 67.68 SDE 59.60 75.60 55.00 79.60 54.00 64.76 DataSci. 60.20 75.40 56.40 81.60 61.40 67.00 Logic. 61.00 72.40 54.40 77.20 55.80 64.16 Teacher 61.80 78.20 58.20 79.80 61.00 67.80 Skeptic 60.20 77.60 51.40 80.40 64.20 66.76 Doctor 60.20 76.20 58.80 80.40 64.80 68.08
+> Qwen3-8B
+> Math. 70.40 61.60 70.40 91.80 59.00 70.64 SDE 67.40 61.80 71.40 91.00 59.80 70.28 DataSci. 66.60 61.00 69.80 90.20 58.40 69.20 Logic. 67.20 61.80 70.60 89.80 57.80 69.44 Teacher 67.00 60.60 69.80 90.20 60.20 69.56 Skeptic 68.00 62.20 70.00 89.60 58.80 69.72 Doctor 67.60 61.00 71.00 88.20 60.80 69.72
+
+Table 4: Per-role performance on CAA .                                                                                     
+
+> Role MMLU TriviaQA MATH GSM8K MedQA AvgAcc
+> Llama-8B-Instruct
+> Math. 60.60 74.40 58.00 84.40 60.40 67.56 SDE 60.60 72.00 56.20 80.80 61.20 66.16 DataSci. 62.00 76.20 56.80 80.80 59.80 67.12 Logic. 61.00 74.60 54.00 83.60 61.40 66.92 Teacher 61.60 72.60 56.80 82.00 61.80 66.96 Skeptic 62.40 73.60 55.60 82.80 62.00 67.28 Doctor 61.20 73.00 56.80 84.40 60.80 67.24
+> Qwen3-8B
+> Math. 70.40 62.00 69.80 90.40 59.60 70.44 SDE 68.80 62.40 70.40 89.80 59.60 70.20 DataSci. 69.40 61.60 67.60 88.00 59.40 69.20 Logic. 69.60 62.20 70.20 89.40 59.20 70.12 Teacher 69.00 62.80 70.20 88.80 60.00 70.16 Skeptic 69.20 62.20 70.80 89.60 59.60 70.28 Doctor 70.60 62.40 69.80 87.60 59.40 69.96
+
+Table 5: Per-role performance on ActAdd .                                                                                       
+
+> Role MMLU TriviaQA MATH GSM8K MedQA AvgAcc
+> Llama-8B-Instruct
+> Math. 61.80 79.20 55.20 82.40 61.60 68.04 SDE 61.60 78.80 55.00 83.40 61.60 68.08 DataSci. 62.00 79.40 56.60 83.40 61.60 68.60 Logic. 61.80 78.80 57.80 82.40 62.00 68.56 Teacher 61.60 79.00 57.80 83.80 61.80 68.80 Skeptic 61.40 78.80 56.20 82.20 61.60 68.04 Doctor 62.00 79.00 56.60 82.60 61.80 68.40
+> Qwen3-8B
+> Math. 69.60 62.20 70.80 89.00 59.80 70.28 SDE 69.60 63.00 70.40 89.60 60.00 70.52 DataSci. 70.00 62.60 68.60 89.60 60.00 70.16 Logic. 69.80 63.00 69.40 90.40 60.20 70.56 Teacher 69.60 62.60 69.60 91.00 60.20 70.60 Skeptic 70.00 62.40 71.60 90.60 60.20 70.96 Doctor 69.60 62.60 70.40 89.80 60.20 70.52 Figure 8: Per-role performance ranges compared with MoRe . For each method, the blue bar spans the lowest to the highest score achieved across different roles, while the red dashed line denotes the performance of MoRe .
+> Figure 9: Performance vs #token on different models and datasets. Left upper corner represents the Pareto front with the best performance and minimal inference cost.
+
+MAS baselines occasionally achieve higher accu-racy, such as on GSM8K, but typically require hun-dreds or thousands of completion tokens per sam-ple. In comparison, MoRe approaches their perfor-mance with one to two orders of magnitude lower token cost. Furthermore, several MAS methods remain less accurate than MoRe despite their sub-stantially larger inference budgets, showing that additional agent interactions do not necessarily produce proportional performance gains. Over-all, MoRe combines the efficiency of single-agent inference with performance competitive with sub-stantially more expensive MAS pipelines. 
+
+A.3 On the Steering Effect 
+
+Figure 10 measures the angular change of the last token embedding with and without steering. The left figure shows the average angular change and std steered by different expert. We observe a consis-tent increase from approximately 12 ◦ at the steer-ing layer to over 40 ◦ at the final layer, indicating that the injected perturbation is not attenuated by subsequent computation but is progressively propa-gated and amplified through the network. The right figure shows the angular change per expert along the layers. Although all candidates exhibit the similar increasing trend, their layer-wise trajectories differ noticeably, with the variance Figure 10: Angular change between last token embed-dings with and without steering. 
+
+across candidates increasing in deeper layers. This suggests that the learned candidate vectors induce distinct patterns of representational transformation rather than merely applying perturbations of differ-ent magnitudes. Together, these results show that steering produces persistent and candidate-specific effects that accumulate toward the model output. 
+
+## B Experiment Details 
+
+B.1 Text Role Design 
+
+We describe our text role design for Text , CAA ,
+
+Billy , and the codebook initialization for MoRe .In general, we consider seven persons covering different roles as follows Mathematician 
+
+> "You are a Mathematician. Work from precise definitions and exact quantities. Manipulate the problem symboli-cally, derive each result formally, and justify that every line follows necessarily from the one before."
+
+Software Engineer 
+
+> "You are a Software Engineer. Decompose the task into a concrete procedure, then mentally execute it like code: track the intermediate state, cover boundary and edge cases, and run the inputs back through your answer to test it before finalizing."
+
+Data Scientist 
+
+> "You are a Data Scientist. Reason quantitatively and em-pirically. Estimate magnitudes, weigh base rates and like-lihoods, sanity-check every number against a plausible range, and let the evidence arbitrate between competing answers."
+
+Logician 
+
+> "You are a Logician. List the premises explicitly, then chain strict deductive inferences. Discard any option that forces a contradiction, and surface every hidden assump-tion and logical fallacy."
+
+Teacher 
+
+> "You are a Teacher. Build intuition in plain language. Mo-tivate why each move makes sense, ground it with a simple analogy or concrete example, and keep the explanation clear enough for a beginner to follow."
+
+Skeptic 
+
+> "You are a Skeptic. Distrust the first answer that comes to mind. Hunt for counterexamples, watch for traps and mis-leading wording, and re-derive the result from a different angle before you commit to it."
+
+Doctor 
+
+> "You are a Medical Doctor. Gather the salient findings, form a differential of candidate explanations, then rule them out one by one by weighing the evidence for and against each, until the most likely answer remains."
+
+B.2 Reward Design 
+
+We utilize GRPO to post train the composer, where the training signal originates from the group-relative advantages of a group of rollouts. A binary reward based on answer correctness can be prob-lematic in this setting: on samples where rollouts consistently provide correct or wrong answers, the group’s reward variance collapses to zero, and the resulting advantage vanishes. Therefore, we de-sign soft, task-aligned rewards that (1) preserve a strict correct-over-incorrect ordering, and (2) in-ject within-group variance so that rollouts sharing the same final-answer verdict are still separable by reasoning quality. Our designs are as follows • Multi-choice questions (MMLU, MedQA). 
+
+We assign a stepped reward: 1.0 for an exact match to the groundtruth, 0.2 when the model emits a wrong but syntactically valid choice (A–D) as a format reward, and 0.0 when no valid choice can be parsed. • Free-form QA questions (TriviaQA). We as-sign a soft reward: an exact match scores 1.0;otherwise the reward is the SBERT similar-ity in [0 , 1] between the normalized prediction and groundtruth. • Long-chain reasoning questions (GSM8K, MATH). We assign a soft reward. For cor-rect rollouts, we assign a soft reward of 
+
+τ + (1 − τ ) · sim( c, r ), where sim( ·, ·) is the SBERT cosine similarity between the gener-ated chain-of-thought c and the reference ra-tionale r. For incorrect rollouts, we assign a continuous partial-credit score min  τ, ; λ1 ·
+
+cov + λ2 · sim , where cov is the fraction of the reference’s intermediate numeric values that also appear in the rollout’s reasoning. 
+
+B.3 Baseline Methods 
+
+We consider the following single LLM baselines • Vanilla utilizes backbone LLM without any specialization. • Text prepends text persona before the query. • CAA (Rimsky et al., 2024) extracts persona steering vector from contrastive pairs. • ActAdd (Turner et al., 2024) extracts token-wise steering vector from contrastive pairs. • Prompt FT (Lester et al., 2021) fine-tunes the soft prompt tokens. • Billy (Pai et al., 2026) merges multiple con-trastive vectors into a single averaged steering vector. • NPTI (Deng et al., 2025) modulates neurons for each persona traits in the FFN activations. • IRIS (Wei et al., 2026c) extends NPTI by re-trieving topic-specific neuron sets for adaptive neuron modulation. We also consider the following MAS baselines • LLM Debate (Du et al., 2023) orchestrates multi-agent to iteratively debate each other’s reasoning to reach a consensus. • AutoGen (Wu et al., 2023) enables multi-agent collaboration by assigning distinct roles and facilitating multi-turn conversations. • AgentVerse (Chen et al., 2024b) coordinates multi-agent via expert recruitment, joint brain-storming, and voting. • DyLAN (Liu et al., 2024c) dynamically con-structs an agent network that evaluates contri-butions and routes information among special-ized agents across multiple reasoning layers. 
+
+B.4 Datasets 
+
+We evaluate on five reasoning benchmarks span-ning general knowledge ( MMLU , TriviaQA ), mathematics ( MATH ,GSM8K ), and domain ex-pertise ( MedQA ), including • MMLU (Hendrycks et al., 2020) consists of multiple-choice questions across 57 subjects for assessing general knowledge and problem-solving abilities. • GSM8K (Cobbe et al., 2021) covers grade-school math word problems that require multi-step reasoning. • MATH (Hendrycks et al., 2021) covers math-ematics problems ranging from grade-school difficulty to advanced competition level. • TriviaQA (Joshi et al., 2017) covers open-domain factoid question answering and read-ing comprehension questions. • MedQA (Jin et al., 2021) consists of multiple-choice questions collected from professional medical board exams. Besides, we adopt PersonalityBench (Deng et al., 2025) to evaluate whether LLM responses exhibit specified personality traits. It is grounded in the Big Five personality model, covering Openness, 
+
+Conscientiousness, Extraversion, Agreeableness, and Neuroticism, including the opposing aspects of each trait. PersonalityBench utilizes open-ended situational questions derived from real-world be-haviors, requiring models to express the target per-sonality through natural-language responses. We evaluate on the evaluation set containing 90 ques-tions per personality, and employ an LLM-as-a-judge to assess the extent to which each response reflects the intended personality. 
+
+## C More on Related Works 
+
+We provide more related works on mixture of ex-perts and pre-trained foundation models. 
+
+Mixture of Experts Mixture-of-Experts (MoE) provides a general framework for conditional com-putation by dynamically routing different inputs to specialized expert modules (Shazeer et al., 2017; Lepikhin et al., 2020). Modern sparse MoE ar-chitectures substantially scale this principle by ac-tivating only a small subset of experts for each input (Fedus et al., 2022; Du et al., 2022; Ai et al., 2025; Lin et al., 2026b). This paradigm has become increasingly prevalent in LLMs, where models such as Mixtral (Jiang et al., 2024) and DeepSeek-MoE (Dai et al., 2024) increase model capacity while maintaining a relatively small number of ac-tivated parameters. In particular, recent designs increasingly emphasize fine-grained expert special-ization and flexible expert composition, which de-composes experts into finer-grained modules and introduces shared experts to reduce redundancy among routed experts (Dai et al., 2024). Beyond full-parameter experts, the MoE principle has also been extended to parameter-efficient specialization, where lightweight LoRA adapters serve as experts and are dynamically selected or composed accord-ing to the input (Liu et al., 2024b; Li et al., 2024; Zeng et al., 2025a, 2026a). MoRe extends the prin-ciple of MoE from parameter-space computation 
+
+to activation-space behavioral specialization , en-abling dynamic multi-perspective composition with minimal additional inference overhead. 
+
+Pre-trained Foundational Models Foundation models have reshaped the field by pretraining mod-els on vast amounts of web-scale data (Brown et al., 2020; Bommasani et al., 2021; Achiam et al., 2023; Grattafiori et al., 2024). Large Language Models (LLMs) built upon this paradigm have demonstrated remarkable performance across di-verse tasks including natural language understand-ing (Comanici et al., 2025; Yang et al., 2025; Wei et al., 2026b), knowledge-intensive question an-swering (Achiam et al., 2023; Zeng et al., 2026c; Cui et al., 2026; Lin et al., 2026a), multi-modal reasoning (Zeng et al., 2026b, 2025b; Liang et al., 2025), and domain-specific problem solving (Wei et al., 2022; Guo et al., 2025; Li et al., 2026; Zhang et al., 2026). Beyond general-purpose capabili-ties, an emerging line of research seeks to special-ize pretrained LLMs toward particular domains, behaviors, personalities, or reasoning styles (Wei et al., 2026a; Ning et al., 2026). Such specialization can be induced through parameter-efficient adap-tation, including prompt tuning and lightweight parameter updates (Lester et al., 2021; Hu et al., 2021), or through role-conditioned prompting that instructs LLMs to behave as particular experts or personas (Shanahan et al., 2023; Shao et al., 2023; Chen et al., 2024a). More recently, representation-level approaches directly manipulate internal acti-vations to induce targeted behaviors without mod-ifying the backbone parameters (Li et al., 2023b; Turner et al., 2024; Rimsky et al., 2024). These techniques have been further extended to persona and behavioral control through learned steering vectors, neuron-level interventions, and context-dependent specialization (Cao et al., 2024; Chen et al., 2025b; Deng et al., 2025; Sun et al., 2025; Wei et al., 2026c). Together, these studies demon-strate that pretrained foundation models contain rich latent capabilities that can be selectively elicited through lightweight specialization. How-ever, most existing specialized-agent approaches rely on a predefined or individually selected special-ization, motivating methods that can dynamically compose multiple complementary specializations according to the input query. 
+
+## D Potential Risks 
+
+MoRe modifies the internal representations of LLMs to induce query-dependent specialization. Al-though our experiments focus on established rea-soning and personality benchmarks, the learned steering vectors may amplify undesirable biases or produce unintended behavioral changes on inputs outside the training distribution. Besides, the personality evaluation relies on LLM-as-a-judge, which may inherit biases, prefer-ences, or inconsistencies from the evaluator model. We mitigate this by following the standard evalua-tion protocol of PersonalityBench and applying the same scoring criteria to all methods. 
+
+## E Use Or Create Scientific Artifacts 
+
+Our work builds upon publicly available datasets, pre-trained language models, and existing special-ization and multi-agent baselines. We do not collect new data from human participants. 
+
+E.1 Cite Creators Of Artifacts 
+
+All external artifacts are properly credited to their original publications and repositories. The benchmarks used in this work, including 
+
+MMLU (Hendrycks et al., 2020), TriviaQA (Joshi et al., 2017), MATH (Hendrycks et al., 2021), 
+
+GSM8K (Cobbe et al., 2021)), MedQA (Jin et al., 2021) and PersonalityBench (Deng et al., 2025), are credited to their respective authors. The backbones used in this work, including 
+
+Llama3.1-8B-Instruct (Grattafiori et al., 2024) and Qwen3-8B (Yang et al., 2025), are referenced to its official publication. We additionally cite the original publications for all single-agent and multi-agent baselines, includ-ing CAA (Rimsky et al., 2024), ActAdd (Turner et al., 2024), Prompt FT (Lester et al., 2021), Billy (Pai et al., 2026), NPTI (Deng et al., 2025), IRIS (Wei et al., 2026c), LLM Debate (Du et al., 2023), 
+
+AutoGen (Wu et al., 2023), AgentVerse (Chen et al., 2024b), and DyLAN (Liu et al., 2024c). 
+
+E.2 Discuss The License For Artifacts 
+
+We comply with the licenses of all artifacts used in this work. The datasets and backbone models are available for research purposes under their respec-tive licenses. 
+
+E.3 Data Contains Personally Identifying Info Or Offensive Content 
+
+We do not collect or introduce new personally iden-tifying information. The reasoning benchmarks mainly contain general knowledge, mathematical, and professional examination questions. Personal-ityBench contains synthetically constructed situa-tional questions based on the Big Five personality framework. These questions may describe interper-sonal conflicts, emotional states, or other sensitive situations necessary for evaluating personality ex-pression. To our knowledge, they do not contain private information about identifiable individuals. 
+
+E.4 Documentation Of Artifacts 
+
+Appendix B documents the evaluated backbone models, datasets, baselines, evaluation protocols, and hardware. Dataset statistics are summarized in Appendix F. These materials specify how each artifact is used and support reproducibility of the experiments. 
+
+## F Statistics For Data 
+
+We summarize the dataset statistics as follows 
+
+F.1 MMLU 
+
+• Domain: Multiple-choice knowledge and rea-soning questions covering 57 subjects in the humanities, social sciences, natural sciences, and professional domains. Each question has four candidate answers. • Size: Approximately 16,000 questions. • Metric: exact match 
+
+F.2 TriviaQA 
+
+• Domain: Open-domain factoid question an-swering covering diverse topics such as his-tory, geography, science, entertainment, and popular culture. Questions require free-form textual answers. • Size: Approximately 95,000 question–answer pairs. • Metric: accuracy given by LLM-as-a-judge. 
+
+F.3 MATH 
+
+• Domain: Competition-level mathematical problem solving across algebra, counting and probability, geometry, intermediate algebra, number theory, prealgebra, and precalculus. Each problem requires a free-form solution and final answer. • Size: 7,500 training problems and 5,000 test problems. • Metric: accuracy given by LLM-as-a-judge. 
+
+F.4 GSM8K 
+
+• Domain: Multi-step grade-school mathemati-cal word problems that require arithmetic rea-soning and the generation of a numerical an-swer. • Size: 7,473 training problems and 1,319 test problems. • Metric: accuracy given by LLM-as-a-judge. 
+
+F.5 MedQA 
+
+• Domain: Multiple-choice medical question answering derived from professional medical licensing examinations. We use the English subset, which primarily contains questions based on the United States Medical Licens-ing Examination. • Size: 12,723 questions across the official train-ing, development, and test splits. • Metric: exact match 
+
+F.6 PersonalityBench 
+
+• Domain: Open-ended situational question an-swering for evaluating personality expression. • Size: 180,000 training instances, with approx-imately 36,000 instances for each personality trait. Its evaluation set contains approximately 90 situational questions for each trait. • Metric: LLM-as-a-judge to score each re-sponse on a scale from 1 to 5. We report the sum of the scores for the high and low poles of each trait, as well as the standard deviation across traits. 
+
+## G Computational Experiments 
+
+All computational experiments in this work are fully reproducible, with details provided in Sec-tion 4.1. 
+
+G.1 Model Size And Budget 
+
+We evaluate MoRe on two open-weight instruction-following LLMs: • Llama-3.1-8B-Instruct : approximately 8 billion parameters. • Qwen3-8B : approximately 8 billion parame-ters. The parameters of both backbone LLMs remain frozen throughout training. Only the codebook of candidate steering vectors and the lightweight query-aware composer are optimized. The result-ing number of parameters 0.04M for codebook and 1.32M for router, sum of which constitutes 0.017% of the backbone model. All experiments are conducted on 8 NVIDIA A100 GPUs with 40GB memory. 
+
+G.2 Experimental Setup And Hyper-params 
+
+We describe experimental settings in Section 4.1. Our default configuration for key hyperparameters studied includes: • Steering strength α = 0 .2.• Codebook size N = 10 .• Sparse routing Top-K with K = 3 .• Load-balancing weight λlb = 0 .1.We study the sensitivity to the following hy-perparameters in Section 4.5.2, including Steer-ing strength α ∈ { 0.1, 0.2, 0.4, 0.6, 0.8}; Code-book size N ∈ { 4, 7, 10 , 13 , 16 }; Router sparsity 
+
+K ∈ { 1, 3, 5, 7, 10 }; and Load-balancing weight 
+
+λlb ∈ { 0, 10 −3, 10 −2, 10 −1, 1}.
+
+G.3 Descriptive Statistics 
+
+For the five reasoning benchmarks, we report ac-curacy on each dataset, average accuracy across datasets, and average rank across methods. For Per-sonalityBench, we report the LLM-judge score for each Big Five trait, the average score across traits, and the standard deviation between the high- and low-pole evaluations. 
+
+G.4 Parameters For Packages 
+
+The existing packages used are specified as fol-lows, including Python : 3.10.20, PyTorch : 2.9.1 (CUDA 12.8), transformers : 5.10.2, datasets :5.0.0, sentence-transformers : 5.5.1 and vllm 
+
+0.6.2. 
+
+## H AI Assistants In Research Or Writing 
+
+In this paper, AI assistant tool is used to edit and improve the quality of the text, including checking the spelling, grammar, punctuation and clarity.

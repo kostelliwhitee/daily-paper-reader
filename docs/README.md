@@ -6,40 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-28
-- 运行时间：2026-08-28 02:55:30 UTC
+- 最新运行日期：2026-08-29
+- 运行时间：2026-08-29 03:09:17 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：4
-- 速读区：2
+- 本次总论文数：4
+- 精读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读4篇、速读2篇，聚焦多智能体系统协作与共识机制。
-最值得关注：资源感知共识的控制论方法，以及信念级联在LLM智能体网络中的说服效应。
-下一步可深入探索多智能体协作中资源分配与信息传播的相互作用。
-- 详情：[/202608/28/README](/202608/28/README)
+今日共处理4篇论文，精读1篇、速读3篇，聚焦集体创新中的自适应传输程序与多智能体协同优化。最值得关注的是精读论文《Discovering Adaptive Transmission Programs for Collective Innovation》（8.0分），其自适应传输机制或为复杂系统协作提效提供新思路；速读中多智能体路由与角色混合（ProgRouter、Mixture of Roles）也值得一瞥。建议普通读者优先阅读精读论文，把握其核心思想，再按兴趣延伸至多智能体工作流的质量-成本权衡。
+- 详情：[/202608/29/README](/202608/29/README)
 
 ### 精读区论文标签
-1. [A Control-Theoretic Approach for Resource-Aware Consensus in Multi-Agent AI](/202608/28/2608.25099v1-a-control-theoretic-approach-for-resource-aware-consensus-in-multi-agent-ai)  
+1. [Discovering Adaptive Transmission Programs for Collective Innovation](/202608/29/2608.24545v1-discovering-adaptive-transmission-programs-for-collective-innovation)  
    标签：评分：8.0/10、query:ma-la
-   evidence：面向多智能体信念动态与通信拓扑的控制论共识
-2. [Belief Cascades Drive Persuasion in LLM Agent Networks](/202608/28/2608.25152v1-belief-cascades-drive-persuasion-in-llm-agent-networks)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：LLM智能体网络中的说服动态与信念级联实证
-3. [Cooperative Multi-Agent Reinforcement Learning for Adaptive Aggregation in Semi-Supervised Federated Learning with non-IID Data](/202608/28/2608.25794v1-cooperative-multi-agent-reinforcement-learning-for-adaptive-aggregation-in-semi-supervised-federated-learning-with-non-iid-data)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：联邦学习中用于自适应聚合的协作多智能体强化学习
-4. [Risks and Controls for Multi-Agent Systems: an analytical framework for deployment of AI agents across organisational boundaries](/202608/28/2608.26626v1-risks-and-controls-for-multi-agent-systems-an-analytical-framework-for-deployment-of-ai-agents-across-organisational-boundaries)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：分析AI代理跨组织边界交互产生的风险与管控措施
+   evidence：将信息传播协议形式化为状态感知程序，根据智能体和集体状态路由信息与资源，直接面向多智能体通信设计。
 
 ### 速读区论文标签
-1. [SIGMA: Structured Noise-Effect-Aware Grouped Multi-Agent Aggregation](/202608/28/2608.26683v1-sigma-structured-noise-effect-aware-grouped-multi-agent-aggregation)  
-   标签：评分：7.0/10、query:ma-la
-   evidence：合作多代理强化学习中的结构化噪声效应与协同交互
-2. [AgentRoom: Concurrent Multi-Agent Coding in a CRDT-Backed Shared Workspace](/202608/28/2608.23740v1-agentroom-concurrent-multi-agent-coding-in-a-crdt-backed-shared-workspace)  
+1. [Mahalanobis-Based Multi-Head Attention for Complex State Propagation](/202608/29/2608.24462v1-mahalanobis-based-multi-head-attention-for-complex-state-propagation)  
    标签：评分：6.0/10、query:ma-la
-   evidence：通过共享工作空间CRDT协议实现并发多智能体编码协调
+   evidence：提出用马氏距离RBF核替代点积的注意力机制，与线性注意力这类可扩展注意力研究相关。
+2. [ProgRouter: Online Progress-Guided Orchestration for Multi-Agent LLM Workflows under Quality-Cost Tradeoffs](/202608/29/2608.25992v1-progrouter-online-progress-guided-orchestration-for-multi-agent-llm-workflows-under-quality-cost-tradeoffs)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：多智能体LLM工作流的在线编排
+3. [One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles](/202608/29/2608.27338v1-one-model-many-minds-unlocking-multi-agent-synergy-in-a-single-agent-via-mixture-of-roles)  
+   标签：评分：6.0/10、query:ma-la
+   evidence：降低多智能体系统中的多轮通信开销
 
 
 <div class="dpr-home-promo-card">
