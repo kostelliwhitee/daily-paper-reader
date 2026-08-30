@@ -6,34 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-29
-- 运行时间：2026-08-29 22:37:29 UTC
+- 最新运行日期：2026-08-30
+- 运行时间：2026-08-30 22:43:14 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
-- 速读区：2
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读速读共4篇论文，重点关注多智能体路由与角色协同机制。  
-最值得看的是《SPFR》与《One Model, Many Minds》，均获8.0分，分别提出语义势场路由和单智能体角色混合新思路。  
-建议优先精读这两篇，再结合《ProgRouter》的成本权衡设计形成对比。
-- 详情：[/202608/29/README](/202608/29/README)
+今日推荐6篇论文，精读3篇、速读3篇，聚焦多智能体与模型推理前沿。  
+最值得关注两项9分精读：LLM智能体群体的“对抗捕获”预测，以及视觉语言模型在专业双打战术推理中的诊断基准。  
+建议优先从这两篇深入，分析多智能体协作与对抗中的对齐盲点；若关注效率研究方向，可顺带浏览Meta-Moderator与LoRA相关速读。
+- 详情：[/202608/30/README](/202608/30/README)
 
 ### 精读区论文标签
-1. [SPFR: Semantic Potential Field Routing for the Distributed Internet of Agents](/202608/29/2608.25396v1-spfr-semantic-potential-field-routing-for-the-distributed-internet-of-agents)  
+1. [Aligned Alone, Misaligned Together: Forecasting Adversarial Capture in LLM Agent Populations](/202608/30/2608.22444v1-aligned-alone-misaligned-together-forecasting-adversarial-capture-in-llm-agent-populations)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：多智能体交互动态；LLM智能体群体中的对抗捕获
+2. [DoublesEval: Diagnosing Multi-Agent Tactical Reasoning in Vision-Language Models via Professional Doubles Badminton](/202608/30/2608.24439v1-doubleseval-diagnosing-multi-agent-tactical-reasoning-in-vision-language-models-via-professional-doubles-badminton)  
+   标签：评分：9.0/10、query:ma-la
+   evidence：聚焦动态多智能体交互中的协调角色与时空推理评估
+3. [Autonomous Mathematical Discovery in an Open-World Multi-Agent Environment](/202608/30/2608.23691v1-autonomous-mathematical-discovery-in-an-open-world-multi-agent-environment)  
    标签：评分：8.0/10、query:ma-la
-   evidence：分布式多智能体路由，集成执行器发现与重选
-2. [One Model, Many Minds: Unlocking Multi-Agent Synergy in a Single Agent via Mixture of Roles](/202608/29/2608.27338v1-one-model-many-minds-unlocking-multi-agent-synergy-in-a-single-agent-via-mixture-of-roles)  
-   标签：评分：8.0/10、query:ma-la
-   evidence：提出角色混合方法，无需多轮交互即可获得多智能体协同
+   evidence：多智能体交互动态；无中心协调器的开放世界协作
 
 ### 速读区论文标签
-1. [ProgRouter: Online Progress-Guided Orchestration for Multi-Agent LLM Workflows under Quality-Cost Tradeoffs](/202608/29/2608.25992v1-progrouter-online-progress-guided-orchestration-for-multi-agent-llm-workflows-under-quality-cost-tradeoffs)  
+1. [Meta-Moderator: Empowering Multi-Agent Debate with Meta-Cognition](/202608/30/2608.23029v1-meta-moderator-empowering-multi-agent-debate-with-meta-cognition)  
    标签：评分：7.0/10、query:ma-la
-   evidence：基于任务进度引导的多智能体LLM工作流在线编排
-2. [Ludi${}_{\scriptscriptstyle 0.1}$: An Agentic System for Socially Intelligent Robots](/202608/29/2608.22035v1-ludiscriptscriptstyle-01-an-agentic-system-for-socially-intelligent-robots)  
+   evidence：Meta-Moderator学习动态调节多智能体辩论过程，监控效用并决定何时给出最终答案
+2. [Apodex 1.1: Scaling Agentic Intelligence for Complex Work](/202608/30/2608.23283v1-apodex-11-scaling-agentic-intelligence-for-complex-work)  
+   标签：评分：7.0/10、query:ma-la
+   evidence：多智能体系统通信；智能体协调缩放与任务委派
+3. [How Much Rank Does LoRA Need? Rank-Error Bounds for Transformer Attention](/202608/30/2608.26052v1-how-much-rank-does-lora-need-rank-error-bounds-for-transformer-attention)  
    标签：评分：6.0/10、query:ma-la
-   evidence：机器人智能体在协作中传达意图并处理多轮社交对话
+   evidence：给出LoRA秩与Transformer注意力逼近误差的理论界，为低秩/线性注意力设计提供依据
 
 
 <div class="dpr-home-promo-card">

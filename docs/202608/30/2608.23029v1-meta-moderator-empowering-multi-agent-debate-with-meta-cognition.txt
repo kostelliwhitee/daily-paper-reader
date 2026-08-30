@@ -1,0 +1,710 @@
+Title: Meta-Moderator: Empowering Multi-Agent Debate with Meta-Cognition
+
+URL Source: https://arxiv.org/pdf/2608.23029v1
+
+Published Time: Tue, 25 Aug 2026 01:51:57 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+## Meta-Moderator: Empowering Multi-Agent Debate with Meta-Cognition 
+
+Wentao Hu ♠ Zhuoyue WAN ♠ Jinhao Shen ♠
+
+Chen Jason Zhang ♠ Xiaoyong Wei ♡,♠,* Qing Li ♠♠The Hong Kong Polytechnic University ♡Sichuan University 
+
+wayne-wt.hu@connect.polyu.hk {jason-c.zhang, cs007.wei}@polyu.edu.hk 
+
+Abstract 
+
+Multi-agent debate can improve large language model reasoning by eliciting diverse hypothe-ses and critiques, yet its performance is often constrained by weak moderation. Common pipelines rely on fixed budgets, agreement-based stopping, or untrained judges, leading to redundant deliberation and unreliable evi-dence aggregation. We cast moderation as a meta-cognitive process, monitoring debate util-ity, controlling deliberation, and adjudicating a final answer, and introduce Meta-Moderator ,a learnable framework that dynamically regu-lates debate and decides when to finalize an answer. Meta-Moderator is trained indepen-dently of the debaters via outcome-driven pol-icy optimization, making debate regulation an explicit capability rather than an incidental ef-fect of prompting. Across five benchmarks, Meta-Moderator outperforms widely used deci-sion layers and transfers across tasks and sys-tem configurations. Further analyses show that it allocates debate more selectively and reduces mis-aggregation after informative hypotheses appear. 1
+
+1 Introduction 
+
+Large language models (LLMs) often achieve stronger reasoning when multiple agents are al-lowed to interact, critique one another, and itera-tively refine their answers (Du et al., 2024; Liang et al., 2024; Chan et al., 2024). This multi-agent debate (MAD) paradigm has produced consistent gains across tasks such as mathematical reasoning, multi-hop question answering, and factual verifica-tion, motivating the common belief that structured interaction yields more reliable reasoning than a single agent (Zhang and Xiong, 2025; Hu et al., 2025b).  
+
+> *
+
+Corresponding author  
+
+> 1
+
+Our code available at https://github.com/Huenao/ Meta-Moderator .(1) Redundancy 
+
+> (2) Drift
+> …… <answer> B </answer>
+> (3) Mis-aggregate
+> …… <answer> C </answer> I aggree with agent 1’s response, so <answer> B </answer>
+> To answer this question, we need to …… Based on this analysis, the most accurate description of Macedo's position on immigration is conservative. <answer> B </answer> To answer this question, we need to …… Based on this analysis, the most accurate description of Macedo's position on immigration is conservative. <answer> B </answer> Agent 2's response is identical to my previous response. There is no need to revise my previous answer, and I agree with Agent 2's analysis…… <answer> B </answer> Agent 1's response is identical to my previous response. There is no need to revise my previous answer…… <answer> B </answer>
+> Agent 2's response is the same as my initial response, I'll provide an alternative perspective to consider the validity of the statements…… <answer> B </answer> Agent 1's response is the same as my initial response, However, this conclusion is not supported by the information provided, …… <answer> C </answer> To determine the most likely outcome in this scenario, let's analyze the options based on general principles of premises liability and…... <answer> D </answer> To determine the most likely outcome in this scenario, let's analyze the options based on general principles of premises liability and…... <answer> D </answer>
+
+Figure 1: Three common issues in standard multi-agent debate: redundancy, drift, and mis-aggregation. 
+
+Despite its promise, MAD is far from reliably beneficial. As shown in Figure 1, debates can (i) be-come redundant , expending additional rounds that contribute little new information; (ii) drift away from the key uncertainty, accumulating plausible but irrelevant details; or (iii) mis-aggregate high-quality arguments into an incorrect final decision, for instance due to superficial consensus, last-round bias, or voting failures under dispersed opinions (Becker, 2024; Zheng et al., 2024; Choi et al., 2025; Cui et al., 2025; Hong et al., 2025). These failure modes arise naturally when collective deliberation is run without reliable mechanisms for assessing progress, allocating deliberation, and committing to a final decision. We argue that these issues point to a central, under-modeled bottleneck in MAD: the moderator .In real-world adversarial deliberation (e.g., court-room argumentation), advocates focus on local ev-idence and persuasive reasoning, while a neutral adjudicator maintains global context, tracks what arXiv:2608.23029v1 [cs.CL] 24 Aug 2026 has been resolved, and decides when the discussion is ready for a decision. By contrast, most MAD systems treat moderation as a heuristic add-on: in-teraction is governed by fixed budgets, shallow con-sensus checks, or voting-based aggregation (Choi et al., 2025; Cui et al., 2025). Recent work has be-gun to explore measurement-driven controllers that stop when debate signals plateau or when judge dynamics stabilize (Chang and Chang, 2025; Hu et al., 2025a). However, these approaches still rely on predefined signals and hand-chosen stopping criteria, rather than learning a moderation policy optimized for end-task accuracy. Some approaches introduce an LLM judge, but it typically operates as a prompted black-box evaluator rather than a policy optimized for regulating debate dynamics (Liang et al., 2024; Hong et al., 2026). As a result, the very capabilities that determine whether debate translates into accuracy gains are left implicit and fragile. This motivates a meta-cognitive view of mod-eration. Drawing inspiration from meta-reasoning and metacognition, which study how cognitive pro-cesses are monitored and regulated under limited resources (Ackerman and Thompson, 2017; Ball and Richardson, 2025; Gao et al., 2024; De Sabbata et al., 2024), we characterize effective moderation as a tightly coupled loop of three functions: Moni-toring whether deliberation is making substantive progress versus repeating or drifting; Control al-locating deliberation by deciding whether to pro-long deliberation or commit to a decision (Wei and Yang, 2013); and Adjudication synthesizing a fi-nal answer from the debate content in a way that is robust to superficial agreement and aggregation biases. Under this perspective, moderation is not merely another round of object-level reasoning; it is a distinct, policy-like capability that must decide 
+
+when further deliberation is worthwhile and when 
+
+to commit to a final decision. Motivated by this framing, we introduce Meta-Moderator , a framework for learnable modera-tion that treats debate regulation as a meta-level decision problem. Meta-Moderator learns an ex-plicit moderation policy that decides, at each round, whether further deliberation is warranted or whether to stop and commit to a final answer. We train this policy independently from debaters with outcome-driven reinforcement learning, so that moderation becomes a dedicated, learnable competence rather than an incidental outcome of prompting or heuristic aggregation. Our contributions are threefold: • We identify moderation as a central bottleneck in multi-agent debate and formalize MAD as a meta-level regulation problem characterized by a monitoring-control-adjudication loop. • We propose Meta-Moderator , a framework for learnable moderation that instantiates an explicit moderation policy to decide whether to continue deliberation or stop and commit to a final answer. • Across multiple reasoning tasks, we show that learned meta-level regulation improves final answer accuracy compared to common MAD baselines. 
+
+2 Related Work 
+
+2.1 Multi-Agent Debate 
+
+Multi-agent debate (MAD) aims to improve LLM reasoning by having agents propose answers, cri-tique one another, and refine arguments (Du et al., 2024). Subsequent work promotes divergent think-ing, structured argumentation, and stronger ver-ification in multimodal and retrieval-augmented settings (Liang et al., 2024; Zheng et al., 2024; Hu et al., 2025b). However, recent analyses suggest that debate is not consistently beneficial. Gains are often at-tributable to diversity in initial answers rather than multi-round deliberation, and debate trajectories do not reliably increase correctness (Choi et al., 2025). Other work further reports conformity and bias amplification, where consensus-seeking dynamics suppress minority hypotheses and propagate shared errors (Cui et al., 2025). These findings imply that debate effectiveness depends not only on debaters’ object-level reasoning, but also on how debate is monitored, budgeted, and aggregated into a final decision. Most MAD pipelines rely on fixed debate lengths, agreement-based stopping, or untrained judges. Measurement-driven stopping moves be-yond fixed rounds but still depends on predefined signals and hand-tuned criteria (Chang and Chang, 2025; Hu et al., 2025a). We address this gap by learning a moderation policy optimized for end-task accuracy. 
+
+2.2 Metacognition for LLMs 
+
+Recent work on metacognition in LLMs mainly fo-cuses on self-monitoring and self-regulation (Gao et al., 2024). Typical operationalizations include confidence estimation, uncertainty awareness, and failure prediction (Ji-An et al., 2025). Although such self-evaluative signals can be elicited, they are often miscalibrated and only weakly aligned with models’ true knowledge limitations (Wang et al., 2025; Wang and Zhao, 2024). Complementary work frames meta-reasoning as a control mecha-nism over actions such as tool use, retrieval, or allocating additional computation (Li et al., 2025; Alazraki and Rei, 2025; De Sabbata et al., 2024). In contrast, we study metacognition as coordina-tion in multi-agent deliberation: a moderator moni-tors agents’ externalized reasoning traces and reg-ulates whether further debate is worthwhile. This motivates a learnable moderation policy for MAD. 
+
+2.3 Reinforcement Learning for LLMs 
+
+Reinforcement learning (RL) is increasingly used to shape LLM behavior beyond supervised fine-tuning (Wu et al., 2025b; Wan et al., 2025), includ-ing improving multi-step reasoning and learning decision policies for LLM-based agents (Shao et al., 2024; Guo et al., 2025; Chen et al., 2026). RL has also been applied to higher-level control, such as planning, tool selection, and allocating search or computation, making it a natural approach for learn-ing meta-level policies over hierarchical reasoning processes (Jin et al., 2025; Chen et al., 2025; Qian et al., 2025; Wu et al., 2025a). However, prior work largely optimizes a single agent’s reasoning or tool-use policy, leaving the moderation policy, when to stop and how to adju-dicate multi-agent evidence, underexplored. We address this gap by training a meta-level moderator with GRPO to directly optimize end-task accuracy. 
+
+3 Meta-Moderator 
+
+3.1 Problem Formulation 
+
+Let X denote the input space (e.g., questions) and 
+
+Y the output space (e.g., free-form or multiple-choice answers). Given an instance x ∈ X with gold label y⋆ ∈ Y , we consider a multi-agent de-bate system composed of N LLM-based debaters 
+
+D = {d1, . . . , d N }.
+
+Agent responses. Each debater produces a tex-tual response at round t, denoted by rtdi . In our setting, rtdi contains both reasoning and a fi-nal answer ; we denote the extracted answer by 
+
+ytdi = fans (rtdi ). At initialization ( t = 0 ), each de-bater independently generates an initial response: 
+
+r0 
+
+> di
+
+∼ Init (x), i ∈ { 1, . . . , N }, (1) where Init samples an initial response condi-tioned on x.
+
+Debate dynamics. The debate runs for at most 
+
+Tmax rounds. At each round t ≥ 1, debater di
+
+observes the set of other debaters’ responses from the previous round, 
+
+Rt 
+
+> −di
+
+= { rt−1 
+
+> dj
+
+| j ∈ { 1, . . . , N }, j ̸ = i }, (2) and updates its response via a one-round debate operator Debate :
+
+rtdi ∼ Debate  x; Rt
+
+> −di
+
+. (3) All debaters update in parallel using the responses from the previous round. Let Ht denote the debate transcript from initial-ization through round t:
+
+Ht = {rτdi | i ∈ { 1, . . . , N }, τ ∈ { 1, . . . , t }} .
+
+(4) 
+
+Decision layer. A moderator (decision layer) ob-serves the debate and may terminate at any round 
+
+t ≤ Tmax . Formally, the system outputs 
+
+ˆy = F(Ht), (5) where t is the (data-dependent) stopping time cho-sen by the moderator. The function F abstracts the 
+
+decision layer of debate: it can be instantiated as majority voting over {ytdi }Ni=1 , or as a judge model conditioning on Ht.
+
+Objective. Our goal is to maximize end-task cor-rectness of the overall debate system by improving the decision layer: 
+
+max E1{ˆy = y⋆}, (6) where the expectation is over task instances and the stochasticity of debater generation and debate up-dates. Next, we will parameterize F as a learnable 
+
+moderator policy that decides when to stop and how to adjudicate, enabling the system to better exploit debate evidence when producing ˆy.Question 𝑥  
+
+> Debater
+> Debater
+> Debater
+> …
+> Debater
+> Debater
+> Debater
+> …
+> Debater
+> Debater
+> Debater
+> … STOP, <answer></answer> CONTINUE
+> …
+> Meta-Moderator
+> 𝜋 !
+> Round 1 Round 2 Round T
+> Debater Response
+> Question 𝑥
+> ………
+> …
+> Reward Model
+> …
+> Reference LLM
+> (a). Policy Optimization Stage (b). Policy Execution Stage
+
+Figure 2: Overview of Meta-Moderator. The moderator monitors debate states and adjudicates a final answer when the debate stops; it is trained via outcome-driven policy optimization and used as a drop-in decision layer. 
+
+3.2 Meta-Moderator Policy 
+
+The formulation above separates the debate layer, which generates multi-agent evidence through in-teraction, from the decision layer F, which maps debate evidence to a single prediction and an adap-tive stopping point. Most existing MAD systems instantiate F with static heuristics or a prompted judge. In contrast, we parameterize F as a Meta-Moderator : a learnable meta-level policy that per-forms monitoring, control (adaptive stopping), and adjudication over the evolving debate. 
+
+Moderator state. At round t, the moderator ob-serves a debate state 
+
+st = ϕ(Ht), (7) where ϕ(·) specifies the moderator’s input view. In general, ϕ may expose the full transcript or a compressed representation. In this work, we use a round-level view: 
+
+st = ϕ  x, {rtdi }Ni=1 
+
+ , (8) constructed from the question and the current-round debater responses. Importantly, debaters’ responses at round t may include summaries of prior discussion, allowing st to encode relevant history without explicitly concatenating Ht.
+
+Moderator policy and structured output. The moderator is implemented as a conditional language-model policy πθ(· | st) that produces a structured moderation output. 
+
+Monitoring. Monitoring refers to assessing whether the current debate state contains suffi-cient, non-redundant evidence for a reliable de-cision. Rather than introducing an explicit scalar monitor, we treat monitoring as an implicit internal signal represented by the policy when producing its control decision at round t. Formally, the control distribution πθ(at | st) depends on st and thus im-plicitly captures whether additional deliberation is expected to be beneficial under the current debate evidence. 
+
+Control. Control uses the monitoring assessment to regulate deliberation depth. The moderator se-lects a control decision 
+
+at ∈ { CONTINUE , STOP }, (9) where CONTINUE allocates an additional debate round and STOP terminates deliberation. While moderation can in principle include richer inter-ventions that shape the next-step information flow (e.g., requesting counterexamples or verification), we focus on this minimal control space to isolate the core question: is further interaction beneficial given st?
+
+Adjudication. When the moderator decides to stop, it produces a single final prediction by ag-gregating multi-agent evidence in the current state. This is realized as conditional generation under the same policy: 
+
+ˆyt ∼ πθ(· | st, a t = STOP ), (10) yielding a learnable instantiation of F that may ad-judicate at an intermediate round rather than relying on a fixed horizon. Unlike surface-level consen-sus, learnable adjudication can weigh competing rationales and identify unresolved inconsistencies before committing to ˆyt.Overall, Meta-Moderator performs inter-agent meta-level regulation by monitoring debate util-ity, controlling whether to continue deliberation, and adjudicating a final answer from accumulated debate evidence. 
+
+3.3 Training Data Construction 
+
+We train Meta-Moderator from an offline dataset of debate states. For each training instance x ∈ X ′,we run a fixed multi-agent debate protocol to obtain a multi-round transcript Ht up to Tmax . We then extract, for each round t, the moderator-observable state 
+
+st = ϕ x, {rtdi | i ∈ { 1, . . . , N }}  , (11) where ϕ(·) is a deterministic formatting function that maps the question and the current-round de-bater responses into the moderator’s input. Each training example is a tuple (st, y ⋆, η t).Here ηt ∈ {0, 1} is an offline auxiliary signal indicating whether a correct candidate answer al-ready appears among debaters at round t. We com-pute ηt by automatically extracting each debater’s predicted answer from rtdi , followed by dataset-specific normalization and matching against y⋆.This signal is used only to shape rewards during training; at inference time, Meta-Moderator ob-serves only st and never accesses gold labels. 
+
+3.4 Reinforcing Meta-Cognition in Debate 
+
+We train the Meta-Moderator to exhibit meta-cognition over multi-agent debate: it must monitor 
+
+whether the current debate state already contains sufficient evidence for a correct answer, and con-trol the process by either continuing deliberation or committing to a final answer. Given a debate state st, the moderator generates a textual decision 
+
+zt ∼ πθ(· | st). We constrain the output space to two executable forms: 
+
+zt ∈
+
+n
+
+CONTINUE , STOP ∥ ⟨ answer ⟩ˆyt⟨/answer ⟩
+
+o
+
+,
+
+(12) which is parsed into an action-answer pair (at, ˆyt).
+
+Reward. We use three additive reward compo-nents to reinforce (i) protocol-compliant decisions, (ii) sufficiency monitoring for debate termination, and (iii) correctness upon commitment: 
+
+R(st, z t) = Rfmt (zt) + Rctrl (st, a t)+ Rans (y⋆, a t, ˆyt). (13) 
+
+Format reward Rfmt enforces an observable and machine-parseable control protocol: CONTINUE 
+
+alone, or STOP with a properly delimited ⟨answer ⟩
+
+span. We assign 1 for a valid format; for STOP 
+
+without an answer span we give partial credit ( 0.5); otherwise 0.
+
+Control reward Rctrl reinforces sufficiency moni-toring : the moderator should stop when the debate already contains a gold-matching proposal, and continue otherwise. We use an offline indicator 
+
+ηt ∈ { 0, 1}, where ηt = 1 means that at round 
+
+t at least one debater proposes a gold-matching answer (estimated by automatic answer extraction and normalization). We reward STOP when ηt = 1 ,and reward CONTINUE when ηt = 0 ; otherwise the reward is 0. This gold-derived signal is used only for offline reward shaping during training and is never provided as an inference-time input. 
+
+Answer reward Rans reinforces commitment cor-rectness and is only applied at termination: 
+
+Rans (y⋆, a t, ˆyt) = 
+
+(
+
+I[ˆ yt = y⋆], at = STOP ,
+
+0, at = CONTINUE .
+
+(14) Dataset-specific matching is used for correctness. 
+
+GRPO optimization. For each state st, we sam-ple G candidate decisions {z(i) 
+
+> t
+
+}Gi=1 from the old policy and compute total rewards {R(i)}Gi=1 . We construct group-relative advantages by normalizing rewards within the group: 
+
+A(i) = R(i) − μ{R}
+
+σ{R}
+
+, (15) and update πθ with a clipped surrogate objective and a KL regularizer, following GRPO (Shao et al., 2024). More details are presented in Appendix C. 
+
+3.5 Inference-Time Moderation Protocol 
+
+At test time, Meta-Moderator is used as a drop-in regulator for any fixed set of debaters. Given an instance x, the system iterates rounds t =0, 1, . . . , T max : (i) debaters produce responses 
+
+{rtdi }i=1 ..N under the debate protocol; (ii) the mod-erator state st = ϕ(x, {rtdi }i=1 ..N ) is constructed; (iii) the moderator samples or decodes a decision 
+
+zt from πθ(· | st) and parses it into (at, ˆyt). If 
+
+at = CONTINUE , the debate proceeds to the next round. If at = STOP , the system terminates and returns ˆyt as the final answer. If no stop decision is made by Tmax , the system terminates at Tmax 
+
+using the moderator’s final output. Method Use Moderator GSM8K AMC MATH500 StrategyQA MMLU                                                                                                           
+
+> Single-agent Llama-3.1-8B-Instruct
+> Naive -22.20 7.23 3.80 68.20 57.00 Reflection (Shinn et al., 2023) -30.40 3.61 7.40 57.80 34.20 CoT (Wei et al., 2022) -83.40 16.87 33.60 67.40 62.60
+> Multi-Agent Debate Llama-3.1-8B-Instruct
+> + Majority-Voting (Cui et al., 2025) ✘79.00 25.20 27.80 66.40 61.80 + Consensus (Du et al., 2024) ✘81.80 22.89 27.20 69.80 64.00
+> + LLM-as-Judge (Liang et al., 2024) ✔80.00 25.30 33.60 63.00 62.00 +Meta-Moderator ∗(Ours) ✔79.80 19.28 33.80 68.80 61.60 +Meta-Moderator (Ours) ✔83.80 27.71 35.80 72.00 67.20
+> Single-agent Qwen-2.5-7B-Instruct
+> Naive -20.60 15.66 4.00 65.20 69.60 Reflection (Shinn et al., 2023) -89.20 20.48 18.80 69.80 68.60 CoT (Wei et al., 2022) -90.20 21.69 15.40 70.00 61.20
+> Multi-Agent Debate Qwen-2.5-7B-Instruct
+> + Majority-Voting (Cui et al., 2025) ✘90.80 26.51 14.40 67.20 68.80 + Consensus (Du et al., 2024) ✘90.60 26.51 14.40 67.20 68.80 + LLM-as-Judge (Liang et al., 2024) ✔90.80 43.37 19.00 67.40 69.80 +Meta-Moderator ∗(Ours) ✔90.80 39.76 13.80 67.60 70.60
+> +Meta-Moderator (Ours) ✔91.20 42.96 29.40 70.40 69.80
+
+Table 1: Overall results of Meta-Moderator and baselines on five benchmarks under two backbone settings. Meta-Moderator ∗ denotes the untrained (prompted) moderator. Blue and light blue denote the best and second-best performances, respectively. All methods are evaluated under the same debate protocol and decoding configuration. 
+
+4 Experiments 
+
+4.1 Experimental Settings Baselines. We compare Meta-Moderator with single-agent prompting and multi-agent debate baselines under a unified setup. For single-agent methods, we include Naive , CoT (Wei et al., 2022), and Reflection (Shinn et al., 2023). For MAD, we use a standard protocol where debaters iteratively revise responses conditioned on peers’ previous-round outputs (Du et al., 2024), and vary only the decision layer: Majority Voting (Cui et al., 2025), 
+
+Consensus (Du et al., 2024), or LLM-as-a-Judge 
+
+(Liang et al., 2024). 
+
+Datasets and Metrics. We evaluate on five benchmarks covering mathematical reasoning, logical reasoning, and general knowledge: 
+
+GSM8K (Cobbe et al., 2021), AMC , MATH500 
+
+(Hendrycks et al., 2021), StrategyQA (Geva et al., 2021), and MMLU (Hendrycks et al., 2020). For large test sets, we randomly sample 500 instances; for smaller benchmarks, we use the full test set (e.g., AMC has 83 instances). We report accuracy . To train Meta-Moderator, we sample 500 instances each from the training splits of GSM8K and MMLU to construct per-round moderation decisions. 
+
+Implementation Details. We instantiate both de-baters and the moderator with instruction-tuned LLMs, using Llama-3.1-8B-Instruct and Qwen-2.5-7B-Instruct as backbones (Dubey et al., 2024; Bai et al., 2023). Unless otherwise specified, we use 
+
+N =2 debaters and a maximum debate budget of 
+
+Tmax =5 rounds. All methods use the same debater protocol and decoding configuration; only the de-cision layer differs. Additional backbone settings are reported in Appendix H. 
+
+4.2 Main Results 
+
+We evaluate Meta-Moderator against single-agent prompting and multi-agent debate baselines across five benchmarks. As shown in Table 1, Meta-Moderator generally improves over common MAD decision layers and achieves the strongest over-all performance across the evaluated settings, sup-porting the value of learnable debate regulation. By contrast, heuristic strategies (e.g., majority vot-ing and consensus-based stopping) are often brit-tle and can underperform strong single-agent CoT prompting, indicating that additional interaction alone does not reliably yield accuracy gains. Meta-Moderator is particularly beneficial where heuristic aggregation is brittle, including Strate-gyQA, MATH500, and MMLU, while prompted LLM-as-a-judge remains competitive on AMC. Method GSM8K AMC MATH500 StrategyQA MMLU 
+
+Multi-Agent Debate Llama-3.1-8B-Instruct & Llama-3.2-3B-Instruct 
+
++ LLM-as-Judge (Liang et al., 2024) 79.80 26.51 29.60 64.80 62.80 
+
++ Meta-Moderator ∗ (Ours) 79.40 26.51 27.80 60.60 61.40 + Meta-Moderator (Ours) 83.60 22.89 28.00 71.20 65.60 
+
+> Table 2: Results with decoupled debater and moderator backbones: debaters use Llama-3.1-8B-Instruct while the moderator uses Llama-3.2-3B-Instruct.
+
+Method GSM8K AMC MATH500 StrategyQA MMLU 
+
+Multi-Agent Debate Llama-3.1-8B-Instruct 
+
++ Majority-Voting (Cui et al., 2025) 77.40 18.07 23.60 68.20 62.80 + Consensus (Du et al., 2024) 79.00 20.48 23.80 72.00 63.40 + LLM-as-Judge (Liang et al., 2024) 78.20 24.10 31.60 69.60 63.80 
+
++ Meta-Moderator ∗ (Ours) 78.40 24.10 29.40 67.80 63.60 + Meta-Moderator (Ours) 83.80 22.89 35.60 72.60 66.00  
+
+> Table 3: Results with more debaters ( N=3 ) under the same debate budget.
+
+Relative to voting-based aggregation and prompted LLM-as-a-judge, Meta-Moderator more reliably converts useful debate evidence into final-answer accuracy, suggesting that learning when to stop and 
+
+how to adjudicate helps turn debate into gains. The learned moderator is also robust across backbone families and model strengths: while heuristic MAD variants can degrade through error propagation and conformity, Meta-Moderator remains competitive with strong single-agent baselines, implying that meta-level regulation can mitigate imperfect object-level reasoning. Finally, the untrained variant Meta-Moderator ∗
+
+is consistently weaker than the trained moderator and can underperform heuristic alternatives on mul-tiple datasets. This gap suggests that effective mod-eration is not merely a byproduct of role prompt-ing; rather, it requires learning a stable policy via outcome-driven optimization. 
+
+4.3 Generalization 
+
+We evaluate the generalization of Meta-Moderator along three dimensions. 
+
+Cross-task generalization. Trained only on GSM8K and MMLU, Meta-Moderator im-proves accuracy on unseen benchmarks (AMC, MATH500, and StrategyQA; Table 1), suggesting that it learns transferable signals of debate utility and decision readiness rather than dataset-specific heuristics. 
+
+Cross-backbone generalization. To decouple debater and moderator backbones, we pair Llama-3.1-8B-Instruct debaters with a smaller Llama-3.2-3B-Instruct moderator (Table 2). Meta-Moderator remains effective and outperforms prompted LLM-as-a-Judge on several benchmarks, suggesting that gains come from the learned policy rather than moderator scale. 
+
+Robustness to the number of debaters. Increas-ing the number of debaters from N =2 to N =3 
+
+while keeping the backbone and debate budget fixed (Table 3), Meta-Moderator remains competi-tive on most benchmarks, showing robustness be-yond a specific debate size. Overall, these results support moderation as a policy-like capability that transfers across tasks, heterogeneous system instantiations, and debate group sizes. 
+
+4.4 Ablation: Decoupling Stopping and Adjudication 
+
+To disentangle adaptive stopping from learned ad-judication, we evaluate two decoupled variants under the same debaters, protocol, budget Tmax ,and decoding: (i) Adjudication-only fixes the de-bate length to 3 and uses Meta-Moderator only for the final answer; (ii) Stopping-only uses Meta-Moderator for CONTINUE /STOP but applies a fixed heuristic aggregator upon stopping. Table 4 shows that neither component alone consistently recovers the full model’s gains, while combining adaptive Method GSM8K AMC MATH500 StrategyQA MMLU 
+
+Multi-Agent Debate Llama-3.1-8B-Instruct 
+
++ Meta-Moderator ∗ (Ours) 79.80 19.28 33.80 68.80 61.60 + Meta-Moderator (Ours) 83.80 27.71 35.80 72.00 67.20 
+
++ Adjudication Only 81.80 24.10 28.00 62.00 63.60 + Adaptive Stopping Only (Majority-Voting) 79.40 24.10 29.40 66.20 62.40 + Adaptive Stopping Only (LLM-as-Judge) 80.40 27.71 33.60 66.80 62.20 
+
+Table 4: Ablation separating adaptive stopping and learned adjudication under the same debate protocol. GSM8K AMC MATH500 StrategyQA MMLU 012345Average Rounds  3.44 1.93 2.22 2.87 4.54 1.03 2.33 2.01 1.15 1.39 4.99 4.24 4.67 4.82 4.76 1.11 1.82 1.04 1.82 1.04 
+
+> Average Debate Rounds across Benchmarks
+> Meta Moderator* (Llama-3.1-8B) Meta Moderator (Llama-3.1-8B) Meta Moderator* (Llama-3.2-3B) Meta Moderator (Llama-3.2-3B)
+
+Figure 3: Average debate rounds across benchmarks, comparing the untrained Meta-Moderator ∗ and the trained Meta-Moderator under the same maximum debate budget. 
+
+GSM8K AMC MATH StratQA MMLU 
+
+Meta-Moderator ∗
+
+y∗ ∈ H t(↑) 432 21 180 386 385 
+
+ˆy̸ = y∗ . . . (↓) 33 8 25 42 77 
+
+Meta-Moderator 
+
+y∗ ∈ H t(↑) 431 24 187 369 351 
+
+ˆy̸ = y∗ . . . (↓) 12 1 8 9 15 
+
+Table 5: Analysis of debate coverage and adjudication. 
+
+stopping with learned adjudication performs best across all five benchmarks. 
+
+4.5 Analysis of Debate Coverage and Adjudication 
+
+To understand why Meta-Moderator helps, we de-compose outcomes into coverage : whether a cor-rect hypothesis ever appears; adjudication : whether it is selected once available. For each instance, let 
+
+Ht be the set of debaters’ answers observed up to the moderator’s stopping time t, and let y∗ de-note the gold answer. We count oracle availabil-ity when the gold answer appears in the debate, 
+
+y∗ ∈ H t, and mis-aggregation when the final pre-diction is still incorrect despite oracle availability, 
+
+ˆy̸ = y∗ ∧ y∗ ∈ H t.As shown in Table 5, training does not uniformly increase oracle availability: coverage improves on AMC and MATH500, remains nearly unchanged on GSM8K, and decreases on StrategyQA and MMLU. In contrast, the trained Meta-Moderator consistently reduces mis-aggregation across all five benchmarks (from 33 to 12 on GSM8K, 8 to 1 on AMC, 25 to 8 on MATH500, 42 to 9 on Strate-gyQA, and 77 to 15 on MMLU). Since Ht is de-fined at the method-specific stopping time, lower coverage may partly reflect earlier termination rather than poorer hypothesis generation. These results suggest that the accuracy gains primarily arise from more reliable finalization when useful debate evidence is available, rather than from uni-formly increasing debate coverage. 
+
+4.6 Analysis of Debate Rounds 
+
+We analyze stopping behavior by reporting the average number of debate rounds used by Meta-Moderator and the untrained Meta-Moderator ∗
+
+in Figure 3 (maximum budget Tmax =5 ). Meta-Moderator ∗ tends to over-deliberate, often con-suming nearly the full budget, especially with the smaller backbone. After training, Meta-Moderator uses substantially fewer rounds across benchmarks while remaining adaptive: it reduces redundant de-bate on easier instances but allocates more rounds when helpful on harder benchmarks (Figure 3). Overall, Meta-Moderator learns adaptive debate budgeting rather than a fixed stopping heuristic. 
+
+5 Conclusion 
+
+We identify moderation as a central bottleneck in multi-agent debate and argue that effective debate requires a meta-cognitive loop of monitoring, con-trol, and adjudication. We therefore propose Meta-Moderator , a learnable framework that regulates deliberation by deciding at each round whether to continue debating or to stop and commit to a final answer. The moderation policy is trained indepen-dently of debaters via outcome-driven reinforce-ment learning. Across five reasoning benchmarks and two backbone settings, Meta-Moderator con-sistently improves accuracy over common debate decision layers and generalizes across tasks, het-erogeneous moderator/debater backbones, and de-bate group sizes. Analyses further show that it budgets debate adaptively, increases the likelihood that a correct hypothesis emerges, and reduces mis-aggregation once it does, enabling more reliable and efficient deliberation. 
+
+Limitations 
+
+A key limitation of our approach is the additional training and inference cost of learning and running a dedicated moderator in conjunction with multi-agent debate. Although Meta-Moderator often re-duces debate rounds at test time, it still requires extra model calls for monitoring and adjudication, and outcome-driven RL training further increases compute relative to purely prompted decision lay-ers. Moreover, our moderator has a restricted con-trol interface due to our data construction: we only consider the minimal continue /stop action space. While this design isolates the effect of learnable stopping and adjudication, it does not capture richer interventions that may further improve debate qual-ity. Future work could reduce overhead by distill-ing the moderator to a smaller model, amortizing monitoring signals, or pruning agents adaptively. It would also be valuable to expand the moderation action space and develop objectives and evaluation suites beyond final-answer accuracy, enabling mod-erators that learn not only when to stop, but also 
+
+how to steer deliberation. 
+
+Acknowledgement 
+
+This work was partially supported by NSFC/RGC Joint Research Scheme (N_PolyU5179/25), Hong Kong RGC (PolyU25600624), Innovation Technol-ogy Fund (ITS/052/23MX, PRP/009/22FX), indus-trial sponsors and RMGS (P0045948, P0048183, P0048191, P0046453, P0060272). This work was also supported by the National Natural Science Foundation of China (Grant No.: 62372314). The experimental part of this work was supported by The Centre for Large AI Models (CLAIM) of The Hong Kong Polytechnic University. 
+
+References           
+
+> Rakefet Ackerman and Valerie A Thompson. 2017. Meta-reasoning: Monitoring and control of think-ing and reasoning. Trends in cognitive sciences ,21(8):607–617. Lisa Alazraki and Marek Rei. 2025. Meta-reasoning improves tool use in large language models. In Find-ings of the Association for Computational Linguistics: NAACL 2025 , pages 7885–7897, Albuquerque, New Mexico. Association for Computational Linguistics. Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang, Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei Huang, et al. 2023. Qwen technical report. arXiv preprint arXiv:2309.16609 .Linden J Ball and Beth H Richardson. 2025. Metar-easoning: Theoretical and methodological develop-ments. Jonas Becker. 2024. Multi-agent large language mod-els for conversational task-solving. arXiv preprint arXiv:2410.22932 .Chi-Min Chan, Weize Chen, Yusheng Su, Jianxuan Yu, Wei Xue, Shanghang Zhang, Jie Fu, and Zhiyuan Liu. 2024. Chateval: Towards better LLM-based eval-uators through multi-agent debate. In The Twelfth International Conference on Learning Representa-tions .Edward Y Chang and Ethan Y Chang. 2025. Multi-agent collaborative intelligence: Dual-dial con-trol for reliable llm reasoning. arXiv preprint arXiv:2510.04488 .Mingyang Chen, Tianpeng Li, Haoze Sun, Yijie Zhou, Chenzheng Zhu, Haofen Wang, Jeff Z. Pan, Wen Zhang, Huajun Chen, Fan Yang, Zenan Zhou, and
+
+Weipeng Chen. 2025. Research: Learning to rea-son with search for llms via reinforcement learning. 
+
+Preprint , arXiv:2503.19470. Xiuwei Chen, Wentao Hu, Hanhui Li, Yongxin Wang Jun Zhou, Zisheng Chen, Meng Cao, Yihan Zeng, Kui Zhang, Yu-Jie Yuan, Jianhua Han, Hang Xu, and Xiaodan Liang. 2026. Syncloop: A multi-modal dual-loop framework for self-improving math-ematical reasoning. Preprint , arXiv:2507.16518. Hyeong Kyu Choi, Jerry Zhu, and Sharon Li. 2025. De-bate or vote: Which yields better decisions in multi-agent large language models? In The Thirty-ninth Annual Conference on Neural Information Process-ing Systems .Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al. 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 .Yu Cui, Hang Fu, Haibin Zhang, Licheng Wang, and Cong Zuo. 2025. Free-mad: Consensus-free multi-agent debate. arXiv preprint arXiv:2509.11035 .C Nicolò De Sabbata, Theodore R Sumers, Badr AlKhamissi, Antoine Bosselut, and Thomas L Grif-fiths. 2024. Rational metareasoning for large lan-guage models. arXiv preprint arXiv:2410.05563 .Yilun Du, Shuang Li, Antonio Torralba, Joshua B. Tenenbaum, and Igor Mordatch. 2024. Improving factuality and reasoning in language models through multiagent debate. In Proceedings of the 41st Inter-national Conference on Machine Learning , ICML’24. JMLR.org. Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Amy Yang, Angela Fan, et al. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Peizhong Gao, Ao Xie, Shaoguang Mao, Wenshan Wu, Yan Xia, Haipeng Mi, and Furu Wei. 2024. Meta reasoning for large language models. arXiv preprint arXiv:2406.11698 .Mor Geva, Daniel Khashabi, Elad Segal, Tushar Khot, Dan Roth, and Jonathan Berant. 2021. Did aristotle use a laptop? a question answering benchmark with implicit reasoning strategies. Transactions of the Association for Computational Linguistics , 9:346– 361. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al. 2025. Deepseek-r1: In-centivizing reasoning capability in llms via reinforce-ment learning. arXiv preprint arXiv:2501.12948 .Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. 2020. Measuring massive multitask language under-standing. arXiv preprint arXiv:2009.03300 .Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Ja-cob Steinhardt. 2021. Measuring mathematical prob-lem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Mengze Hong, Wailing Ng, Chen Jason Zhang, and Di Jiang. 2025. Qualbench: Benchmarking chinese llms with localized professional qualifications for ver-tical domain evaluation. Preprint , arXiv:2505.05225. Mengze Hong, Xia Zeng, Zeyang Lei, Sheng Wang, Chen Jason Zhang, Di Jiang, Taiming Fu, Jinfeng Huang, Mengqiao Liu, Qinghe Chang, Haosheng Zou, Qiongyi Zhou, Sijun He, Simonjmdeng, Hao-jing Huang, Zijian Li, Lucas Mu Li, Fubao Zhang, Mona Zhou, Wei Ma, Yuan Hua, Qi Zhu, Shuo Jiang, Chenxuan Ma, Yuanmeng Zhang, Jian Song, Minlong Peng, Di Liang, and Davey Chen. 2026. Uxbench: Benchmarking user experience in ai assis-tants. Preprint , arXiv:2606.09570. Tianyu Hu, Zhen Tan, Song Wang, Huaizhi Qu, and Tianlong Chen. 2025a. Multi-agent debate for LLM judges with adaptive stability detection. In The Thirty-ninth Annual Conference on Neural Informa-tion Processing Systems .Wentao Hu, Wengyu Zhang, Yiyang Jiang, Chen Jason Zhang, Xiaoyong Wei, and Li Qing. 2025b. Removal of hallucination on hallucination: Debate-augmented RAG. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 15839–15853, Vienna, Austria. Association for Computational Linguistics. Li Ji-An, Hua-Dong Xiong, Robert Wilson, Marcelo G Mattar, and Marcus K. Benna. 2025. Language mod-els are capable of metacognitive monitoring and con-trol of their internal activations. In The Thirty-ninth Annual Conference on Neural Information Process-ing Systems .Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan Arik, Dong Wang, Hamed Zamani, and Jiawei Han. 2025. Search-r1: Training llms to reason and leverage search engines with reinforcement learning. 
+
+arXiv preprint arXiv:2503.09516 .Wenjun Li, Dexun Li, Kuicai Dong, Cong Zhang, Hao Zhang, Weiwen Liu, Yasheng Wang, Ruiming Tang, and Yong Liu. 2025. Adaptive tool use in large lan-guage models with meta-cognition trigger. In Pro-ceedings of the 63rd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) , pages 13346–13370, Vienna, Austria. Asso-ciation for Computational Linguistics. Tian Liang, Zhiwei He, Wenxiang Jiao, Xing Wang, Yan Wang, Rui Wang, Yujiu Yang, Shuming Shi, and Zhaopeng Tu. 2024. Encouraging divergent thinking in large language models through multi-agent debate. In Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , pages 17889–17904, Miami, Florida, USA. Association for Computational Linguistics. Cheng Qian, Emre Can Acikgoz, Qi He, Hongru Wang, Xiusi Chen, Dilek Hakkani-Tür, Gokhan Tur, and Heng Ji. 2025. Toolrl: Reward is all tool learning needs. arXiv preprint arXiv:2504.13958 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open lan-guage models. arXiv preprint arXiv:2402.03300 .Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: Language agents with verbal reinforcement learning. Advances in Neural Information Process-ing Systems , 36:8634–8652. Zhuoyue Wan, Yuanfeng Song, Shuaimin Li, Chen Ja-son Zhang, and Raymond Chi-Wing Wong. 2025. Datavist5: A pre-trained language model for jointly understanding text and data visualization. In 2025 IEEE 41st International Conference on Data Engi-neering (ICDE) , pages 1704–1717. Guoqing Wang, Wen Wu, Guangze Ye, Zhenxiao Cheng, Xi Chen, and Hong Zheng. 2025. Decoupling metacognition from cognition: a framework for quan-tifying metacognitive ability in llms. In Proceedings of the Thirty-Ninth AAAI Conference on Artificial Intelligence and Thirty-Seventh Conference on In-novative Applications of Artificial Intelligence and Fifteenth Symposium on Educational Advances in Artificial Intelligence , AAAI’25/IAAI’25/EAAI’25. AAAI Press. Yuqing Wang and Yun Zhao. 2024. Metacognitive prompting improves understanding in large language models. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Tech-nologies (Volume 1: Long Papers) , pages 1914–1926, Mexico City, Mexico. Association for Computational Linguistics. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits rea-soning in large language models. Advances in neural information processing systems , 35:24824–24837. Xiao-Yong Wei and Zhen-Qun Yang. 2013. Coaching the exploration and exploitation in active learning for interactive video retrieval. IEEE Transactions on Image Processing , 22(3):955–968. Junlin Wu, Xianrui Zhong, Jiashuo Sun, Bolian Li, Bowen Jin, Jiawei Han, and Qingkai Zeng. 2025a. Structure-r1: Dynamically leveraging structural knowledge in llm reasoning through reinforcement learning. arXiv preprint arXiv:2510.15191 .Qian Wu, Zheyao Gao, Longfei Gou, and Qi Dou. 2025b. DDxTutor: Clinical reasoning tutoring sys-tem with differential diagnosis-based structured rea-soning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 30934–30957, Vienna, Austria. Association for Computational Linguistics. Shaowei Zhang and Deyi Xiong. 2025. Debate4MATH: Multi-agent debate for fine-grained reasoning in math. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 16810–16824, Vienna, Austria. Association for Computational Linguistics. Changmeng Zheng, Dayong Liang, Wengyu Zhang, Xiao-Yong Wei, Tat-Seng Chua, and Qing Li. 2024. A picture is worth a graph: A blueprint debate paradigm for multimodal reasoning. In Proceedings of the 32nd ACM International Conference on Multi-media , pages 419–428. A More Implementation Details 
+
+For large benchmarks, we evaluate all methods on the same fixed subset of 500 instances sampled once with a shared random seed, ensuring identi-cal evaluation sets across methods. We use deter-ministic decoding (temperature=0) for all model components. For inference, Qwen-3-30B-Instruct was run on two NVIDIA RTX A6000 GPUs, while all other models used one RTX A6000. For GRPO training, the Llama-3.1-8B-Instruct, Llama-3.2-3B-Instruct, and Qwen-2.5-7B-Instruct models were each trained on one RTX A6000. 
+
+B Algorithm 
+
+Algorithm 1 describes our inference-time modera-tion protocol for multi-agent debate. 
+
+C Learning Meta-Moderator with Reinforcement Learning 
+
+The GRPO update maximizes a PPO-style clipped surrogate objective with a KL regularizer: 
+
+JGRPO (θ) = Est∼P (S), {z(i)  
+
+> t}Gi=1 ∼πθold (·| st)
+
+"
+
+1
+
+G
+
+> G
+
+X
+
+> i=1
+
+min 
+
+
+
+ρi(θ) A(i),
+
+clip  ρi(θ), 1 − ϵ, 1 + ϵA(i)
+
+− βD KL (πθ(· | st)∥πref (· | st)) 
+
+#
+
+(16) where ρi(θ) = πθ (z(i)    
+
+> t|st)
+> πθold (z(i)
+> t|st)
+
+is the importance ra-tio. The clipping operator constrains the update magnitude within [1 − ϵ, 1 + ϵ] to stabilize learning, while the KL term regularizes the policy toward a reference model πref with strength β. In all experi-ments, we use a group size of G=8 , a clipping ratio of ϵ=0 .2, and a KL coefficient of β=0 , and opti-mize the moderator for 3000 gradient-update steps. This group-relative, clipped update yields stable policy improvements under sparse, outcome-driven rewards and directly optimizes the moderator’s reg-ulation behavior. 
+
+D Prompt Templates 
+
+This section presents the prompt templates used in our implementation for both the debaters and the Meta-Moderator. We adopt a lightweight tag-based protocol for parsing: each debater ends with 
+
+Algorithm 1 Meta-Moderator Inference-Time Moderation for Multi-Agent Debate 
+
+Require: Input x, debaters D = {d1, . . . , d N },init operator Init , debate operator Debate ,moderator policy πθ, state formatter ϕ(·), max rounds Tmax .
+
+Ensure: Final answer ˆy. 
+
+> 1:
+
+Initialize round t ← 0 
+
+> 2:
+
+Initialize transcript H ← ∅  
+
+> 3:
+
+for i = 1 to N do  
+
+> 4:
+
+Initial response r0 
+
+> di
+
+∼ Init( x) 
+
+> 5:
+
+end for  
+
+> 6:
+
+Update transcript H ← H ∪ { r0 
+
+> di
+
+}Ni=1  
+
+> 7:
+
+while t ≤ Tmax do  
+
+> 8:
+
+Construct moderator state st ←
+
+ϕ x, {rtdi }Ni=1 
+
+ 
+
+> 9:
+
+Moderator decision zt ∼ πθ(· | st) 
+
+> 10:
+
+Parse (at, ˆyt) ← ParseDecision( zt)
+
+▷ zt ∈ {CONTINUE , STOP ∥
+
+<answer> ˆyt</answer> } 
+
+> 11:
+
+if at = STOP then  
+
+> 12:
+
+return ˆyt 
+
+> 13:
+
+end if  
+
+> 14:
+
+if t = Tmax then ▷ No stop decision within budget; terminate with final moderator output  
+
+> 15:
+
+ˆy ← FinalizeAtBudget( st, π θ) 
+
+> 16:
+
+return ˆy 
+
+> 17:
+
+end if  
+
+> 18:
+
+▷ One-round parallel debate update  
+
+> 19:
+
+t ← t + 1  
+
+> 20:
+
+for i = 1 to N in parallel do  
+
+> 21:
+
+Observe peers Rt 
+
+> −di
+
+← { rt−1 
+
+> dj
+
+| j̸ = i} 
+
+> 22:
+
+Update response rtdi ∼
+
+Debate  x; Rt
+
+> −di
+
+ 
+
+> 23:
+
+end for  
+
+> 24:
+
+Update transcript H ← H ∪ { rtdi }Ni=1  
+
+> 25:
+
+end while <answer> ... </answer> , and the Meta-Moderator outputs either CONTINUE or STOP with an optional 
+
+<answer> span. 
+
+D.1 Prompt for Meta-Moderator (STOP/CONTINUE )
+
+Prompt for Meta-Moderator (STOP/CONTINUE) You are a moderator in a debate. Your task is to decide whether to CONTINUE or STOP the debate based on the arguments presented by debaters. If STOP, output the STOP first and then the final answer between <answer> and </answer> tags with no explanations or additional text. If CONTINUE, output the CONTINUE only. Question: {question} Other agents’ responses: {agents_responses} 
+
+D.2 Prompt for Meta-Moderator (Forced Answer at Tmax )
+
+Prompt for Meta-Moderator (Forced An-swer at Tmax )You are a moderator in a debate competition. Your task is to determine the correct final answer based on the arguments presented by debaters. Output only the final answer with no explanations or additional text. Question: {question} Other agents’ responses: {agents_responses} 
+
+D.3 Debater Prompts 
+
+Prompt for Debater Agent (Initial Round) Answer the question based on your own knowledge. Explain your answer step by step, and put the answer between <answer> and </answer> tags at the end of your response. {optional confidence instruction} Question: {question} Prompt for Debater Agent (Debate Round) I will give the answers and arguments to this question from other agents. Use their solution as additional advice; note that they may be wrong. If you disagree with the other agents, please give your reasons and answer; otherwise, revise your previous answer. Explain your answer step by step, and put the answer between <answer> and </answer> tags at the end of your response. Question: {question} Other agents’ responses: {other_agents_responses} 
+
+E Training Template 
+
+Training data generation. We construct the Meta-Moderator training set by first generating multi-agent debate traces using the standard Multi-Agent Debate (MAD) pipeline, with Llama3.1-8B-Instruct as the underlying generator. For each ques-tion, MAD produces debater responses per round. In our data construction, we only retain two de-baters ( N = 2 ) and use their responses to form the debate state; any additional agent outputs are discarded. Each training instance is a single-round snapshot consisting of the original question and the two agents’ responses at that round, paired with a Meta-Moderator decision label ( CONTINUE or STOP )and (when applicable) a target final answer. 
+
+Template. We train the Meta-Moderator using a single prompt template constructed from the current-round debate state. The input consists of: (i) an instruction that constrains the output space to CONTINUE or STOP (with <answer> ... </answer> when stopping), and (ii) the question plus the two debaters’ responses at the current round. Training Template for Meta-Moderator You are a moderator in a debate. Your task is to decide whether to CONTINUE or STOP the debate based on the arguments presented by debaters. If STOP, output the STOP first and then the final answer between <answer> and </answer> tags with no explanations or additional text. If CONTINUE, output the CONTINUE only. Question: {question} Other agents’ responses: Agent 1: {response_1} Agent 2: {response_2} 
+
+F Efficiency and Cost Accounting 
+
+We report the training and inference overhead of Meta-Moderator for completeness. 
+
+F.1 Training cost 
+
+Meta-Moderator requires constructing offline de-bate trajectories and performing RL optimization. The total generation cost for constructing training data is approximately 11.25M tokens (9.78M input + 1.46M output). The moderator is trained once and reused across tasks and backbone configurations; debaters are not fine-tuned. 
+
+F.2 Inference cost, latency, and memory 
+
+We additionally report inference token usage for all methods in Table 7 to quantify the accu-racy–compute trade-off. At inference time, all methods share the same debate protocol, backbone, maximum round budget ( Tmax ), and decoding con-figuration; the only difference is the decision layer. Meta-Moderator introduces one additional moder-ator call per round. However, it typically reduces the average number of debate rounds (Figure 3), thereby lowering the number of debater-side gen-eration tokens. As a result, the net inference token cost is comparable and is often reduced due to adaptive early stopping. The memory overhead is limited to loading one additional moderator model, which can be smaller than the debaters (as demon-strated by the decoupled debater-moderator setting in Table 2). From an implementation perspective, our framework only replaces the decision layer and does not modify the debate protocol itself. Im-portantly, our claim is not that Meta-Moderator is universally cheaper than all prompt-based base-lines, but that it improves the accuracy-compute trade-off by allocating deliberation adaptively. 
+
+G Trained Single-Agent GRPO Baseline 
+
+To isolate whether performance gains come from GRPO training alone, we implement a trained single-agent baseline in Table 6. We use the same backbone (Llama-3.1-8B-Instruct) and the same GRPO optimizer. The reward is based on final-answer correctness with dataset-specific matching. We train on the same training splits used to con-struct Meta-Moderator training data (500 instances each from GSM8K and MMLU). Overall, Naive+GRPO can improve over naive prompting on some benchmarks, but it remains be-low Meta-Moderator. This suggests that the gains are not explained by GRPO training alone, and that meta-level regulation of multi-agent debate (adap-tive stopping and adjudication) provides additional benefits. 
+
+H Additional Results with Different Backbone Settings 
+
+Shown in Table 8, we report additional backbone settings for the debate system beyond the main re-sults. We evaluate three settings: (i) we use Llama-3.2-3B-Instruct (Dubey et al., 2024) as both the debaters and the moderator; (ii) we use Qwen-2.5-14B-Instruct (Bai et al., 2023) as the debaters, while using Llama-3.1-8B-Instruct as the moder-ator; and (iii) we use Qwen-3-30B-Instruct (Bai et al., 2023) as the debaters, while using Llama-3.1-8B-Instruct as the moderator. Following our main setup, we construct the moderator state us-ing responses from two debaters ( N = 2 ). All numbers are accuracies (%). 
+
+Discussion. Across both settings, using a learned Meta-Moderator consistently improves over heuris-tic aggregation baselines (Majority-Voting / Con-sensus) and is competitive with (or better than) an LLM-as-Judge. Notably, in the 7B setting, Meta-Moderator yields clear gains on MATH500 and StrategyQA compared to heuristic aggregation, in-dicating better debate termination and answer se-lection. Method GSM8K AMC MATH500 StrategyQA MMLU Naive 22.20 7.23 3.80 68.20 57.00 Naive+GRPO 81.60 19.28 4.60 68.80 62.80 
+
+Meta-Moderator (Ours) 83.80 27.71 35.80 72.00 67.20 
+
+> Table 6: Trained single-agent GRPO baseline (Naive+GRPO) under Llama-3.1-8B-Instruct.
+
+Method GSM8K AMC MATH500 StrategyQA MMLU 
+
+Single-agent Llama-3.1-8B-Instruct 
+
+Naive 147.89 210.96 252.53 87.38 175.95 Reflection 2408.09 3573.96 3223.21 2118.11 2763.92 CoT 336.06 614.43 516.29 354.07 485.06 
+
+Multi-Agent Debate Llama-3.1-8B-Instruct 
+
++ Majority-Voting 10972.33 17785.76 16442.11 18460.87 13222.93 + Consensus 10034.28 16890.30 15809.21 18740.09 12238.40 + LLM-as-Judge 9401.76 15335.23 14399.28 14614.69 11084.35 + Meta-Moderator ∗ 12329.51 8598.46 10060.58 7008.93 22350.50 + Meta-Moderator 3522.08 12802.40 10668.56 4192.31 4017.78 
+
+> Table 7: Inference token statistics (average tokens per instance; input+output) across five benchmarks under the same debate protocol, backbone, round budget, and decoding configuration. Token counts include all LLM calls used by each method (e.g., debaters and the decision component).
+
+I Case Study 
+
+We present a qualitative case study illustrating how moderation failures can negate the potential bene-fits of multi-agent debate, and how a trained mod-erator mitigates these issues. Figure 4 shows an instance where the untrained Meta-Moderator ∗
+
+fails to stop in time and eventually commits to an incorrect answer due to late-round drift, whereas the trained Meta-Moderator stops earlier and se-lects the correct hypothesis. 
+
+Oracle availability but mis-aggregation. In the early rounds, both debaters independently propose the correct option ( B. friendship ), meaning the gold hypothesis is already present in the debate history (i.e., oracle availability holds, y∗ ∈ H t). However, Meta-Moderator ∗ chooses to continue ,spending additional rounds despite diminishing marginal utility. As the debate proceeds, one agent introduces a spurious line of reasoning (arguing that none of the options perfectly match and then selecting C. luxury by elimination), which shifts the discussion away from the previously consis-tent correct hypothesis. The moderator then stops 
+
+and commits to the wrong answer, constituting a mis-aggregation error despite oracle availability (ˆy̸ = y∗ ∧ y∗ ∈ H t). 
+
+Why learned moderation helps. This example highlights two failure modes of untrained modera-tion: (i) over-deliberation , where redundant inter-action consumes budget after a correct hypothesis has emerged, and (ii) problem drift , where addi-tional rounds introduce distracting arguments that increase the risk of mis-aggregation. In contrast, the trained Meta-Moderator recognizes early de-cision readiness and terminates the debate before drift dominates, selecting B. friendship . This behavior is consistent with our quantitative findings that learning a moderation policy reduces unnec-essary rounds and lowers mis-aggregation once informative hypotheses appear (Sections 4.5 and Figure 3). Method Use Moderator GSM8K AMC MATH500 StrategyQA MMLU 
+
+Single-agent Llama-3.2-3B-Instruct 
+
+Naive - 4.80 3.61 2.60 66.00 32.80 Reflection - 17.80 2.41 16.20 47.00 39.00 CoT - 74.20 14.46 25.20 57.60 40.00 
+
+Multi-Agent Debate Llama-3.2-3B-Instruct 
+
++ Majority-Voting ✘ 28.80 3.61 13.60 44.80 32.40 + Consensus ✘ 33.40 2.41 16.20 47.00 39.00 + LLM-as-Judge ✔ 66.20 7.23 17.40 24.40 41.40 + Meta-Moderator ∗ ✔ 63.40 8.43 17.40 44.80 39.80 + Meta-Moderator ✔ 74.60 18.07 23.40 56.40 42.40 
+
+Single-agent Qwen-2.5-14B-Instruct 
+
+Naive - 28.80 9.64 7.20 69.80 67.40 Reflection - 92.40 33.73 47.60 77.60 67.00 CoT - 92.40 16.87 44.00 77.00 64.20 
+
+Multi-Agent Debate Debaters: Qwen-2.5-14B-Instruct + Moderator: Llama-3.1-8B-Instruct 
+
++ Majority-Voting ✘ 92.00 44.58 55.00 77.60 67.80 + Consensus ✘ 92.00 44.58 55.60 77.40 68.20 + LLM-as-Judge ✔ 92.20 44.58 53.56 76.80 68.60 + Meta-Moderator ∗ ✔ 92.40 42.71 52.20 77.60 69.40 + Meta-Moderator ✔ 92.60 44.58 56.00 77.80 69.00 
+
+Single-agent Qwen-3-30B-Instruct 
+
+Naive - 52.20 13.25 14.20 73.00 78.40 Reflection - 93.00 7.23 33.00 73.00 76.60 CoT - 93.80 13.25 37.80 76.00 76.80 
+
+Multi-Agent Debate Debaters: Qwen-3-30B-Instruct + Moderator: Llama-3.1-8B-Instruct 
+
++ Majority-Voting ✘ 93.00 27.71 30.40 73.40 75.20 + Consensus ✘ 93.40 24.10 28.20 69.80 68.60 + LLM-as-Judge ✔ 93.40 36.14 47.00 73.40 78.40 + Meta-Moderator ∗ ✔ 92.80 36.14 47.40 72.40 76.60 + Meta-Moderator ✔ 93.60 39.76 59.60 75.60 79.80 
+
+> Table 8: Additional results under different backbone choices for debaters and moderators.
+
+STOP, <answer> C </answer> 
+
+To answer this question, let‘s consider the philosophical ideas of Epicurus, a Greek philosopher who founded Epicureanism. ….. Based on Epicurus' philosophical ideas, the correct answer is: <answer> B. friendship. </answer> 
+
+Meta-Moderator* 
+
+Q: Epicurus states that of all the things required for a complete life, the greatest is: (A) honor., (B) friendship., (C) luxury., (D) good food. A: B. 
+
+CONTINUE 
+
+To answer this question, let‘s consider the philosophical ideas of Epicurus, a Greek philosopher who founded Epicureanism. ….. Based on Epicurus' philosophical ideas, the correct answer is: <answer> B. friendship. </answer> 
+
+Agent 2's response provides a new perspective on the question. ……Among the provided options, I would argue that the closest match to Epicurus' ideas on simplicity and avoiding excessive desires is actually living modestly, but it is not listed.\n\nGiven the available options, I would still argue that none of them accurately represent Epicurus' ideas on the greatest requirement for a complete life. However, if I had to choose from the given options, I would choose: <answer> C. luxury. </answer> Agent 1's response is identical to my previous response, and it correctly identifies friendship as the greatest requirement for a complete life according to Epicurus. …… However, based on the options provided, I still believe that friendship is the closest match to Epicurus' ideas. <answer> B. friendship. </answer> 
+
+Agent 1's response is identical to my previous response, and it correctly identifies friendship as the greatest requirement for a complete life according to Epicurusclarification.I still believe that friendship is the closest match to Epicurus' ideas. <answer> B. friendship. </answer> Agent 2's response is identical to my previous response, which concluded that the correct answer is B. friendship. ……on the original analysis and the additional perspectives from the other agents, my previous answer remains the same: <answer> B. friendship. </answer> 
+
+# …… 
+
+To answer this question, let‘s consider the philosophical ideas of Epicurus, a Greek philosopher who founded Epicureanism. ….. Based on Epicurus' philosophical ideas, the correct answer is: <answer> B. friendship. </answer> 
+
+Meta-Moderator 
+
+STOP\n<answer> B. friendship. </answer> 
+
+To answer this question, let‘s consider the philosophical ideas of Epicurus, a Greek philosopher who founded Epicureanism. ….. Based on Epicurus' philosophical ideas, the correct answer is: <answer> B. friendship. </answer> 
+
+Agent 1's response is identical to my previous response, and it correctly identifies friendship as the greatest requirement for a complete life according to Epicurusclarification.I still believe that friendship is the closest match to Epicurus' ideas. <answer> B. friendship. </answer> Agent 2's response is identical to my previous response, which concluded that the correct answer is B. friendship. ……on the original analysis and the additional perspectives from the other agents, my previous answer remains the same: <answer> B. friendship. </answer> Figure 4: Case study comparing a failure of the untrained Meta-Moderator ∗ with a successful decision by the trained Meta-Moderator.
