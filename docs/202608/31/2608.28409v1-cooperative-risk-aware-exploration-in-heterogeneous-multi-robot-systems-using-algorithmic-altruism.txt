@@ -1,0 +1,873 @@
+Title: Cooperative Risk-Aware Exploration in Heterogeneous Multi-Robot Systems Using Algorithmic Altruism
+
+URL Source: https://arxiv.org/pdf/2608.28409v1
+
+Published Time: Mon, 31 Aug 2026 01:19:57 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Cooperative Risk-Aware Exploration in Heterogeneous Multi-Robot Systems Using Algorithmic Altruism 
+
+Brooks A. Butler 1, Jair Cert´ orio 2, Jo˜ ao P. Hespanha 3, and Magnus Egerstedt 4
+
+Abstract —Multi-robot systems are well-positioned for explo-ration in hazardous environments, but effective deployment re-quires deciding not only where robots should gather information, but also how risk should be distributed across heterogeneous team members. This paper develops a game-theoretic framework for cooperative risk-aware exploration based on ecologically inspired altruistic behavior. Each robot selects a finite-horizon trajectory to maximize information gain while penalizing redundant explo-ration and expected hazard exposure. Heterogeneity is introduced through agent-specific value parameters for encoding altruistic coupling, which is modeled through relatedness weights inspired by Hamilton’s rule. We introduce a game-theoretic structure for trajectory planning that defines a Social Nash Equilibrium, which modifies the utility of agent actions according to agent relatedness. This utility shaping causes agents to internalize the effect of their trajectory choices on teammates, encouraging lower-valued robots to accept risk when doing so benefits higher-valued agents and improves team performance. We define an exploration utility for agents that rewards area coverage and uncertainty reduction, while also penalizing redundancy and risk, enabling projected gradient-based waypoint optimization in a receding-horizon planner. Simulations show that altruistic planning reduces redundant exploration, improves inter-robot separation, and reallocates risk according to agent value while maintaining comparable map coverage. We further demonstrate the approach in hardware experiments, where planned waypoints are tracked by wheeled robots using single-integrator controllers and barrier certificates. 
+
+I. I NTRODUCTION 
+
+Multi-robot systems are frequently proposed for deployment in hazardous or uncertain environments because their dis-tributed nature provides inherent robustness to individual robot failures [1]–[4]. If one robot becomes damaged or disabled, the remaining members of the team can often continue the mission, in contrast to single-robot deployments where such failures may be mission-ending. However, this redundancy raises the question about how risk should be allocated across a 
+
+> 1Brooks A. Butler is with the School of Electrical and Computer Engi-neering at Oklahoma State University, Stillwater, OK, 74074, USA (Email:
+
+brooks.butler@okstate.edu ).                
+
+> 2Jair Cert´ orio is with the Systems Engineering Division, Instituto Tecnol´ ogico de Aeron´ autica, Fortaleza, CE, 60415-513, Brazil (Email:
+
+certorio@ita.br ).          
+
+> 3Jo˜ ao P. Hespanha is with the Electrical and Computer Engineering Department, University of California, Santa Barbara, CA, 93106, USA (Email:
+
+hespanha@ece.ucsb.edu ).          
+
+> 4Magnus Egerstedt is with the Department of Computer Science at the University of North Carolina, Chapel Hill, NC, 27599, USA (Email:
+
+magnus@unc.edu). 
+
+> This research was supported in part by an appointment to the Intelligence Community Postdoctoral Research Fellowship Program at the University of California, Irvine, administered by the Oak Ridge Institute for Science and Education (ORISE) through an interagency agreement between the U.S. Department of Energy and the Office of the Director of National Intelligence (ODNI).
+
+team of autonomous agents. In particular, when robots operate in environments with spatially varying hazards, it may be ad-vantageous for some robots to deliberately accept higher levels of risk if doing so improves the overall success of the mission. This observation motivates the study of altruistic decision-making mechanisms, in which individual robots may incur local costs or risks when such maneuvers yield sufficiently large benefits to the collective performance of the team. In this paper, we consider a heterogeneous team of risk-aware robots in an exploration mission, where the objective for each team member is to select an exploration trajectory that simultaneously maximizes information gained while min-imizing expected agent loss and redundant exploration with other agents. Inspired by ecological principles of inclusive fitness [5], [6], we propose a framework that allows for increased risk-taking by individual robots as long as it benefits the team more than it costs the individual. Exploration of hazardous environments that would pose undue risks to humans is a well-suited task for multi-robot systems, particularly in applications such as search-and-rescue missions [7]–[10]. In these settings, robots must reason not only about where to explore, but also about the risks as-sociated with operating in uncertain or dangerous regions. Disregarding risk in such scenarios can lead to higher rates of mission failure and damage to robotic assets, motivating planning strategies that explicitly account for hazard exposure [11], [12]. Recent research has therefore explored decision-making frameworks that optimize criteria beyond minimizing expected risk, enabling systems to better account for rare but high-impact events [13], [14]. At the same time, exploration planning should seek to maximize the information gathered from the environment, since efficient information acquisition reduces the travel required to fully cover a map [15], [16] and guarantees eventual coverage of all reachable unexplored space [17]–[19]. Balancing information gain with risk exposure is therefore a central challenge in multi-robot exploration. When multiple robots operate in the same environment, their decisions become inherently coupled. In particular, robots may gather redundant information when visiting similar regions, and risk may be unevenly distributed across the team de-pending on the trajectories selected by each agent. A natural modeling framework for such interactions is game theory, where robots are treated as decision-making agents seeking to maximize their utilities [20]–[22]. Noncooperative game formulations are especially attractive because they permit decentralized implementations in which each robot indepen-dently selects its actions. However, when robots optimize only their individual utilities, the resulting behaviors may lead to inefficient collective outcomes that degrade the overall success arXiv:2608.28409v1 [cs.RO] 28 Aug 2026 of the mission, suggesting that some degree of coordination or cooperation is beneficial [23]–[26]. While noncooperative games rely on Nash equilibria as their primary solution concept, cooperative games often lack consensus on solution concepts and can be significantly more computationally demanding [27]. One common approach is to modify individual utilities to incorporate terms that capture the effects of an agent’s decisions on others [28], [29]. Such formulations combine a private utility component with addi-tional terms that encourage cooperative behavior and improve system-level outcomes [30]–[32]. Importantly, these modified utilities still allow agents to make decisions independently, while implicitly encouraging forms of altruistic behavior through the structure of their incentives. Questions regarding when individuals should incur personal costs to benefit others have also been extensively studied in mathematical biology [33], [34]. In particular, Hamilton [5] proposed that individuals sufficiently similar should display altruistic behavior, being willing to incur small losses if doing so provides sufficiently large benefits to their group. 
+
+Contributions 
+
+This paper introduces a game-theoretic framework for co-operative risk-aware exploration in heterogeneous multi-robot teams based on principles of ecologically inspired algorith-mic altruism. Inspired by Hamilton’s rule from evolutionary biology, we propose an altruistic utility-shaping mechanism that allows robots to internalize the impact of their trajectory choices on the utilities of other agents. By defining inter-agent relatedness through value-based risk sensitivities, we show that the resulting interaction induces a weighted po-tential game whose maximizers correspond to Pareto-optimal solutions of the underlying exploration problem. We further show that decentralized fictitious play over trajectory choices converges to these equilibria under mild assumptions. Finally, we demonstrate how this framework can be instantiated in a continuous exploration setting that accounts for information gain, sensing redundancy, and spatially varying risk, and verify its real-time efficacy on hardware through robotic experiments using small wheeled robots. II. P ROBLEM STATEMENT 
+
+Consider a team of n mobile robots indexed by i ∈ [n],where [n] = {1, . . . , n }, operating over a bounded explo-ration domain Ω ⊂ Rd, d ∈ { 2, 3}. Consider a discrete-time trajectory through the exploration domain Ω by a given agent i, where each robot selects a finite-horizon discrete-time trajectory of length T ∈ N. The feasible trajectory space for agent i is then given by sets of time-ordered points in the exploration domain Ω that are constrained by the agents dynamics, given formally as 
+
+Xi = {xi ∈ [T ] × Ω : ∃ai ∈ A i, ∀t ∈ [T ]
+
+s.t. xi(t + 1) = fi(xi(t), a i)}, (1) where we assume that agent dynamics can be modeled in discrete-time as 
+
+xi(t + 1) = fi(xi(t), a i), (2) with ai ∈ A i corresponding to the set of feasible exploration actions, or inputs, that an agent may choose to explore Ω
+
+between time steps t and t + 1 .The joint finite horizon trajectory profile for all agents is denoted by 
+
+x =  x1, . . . , x n
+
+ ∈ X = Y
+
+> i∈[n]
+
+Xi,
+
+where X ⊆ [T ] × Ωn.The environment to be explored by agent i is characterized by an information utility Ii : Ω n → R≥0, which quantifies the expected information utility gained by agent i given the trajectories of all agents. Examples of such information densi-ties could include map [35], Gaussian process variance [36], or task-relevance scores [37]. The total information utility gained by robot i along its trajectory is given by 
+
+Ii
+
+ x(·) =
+
+> T
+
+X
+
+> t=1
+
+Ii
+
+ xi(t), x −i(·). (3) Since robots may collect redundant information when their trajectories overlap in space, we introduce a redundancy penalty for joint exploration trajectories. To model this effect, we define a spatial overlap kernel K : Ω × Ω → R≥0, where 
+
+K(xi, x j ) measures the degree of sensing overlap between locations xi and xj . The redundancy penalty incurred by robot 
+
+i due to overlap with other robots is defined as 
+
+Ri
+
+ x(·) = X
+
+> j∈[n]
+> T
+
+X
+
+> t=1
+> T
+
+X
+
+> s=1
+
+K xi(t), x j (s). (4) Additionally, each agent is subject to risk, modeled by a risk field pi : Ω n → [0 , 1] , representing the instantaneous probability of failure or hazard given the joint trajectories of the system. Each robot i is assigned a positive scalar 
+
+λi > 0, representing its value or risk sensitivity. The expected cumulative loss incurred by robot i along its trajectory is 
+
+Li
+
+ xi(·) = λiTX
+
+> t=1
+
+pi
+
+ xi(t), x −i(·). (5) Given these metrics, we define the utility accrued by robot 
+
+i from a joint trajectory profile x(· ; θ) as 
+
+ui
+
+ x(·) = Ii
+
+ x(·) − α Ri
+
+ x(·) − L i
+
+ x(·), (6) where α > 0 is a weighting parameter penalizing redundant exploration. Note that the utilities are directly coupled across robots through the redundancy term Ri.We can describe the joint utility of the system with the vector u(x(·)) =  u1(x(·)) , . . . , u n(x(·))  of individual utili-ties. We consider a social welfare function W : Rn → R that aggregates individual utilities into a system-level objective. A commonly used special case is the utilitarian welfare 
+
+W (u) = Pni=1 ui. A joint trajectory profile x⋆(·) is said to be Pareto-optimal if there exists no feasible x(·) such that 
+
+ui(x(·)) ≥ ui(x(·)) , ∀i, with strict inequality for at least one 
+
+i.Thus, the objective of this work is to design decentralized decision-making mechanisms such that the robots’ trajectory choices converge to Pareto-optimal solutions of the coupled exploration problem, defined concretely as follows: 
+
+Problem 1. Given the exploration domain Ω, information den-sity I, agent risk fields {pi}ni=1 , and overlap kernel K, design a control law over trajectories xi(·) such that the resulting joint trajectories converge to Pareto-optimal solutions of the coupled exploration problem without centralized coordination. 
+
+This problem is particularly challenging due to the coupled nature of the utilities induced by overlapping trajectories, heterogeneous risk sensitivities across robots, and the absence of centralized planning or global optimization. The coupled structure of the utilities in (6) suggests that purely self-interested decision making may lead to inefficient or highly redundant exploration behaviors. To address this challenge, we draw inspiration from ecological models of altruism, most notably Hamilton’s rule [5], which characterizes when an individual should incur a personal cost to benefit others based on a notion of relatedness. In the multi-robot setting, this perspective motivates the introduction of agent-specific altruistic preferences that weight the utilities of neighboring agents according to measures of relative value or shared welfare. We show that embed-ding such altruistic structure into a game-theoretic learn-ing framework—specifically, fictitious play over trajectory choices—induces dynamics that align individual incentives with system-level efficiency. III. A LTRUISM IN RISK -A WARE EXPLORATION 
+
+In this section, we present a game-theoretic framework by which agents can solve Problem 1 by leveraging the coupled utility and asymmetric risk exposure across agents of different value (i.e., λi̸ = λj for some i, j ∈ [n]). Further, we show that, by formulating the shared objective of the system as an altruistic social utility function, inspired by ecology, we can induce a potential game structure whose equilibrium yeilds a system-level optimal solution according to the social welfare. 
+
+A. Hamilton’s Rule and Altruistic Decision-Making 
+
+In evolutionary biology, altruistic behavior, or kin selection, can be described through Hamilton’s rule [5], [25], [26], which characterizes when an individual should incur a personal cost to benefit another. Specifically, an altruistic action is favored when Ci < r ij Bj , where Ci denotes the cost incurred by the donor, Bj denotes the benefit received by the recipient, and rij is a measure of genetic relatedness between the two individuals. While originally derived to explain genetic selection, Hamil-ton’s rule can be interpreted more broadly as a decision-making template for agents operating in coupled environments. The rule formalizes the idea that an agent may rationally accept a local loss if it generates sufficiently large benefits for others with whom it shares alignment or interdependence (i.e., relatedness between agents). Importantly, the notion of relatedness need not be genetic, but may instead reflect task relevance, shared objectives, or asymmetric importance within a team. In multi-robot exploration, individual trajectory choices gen-erate externalities through redundant sensing and interference, while risk is borne locally and asymmetrically. This structure naturally lends itself to an altruistic interpretation, where a robot may deviate from its individually optimal trajectory to reduce redundancy or risk exposure for others, provided the collective benefit outweighs its personal cost as follows. Let the cost of agent i deviating from its current exploration trajectory xi to an alternative trajectory x′ 
+
+> i
+
+be defined as 
+
+Ci(xi, x ′
+
+> i
+
+) = ui(xi, x −i) − ui(x′
+
+> i
+
+, x −i), (7) where x−i is the set of trajectories for all agents j̸ = i.Likewise, define the benefit received by agent j due to the deviation of agent i as 
+
+Bij (xi, x ′
+
+> i
+
+) = uj (x′
+
+> i
+
+, x −i) − uj (xi, x −i). (8) Thus, given a non-negative measure of relatedness between agent i and j as γij ≥ 0, we can define a Hamilton’s rule-like condition that evaluates the social benefit of a unilateral trajectory deviation by agent i as 
+
+Ci(xi, x ′
+
+> i
+
+) < X 
+
+> j̸=i
+
+γij Bij (xi, x ′
+
+> i
+
+). (9) In other words, the trajectory x′ 
+
+> i
+
+is strictly preferred over xi
+
+if the collective weighted benefit of agent i choosing x′ 
+
+> i
+
+is greater than the cost incurred by agent i. When (9) does not 
+
+hold for any alternative trajectory x′
+
+> i
+
+, altruistic agents have no incentive to deviate from their trajectories xi and we say that we have a social Nash Equilibrium, which we define formally as follows: 
+
+Definition 1 (Social Nash Equilibria (SNE)) . If x∗(·) ∈ [T ] ×
+
+Ωn is a SNE, then for all x(·) ∈ [T ] × Ωn it holds that 
+
+vi(x∗) − vi(xi, x ∗−i) ≥ 0, ∀i ∈ [n], (10) 
+
+where 
+
+vi(x) = ui(x) + X 
+
+> j̸=i
+
+γij uj (x). (11) Further, if we collect the relatedness weights γij into a matrix 
+
+Γ ∈ Rn×n 
+
+> ≥0
+
+, where γii = 1 for all i, we can compute the social utility vector for the system as 
+
+v(x) = Γ u(x). (12) Given our definition of an SNE, we can imagine several types of games that might arise given a choice of Γ. If Γ = I
+
+we recover a noncooperative game, as the social utility vector equals the vector of private utilities, which renders the SNE to be a standard Nash equilibrium by definition. If Γ = 1 n×n,a matrix of ones, we obtain a cooperative game that aims to maximize the average utility to agents. If we instead consider 
+
+Γ to be a block diagonal matrix with matrices of ones along its diagonal, Γ = blkdiag (1 m1×m1 , 1m2×m2 , . . . , 1mN ×mN ), we obtain an N -coalition game, where the agents group into N
+
+fixed coalitions, with each coalition cooperating to maximize their average private utility, but being noncooperative across coalitions. However, since our objective is more concerned with a fully cooperative system, in this paper, we focus on relatedness structures that help to induce a potential game where decentralized fictitious play can converge to a system-level optimum value according to a social welfare function. 
+
+B. Value-Based Relatedness in Risk-Aware Teams 
+
+We propose to encode inter-agent relatedness through the notion of agent value introduced in Section II. Recall that each agent i is assigned a scalar λi > 0, which captures its relative value, vulnerability, or risk sensitivity within the mission. Using these values, we define the relatedness between agents i and j as 
+
+γij = λj
+
+λi
+
+. (13) This definition induces asymmetric altruistic preferences, where agents with lower value place greater weight on the utilities of higher-value agents, while higher-value agents are comparatively less influenced by the outcomes of lower-value agents. Intuitively, this structure reflects the principle that preserving or assisting critical agents is more beneficial to the system than prioritizing less critical ones. As we show next, this utility shaping and relatedness definitions induce a favorable game-theoretic structure. 
+
+C. Induced Potential Game Structure 
+
+Consider the value-weighted social welfare function 
+
+Φ( x(·)) = X
+
+> i∈[n]
+
+λi ui(x(·)) . (14) We now show that the altruistically shaped game defined by the utilities {vi}ni=1 admits Φ as a weighted potential function. 
+
+Proposition 1. The game induced by the altruistic utilities 
+
+(11) and value-based relatedness (13) is a weighted potential game with potential function (14) .Proof. Consider a unilateral deviation by agent i from xi to 
+
+x′
+
+> i
+
+, holding x−i fixed. The change in the social utility of agent 
+
+i is 
+
+∆vi = ∆ ui + X 
+
+> j̸=i
+
+λj
+
+λi
+
+∆uj ,
+
+where ∆vi = vi(x(·)) − vi(x′
+
+> i
+
+(·), x −i(·)) captures the uni-lateral deviation of agent i’s trajectory parameterization, and 
+
+x−i(·) are the trajectories of all agents j̸ = i, with a similar structure for ∆ui. Multiplying both sides by λi yields 
+
+λi∆vi = X
+
+> j∈[n]
+
+λj ∆uj = ∆Φ ,
+
+which establishes that any unilateral improvement in vi cor-responds to a weighted improvement in the global poten-tial Φ.As a consequence, every local maximizer of the weighted social welfare function Φ is an equilibrium of the altruistically shaped game. The converse does not hold in general, where, without additional joint concavity, an SNE is only guaranteed to be a coordinatewise maximizer of Φ and need not be a local or global maximizer. To narrow our focus for analysis, we restrict our attention to only consider the following family of trajectories for agents that can be parameterized by a finite-dimensional vector as follows 
+
+Assumption 1. Let Xi = {xi(· ; θi) : θi ∈ Θi} ⊂ [T ] × Ω,where Θi ⊂ Rm.
+
+Under this assumption, xi(· ; θi) denotes a finite-dimensional parametric representation of a function xi : [ T ] 7 → Ω (such as waypoints, splines, radial basis functions, neural networks, etc.). Since Φ is a monotone aggregation of individual utilities, its maximizers correspond to Pareto-optimal solutions of the original exploration problem under the following assumption. 
+
+Assumption 2. Let Θ := Q 
+
+> i∈[n]
+
+Θi be convex, and define 
+
+Φ( θ) := Φ( x(· ; θ)) . The weighted potential Φ : Θ → R is continuously differentiable and strictly concave with respect to the full joint parameter θ = ( θ1, . . . , θ n) ∈ Θ.
+
+A sufficient utility-level condition is that every ui(x(· ; θ)) is continuously differentiable and jointly concave in θ, with their positively weighted sum strictly concave. This restriction will be discussed further in the following section for the simplified exploration model. 
+
+Theorem 1. Under Assumptions 1 and 2, a joint trajectory profile x(· ; θ⋆) is a pure SNE if and only if θ⋆ is the unique global maximizer of the weighted potential functional (14) .Moreover, x(· ; θ⋆) is Pareto-optimal with respect to the agents’ original utilities. Proof. First, let θ⋆ be a global maximizer of Φ, and write x⋆ =
+
+x(· ; θ⋆). For any agent i ∈ [n] and any θi ∈ Θi, Proposition 1 gives             
+
+> 0≤Φ( θ⋆)−Φ( θi, θ ⋆
+> −i) = λi[vi(x⋆)−vi(xi(·;θi), x −i(·;θ⋆
+> −i))] .
+
+Since λi > 0, no agent has a beneficial unilateral deviation, and x⋆ is a pure SNE. Conversely, let x(· ; ¯θ) be a pure SNE. By Proposition 1, ¯θi
+
+maximizes Φ( θi, ¯θ−i) over Θi for every i. Continuous differ-entiability and convexity of Θi therefore imply the blockwise first-order conditions 
+
+∇θi Φ( ¯θ)⊤(θi − ¯θi) ≤ 0, ∀θi ∈ Θi, ∀i ∈ [n].
+
+Summing these inequalities over all agents yields 
+
+∇θ Φ( ¯θ)⊤(θ − ¯θ) ≤ 0, ∀θ ∈ Θ.
+
+Joint concavity of Φ then gives 
+
+Φ( θ) ≤ Φ( ¯θ) + ∇θ Φ( ¯θ)⊤(θ − ¯θ) ≤ Φ( ¯θ), ∀θ ∈ Θ.
+
+Thus, ¯θ is a global maximizer of Φ, and strict concavity makes it unique. Finally, if there were a feasible ˜θ such that 
+
+ui(x(· ; ˜θ)) ≥ ui(x(· ; ¯θ)) for every i, with strict inequality for at least one agent, then positivity of the weights λi would imply Φ( ˜θ) > Φ( ¯θ), contradicting global optimality. Hence, 
+
+x(· ; ¯θ) is Pareto-optimal. Proposition 1 establishes the weighted-potential structure, while Theorem 1 shows that, under joint strict concavity, the SNE coincides with the unique global maximizer of the weighted social welfare (14). We now leverage this structure to Algorithm 1 Altruistic Fictitious Play 
+
+Require: Initial feasible trajectories θ0 
+
+> i
+
+∈ Θ, ∀i ∈ [n] 
+
+> 1:
+
+for k = 0 , 1, 2, . . . do  
+
+> 2:
+
+for each agent i = 1 , . . . , N (sequentially) do  
+
+> 3:
+
+Collect current planned trajectories 
+
+θk 
+
+> −i
+
+= {θj }j̸ =i 
+
+> 4:
+
+Compute altruistic best-response trajectory: 
+
+θk+1  
+
+> i
+
+= arg max 
+
+> θi∈Θi
+
+vi
+
+ xi(· ; θi), x −i(· ; θk
+
+> −i
+
+) 
+
+> 5:
+
+Update and broadcast planned trajectory θk+1  
+
+> i
+> 6:
+
+end for  
+
+> 7:
+
+end for 
+
+characterize both the equilibrium behavior of the system and the convergence properties of decentralized learning dynamics when agents iteratively update their planned trajectories. We focus on a setting in which agents communicate their planned trajectories at each iteration, as described by Algo-rithm 1. Let x(· ; θk) = ( x1(· ; θk 
+
+> 1
+
+), . . . , x n(· ; θkn)) denote the joint planned trajectories at iteration k with parameterization 
+
+θk. At each iteration, agent i updates θi according to 
+
+θk+1  
+
+> i
+
+∈ arg max 
+
+> θi∈Θi
+
+vi
+
+ xi(· ; θi), x −i(· ; θk
+
+> −i
+
+), (15) where vi is the altruistic utility defined in (11) and θk 
+
+> −i
+
+is the current parameterization of all agents j̸ = i at iteration k. We next show that this learning dynamic converges to a Pareto-optimal solution of the original exploration problem under the following additional assumptions. 
+
+Assumption 3. Let the following properties hold for each agent i ∈ [n]:1) Feasible Trajectory Sets: For each agent i, the parameter set Θi is nonempty, compact, and convex, and the param-eterization θi 7 → xi(· ; θi) is continuous. Consequently, the feasible trajectory space Xi is compact. 2) Continuity: Each individual utility function ui(x) is continuous in the joint trajectory profile x ∈ X .3) Exact Best Responses: At each iteration, agents compute an exact best response as defined in (15) .4) Sequential Updates: All agents update their trajectories sequentially at each iteration. 
+
+Theorem 2. Let Assumptions 1-3 hold. Then every limit point of the sequence {x(· ; θk)} generated by the trajectory-space best-response update (15) through Algorithm 1 is an SNE and corresponds to the unique global maximizer of the weighted social welfare (14) . Consequently, every limit point is Pareto-optimal with respect to the original utility vector. Proof. By Proposition 1, maximizing vi with respect to θi
+
+while holding θ−i fixed is equivalent to maximizing Φ over the same block. Assumption 2 implies strict concavity in every block, so Assumptions 3.1 and 3.2 ensure that each best response exists and is unique. Let θk, 0 = θk, let θk,i denote the joint parameter im-mediately after agent i updates during sweep k, and let 
+
+θk,n = θk+1 . By Assumption 3.3, we have each exact best response satisfies 
+
+Φ( θk,i ) − Φ( θk,i −1) = λi
+
+vi(θk,i ) − vi(θk,i −1) ≥ 0.
+
+Thus, under the sequential updates in Assumption 3.4, 
+
+{Φ( θk)} is nondecreasing. It is bounded above because Θ = Q 
+
+> i
+
+Θi is compact and Φ is continuous, and hence it converges to some finite Φ⋆. Since the increase over a complete sweep is the sum of finitely many nonnegative blockwise increases, every blockwise increase converges to zero. Let ¯θ be an accumulation point of {θk} and choose a subsequence θkℓ → ¯θ. The unique best-response map for each block is continuous by the maximum theorem. If agent 1
+
+had a profitable deviation at ¯θ, continuity would give auniformly positive increase in Φ at the first update along this subsequence, contradicting the vanishing blockwise increases. Hence, ¯θ1 is agent 1’s unique best response, and θkℓ,1 → ¯θ.Applying the same argument successively to agents 2, . . . , n 
+
+shows that every ¯θi is a best response to ¯θ−i. Therefore, x(· ; ¯θ)
+
+is an SNE. Theorem 1 then implies that ¯θ is the unique global maximizer of Φ and that the associated trajectory profile is Pareto-optimal. Joint strict concavity in Assumption 2 is what promotes an SNE from a coordinatewise optimum to the unique global maximizer of (14). If this joint condition is replaced by strict concavity only in each agent’s own parameter block, Algorithm 1 still admits the following weaker characterization; however, no local, global, or Pareto-optimality conclusion follows in general. 
+
+Corollary 1. Let Assumptions 1 and 3 hold, and suppose that 
+
+Φ is continuously differentiable and, for every i and fixed 
+
+θ−i, strictly concave in θi. Then every accumulation point of the sequence generated by Algorithm 1 is an SNE and a coordinatewise maximizer of Φ.Proof. Blockwise strict concavity guarantees a unique exact best response for every agent. The monotone-potential and accumulation-point argument in the proof of Theorem 2, up to the conclusion that every agent is playing a best response, applies without joint concavity. Hence, every accumulation point is an SNE. Proposition 1 then implies that it is a coordinatewise maximizer of Φ.The above results illustrate how altruism is not solely a behavioral preference, but also a mechanism for aligning decentralized decision making with system-level objectives. By weighting the utilities of teammates according to agent value, each robot accounts for how its trajectory affects the rest of the team, re-framing the exploration problem into a potential game. Under Assumption 2, its SNE is the unique Pareto-optimal maximizer of the weighted social welfare; without joint concavity, the equilibrium guarantee is limited to coordi-natewise optimality. With these results, we can now illustrate the application of this risk-aware exploration framework using a simplified setting in which agent trajectories are modeled as sequences of waypoints. IV. R ISK -A WARE MAP EXPLORATION MODEL 
+
+While the analysis in Section III is general to any agent utilities and trajectory parameterizations that satisfy a com-bination of Assumptions 1-3, we instantiate in this section the coupled exploration game introduced in Section II using a utility model that is discretized over the continuous exploration domain. This discretization enables a more computationally tractable setting for individual agents, while also simplifying the interpretation of the exploration results. Additionally, since we are interested in examining agent trade-offs between the risk and reward of exploring unknown regions, and how the altruistic utility mixing model might encourage some agents to take greater risks for the benefit of the team, we define information and risk models that explicitly incorporate that risk-reward trade-off as agents tra-verse unknown regions with potentially unknown hazardous conditions. 
+
+A. Coupling Information and Risk in Exploration 
+
+A challenging aspect of the exploration problem is that, by the nature of exploration, agents must enter and traverse regions with unknown or uncertain risks. In this setting, there can be a natural trade-off between the amount of information gained and the amount of risk incurred by an agent to obtain that information, where agents may learn the most by exploring completely unknown regions while simultaneously experiencing higher risk due to uncertainties about the un-known environment. Thus, to explore this risk-reward trade-off in a setting where some agents may intentionally take on additional risk to reduce uncertainty for other agents, we consider the following simplified risk model for agents 
+
+pi(x(t)) = μ(xi(t)) + βiξ(xi(t), x −i(·)) , (16) where μ : Ω → R≥0 models the average (or known) risk and 
+
+ξ models uncertain (or unknown) risk given trajectories of all agents, with βi ≥ 0 denoting agent i’s tolerance to unknown risk. We consider a deterministic risk profile defined by known hazards, where the known risk to agent i of a given trajectory, parameterized by θi, is defined by its proximity to hazards as 
+
+μ(xi(t ; θi)) = 
+
+> R
+
+X
+
+> r=1
+
+exp 
+
+
+
+− ∥xi(t ; θi) − hr ∥2
+
+2σ2
+
+> r
+
+
+
+, (17) where hr ∈ Ω denotes hazard centers. In this paper, we consider a time-varying uncertainty, where, when an agent explores an uncertain region, the uncertainty of that region is reduced as new information is obtained. In this sense, we may consider uncertainty reduction itself as an information utility for agents based on area coverage as follows. Consider the coverage field defined by agent trajectory histories, where the coverage density at any given point q ∈ Ω,given past and current trajectories of agents up to time T0 +T ,is 
+
+ρ q, x (·) = X
+
+> i∈[n]
+> T0+T
+
+X
+
+> t=1
+
+K(q, x i(t)) , (18) where T0 is the current time, T is the current trajectory length, and K : Ω × Ω → R≥0 is the overlap kernel 
+
+K(x, y ) = exp 
+
+
+
+− ∥x − y∥2
+
+2σ2
+
+> K
+
+
+
+, (19) which, for simplicity, is the same overlap kernel we will use for the redundancy term in (4). Thus, to model the uncertainty of a given point, we consider an inverse metric of the coverage density 
+
+ξ q, x (·) = exp  −ρ q, x (·) , (20) where uncovered or unobserved points evaluate to ξ ≈ 1
+
+and well covered points result in ξ → 0. Under this uncer-tainty model, we say that an agent’s information utility for the trajectory xi(· ; θi) is the marginal decrease in Shannon entropy H(q) = −ξ(q) log ξ(q) for the entire uncertainty field. To quantify this marginal decrease, we first define the total entropy as 
+
+Ξ x(·) =
+
+Z
+
+> Ω
+
+−ξ q, x (·) log ξ q, x (·)dq. (21) Then, the marginal decrease in map uncertainty given atrajectory xi(· ; θi) is 
+
+∆Ξ i = Ξ 
+
+ x−i, x T0
+
+> i
+
+
+
+− Ξ
+
+ x−i, x T0 
+
+> i
+
+, x i(· ; θi)
+
+,
+
+=
+
+Z
+
+> Ω
+
+−ξ−i(q) log ξ−i(q) + ξ(q) log ξ(q dq 
+
+where x−i is the combined trajectories of all agents j̸ = i,including current trajectories from T0 to T0 + T , xT0 
+
+> i
+
+is the trajectory history of agent i up to T0, and ξ−i(q) is the uncertainty field without the additional trajectory xi(· ; θi).Since ξ−i(q) = e−ρ−i(q), we can rewrite the uncertainty field function as ξ(q) = ξ−i(q)e−ρi(q), where 
+
+ρi(q) = 
+
+> T0+T
+
+X
+
+> t=1
+
+K q, x i(· ; θi).
+
+Using the Taylor expansion e−ρi(q) ≈ 1 − ρi(q), we have 
+
+ξ(q) ≈ ξ−i(q)(1 − ρi(q)) , thus 
+
+δξ = ξ(q) − ξ−i(q) ≈ − ξ−i(q)ρi(q).
+
+We can then expand entropy using first-order variation 
+
+∆Ξ ≈
+
+Z
+
+> Ω
+
+∂H (q)
+
+∂ξ δξ (q)dq 
+
+=
+
+Z
+
+> Ω
+
+(1 + log ξ−i(q)) ξ−i(q)ρi(q)dq, 
+
+where this approximation now allows us to linearly separate the contribution of each trajectory point xi(t, θ i).Thus, we compute the marginal uncertainty reduction of a given trajectory point xi(t ; θi) as 
+
+Ii
+
+ x−i(·), x i(t ; θi) =
+
+Z
+
+> Ω
+
+κ−i(q)K q, x i(t ; θi)dq, (22) where 
+
+κ−i(q, x −i) = (1 + log ξ−i(q, x −i)) ξ−i(q, x −i). (23) Therefore, with this model of information utility, we have a coupled notion of risk and reward through the uncertainty field ξ, as agents must manage both information incentives by lowering uncertainty countered with potential loss according to the risk penalty. Note also that since we have included the current trajectories of other agents in the evaluation of future risk, we have also coupled the information and risk utilities for all agents. Importantly, since our information, redundancy, and risk models are smooth in θi, we can compute the gradient of the utility ui (and, by extension, the gradient of the social utility vi), which is required for agent-level trajectory updates in Algorithm 1, where the full expression of the utility for agent i is given by 
+
+ui
+
+ x(·) =
+
+> T0+T
+
+X
+
+> t=T0+1
+
+Z
+
+> Ω
+
+κ−i(q, x −i(·)) K q, x i(t ; θi)dq 
+
+− X
+
+> j∈[n]
+> T0+T
+
+X
+
+> t=T0+1
+> T0+T
+
+X
+
+> s=T0+1
+
+K xi(t ; θi), x j (s)
+
+− λiT0+TX
+
+> t=T0+1
+
+μ(xi(t ; θi)) + βiξ(xi(t ; θi)) . (24) 
+
+B. Numerical Best-Response Computation with Waypoints 
+
+To simplify trajectory parameterization and gradient com-putation, we directly parameterize each agent’s discrete-time trajectory by a sequence of waypoints. Specifically, for agent 
+
+i we define 
+
+θi = [ w⊤
+
+> i, 1
+
+, . . . , w ⊤ 
+
+> i,T
+
+]⊤, xi(t; θi) = wi,t , t = 1 , . . . , T, 
+
+(25) where wi,t ∈ Ω denotes the robot’s planned position at time step t.To enforce basic kinematic feasibility, we constrain succes-sive waypoints to satisfy 
+
+∥wi,t +1 − wi,t ∥ ≤ ∆wmax  
+
+> i
+
+, ∀t = 1 , . . . , T − 1, (26) where ∆wmax  
+
+> i
+
+is the maximum distance robot i can travel between timesteps. The feasible parameter set Θi is therefore defined by the workspace constraint wi,t ∈ Ω and the inter-waypoint distance constraints in (26). At iteration k of Algorithm 1, agent i computes an approx-imate best response by solving 
+
+max 
+
+> θi∈Θi
+
+vi
+
+ xi(· ; θi), x −i(· ; θk
+
+> −i
+
+),
+
+using projected gradient ascent. The gradient of vi with respect to waypoint wi,t is given by 
+
+∇wi,t vi = ∇wi,t ui + X 
+
+> j̸=i
+
+γij ∇wi,t uj , (27) where 
+
+∇wi,t ui = ∇wi,t Ii(wi,t , x −i) − λi∇wi,t pi(wi,t , x −i)
+
+− α X 
+
+> j̸=iT0+T
+
+X
+
+> s=T0+1
+
+∇wi,t K(wi,t , x j (s)) . (28) and 
+
+∇wi,t uj = ∇wi,t Ij − λj βjT0+TX
+
+> s=T0+1
+
+∇wi,t ξ(xj (s), x −j )
+
+− α
+
+> T0+T
+
+X
+
+> s=T0+1
+
+∇wi,t K xj (s), w i,t 
+
+, (29) where, it should be noted that x−j includes the waypoint wi,t .For the specific fields defined in Section IV-A, the spatial gradients required in (28) are given by 
+
+∇wi,t Ii(wi,t , x −i) = 
+
+Z
+
+> Ω
+
+κ−i(q, x −i)∇wi,t K q, w i,t 
+
+dq, 
+
+∇wi,t pi(wi,t , x −i) = ∇wi,t μ(wi,t ) + βi∇wi,t ξ(wi,t , x −i)
+
+with 
+
+∇wi,t μ(wi,t ) = 
+
+> R
+
+X
+
+> r=1
+
+∇wi,t K(wi,t , h r )
+
+and 
+
+∇wi,t ξ(wi,t , x −i) = ∂ξ (wi,t , x −i)
+
+∂ρ (wi,t , x −i) ∇wi,t ρ(wi,t , x −i)= −ξ(wi,t , x −i)∇wi,t ρ(wi,t , x −i)
+
+where 
+
+∇wi,t ρ(wi,t , x −i) = X 
+
+> j̸=iT0+T
+
+X
+
+> s=1
+
+∇wi,t K(wi,t , x j (s)) ,
+
+and 
+
+∇xK(x, y ) = 1
+
+σ2
+
+> K
+
+K(y, x )( y − x).
+
+The additional cross-gradient terms in (29) are computed as 
+
+∇wi,t Ij =
+
+> T0+T
+
+X
+
+> s=1
+
+Z
+
+> Ω
+
+K q, x j (s) ∂κ −j (q)
+
+∂ρ −j (q) ∇wi,t K q, w i,t 
+
+dq, 
+
+(30) where 
+
+∂κ −j (q)
+
+∂ρ −j (q) = ∂κ −j
+
+∂ξ −j
+
+∂ξ −j
+
+∂ρ −j
+
+= −(2 + log ξ−j (q)) ξ−j (q),
+
+and 
+
+∇wi,t ξ(xj (s), x −j ) = −ξ(xj (s), x −j )∇wi,t K(xj (s), w i,t ).
+
+Consequently, the full parameter gradient is given by 
+
+∇θi vi = ∇wi, 1 vi, . . . , ∇wi,T vi
+
+⊤,
+
+making the gradient accent parameter update 
+
+θ(τ +1)  
+
+> i
+
+= Π Θi
+
+
+
+θ(τ ) 
+
+> i
+
++ η∇θi vi
+
+
+
+, (31) where η > 0 is the accent rate parameter and ΠΘi denotes projection onto the feasible set defined by Ω and (26). In practice, this projection is implemented by clamping each waypoint to Ω and projecting successive waypoint differences onto the ball of radius ∆wmax  
+
+> i
+
+.The exploration model developed in this section provides a concrete instantiation of the altruistic game-theoretic frame-work introduced in Section III. We next evaluate the resulting planner in simulation and hardware experiments to examine how altruistic utility shaping affects information gathering, risk allocation, and collective exploration performance. V. E XPERIMENTS 
+
+We evaluate the proposed altruistic exploration framework in numerical simulation and on the Robotarium platform. The purpose of the simulation study is to isolate the effect of the altruistic utility shaping on coverage, risk allocation, and inter-agent coordination, while the Robotarium experiment verified that the resulting waypoint planner can be executed by physical unicycle robots using standard low-level controllers and safety filters. In simulation, robots explore the bounded planar domain 
+
+Ω = [ −1.5, 1.5] × [−1, 1] , discretized on a 40 × 40 grid. The known hazard field consists of two Gaussian hazards centered at (0 .5, 0.5) and (−0.5, −0.3) with standard deviations σr
+
+of 0.3 and 0.5, respectively. Coverage is accumulated using a Gaussian sensing kernel with σK = 0 .1, and the uncertainty at each grid point is computed as ξ(q) = exp( −ρ(q)) , where 
+
+ρ(q) is the accumulated coverage density, where, for all experiments, the four robots are initialized at (−1, 0) , (1 , 0) ,
+
+(0 , 0.5) , and (0 , −0.5) .Each robot plans a finite-horizon waypoint trajectory with planning horizon T = 4 , with dt = 1 and ∆wmax  
+
+> i
+
+= 0 .2.The first waypoint is fixed at the robot’s current position, and subsequent waypoints are projected to remain inside Ω and satisfy the maximum inter-waypoint displacement constraint. At each replanning round, projected gradient ascent is used to approximately maximize the altruistic utility vi according to (11) and (13), given the agent value weights λi for i ∈ [n]. We compare a selfish baseline, corresponding to Γ = I, against the altruistic game with relatedness weights γij = λj /λ i. Under this choice, lower-valued robots place greater relative weight on protecting higher-valued teammates, while higher-valued robots are less inclined to sacrifice themselves for lower-valued agents. Figure 1 shows representative final trajectories for the selfish and altruistic planners, where the self planner sets Γ = I
+
+and the altruistic planner sets Γ according to (13), with 
+
+λ = [40 , 40 , 15 , 15] . Both methods reduce uncertainty across the environment, but the spatial organization of the trajectories differs. In the selfish case, each robot optimizes only its own information-risk tradeoff, leading to more overlapping paths and less explicit differentiation by agent value. In contrast, the altruistic planner produces trajectories that are more separated and more strongly structured by the value parameters. Lower-valued robots take on exploration near higher-risk regions when doing so improves team coverage and reduces the need for higher-valued robots to enter those regions. Thus, altruism does not simply make the team more conservative; rather, it changes which robots absorb risk. We note that the trajectories in Fig. 1 are waypoint plans, so they may appear piecewise linear rather than dynamically smooth. This representation keeps the best-response optimiza-tion computationally efficient, while a lower-level controller can convert the waypoint sequence into executable robot motion. 
+
+> (a) Non-altruistic
+> (b) Altruistic
+
+Fig. 1: Representative simulated exploration trajectories for (a) the selfish baseline (i.e., Γ = I) and (b) the altruistic utility with relationships defined by (13), where λblue = λorange = 40 
+
+and λred = λgreen = 15 . The filled background shows final map uncertainty, with darker regions corresponding to lower remaining uncertainty. Red contours denote the known hazard field. While both methods explore the domain, the altruistic planner produces more spatially separated trajectories and allo-cates hazardous exploration according to agent value, allowing lower-valued agents to absorb risk that would otherwise be borne by higher-valued teammates. To quantify these effects across different importance con-figurations, we run 50 trials for five configurations of varying risk tolerances and relative agent importance compositions, where randomness enters through the warm-start perturbations used when initializing trajectories before gradient optimiza-tion. Figure 2 reports four metrics for selected homogeneous and heterogeneous value profiles: mean uncertainty, raw ac-cumulated risk, value-weighted risk, and minimum pairwise distance. Bars show the sample mean across trials and error bars indicate standard error. The altruistic planner achieves comparable uncertainty reduction to the selfish baseline, in-dicating that the cooperative risk allocation does not come at the expense of exploration performance. The most consistent improvement appears in minimum pairwise distance, where altruism increases separation between robots and thereby re-duces redundant or conflicting exploration. In the higher-value and mixed-value cases, altruism also reduces value-weighted risk, showing that the induced behavior preferentially protects more valuable agents while still allowing the team to gather information. Finally, we implement the planner on hardware in the UCI Robotarium, where the high-level planner generates the same finite-horizon waypoint plans in real-time, while each robot tracks the current waypoint using a single-integrator position controller. Control inputs are then passed through a boundary-aware single-integrator barrier certificate and then mapped to unicycle commands. Figure 3 shows snapshots from a representative run, where a video of this run may be viewed at https://youtu.be/KigS25qrS4I. The robots pro-gressively reduce uncertainty while respecting collision and boundary constraints, demonstrating that the proposed planner can be coupled to standard control primitives without requiring a specialized low-level controller. VI. C ONCLUSION 
+
+This paper presents an altruistic game-theoretic framework for risk-aware multi-robot exploration with heterogeneous agents. By shaping each robot’s utility with value-dependent relatedness weights, the proposed method allows agents to account for the effect of their decisions on teammates while preserving a decentralized trajectory-optimization structure. In the continuous exploration setting, this framework was implemented with smooth uncertainty, redundancy, and haz-ard models, enabling projected gradient updates over finite-horizon waypoint trajectories. The experimental results demonstrate that altruistic utility shaping changes how risk and information-gathering effort are allocated across the team. Compared with the selfish baseline, the altruistic planner produced more spatially separated trajec-tories, reduced redundant exploration, and in several heteroge-neous value configurations lowered value-weighted risk while maintaining comparable uncertainty reduction. Robotarium experiments further showed that the resulting waypoint plans can be executed using standard single-integrator controllers and barrier certificates, with online uncertainty updates from measured robot motion. Future work will extend the framework to richer robot dynamics, partially known or learned hazard fields, and larger teams with communication constraints. Another important direction is to study adaptive relatedness weights that depend not only on fixed agent value, but also on mission context, remaining energy, robot health, or task-critical capabilities. REFERENCES [1] N. Hazon and G. A. Kaminka, “On redundancy, efficiency, and robust-ness in coverage for multiple robots,” Robotics and Autonomous Systems ,vol. 56, no. 12, pp. 1102–1114, 2008. [2] Z. Yan, N. Jouandeau, and A. A. Cherif, “A survey and analysis of multi-robot coordination,” International Journal of Advanced Robotic Systems , vol. 10, no. 12, p. 399, 2013. [3] H. Lee and D. Panagou, “Distributed resilience-aware control in multi-robot networks,” in 2025 IEEE 64th Conference on Decision and Control (CDC) . IEEE, 2025, pp. 3868–3875. [4] R. Wehbe and R. K. Williams, “Probabilistic resilience of dynamic multi-robot systems,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 1777–1784, 2021. [5] W. D. Hamilton, “The evolution of altruistic behavior,” The American Naturalist , vol. 97, no. 896, pp. 354–356, 1963. [6] J. A. Endler, Natural Selection in the Wild . Princeton University Press, 1986, no. 21. [7] V. Shree, B. Asfora, R. Zheng, S. Hong, J. Banfi, and M. Campbell, “Exploiting natural language for efficient risk-aware multi-robot sar planning,” IEEE Robotics and Automation Letters , vol. 6, no. 2, pp. 3152–3159, 2021. [8] J. P. Queralta, J. Taipalmaa, B. C. Pullinen, V. K. Sarker, T. N. Gia, H. Tenhunen, M. Gabbouj, J. Raitoharju, and T. Westerlund, “Collaborative multi-robot search and rescue: Planning, coordination, perception, and active vision,” IEEE Access , vol. 8, pp. 191 617–191 643, 2020. [9] D. S. Drew, “Multi-agent systems for search and rescue applications,” 
+
+Current Robotics Reports , vol. 2, no. 2, pp. 189–200, 2021. [10] J. L. Baxter, E. Burke, J. M. Garibaldi, and M. Norman, “Multi-robot search and rescue: A potential field based approach,” in Autonomous Robots and Agents . Springer, 2007, pp. 9–16. [11] X. Xiao, J. Dufek, and R. R. Murphy, “Robot risk-awareness by formal risk reasoning and planning,” IEEE Robotics and Automation Letters ,vol. 5, no. 2, pp. 2856–2863, 2020. [12] K. Di, Y. Zhou, J. Jiang, F. Yan, S. Yang, and Y. Jiang, “Risk-aware collection strategies for multirobot foraging in hazardous environments,” 
+
+ACM Transactions on Autonomous and Adaptive Systems (TAAS) ,vol. 16, no. 3-4, pp. 1–38, 2022. [13] L. Jiang and Y. Wang, “Risk-aware decision-making in human-multi-robot collaborative search: a regret theory approach,” Journal of Intelli-gent & Robotic Systems , vol. 105, no. 2, p. 40, 2022. [14] L. Zhou and P. Tokekar, “Risk-aware submodular optimization for multirobot coordination,” IEEE Transactions on Robotics , vol. 38, no. 5, pp. 3064–3084, 2022. [15] M. G. Jadidi, J. V. Miro, and G. Dissanayake, “Mutual information-based exploration on continuous occupancy maps,” in 2015 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2015, pp. 6086–6092. [16] H. Carrillo, P. Dames, V. Kumar, and J. A. Castellanos, “Autonomous robotic exploration using occupancy grid maps and graph slam based on shannon and r´ enyi entropy,” in Proceedings of the International Conference on Robotics and Automation (ICRA) . IEEE, 2015, pp. 487–494. [17] B. J. Julian, S. Karaman, and D. Rus, “On mutual information-based control of range sensing robots for mapping applications,” The Interna-tional Journal of Robotics Research , vol. 33, no. 10, pp. 1375–1392, 2014. [18] H. Guo, Q. Kang, W.-Y. Yau, M. H. Ang, and D. Rus, “Em-patroller: Entropy maximized multi-robot patrolling with steady state distribution approximation,” IEEE Robotics and Automation Letters , vol. 8, no. 9, pp. 5712–5719, 2023. [19] X. Duan, W. Wang, and R. Yan, “Maximizing markov trajectory entropy under kemeny constraints for robotic surveillance,” IEEE Transactions on Automatic Control , 2026. [20] S. M. LaValle and S. Hutchinson, “Game theory as a unifying structure for a variety of robot tasks,” in Proceedings of 8th IEEE international symposium on intelligent control . IEEE, 1993, pp. 429–434. [21] X. Huo, H. Zhang, C. Huang, Z. Wang, and H. Yan, “Task allocation with minimum requirements for multiple mobile robot systems: A game-theoretical approach,” IEEE Transactions on Network Science and Engineering , vol. 11, no. 1, pp. 1202–1213, 2023. [22] R. Emery-Montemerlo, G. Gordon, J. Schneider, and S. Thrun, “Game theoretic control for robot teams,” in Proceedings of the 2005 IEEE International Conference on Robotics and Automation . IEEE, 2005, pp. 1163–1169. [23] J. Jes´ us Rold´ an, J. Del Cerro, and A. Barrientos, “Should we compete or should we cooperate? Applying game theory to task allocation in drone swarms,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2018, pp. 5366–5371. [24] H. Xiao, Z. Huang, Z. Xu, S. Yang, W. Wang, L. Zhong, and C. Xu, “Task-driven cooperative internet of robotic things crowdsourcing: From the perspective of hierarchical game theoretic,” IEEE Internet of Things Journal , vol. 11, no. 20, pp. 32 350–32 362, 2024. Fig. 2: Aggregate simulation performance over 50 trials for selected value configurations. Bars show sample means and error bars show standard error. The altruistic planner maintains comparable uncertainty reduction to the selfish baseline, while generally increasing minimum pairwise distance and reducing redundant exploration. In heterogeneous and high-value configurations, altruism also lowers value-weighted risk, indicating that the relatedness-weighted utility reallocates risk away from more valuable agents. 
+
+t = 5 s t = 10 s t = 15 s
+
+t = 20 s t = 25 s t = 30 s
+
+Fig. 3: Robotarium execution of the altruistic risk-aware exploration planner. The projected visualization shows the online uncertainty estimate together with contour lines for the known hazard field. At each replanning round, the high-level planner produces waypoint trajectories, which are tracked by Robotarium single-integrator controllers with boundary-aware barrier certificates. Over time, the robots reduce uncertainty across the arena while maintaining safe separation and respecting workspace boundaries. 
+
+[25] R. Karam, R. Lin, B. A. Butler, and M. Egerstedt, “Resource allocation with multi-team collaboration based on Hamilton’s rule,” in Proceedings of the IEEE Conference on Decision and Control (CDC) . IEEE, 2025, pp. 6891–6898. [26] B. A. Butler and M. Egerstedt, “Hamilton’s rule for enabling altruism in multi-agent systems,” in 2025 IEEE 64th Conference on Decision and Control (CDC) , 2025, pp. 6776–6783. [27] X. Deng and C. H. Papadimitriou, “On the Complexity of Cooperative Solution Concepts,” Mathematics of Operations Research , vol. 19, no. 2, pp. 257–266, May 1994. [28] W. C. Stirling, “Social utility functions-Part I: Theory,” IEEE Trans-actions on Systems, Man, and Cybernetics, Part C (Applications and Reviews) , vol. 35, no. 4, pp. 522–532, 2005. [29] W. C. Stirling and R. L. Frost, “Social utility functions-Part II: Appli-cations,” IEEE Transactions on Systems, Man, and Cybernetics, Part C (Applications and Reviews) , vol. 35, no. 4, pp. 533–543, 2005. [30] H. Bester and W. G¨ uth, “Is altruism evolutionarily stable?” Journal of Economic Behavior & Organization , vol. 34, no. 2, pp. 193–209, 1998. [31] G. De Marco and J. Morgan, “Altruistic behavior and correlated equi-librium selection,” International Game Theory Review , vol. 13, no. 04, pp. 363–381, 2011. [32] ´A. T´ obi´ as, “Rational altruism,” Journal of Economic Behavior & Orga-nization , vol. 207, pp. 50–80, 2023. [33] S. B. Ale, J. S. Brown, and A. T. Sullivan, “Evolution of cooperation: combining kin selection and reciprocal altruism into matrix games with social dilemmas,” PloS one , vol. 8, no. 5, p. e63761, 2013. [34] R. Su and B. Morsky, “Relational utility and social norms in games,” 
+
+Mathematical Social Sciences , vol. 127, pp. 54–61, 2024. [35] J. T. Bjørke, “Framework for entropy-based map evaluation,” Cartog-raphy and Geographic Information Systems , vol. 23, no. 2, pp. 78–95, 1996. [36] S. T. O’Callaghan and F. T. Ramos, “Gaussian process occupancy maps,” 
+
+The International Journal of Robotics Research , vol. 31, no. 1, pp. 42– 62, 2012. [37] K. Nagami, T. Chen, J. Yu, O. Shorinwa, M. Adang, C. Dougherty, E. Cristofalo, and M. Schwager, “Vista: Open-vocabulary, task-relevant robot exploration with online semantic gaussian splatting,” IEEE Robotics and Automation Letters , 2026. Brooks A. Butler (Member, IEEE) is an Assistant Professor in the College of Electrical and Com-puter Engineering at Oklahoma State University in Stillwater, OK. He was the recipient of the In-telligence Community Postdoctoral Research Fel-lowship, administered by Oak Ridge Institute for Science and Education (ORISE) through an inter-agency agreement between the U.S. Department of Energy and the Office of the Director of National Intelligence (ODNI), hosted at the University of California, Irvine. He received his Ph.D. in Electrical and Computer Engineering from Purdue University in 2024. He received his M.S. in Computer Science and his B.S. in Applied Physics from Brigham Young University in 2020 and 2019, respectively. 
+
+Jair Cert´ orio (Member, IEEE) is an Assistant Professor in the Systems Engineering Division at Instituto Tecnol´ ogico de Aeron´ autica, Fortaleza, CE, Brazil. He received his B.S. degree in Electrical Engineering from the Universidade Estadual de Mar-ing´ a, PR, Brazil, in 2018, and his Ph.D. degree in Electrical Engineering from the University of Mary-land, College Park, MD, USA, in 2025. Between 2025 and 2026, he was a Postdoctoral Scholar in the Department of Electrical and Computer Engineering at the University of California, Santa Barbara. 
+
+Jo˜ ao Hespanha (Fellow, IEEE) is a Distinguished Professor in the Department of Electrical and Com-puter Engineering at the University of California, Santa Barbara. He received the Ph.D. degree in electrical engineering and applied science from Yale University, New Haven, Connecticut in 1998. Dr. Hespanha is a Fellow of IEEE and IFAC. His cur-rent research interests include hybrid and switched systems; multi-agent control systems; game theory; optimization; distributed control over communica-tion networks (also known as networked control systems); the use of vision in feedback control; stochastic modeling in biology; and network security. 
+
+Magnus Egerstedt (Fellow, IEEE) is the Provost at the University of North Carolina, Chapel Hill, where he holds the Harry L. Watson Distinguished Profes-sorship in Computer Science. Egerstedt received the M.S. degree in Engineering Physics and the Ph.D. degree in Applied Mathematics from the Royal In-stitute of Technology, Stockholm, Sweden, the B.A. degree in Philosophy from Stockholm University, and he conducts research in the areas of control theory and robotics, with particular focus on control and coordination of multi-robot systems. Magnus Egerstedt is a Fellow of IEEE and IFAC, a member of the Royal Swedish Academy of Engineering Science, and a past president of the IEEE Control Systems Society.

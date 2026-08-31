@@ -1,0 +1,245 @@
+Title: Sliding-window beats linear attention
+
+URL Source: https://arxiv.org/pdf/2608.28444v1
+
+Published Time: Mon, 31 Aug 2026 01:10:35 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# SLIDING -WINDOW BEATS LINEAR ATTENTION 
+
+Alexia Jolicoeur-Martineau 
+
+Microsoft Applied Sciences Group (ASG) 
+
+alexiaj@microsoft.com 
+
+Rhea Sanjay Sukthanker 
+
+Microsoft Applied Sciences Group (ASG) 
+
+rsukthanker@microsoft.com 
+
+Pashmina Cameron 
+
+Microsoft Applied Sciences Group (ASG) 
+
+pcameron@microsoft.com 
+
+Emy Gervais 
+
+Independent 
+
+emy.gervais0@gmail.com 
+
+## ABSTRACT 
+
+Due to the nature of quadratic attention, Large Language Models (LLMs) con-sume a lot of memory and energy. Every new token costs more than the previous one. For each additional token, the keys and values must be stored in memory indefinitely, which is unsustainable. Several alternatives have been proposed to fix the quadratic scaling problem, one of which is retrofitting LLMs to use Linear Attention. This idea has attracted a lot of attention, given its promise to solve the quadratic scaling problem with state-of-the-art performance at low cost. However, this line of research has not been properly compared to simpler baselines. In this work, we show that Sliding Window Attention (SWA) with sinks performs as well or better than post-trained Linear Attention models. We observe this across multiple LLMs on various downstream tasks. For long-context reasoning tasks (Needle-in-a-Haystack and BABILong), SWA achieves massively higher performance (2 to 10 times higher than linear attention). SWA requires no post-training, is extremely fast, and requires low memory; therefore, making it an extremely cheap and reliable solution. To reduce inference memory cost, we strongly recommend switching to SWA instead of post-training linear models. Linear attention models may have shown some promise, but they likely require to be trained from scratch or extensive post-training in order to even match SWA. Post-traning Post-training Recovery (%) Name Tokens Stages MMLU ↑ Average ↑
+
+SUPRA (Mercat et al., 2024) 100B 1 53.0 (0.0) 88.1 (0.0) Hedgehog (Zhang et al., 2024) 40M 2 36.9 (0.0) 73.9 (0.0) LoLCATs (Zhang et al., 2025a) 40M 2 83.2 (2.2) 97.5 (1.3) Liger-GLA (Lan et al., 2025) 20M 1 62.2 (5.8) 92.0 (2.8) MOHAWK (Bick et al., 2024b) 3-5B 3 56.9 (0.0) 92.4 (0.0) Mamba in the Llama (Wang et al., 2024) 20B 2 67.7 (0.0) 86.7 (0.0) DiJiang b (Chen et al., 2024) 40B 1 88.7 (0.0) -ARWKV (Yueyu et al., 2025) 60M/830M 2/3 84.1 (0.0) 94.7 (0.0) Llamba (Bick et al., 2025) 8-12B 3 91.5 (0.0) 98.6 (0.0) QLinAtt (Goldstein et al., 2025) 350-700M 3 74.0 (0.0) 92.9 (0.0) QRWKV6 (Goldstein et al., 2025) 350-700M 3 92.4 (2.7) 99.1 (0.8) QRWKV7 (Goldstein et al., 2025) 350-700M 3 86.4 (6.8) 96.1 (4.1) Sliding Window Attention (64 window-size, 4 sinks) 0 0 93.2 (3.5) 99.0 (0.5) Table 1: Performance recovery (student score divided by teacher score) on MMLU-5shot and the average of 6 benchmarks (MMLU-5shot, ARC-C, ARC-E, Hellaswag, PIQA, Winogrande). arXiv:2608.28444v1 [cs.CL] 28 Aug 2026 1 INTRODUCTION 
+
+Large Language Models (LLMs) consume massive amounts of memory and energy because they scale quadratically with context-length (Vaswani et al., 2017). Every new token’s keys and values must be added to the KV cache, and they contribute to an ever-growing memory and compute cost. Linear attention methods (Katharopoulos et al., 2020) propose an alternative which reduce the time and memory complexity from quadratic to linear. This removes the need to store a KV cache which makes the memory cost small and fixed at inference-time instead of having an ever-growing KV cache. While promising, linear attention models come with significant drawbacks: 1) lower expressivity, 2) untractable problem of having to decide what to remember so that important information is not overwritten/ignored, and 3) training is expensive and most software/hardware are not built for them. To tackle the expensive training, a solution is to take an existing pretrained models and swap its expensive quadratic attention with a linear attention. This would normally require fine-tuning with billions of tokens (Bick et al., 2024a), but LoLCATs (Zhang et al., 2025a) showed that this could be done with as little as 40M tokens by combining Hedgehog (Zhang et al., 2024) and Sliding Window Attention (SWA). In doing so, LoLCATs recovers most of the full attention performance on knowledge and reasoning tasks. Given the promises of these linearizing methods, we gave them a try. What we found was striking. We discovered that changing the attention mask to Sliding Window Attention (SWA)with attention sinks (meaning that we attend to the k previous tokens and the first 4 tokens) gives us better downstream performance than most linearized models. For long-context tasks, the performance gap is even more pronounced, whereas SWA obtains much higher accuracy than linear attention post-training. The fact that SWA with sinks retains most of the performance of the original model is well known (Xiao et al., 2024; Cabannes et al., 2026), however, to our knowledge, linearizing methods have not been compared to SWA with sinks. In this work, we provide this direct comparison for a wide variety of models (ranging from 1.3B to 70B) on various benchmarks (short and long context). In doing so, we demonstrate that pretrained models can already use SWA at inference time to obtain high performance at a fixed inference memory cost without needing any post-training or specialized linear kernels. 
+
+Notation We denote Sliding Window Attention (SWA) in the following way: SWA( w, s), where w is the window-size (varies from 64 to 512) and s is the number of attention sink (always fixed at 4). 
+
+Figure 1: Different types of attention masks: Full attention (FA), LoLCATs/Liger-GLA (mixture of linear attention and SWA), and Sliding Window Attention (SWA) with sinks. 2 BACKGROUND 
+
+2.1 TRANSFORMERS AND SELF -A TTENTION (SA) Transformers (Vaswani et al., 2017) are the backbone of modern Large Language Models (LLMs). They process a sequence of L consecutive tokens. Assuming discrete tokens (with vocab-size V )used in language, the tokens are embedded ( V → D), transforming the shape of the sequence to [L, D]. Transformers then process this sequence by alternating between a transformation on the dimension D using Multi-Layer Perceptron (MLP) and on the dimension L using Self-Attention (SA). Both MLP and SA use residual connections ( x ← x + f (x) where f is either the MLP or SA). The final output is then projected back into shape [ L,V ] to predict the next-token probabilities. Self-Attention works as follows: the data of shape [ L, D] is linearly projected to keys k, queries q,and values v and the output is transformed in the following way: 
+
+xt =
+
+Pti =1 at ,i vi
+
+Pti =1 at ,i
+
+=
+
+Pti =1 exp( qt k⊤ 
+
+> i
+
+/pd)vi
+
+Pti =1 exp( qt k⊤ 
+
+> i
+
+/pd) , for t in [1, . . . , L] (1) Several variants of the formulation have proposed, such as Multi-Query Attention (Shazeer, 2019), Grouped Query Attention (Ainslie et al., 2023). Unlike MLP which has complexity O(LD 2), Self-Attention has complexity O(DL 2) and it requires a KV cache at inference time to keep tracks of all previous keys and values in order to make the inference cost per new token linear O(L). The quadratic scaling with respect to context-length and the ever-growing KV cache is a big problem for LLMs as it increases in memory and requires more processing time as the sequence grows. Many engineering tricks have been exploited to make self-attention more efficient (Dao et al., 2022; Dao, 2023; Kwon et al., 2023; Zhang et al., 2023) and compress the KV cache (Liu et al., 2023; Li et al., 2024; Tang et al., 2024). However, the quadratic problem remains. Various solutions have been suggested, but we focus on the following two: Sliding Window Attention (SWA) and Linear Attention (LA). 2.2 SLIDING WINDOW ATTENTION (SWA) Instead of attending to all previous tokens, Sliding Window Attention (SWA) (Beltagy et al., 2020) proposes to only attend to the previous w tokens (its window size). This may appear extremely constraining, but similar to convolutional networks (Luo et al., 2016), the effective receptive field grows after each self-attention layers such that after l layers, the receptive field is l w . Empirically, SWA improves long-term memorization and length extrapolation by encouraging models to learn dependencies beyond their local receptive field (Cabannes et al., 2026). SWA can be represented as follows: 
+
+xt =
+
+> t
+
+X  
+
+> i=max(1, t−w+1)
+
+exp 
+
+³
+
+qt k⊤ 
+
+> i
+
+/pd
+
+´
+
+vitX  
+
+> i=max(1, t−w+1)
+
+exp 
+
+³
+
+qt k⊤ 
+
+> i
+
+/pd
+
+´ , t ∈ [1, . . . , L]. It was later discovered that LLMs assign disproportionately high attention to the first few tokens even though they are not semantically relevant (Xiao et al., 2024; Barbero et al., 2025). These tokens, called the attention sinks , are tokens that transformers learn to use as repositories for any unnecessary attention. Without their inclusion in the attention mask, there is a catastrophic degradation in performance. Thus, when SWA moves past the first few (sink) tokens, performance becomes horrendous. A simple fix was later found: attend to the first s = 4 tokens in addition to the remaining w − 4 sliding window (Xiao et al., 2024). This approach solves the catastrophic failure that arises after the first tokens are out of the sliding window. SWA naturally works without any training, but additional post-training can boost its performance (Yu et al., 2025). There also exists learnable attention sinks (Agarwal et al., 2025), but these require additional post-training. In this work, we focus exclusively on training-free SWA with sinks. 2.3 LINEAR ATTENTION 
+
+Linear Attention (Katharopoulos et al., 2020) has been proposed as a way to alleviate the issues in Self-Attention. The main idea is to design a transformation φ such that exp( qt k⊤ 
+
+> i
+
+) ≈ φ(qt )φ(ki )⊤.Then, the computations can be reformulated as: 
+
+xt =
+
+Pti =1 φ(qt )φ(ki )⊤vi
+
+Pti =1 φ(qt )φ(ki )⊤ = φ(qt ) Pti =1 φ(ki )⊤vi
+
+φ(qt ) Pti =1 φ(ki )⊤ = φ(qt )st
+
+φ(qt )zt
+
+, (2) Thus at inference, the equation becomes: 
+
+st = st −1 + φ(kt )⊤vt , zt = zt −1 + φ(kt )⊤. (3) This makes the inference cost O(1) with respect to L since it does not depend on the sequence length. Thus one only need to store and update s and v over time, both of which do not grow in size over time. This resolves the issue of increasing memory and lower speed over long context lengths. However, making Linear Attention work well in practice is extremely challenging due to the nature of having to continuously rewrite itself while trying not to forget/ignore important information. Many variants of linear attention with varying performance have been proposed (Gu & Dao, 2023; Qin et al., 2022; Sun et al., 2023; Peng et al., 2023; De et al., 2024; Yang et al., 2024; Dao & Gu, 2024; Yang et al., 2023; Peng et al., 2024; 2025). Furthermore, multiple kernels have been proposed such as ReLU or ELU (Katharopoulos et al., 2020). There are 3 necessary properties that are required for a good kernel: expressiveness, spikiness, and monotonicity. To obtain these properties, Hedgehog (Zhang et al., 2024) proposed using a learnable projection followed by a dual-sided exponential transformation: 
+
+φ(x) ← (exp( f (x)), exp( − f (x))) (4) where f is a linear projection from D to D/2. 2.3.1 POST -TRAINING OF LINEAR ATTENTION 
+
+Training linear attention models is expensive and most software/hardware is made for Softmax attention, which makes things more challenging. Instead of training from scratch a linear attention Transformer, one can convert existing pretrained LLMs with quadratic Self-Attention to use linear-attention instead. With some post-training, a large portion of the baseline’s performance can be recovered. Most importantly, LoLCATs (Zhang et al., 2025a) showed that one could linearize models with as little as 40M tokens using Low-Rank Adaptation (LoRA) (Hu et al., 2021). To make it work, they use an expressive kernel such as Hedgehog (Zhang et al., 2024) and combine the linear attention with a small Sliding Window Attention (SWA). This idea paved the way toward extremely efficient methods for post-training linear attention models. 
+
+## 3 THE MISSING COMPARISON : S LIDING WINDOW VS LINEAR ATTENTION 
+
+Post-training linear attention is an interesting way of solving the quadratic scaling problem, although it comes with its own drawbacks (e.g., low expressivity, untractable problem of knowing what to retain and forget, requires additional training). However, most linear attention papers only compare linear-attention to regular (sink-free) SWA. This makes the comparison inadequate since we know that sink-free SWA leads to catastrophic failure once the first (sink) tokens are out of the sliding window. Furthermore, the long-context behavior of post-trained attention models is understudied. In this work, we demonstrate that Sliding Window Attention (SWA) with attention sinks performs equally or better than post-trained linearized models on knowledge and reasoning short context tasks. SWA leads to especially large gains on long-context. See our results below. 4 EXPERIMENTS 
+
+We compare existing linearizing methods (pure linear or linear with SWA) to the base pretrained model and their sliding-window attention (SWA) analog. For simplicity and fairness, we do not compare to hybrid models containing some full-attention layers. 4.1 GENERAL KNOWLEDGE AND REASONING 
+
+We compare the different linear attention methods listed in Table 1 to Sliding Window Attention (SWA; window-size=64 with 4 sinks) on general knowledge and reasoning metrics with different base models (See Appendix A.1 for details). The summarized metrics are shown in Table 1 and the full results in Table 2. Fine-Tuning MMLU ↑ ARC-C ↑ ARC-E ↑ HellaSwag ↑ PIQA ↑ WinoGrande ↑ Avg ↑
+
+Model Type Tokens (B) (5-shot) (acc-norm) (acc) (acc-norm) (acc) (acc) Phi1.5-1.3B Teacher 0 42.5 48.0 76.2 62.6 76.6 72.9 63.1 SWA(64, 4) 0 39.3 48.1 76.2 61.5 76.4 72.8 62.4 MOHAWK 3 24.2 44.1 74.0 60.2 75.5 71.7 58.3 LoLCATs(+SWA) 0.04 39.2 46.9 77.0 62.3 76.9 72.7 62.5 Mistral-7B-v0.1 Teacher 0 62.5 54.3 80.1 81.2 80.8 75.1 72.3 SWA(64, 4) 0 56.3 53.8 80.3 80.6 80.9 75.4 71.2 SUPRA 20 33.1 45.8 75.9 77.1 80.1 70.3 63.7 LoLCATs(+SWA) 0.04 51.4 54.9 81.7 80.7 81.5 74.0 70.7 Liger-GLA(+SWA) 0.02 36.3 49.3 78.7 76.3 80.1 70.1 65.1 Llama2.0-7B Teacher 0 45.9 45.1 75.5 76.2 78.1 69.3 65.0 SWA(64, 4) 0 39.8 44.8 75.5 75.3 78.1 69.5 63.8 DiJiang 40 40.7 42.7 62.6 69.4 77.5 - -Llama3.0-8B Teacher 0 65.5 53.9 80.8 79.1 78.5 73.3 71.9 SWA(64, 4) 0 59.8 54.2 80.9 78.8 78.8 73.7 71.0 Hedgehog 0.04 24.2 40.6 71.1 50.7 77.4 54.3 53.1 LoLCATs(+SWA) 0.04 52.8 54.9 81.7 79.7 80.9 74.1 70.7 Liger-GLA(+SWA) 0.02 43.4 52.5 81.1 76.3 80.3 72.0 67.6 Llama3.0-8B-Instruct Teacher 0 66.8 55.9 82.2 75.5 77.7 71.3 71.6 SWA(64, 4) 0 61.4 55.7 82.2 75.3 78.1 71.3 70.7 Mamba2(+SWA) 0 45.2 48.0 74.1 70.8 75.8 58.6 62.1 Llama-3.1-8B Teacher 0 65.4 55.1 81.9 79.2 78.9 74.2 72.5 SWA(64, 4) 0 60.6 55.1 82.1 78.9 79.3 75.0 71.8 LoLCATs(+SWA) 0.04 54.9 54.4 82.4 79.1 81.0 69.7 70.3 Lamba 12 60.0 54.6 82.5 77.6 80.9 73.3 71.5 Llama-3.1-70B Teacher 0 78.9 61.4 85.0 85.7 82.5 81.6 79.1 SWA(64, 4) 0 73.2 61.2 85.1 85.4 82.3 81.7 78.2 LoLCATs(+SWA) 0.04 67.7 60.5 85.0 84.6 82.1 73.7 75.6 Qwen2.5-7B-Instruct Teacher 0 74.2 55.4 81.4 80.4 79.7 70.9 73.7 SWA(64, 4) 0 70.3 55.4 81.8 79.8 79.4 71.3 73.0 ARWKV 0.02 62.4 52.2 79.7 76.8 79.2 68.7 69.8 QLinAtt 0.6 54.9 53.4 79.6 75.3 78.8 68.9 68.5 QRWKV6-RoPE 0.6 66.1 56.7 81.7 78.9 79.9 70.6 72.3 QRWKV7 0.6 65.7 56.3 81.4 79.0 80.3 71.1 72.3 QRWKV7-RoPE 0.6 68.2 55.8 81.7 79.3 79.8 71.8 72.8 Qwen2.5-32B-Instruct Teacher 0 83.2 58.5 82.2 85.3 80.8 73.0 77.2 SWA(64, 4) 0 79.5 58.8 81.9 84.9 80.7 73.6 76.6 QRWKV6 0.6 76.6 60.9 84.3 83.0 81.2 78.2 77.3 QwQ-32B Teacher 0 79.9 55.6 81.0 84.1 79.8 70.5 75.2 SWA(64, 4) 0 79.9 55.6 81.0 84.1 79.8 70.5 75.2 QRWKV6 0.6 74.3 56.4 80.6 83.0 80.4 73.2 74.7 Qwen2.5-72B-Instruct Teacher 0 84.6 63.1 86.0 87.4 83.3 76.4 80.1 SWA(64, 4) 0 81.8 63.7 86.4 87.2 83.2 76.3 79.8 QRWKV6 0.6 77.5 63.8 86.5 85.7 82.5 79.6 79.3 QRWKV7 0.6 66.7 57.2 83.3 78.2 80.1 73.9 73.2 Table 2: Benchmark scores (%) for distilled linearized models, teachers, and teachers with SWA (4 sinks with sliding window 64 or 128). The best non-teacher model is highlighted. 
+
+Results: SWA obtains the best average downstream performance in 9 out of 11 cases. The only exceptions are a) LoLCATs on Phi-1.5-1.3B which obtains a score barely higher (62.5 vs 62.4 for SWA), and b) QRWKV6 on Qwen2.5-32B-Instruct which performs as well the baseline model (77.3) while SWA has a slight drop of performance (76.6). On MMLU, SWA is always the best performing except for Llama2.0-7B where DiJiang is better (40.7 versus 39.8 for SWA). Summarized results: SWA recovers the most out of MMLU baseline’s performance (93.2%), followed closely by QRWKV6 (92.4%). Both SWA and QRWKV6 recover most of the average baseline performance (99.0% for SWA and 99.1% for QRWKV6). In terms of training efficiency at high performance, SWA is the winner with 0 tokens required, followed by LoLCATs which fine-tune on 40M tokens to recover 83.2% of MMLU and 97.5% of the average baseline performance. As additional experiments, we also post-train our own linearized models with several state-of-the-art attention variants on modern architectures. Similar results were found when comparing them to SWA; see Appendix A.2 for details. 4.2 LONG CONTEXT REASONING 
+
+4.2.1 SINGLE NEEDLE -IN -A-H AYSTACK (S-NIAH) We compare SWA, LoLCATs (Zhang et al., 2025a), and Liger-GLA (Lan et al., 2025) on Single Needle-in-a-Haystack (S-NIAH) tasks at context lengths up to 4K. The base model used by all approaches is Llama 3.1 8B (Grattafiori et al., 2024). We compare at different window-sizes (128, 256, 512) Results are shown in Table 3. (Base: Llama 3.1 8B) Window S-NIAH-1 S-NIAH-2 S-NIAH-3                                                                                                                                                
+
+> Model size .5K 1K 2K 4K .5K 1K 2K 4K .5K 1K 2K 4K SWA(128,4) 128 35.0 20.2 15.0 12.6 100 33.0 22.8 9.2 99.8 56.2 41.4 17.2 LoLCATs(+SWA) 128 29.4 9.6 3.0 0100 17.4 7.2 4.2 98.2 14.6 3.2 1.6 Liger-GLA(+SWA) 128 28.4 0.2 0.2 0.2 100 1.6 0.6 1.0 97.6 2.0 1.2 0.8 SWA(256,4) 256 91.8 34.8 21.0 14.6 100 51.4 33.4 13.8 100 68.0 50.2 19.6 LoLCATs(+SWA) 256 84.8 26.2 10.2 2.2 100 37.0 12.2 8.2 100 30.6 6.0 2.2 Liger-GLA(+SWA) 256 83.8 0.0 0.0 2.8 100 1.0 4.6 0.8 97.6 1.0 3.8 0.6 SWA(512,4) 512 100 69.0 33.6 19.0 100 85.2 51.0 23.0 100 90.4 64.8 23.0 LoLCATs(+SWA) 512 100 65.6 24.6 8.8 100 71.8 17.4 16.6 100 51.0 10.6 5.8 Liger-GLA(+SWA) 512 73.4 1.0 0.0 0.0 100 2.6 4.0 0.0 97.6 1.2 1.2 0.0 Full Attention ∞100 100 100 100 100 100 100 100 100 99.8 100 99.8
+
+Table 3: Accuracy on the Single Needle-in-a-Haystack (S-NIAH) across context lengths (0.5K, 1K, 2K, 4K) and window-size (128, 256, 512). The best model at each window-size is highlighted. 
+
+Results: At all window-size (128, 256, 512) and context-length, SWA obtains equal or higher score on all tasks. At 4K context-length, SWA recovers 17.2-23% of the regular full attention accuracy, while LoLCATs and Liger-GLA reach at most 5.8% and 0.8% accuracy respectively. 4.2.2 BABIL ONG 
+
+We compare SWA and LoLCATs (Zhang et al., 2025a) on the BABILong Benchmark (average of QA1, QA2, QA3, QA4, and QA5) at context lengths up to 4K and window-size 256. The base model is Llama 3.1 8B (Grattafiori et al., 2024). Results are shown in Table 4 (see Appendix A.3 for details). (Base: Llama 3.1 8B) Window BABIL ONG (A VERAGE )
+
+Model size 0K 1K 2K 4K SWA(256, 4) 256 55 20 19 15 LoLCATs(+SWA) 256 56 22 10 3Full Attention ∞ 74 70 67 60 Table 4: Accuracy on the BABILong Benchmark across context lengths (0K, 1K, 2K, 4K). 
+
+Results: At small context tasks, LoLCATs(+SWA) obtains slightly higher scores than SWA (56% versus 55% at 0K and 22% versus 20% at 1K). At large context tasks, SWA obtains noticeably higher scores than LoLCATs (19% versus 10% at 2K and 15% versus 3% at 4K). At small context length (0K), SWA and LoLCATs(+SWA) recover 74-76% of the baseline performance. At long context length (4K), SWA recovers 25% of the baseline performance, unlike LoLCATs which recover only 5%. 4.3 SPEED AND MEMORY 
+
+We compare full attention (FA), Sliding Window Attention (SWA) with (4) attention sinks to linear attention and linear attention with SWA (LoLCATs) in terms of memory and speed. Results are shown in Figure 2. We also provide plots with additional details in A.4. 128 512 2K 8K 32K 128K 256K           
+
+> Context length
+> 10 3
+> 10 4
+> Decode throughput (tokens/s)
+> 128 512 2K 8K 32K 128K 256K
+> Context length
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> KV cache / recurrent state memory (MiB)
+> FA SWA = 64 SWA = 512 Linear Linear + SWA (LoLCATs)
+
+Figure 2: Speed (decoding throughput; tokens/s) and Memory cost (KV Cache or Recurrent state memory; MiB) of different attention types (Full Attention (FA), Sliding-Window Attention (SWA), Linear Attention, Linear + SWA (LoLCATs)) across context lengths (128 to 256K). 
+
+Hardware/Software: FA, and SWA both use FlashAttention (Dao et al., 2022; Dao, 2023) as backend. For linear attention, ThunderKittens (Spector et al., 2024) is used as backend. For LoLCATs, the fused SWA + linear-attention kernel from ThunderKittens at window-size=256 is used. Tests are done on a 4-layer Transformer (embedding-size=1024, 16 heads with dimension 64) with batch-size=1 in float16 precision. The hardware is an NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition. 
+
+Speed: FA decreases in speed as context-length grows beyond 1K; all other methods stay with a relatively flat speed. SWA is the fastest method (window-size=64 is faster than 512, but both are faster than the other methods). 
+
+Memory: FA increases in memory cost linearly with context length. SWA increases in memory cost until it reaches its window-size, then it stays constant. SWA at window-size=64 has the lowest memory cost, followed by Linear, Linear + SWA (LoLCATs), and finally SWA at window-size=512. Thus, SWA is faster and it has a similar or lower memory cost at window-size smaller than 512. 
+
+## 5 LIMITATIONS / F UTURE WORK 
+
+Our work is focused on training-free SWA. However, post-training can further improve the per-formance of SWA (Yu et al., 2025). Future work should investigate the effect of post-training with SWA and compare it to linearizing methods at different amounts of tokens (aka scaling laws). We did not consider hybrid models with some tokens or entire layers using full-attention (FA). It would be interesting to know the impact of different degrees of full-attention with SWA or linear attention. The analysis could also be extended to extremely large models and complex metrics, such as agentic tasks. The effect on multi-modal LLMs and video generations models with a multi-dimensional sliding window (e.g., 3D with (x, y) image position and (t) time coordinates) would also be interesting to investigate as future work. Note that for video diffusion models (Ho et al., 2022), there is already strong evidence that training-free SWA is an extremely strong baseline. For example, Sliding Tile Attention (Zhang et al., 2025b) recovers 97% of baseline’s VBench score (Huang et al., 2024) on HunyuanVideo (Kong et al., 2024) at 3.53 times the speed with the same number of sampling steps. 6 CONCLUSION 
+
+In this work, we showed that Sliding Window Attention (SWA) with attention sinks achieves better performance than most linear attention post-training methods. It does so without any post-training, at higher decoding speed, and lower memory cost. On short-context reasoning tasks, SWA recovers 99% of the average baseline’s performance, which matches the more expensive state-of-the-art linear attention post-training methods. On long-context tasks, SWA performs overwhelmingly better than linear-attention post-training. At context length 256, SWA recovers 20% and 25% of baseline performance on S-NIAH-3 and BABILong while LoLCATs only recovers 2.2% and 5% respectively. Given our finding, we strongly recommend practitioners to use SWA with attention sinks in order to achieve the best performance at a fixed small memory cost. 
+
+## REFERENCES 
+
+Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien Bubeck, Ronen Eldan, Suriya Gunasekar, Michael Harrison, Russell J Hewett, Mojan Javaheripi, Piero Kauffmann, et al. Phi-4 technical report. arXiv preprint arXiv:2412.08905 , 2024. Marah Abdin, Sahaj Agarwal, Ahmed Awadallah, Vidhisha Balachandran, Harkirat Behl, Lingjiao Chen, Gustavo de Rosa, Suriya Gunasekar, Mojan Javaheripi, Neel Joshi, et al. Phi-4-reasoning technical report. arXiv preprint arXiv:2504.21318 , 2025. Sandhini Agarwal, Lama Ahmad, Jason Ai, Sam Altman, Andy Applebaum, Edwin Arbus, Rahul K Arora, Yu Bai, Bowen Baker, Haiming Bao, et al. gpt-oss-120b & gpt-oss-20b model card. arXiv preprint arXiv:2508.10925 , 2025. Joshua Ainslie, James Lee-Thorp, Michiel De Jong, Yury Zemlyanskiy, Federico Lebrón, and Sumit Sanghai. Gqa: Training generalized multi-query transformer models from multi-head check-points. In Proceedings of the 2023 conference on empirical methods in natural language process-ing , pp. 4895–4901, 2023. Federico Barbero, Alvaro Arroyo, Xiangming Gu, Christos Perivolaropoulos, Michael Bronstein, Petar Veliˇ ckovi´ c, and Razvan Pascanu. Why do llms attend to the first token?, 2025. Iz Beltagy, Matthew E Peters, and Arman Cohan. Longformer: The long-document transformer. 
+
+arXiv preprint arXiv:2004.05150 , 2020. Albert Bick, Kevin Y Li, Eric P Xing, J Zico Kolter, and Albert Gu. Transformers to SSMs: Distilling quadratic knowledge to subquadratic models. arXiv preprint arXiv:2408.10189 , 2024a. doi: 10.48550/arXiv.2408.10189. Aviv Bick, Kevin Y. Li, Eric P. Xing, J. Zico Kolter, and Albert Gu. Transformers to ssms: Distilling quadratic knowledge to subquadratic models, 2024b. URL https://arxiv.org/abs/ 2408.10189 .Aviv Bick, Tobias Katsch, Nimit Sohoni, Arjun Desai, and Albert Gu. Llamba: Scaling distilled recurrent models for efficient language processing, 2025. URL https://arxiv.org/abs/ 2502.14458 .Yonatan Bisk, Rowan Zellers, Jianfeng Gao, Yejin Choi, et al. Piqa: Reasoning about physical com-monsense in natural language. In Proceedings of the AAAI conference on artificial intelligence ,volume 34, pp. 7432–7439, 2020. Loïc Cabannes, Maximilian Beck, Maria Lomeli, Gergely Szilvasy, Matthijs Douze, Jade Copet, Pierre-Emmanuel Mazaré, Gabriel Synnaeve, and Hervé Jégou. Short window attention enables long-term memorization. In International Conference on Learning Representations , volume 2026, pp. 79759–79774, 2026. Hanting Chen, Zhicheng Liu, Xutao Wang, Yuchuan Tian, and Yunhe Wang. Dijiang: Efficient large language models through compact kernelization. ArXiv , abs/2403.19928, 2024. URL 
+
+https://arxiv.org/abs/2403.19928 .Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try arc, the ai2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 , 2018. Tri Dao. Flashattention-2: Faster attention with better parallelism and work partitioning. arXiv preprint arXiv:2307.08691 , 2023. Tri Dao and Albert Gu. Transformers are ssms: Generalized models and efficient algorithms through structured state space duality. arXiv preprint arXiv:2405.21060 , 2024. Tri Dao, Dan Fu, Stefano Ermon, Atri Rudra, and Christopher Ré. Flashattention: Fast and memory-efficient exact attention with io-awareness. Advances in Neural Information Processing Systems ,35:16344–16359, 2022. Soham De, Samuel L Smith, Anushan Fernando, Aleksandar Botev, George Cristian-Muraru, Albert Gu, Ruba Haroun, Leonard Berrada, Yutian Chen, Srivatsan Srinivasan, et al. Griffin: Mixing gated linear recurrences with local attention for efficient language models. arXiv preprint arXiv:2402.19427 , 2024. Daniel Goldstein, Eric Alcaide, Janna Lu, and Eugene Cheah. Radlads: Rapid attention distillation to linear attention decoders at scale. arXiv preprint arXiv:2505.03005 , 2025. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. Albert Gu and Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 , 2023. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding, 2021. Jonathan Ho, Tim Salimans, Alexey Gritsenko, William Chan, Mohammad Norouzi, and David J Fleet. Video diffusion models. Advances in neural information processing systems , 35:8633–8646, 2022. Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language models. arXiv preprint arXiv:2106.09685 , 2021. Ziqi Huang, Yinan He, Jiashuo Yu, Fan Zhang, Chenyang Si, Yuming Jiang, Yuanhan Zhang, Tianxing Wu, Qingyang Jin, Nattapol Chanpaisit, et al. Vbench: Comprehensive benchmark suite for video generative models. In 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pp. 21807–21818. IEEE, 2024. Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guillaume Lample, Lucile Saulnier, Lélio Renard Lavaud, Marie-Anne Lachaux, Pierre Stock, Teven Le Scao, Thibaut Lavril, Thomas Wang, Timothée Lacroix, and William El Sayed. Mistral 7b. arXiv preprint arXiv:2310.06825 ,2023. Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and François Fleuret. Transformers are rnns: Fast autoregressive transformers with linear attention. In International conference on machine learning , pp. 5156–5165. PMLR, 2020. Weijie Kong, Qi Tian, Zijian Zhang, Rox Min, Zuozhuo Dai, Jin Zhou, Jiangfeng Xiong, Xin Li, Bo Wu, Jianwei Zhang, et al. Hunyuanvideo: A systematic framework for large video generative models. 
+
+arXiv preprint arXiv:2412.03603 , 2024. Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large language model serving with pagedattention. In Proceedings of the 29th symposium on operating systems principles , pp. 611–626, 2023. Disen Lan, Weigao Sun, Jiaxi Hu, Jusen Du, and Yu Cheng. Liger: Linearizing large language models to gated recurrent structures. arXiv preprint arXiv:2503.01496 , 2025. Yuanzhi Li, Sébastien Bubeck, Ronen Eldan, Allie Del Giorno, Suriya Gunasekar, and Yin Tat Lee. Textbooks are all you need ii: phi-1.5 technical report. arXiv preprint arXiv:2309.05463 , 2023. Yuhong Li, Yingbing Huang, Bowen Yang, Bharat Venkitesh, Acyr Locatelli, Hanchen Ye, Tianle Cai, Patrick Lewis, and Deming Chen. Snapkv: Llm knows what you are looking for before generation. Advances in Neural Information Processing Systems , 37:22947–22970, 2024. Zichang Liu, Aditya Desai, Fangshuo Liao, Weitao Wang, Victor Xie, Zhaozhuo Xu, Anastasios Kyrillidis, and Anshumali Shrivastava. Scissorhands: Exploiting the persistence of importance hypothesis for llm kv cache compression at test time. Advances in Neural Information Processing Systems , 36:52342–52364, 2023. Wenjie Luo, Yujia Li, Raquel Urtasun, and Richard Zemel. Understanding the effective receptive field in deep convolutional neural networks. Advances in neural information processing systems ,29, 2016. Jean Mercat, Igor Vasiljevic, Sedrick Keh, Kushal Arora, Achal Dave, Adrien Gaidon, and Thomas Kollar. Linearizing large language models, 2024. URL https://arxiv.org/abs/2405. 06640 .Bo Peng, Eric Alcaide, Quentin Anthony, Alon Albalak, Samuel Arcadinho, Stella Biderman, Huanqi Cao, Xin Cheng, Michael Chung, Matteo Grella, et al. Rwkv: Reinventing rnns for the transformer era. arXiv preprint arXiv:2305.13048 , 2023. Bo Peng, Daniel Goldstein, Quentin Anthony, Alon Albalak, Eric Alcaide, Stella Biderman, Eugene Cheah, Xingjian Du, Teddy Ferdinan, Haowen Hou, et al. Eagle and finch: Rwkv with matrix-valued states and dynamic recurrence. arXiv preprint arXiv:2404.05892 , 2024. Bo Peng, Ruichong Zhang, Daniel Goldstein, Eric Alcaide, Xingjian Du, Haowen Hou, Jiaju Lin, Jiaxing Liu, Janna Lu, William Merrill, et al. Rwkv-7" goose" with expressive dynamic state evolution. arXiv preprint arXiv:2503.14456 , 2025. Zhen Qin, Weixuan Sun, Hui Deng, Dongxu Li, Yunshen Wei, Baohong Lv, Junjie Yan, Ling-peng Kong, and Yiran Zhong. cosformer: Rethinking softmax in attention. arXiv preprint arXiv:2202.08791 , 2022. Qwen, :, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Keqin Bao, Kexin Yang, Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tianyi Tang, Tingyu Xia, Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu Cui, Zhenru Zhang, and Zihan Qiu. Qwen2.5 technical report, 2025. Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. Winogrande: An adversarial winograd schema challenge at scale. Communications of the ACM , 64(9):99–106, 2021. Noam Shazeer. Fast transformer decoding: One write-head is all you need. arXiv preprint arXiv:1911.02150 , 2019. Benjamin F Spector, Simran Arora, Aaryan Singhal, Daniel Y Fu, and Christopher Ré. Thunderkit-tens: Simple, fast, and adorable ai kernels. arXiv preprint arXiv:2410.20399 , 2024. Yutao Sun, Li Dong, Shaohan Huang, Shuming Ma, Yuqing Xia, Jilong Xue, Jianyong Wang, and Furu Wei. Retentive network: A successor to transformer for large language models. arXiv preprint arXiv:2307.08621 , 2023. Jiaming Tang, Yilong Zhao, Kan Zhu, Guangxuan Xiao, Baris Kasikci, and Song Han. Quest: Query-aware sparsity for efficient long-context llm inference. arXiv preprint arXiv:2406.10774 ,2024. Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann Dubois, Xuechen Li, Carlos Guestrin, Percy Liang, and Tatsunori B. Hashimoto. Stanford alpaca: An instruction-following llama model. 
+
+https://github.com/tatsu-lab/stanford_alpaca , 2023. Qwen Team. Qwq-32b: Embracing the power of reinforcement learning, March 2025. URL 
+
+https://qwenlm.github.io/blog/qwq-32b/ .Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 , 2023. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. Junxiong Wang, Daniele Paliotta, Avner May, Alexander M Rush, and Tri Dao. The mamba in the llama: Distilling and accelerating hybrid models. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. URL https://openreview.net/forum? id=uAzhODjALU .Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis. Efficient streaming language models with attention sinks. In International Conference on Learning Representations ,volume 2024, pp. 21875–21895, 2024. Haoran Xu, Baolin Peng, Hany Awadalla, Dongdong Chen, Yen-Chun Chen, Mei Gao, Young Jin Kim, Yunsheng Li, Liliang Ren, Yelong Shen, et al. Phi-4-mini-reasoning: Exploring the limits of small reasoning language models in math. arXiv preprint arXiv:2504.21233 , 2025. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 ,2025a. Songlin Yang, Bailin Wang, Yikang Shen, Rameswar Panda, and Yoon Kim. Gated linear attention transformers with hardware-efficient training. arXiv preprint arXiv:2312.06635 , 2023. Songlin Yang, Bailin Wang, Yu Zhang, Yikang Shen, and Yoon Kim. Parallelizing linear transformers with the delta rule over sequence length. Advances in neural information processing systems , 37: 115491–115522, 2024. Songlin Yang, Jan Kautz, and Ali Hatamizadeh. Gated delta networks: Improving mamba2 with delta rule, 2025b. URL https://arxiv.org/abs/2412.06464 .Yijiong Yu, Jiale Liu, Qingyun Wu, Huazheng Wang, and Ji Pei. Swaa: Sliding window atten-tion adaptation for efficient and quality preserving long context processing. arXiv preprint arXiv:2512.10411 , 2025. Lin Yueyu, Li Zhiyuan, Peter Yue, and Liu Xiao. Arwkv: Pretrain is not what we need, an rnn-attention-based language model born from transformer, 2025. URL https://arxiv.org/ abs/2501.15570 .Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. Hellaswag: Can a machine really finish your sentence?, 2019. URL https://arxiv.org/abs/1905.07830 .Michael Zhang, Kush Bhatia, Hermann Kumbong, and Christopher Ré. The hedgehog & the porcupine: Expressive linear attentions with softmax mimicry, 2024. URL https://arxiv. org/abs/2402.04347 .Michael Zhang, Simran Arora, Rahul Chalamala, Benjamin Spector, Alan Wu, Krithik Ramesh, Aaryan Singhal, and Christopher Ré. Lolcats: On low-rank linearizing of large language models. In International Conference on Learning Representations , volume 2025, pp. 46200–46253, 2025a. Peiyuan Zhang, Yongqi Chen, Runlong Su, Hangliang Ding, Ion Stoica, Zhengzhong Liu, and Hao Zhang. Fast video generation with sliding tile attention. arXiv preprint arXiv:2502.04507 , 2025b. Zhenyu Zhang, Ying Sheng, Tianyi Zhou, Tianlong Chen, Lianmin Zheng, Ruisi Cai, Zhao Song, Yuandong Tian, Christopher Ré, Clark Barrett, et al. H2o: Heavy-hitter oracle for efficient generative inference of large language models. Advances in neural information processing systems , 36:34661–34710, 2023. A APPENDIX 
+
+A.1 LIST OF MODELS AND METRICS 
+
+We compare methods on the following pretrained architectures: Phi-1.5-1.3B (Li et al., 2023), Mistral-7B-v0.1 (Jiang et al., 2023), Llama 2.0-7B (Touvron et al., 2023), Llama 3.0-8B, Llama 3.0-8B-Instruct, Llama 3.1-8B, Llama 3.1-70B (Grattafiori et al., 2024), Qwen 2.5-7B-Instruct, Qwen 2.5-32B-Instruct, Qwen 2.5-72B-Instruct (Qwen et al., 2025), and QwQ (Team, 2025). The size of the models range from 1.3B to 70B. The metrics considered are: MMLU (Hendrycks et al., 2021), ARC-C, ARC-E (Clark et al., 2018), PIQA (Bisk et al., 2020), WinoGrande (Sakaguchi et al., 2021), HellaSwag (Zellers et al., 2019). We chose these metrics because they are the standards used by other papers, which makes comparisons easier (Zhang et al., 2025a) (Goldstein et al., 2025). A.2 ADDITIONAL RESULTS ON NEWLY LINEARIZED MODELS                                                                                                                            
+
+> Model Type Fine-tuning Tokens (B) MMLU (5-shot) ARC-C (acc-norm) ARC-E (acc) HellaSwag (acc-norm) PIQA (acc) WinoGrande (acc) Avg.
+> Qwen3-8B Teacher 074.9 56.7 83.5 75.0 76.6 68.4 72.5 SWA(64, 4) 070.8 56.9 83.6 74.3 76.5 67.6 71.6 Gated DeltaNet 0.1 27.5 46.8 76.6 59.1 73.9 52.9 56.1 GLA 0.1 25.8 38.0 70.5 50.9 72.0 50.6 51.3 QRWKV6 0.1 24.6 41.5 74.7 53.7 72.6 52.0 53.2 Phi-4-mini-reasoning Teacher 057.4 48.0 71.4 64.8 69.3 59.1 61.7 SWA(64, 4) 054.8 48.1 71.0 63.3 69.0 59.5 60.9 Gated DeltaNet 0.1 24.3 34.7 64.0 45.5 68.7 51.1 48.1 GLA 0.1 25.2 30.7 59.2 40.9 66.5 51.8 45.7 QRWKV6 0.1 25.1 31.4 61.4 41.8 67.6 52.0 46.6 Phi-4-reasoning-plus Teacher 077.8 56.5 82.5 78.7 80.1 76.7 75.4 SWA(64, 4) 074.4 56.5 82.4 78.4 80.3 77.1 74.9 Gated DeltaNet 0.1 25.9 44.5 75.3 60.1 75.7 52.6 55.7 GLA 0.1 23.7 45.0 75.9 60.0 74.3 52.8 55.3 QRWKV6 0.1 25.7 40.1 72.7 57.3 74.6 53.2 53.9
+
+Table 5: Comparison of sliding-window and linear-attention methods. Teacher and SWA(64, 4) are train-free baselines; linear variants are LoLCATs-style two-stage distilled on ∼0.1B tokens of cleaned-Alpaca (Taori et al., 2023). We use different attention variants (GLA (Yang et al., 2023), Gated DeltaNet (Yang et al., 2025b), QRWKV6 (Peng et al., 2024)) on modern architectures (Qwen-3 (Yang et al., 2025a), Phi-4-mini-reasoning (Abdin et al., 2024; Xu et al., 2025), and Phi-4-reasoning-plus (Abdin et al., 2025)). A.3 BABILONG FULL RESULTS 
+
+Table 6: BABILong Benchmark Full Results. Performance comparison on BABILong across increasing context lengths (0K ∼4K), evaluating long-context reasoning performance. (Base: Llama 3.1 8B) QA1 QA2 QA3 QA4 QA5                                                                                 
+
+> Model 0K 1K 2K 4K 0K 1K 2K 4K 0K 1K 2K 4K 0K 1K 2K 4K 0K 1K 2K 4K SWA(256, 4) 84 21 16 12 36 14 11 626 16 21 11 82 16 17 18 49 35 29 30 LoLCATs(256) 100 22 5325 10 4130 17 13 465 21 9162 42 17 6Full attention 94 88 82 74 59 49 48 44 47 53 48 44 82 76 74 67 90 86 83 73
+
+A.4 SPEED , M EMORY , AND FLOP S PLOTS 128 512 2K 8K 32K 128K 256K         
+
+> Context length
+> 10 3
+> 10 4
+> Decode throughput (tokens/s)
+> 128 512 2K 8K 32K 128K 256K
+> Context length
+> 10 0
+> 10 1
+> 10 2
+> 10 3
+> KV cache / recurrent state memory (MiB)
+> FA SWA = 64 SWA = 128 SWA = 256 SWA = 512 Linear Linear + SWA (LoLCATs)
+
+Figure 3: Speed (decoding throughput; tokens/s) and Memory cost (KV Cache or Recurrent state memory; MiB) of different attention types (Full Attention (FA), Sliding-Window Attention (SWA), Linear Attention, Linear + SWA (LoLCATs)) across context lengths (128 to 256K). 128 512 2K 8K 32K 128K 256K 
+
+Context length 
+
+10 6
+
+10 7
+
+10 8
+
+10 9
+
+> Attention FLOPs / decoded token
+
+FA SWA = 64 SWA = 128 SWA = 256 SWA = 512 Linear Linear + SWA (LoLCATs) 
+
+Figure 4: Floating point operations per second (FLOPs) of different attention types (Full Attention (FA), Sliding-Window Attention (SWA), Linear Attention, Linear + SWA (LoLCATs)) across context lengths (128 to 256K).
