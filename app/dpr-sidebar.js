@@ -471,6 +471,11 @@
   }
 
   // ---------- 数据解析 ----------
+  function normalizeTutorialLabel(label) {
+    var text = String(label || '').trim();
+    return !text || text === '使用教程' ? '教程' : text;
+  }
+
   // 把 docs/_sidebar.md 文本解析成 model
   // 结构：
   //   - 行 "* Daily Papers" 进入日报分组
@@ -547,6 +552,7 @@
           if (!model.home && (top.href === '#/' || /\/$/.test(top.href))) {
             model.home = top;
           } else if (!model.tutorial) {
+            top.label = normalizeTutorialLabel(top.label);
             model.tutorial = top;
           }
         }
@@ -1103,14 +1109,24 @@
     var requestedMonth = normalizeMonthKey(activeMonthKey);
     var tabs = [];
     var seen = {};
+    // 日历格与状态里的 activeDailyDate 都是"锚定日"（区间日报取结束日），
+    // 与 model.daily 的原始 dateKey 不同形；这里建锚定日 → 原始 dateKey 的反查表。
+    var rawKeyByAnchor = {};
     (model && model.daily || []).forEach(function (day) {
       addTab(tabs, seen, day.dateKey, day.dateLabel || formatDateLabel(day.dateKey));
       seen[day.dateKey].count = (day.papers || []).length;
       seen[day.dateKey].unreadCount = countUnreadPapers(day.papers || [], map);
+      var dayAnchor = dailyCalendarAnchorDateKey(day.dateKey);
+      if (dayAnchor && !rawKeyByAnchor[dayAnchor]) rawKeyByAnchor[dayAnchor] = day.dateKey;
     });
+    // 把锚定日形态的 activeKey 还原成原始 dateKey；单日日报两者同形，等价于原样返回。
+    var requestedKey = String(activeKey || '');
+    if (requestedKey && !seen[requestedKey]) {
+      requestedKey = rawKeyByAnchor[dailyCalendarAnchorDateKey(requestedKey) || requestedKey] || requestedKey;
+    }
     var active = '';
-    if (activeKey && seen[activeKey] && (!requestedMonth || monthKeyFromDateKey(activeKey) === requestedMonth)) {
-      active = activeKey;
+    if (requestedKey && seen[requestedKey] && (!requestedMonth || monthKeyFromDateKey(requestedKey) === requestedMonth)) {
+      active = requestedKey;
     }
     if (!active && requestedMonth) {
       for (var tabIndex = 0; tabIndex < tabs.length; tabIndex += 1) {
@@ -1120,10 +1136,13 @@
         }
       }
     }
-    if (!active) active = activeKey && seen[activeKey] ? activeKey : (tabs[0] && tabs[0].key) || '';
+    if (!active) active = requestedKey && seen[requestedKey] ? requestedKey : (tabs[0] && tabs[0].key) || '';
     var groups = [];
+    // 同一锚定日可能对应多条记录（当天既有单日日报又有区间日报），按锚定日聚合，
+    // 与 buildDailyCalendarView 的日历计数口径保持一致。
+    var activeAnchor = dailyCalendarAnchorDateKey(active) || active;
     (model && model.daily || []).forEach(function (day) {
-      if (day.dateKey !== active) return;
+      if ((dailyCalendarAnchorDateKey(day.dateKey) || day.dateKey) !== activeAnchor) return;
       groups.push({
         key: day.dateKey,
         label: day.dateLabel || formatDateLabel(day.dateKey),
@@ -1473,6 +1492,24 @@
     );
   }
 
+  function renderFeedbackQuickButton() {
+    return (
+      '<button type="button" class="dpr-sidebar-quick dpr-sidebar-feedback-btn" data-sidebar-feedback aria-label="打开反馈" title="打开反馈">' +
+      '<span class="dpr-sidebar-quick-label"><span class="dpr-sidebar-quick-icon" aria-hidden="true">💬</span>反馈</span>' +
+      '</button>'
+    );
+  }
+
+  function renderSidebarHeader(homeHref, tutorialHref, homeLabel, tutorialLabel) {
+    return (
+      '<header class="dpr-sidebar-header">' +
+      renderQuickLink('dpr-sidebar-quick-home', homeHref, '🏠', homeLabel) +
+      renderQuickLink('dpr-sidebar-quick-tutorial', tutorialHref, '📖', normalizeTutorialLabel(tutorialLabel)) +
+      renderFeedbackQuickButton() +
+      '</header>'
+    );
+  }
+
   function renderSidebarFooterControls(collapsed) {
     var collapseLabel = collapsed ? '展开侧边栏' : '收起侧边栏';
     return (
@@ -1513,20 +1550,28 @@
     }, 100);
   }
 
+  function openFeedbackPanel() {
+    try {
+      if (window.DPRFeedback && typeof window.DPRFeedback.open === 'function') {
+        window.DPRFeedback.open();
+        return true;
+      }
+    } catch (e) {}
+    dispatchNamedEvent('dpr-open-feedback');
+    return false;
+  }
+
   function renderShell(root) {
     var homeHref = (state.model.home && state.model.home.href) || '#/';
     var tutorialHref = (state.model.tutorial && state.model.tutorial.href) || '#/tutorial/README';
     var homeLabel = (state.model.home && state.model.home.label) || '首页';
-    var tutorialLabel = (state.model.tutorial && state.model.tutorial.label) || '使用教程';
+    var tutorialLabel = (state.model.tutorial && state.model.tutorial.label) || '教程';
     var filterAllActive = state.filter === 'all' ? 'is-active' : '';
     var filterUnreadActive = state.filter === 'unread' ? 'is-active' : '';
     root.innerHTML =
       '<button type="button" class="dpr-sidebar-mobile-toggle" aria-label="切换侧边栏">' +
       '<span></span><span></span><span></span></button>' +
-      '<header class="dpr-sidebar-header">' +
-      renderQuickLink('dpr-sidebar-quick-home', homeHref, '🏠', homeLabel) +
-      renderQuickLink('dpr-sidebar-quick-tutorial', tutorialHref, '📖', tutorialLabel) +
-      '</header>' +
+      renderSidebarHeader(homeHref, tutorialHref, homeLabel, tutorialLabel) +
       '<div class="dpr-sidebar-toolbar">' +
       '  <div class="dpr-sidebar-search-wrap">' +
       '    <span class="dpr-sidebar-search-icon" aria-hidden="true">🔍</span>' +
@@ -2268,6 +2313,15 @@
         openSettingsPanel();
         return;
       }
+      var feedbackBtn = e.target.closest('.dpr-sidebar-feedback-btn');
+      if (feedbackBtn) {
+        e.preventDefault();
+        openFeedbackPanel();
+        if (isOverlaySidebarViewport()) {
+          toggleMobile(false);
+        }
+        return;
+      }
       var axisToggle = e.target.closest('.dpr-sidebar-axis-toggle');
       if (axisToggle) {
         var axisGroup = axisToggle.getAttribute('data-axis-toggle');
@@ -2579,11 +2633,14 @@
         resolveCurrentPaperHrefForRender: resolveCurrentPaperHrefForRender,
         updatePaperTitleOverflowMarks: updatePaperTitleOverflowMarks,
         renderQuickLink: renderQuickLink,
+        renderFeedbackQuickButton: renderFeedbackQuickButton,
+        renderSidebarHeader: renderSidebarHeader,
         renderSidebarFooterControls: renderSidebarFooterControls,
         applySidebarCollapsed: applySidebarCollapsed,
         toggleSidebarCollapsed: toggleSidebarCollapsed,
         syncResponsiveSidebarMode: syncResponsiveSidebarMode,
         openSettingsPanel: openSettingsPanel,
+        openFeedbackPanel: openFeedbackPanel,
       },
     };
   }

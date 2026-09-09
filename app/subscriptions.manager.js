@@ -33,6 +33,7 @@ window.SubscriptionsManager = (function () {
   const selectedConferenceYearPairs = new Set();
   let resetContentBtn = null;
   let resetContentMsgEl = null;
+  let resetContentPending = false;
   let adminDailyTabBtn = null;
   let adminConferenceTabBtn = null;
   let adminDailyPanel = null;
@@ -111,10 +112,8 @@ window.SubscriptionsManager = (function () {
     'NDSS',
   ];
   const CONFERENCE_STATS_SNAPSHOT_URL = 'app/conference-stats.json';
-  // 2026 年会议数据可用性（截至 2026-07）：
-  // 有数据: ICLR 2026, ICML 2026, AAAI 2026, ACL 2026, OSDI 2026, IEEE S&P 2026, NDSS 2026
-  // 无数据: CVPR/SOSP 2026（论文 PDF 尚未全量公开或未上传）
-  const CONFERENCE_2026_AVAILABLE = new Set(['ICLR', 'ICML', 'AAAI', 'ACL', 'OSDI', 'IEEE S&P', 'NDSS']);
+  // 2026 年已入库并验证检索的会议（截至 2026-09，含 CVPR、ECCV）。
+  const CONFERENCE_2026_AVAILABLE = new Set(['ICLR', 'ICML', 'AAAI', 'ACL', 'CVPR', 'ECCV', 'OSDI', 'IEEE S&P', 'NDSS']);
   const FEATURED_CONFERENCE_YEAR_PAIRS = new Set(['acl:2026', 'icml:2026']);
   // ECCV 是双年会议（偶数年）
   const BIENNIAL_EVEN_CONFERENCES = new Set(['ECCV']);
@@ -692,14 +691,12 @@ window.SubscriptionsManager = (function () {
     const currentYear = new Date().getFullYear();
     if (yearNum >= currentYear && !CONFERENCE_2026_AVAILABLE.has(conf)) {
       const ESTIMATED_DATES = {
-        CVPR:    '2026 年 7 月（论文上传后）',
         ICML:    '2026 年 7 月会后',
         IJCAI:   '2026 年 8 月会后',
         ACL:     '2026 年 7 月会后',
-        EMNLP:   '2026 年 11 月会后',
+        EMNLP:   '2026 年 10 月中下旬（以官方论文集开放时间为准）',
         NEURIPS: '2026 年 12 月会后',
         NIPS:    '2026 年 12 月会后',
-        ECCV:    '2026 年秋季会后',
         OSDI:    '2026 年会后论文 PDF 公开后',
         SOSP:    '2026 年会后论文 PDF 公开后',
         'IEEE S&P': '2026 年 CSDL 论文 PDF 公开后',
@@ -1144,7 +1141,8 @@ window.SubscriptionsManager = (function () {
     return true;
   };
 
-  const runResetContent = (msgEl) => {
+  const runResetContent = async (msgEl) => {
+    if (resetContentPending) return;
     if (String(window.DPR_ACCESS_MODE || '') !== 'full') {
       if (msgEl) {
         msgEl.textContent = '未检测到完整登录权限，危险操作未开启。';
@@ -1172,10 +1170,34 @@ window.SubscriptionsManager = (function () {
       return;
     }
 
-    window.DPRWorkflowRunner.runWorkflowByKey('reset-content');
+    resetContentPending = true;
+    if (resetContentBtn) resetContentBtn.disabled = true;
+    const warnBeforeDispatch = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeDispatch);
     if (msgEl) {
-      msgEl.textContent = '已发起论文内容重置任务。';
-      msgEl.style.color = '#080';
+      msgEl.textContent = '正在提交论文内容重置任务，请勿关闭页面…';
+      msgEl.style.color = '#666';
+    }
+    try {
+      const accepted = await window.DPRWorkflowRunner.runWorkflowByKey('reset-content');
+      if (msgEl) {
+        msgEl.textContent = accepted === true
+          ? '论文内容重置任务已提交，请在工作流面板查看进度。'
+          : '重置任务提交未获确认，请在工作流面板检查状态。';
+        msgEl.style.color = accepted === true ? '#080' : '#c00';
+      }
+    } catch (error) {
+      if (msgEl) {
+        msgEl.textContent = `重置任务提交失败：${error.message || error}`;
+        msgEl.style.color = '#c00';
+      }
+    } finally {
+      resetContentPending = false;
+      if (resetContentBtn) resetContentBtn.disabled = false;
+      window.removeEventListener('beforeunload', warnBeforeDispatch);
     }
   };
 

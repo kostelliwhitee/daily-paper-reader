@@ -28,8 +28,14 @@ function setupBrowserStub(hash) {
   global.document = {
     readyState: 'loading',
     addEventListener: () => {},
+    dispatchEvent: () => {},
     querySelector: () => null,
     querySelectorAll: () => [],
+    createEvent: () => ({
+      initCustomEvent(name) {
+        this.type = name;
+      },
+    }),
     createElement: () => {
       let text = '';
       return {
@@ -170,6 +176,19 @@ const rangeDailySidebar = `
       * <a class="dpr-sidebar-item-link" href="#/201706/12/attention" data-sidebar-item="{&quot;title&quot;:&quot;Attention Paper&quot;}">Attention Paper</a>
 `;
 
+// 区间日报的结束日「没有」同日单日报，复刻线上真实形态：
+// 日历会把区间挂到锚定日 20260827，而该 key 不存在于 model.daily 的原始 key 集合中。
+const orphanRangeDailySidebar = `
+* Daily Papers
+  * 2026-08-28 <!--dpr-date:20260828-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link" href="#/202608/28/fresh" data-sidebar-item="{&quot;title&quot;:&quot;Fresh Paper&quot;,&quot;tags&quot;:[{&quot;kind&quot;:&quot;query&quot;,&quot;label&quot;:&quot;eeg&quot;}]}">Fresh Paper</a>
+  * 2026-07-29 ~ 2026-08-27 <!--dpr-date:20260729-20260827-->
+    * 速读区
+      * <a class="dpr-sidebar-item-link" href="#/20260729-20260827/range-one" data-sidebar-item="{&quot;title&quot;:&quot;Range One&quot;,&quot;tags&quot;:[{&quot;kind&quot;:&quot;query&quot;,&quot;label&quot;:&quot;eeg&quot;}]}">Range One</a>
+      * <a class="dpr-sidebar-item-link" href="#/20260729-20260827/range-two" data-sidebar-item="{&quot;title&quot;:&quot;Range Two&quot;,&quot;tags&quot;:[{&quot;kind&quot;:&quot;query&quot;,&quot;label&quot;:&quot;speech&quot;}]}">Range Two</a>
+`;
+
 function testSidebarNavigationContract() {
   const sidebar = loadSidebarForTest('#/202606/24/paper-b?from=test');
   const tools = sidebar.__test;
@@ -177,6 +196,7 @@ function testSidebarNavigationContract() {
   assert.equal(typeof tools.parseSidebar, 'function');
 
   const model = tools.parseSidebar(sampleSidebar);
+  assert.equal(model.tutorial.label, '教程', '旧版运行态文案也应归一化为两个字');
   assert.deepEqual(tools.collectPaperHrefsFromModel(model), [
     '#/202606/24/paper-a',
     '#/202606/24/paper-b',
@@ -445,6 +465,51 @@ function testDailyRangeReportsStayReachableFromCalendarEndDate() {
   assert.ok(html.includes('data-axis-section="20260627-20260706:__all__"'));
 }
 
+// 回归：区间日报的锚定日（结束日）在当天没有同日单日报时，点击日历格必须能选中该区间。
+// 注意 rangeDailySidebar 的区间结束日 20260706 恰好另有一条单日报，会掩盖该缺陷，
+// 所以这里必须用「孤立锚定日」的 fixture，且保持单日组排在区间组之前（与线上生成顺序一致）。
+function testDailyRangeSelectableFromOrphanCalendarAnchorDay() {
+  const sidebar = loadSidebarForTest('#/202608/28/fresh');
+  const tools = sidebar.__test;
+  const model = tools.parseSidebar(orphanRangeDailySidebar);
+
+  assert.deepEqual(model.daily.map((day) => day.dateKey), [
+    '20260828',
+    '20260729-20260827',
+  ], '单日组必须排在区间组之前，否则该用例会假绿');
+
+  // 日历格按锚定日聚合，27 号格子应带出区间的两篇
+  const baseView = tools.buildDailyCalendarTagView(model, '', '__all__', {}, '202608');
+  const anchorDay = baseView.calendar.days.find((day) => day.dateKey === '20260827');
+  assert.equal(anchorDay.totalCount, 2, '27 号日历格应显示区间日报的篇数');
+  assert.equal(anchorDay.hasPapers, true);
+
+  // 点击 27 号格子传回的是锚定日 '20260827'，必须能还原到区间原始 key
+  const picked = tools.buildDailyDateView(model, '20260827', {}, '202608');
+  assert.equal(picked.activeKey, '20260729-20260827');
+  assert.deepEqual(picked.groups.map((group) => group.label), ['2026-07-29 ~ 2026-08-27']);
+  assert.deepEqual(picked.groups[0].papers.map((paper) => paper.title), ['Range One', 'Range Two']);
+
+  // 月份为空时走的是另一条兜底分支，同样不能落回最新单日
+  const pickedNoMonth = tools.buildDailyDateView(model, '20260827', {}, '');
+  assert.equal(pickedNoMonth.activeKey, '20260729-20260827');
+
+  // 完整视图：区间被选中，日历高亮落在锚定日上
+  const rangeView = tools.buildDailyCalendarTagView(model, '20260827', '__all__', {}, '202608');
+  assert.deepEqual(rangeView.groups.map((group) => [group.key, group.papers.length]), [
+    ['20260729-20260827:__all__', 2],
+  ]);
+  assert.equal(rangeView.calendar.days.find((day) => day.dateKey === '20260827').isActive, true);
+  assert.equal(rangeView.calendar.days.find((day) => day.dateKey === '20260828').isActive, false);
+
+  // 普通单日组不能因此回归
+  const freshView = tools.buildDailyCalendarTagView(model, '20260828', '__all__', {}, '202608');
+  assert.deepEqual(freshView.groups.map((group) => [group.key, group.papers.length]), [
+    ['20260828:__all__', 1],
+  ]);
+  assert.equal(freshView.calendar.days.find((day) => day.dateKey === '20260828').isActive, true);
+}
+
 function testDailyCalendarPlacementToggleKeepsControlRowFixedAboveLayers() {
   const sidebar = loadSidebarForTest('#/202606/24/paper-a');
   const tools = sidebar.__test;
@@ -622,19 +687,50 @@ function testQuickLinksCenterTextAndDetachIcon() {
   const sidebar = loadSidebarForTest('#/');
   const tools = sidebar.__test;
   assert.equal(typeof tools.renderQuickLink, 'function');
+  assert.equal(typeof tools.renderSidebarHeader, 'function');
+  assert.equal(typeof tools.renderFeedbackQuickButton, 'function');
 
   const html = tools.renderQuickLink('dpr-sidebar-quick-home', '#/', '🏠', '首页');
   assert.ok(html.includes('class="dpr-sidebar-quick dpr-sidebar-quick-home"'));
   assert.ok(html.includes('<span class="dpr-sidebar-quick-label"><span class="dpr-sidebar-quick-icon" aria-hidden="true">🏠</span>首页</span>'));
 
+  const feedbackHtml = tools.renderFeedbackQuickButton();
+  assert.ok(feedbackHtml.includes('<button type="button" class="dpr-sidebar-quick dpr-sidebar-feedback-btn"'));
+  assert.ok(feedbackHtml.includes('data-sidebar-feedback'));
+  assert.ok(feedbackHtml.includes('aria-label="打开反馈"'));
+  assert.ok(feedbackHtml.includes('<span class="dpr-sidebar-quick-label"><span class="dpr-sidebar-quick-icon" aria-hidden="true">💬</span>反馈</span>'));
+
+  const headerHtml = tools.renderSidebarHeader('#/', '#/tutorial/README', '首页', '使用教程');
+  const homeIndex = headerHtml.indexOf('dpr-sidebar-quick-home');
+  const tutorialIndex = headerHtml.indexOf('dpr-sidebar-quick-tutorial');
+  const feedbackIndex = headerHtml.indexOf('dpr-sidebar-feedback-btn');
+  assert.ok(homeIndex >= 0 && tutorialIndex > homeIndex && feedbackIndex > tutorialIndex);
+  assert.ok(headerHtml.includes('aria-hidden="true">📖</span>教程</span>'));
+
+  const sidebarTemplate = fs.readFileSync('docs_init/_sidebar.md', 'utf8').split('\n').slice(0, 3).join('\n');
+  assert.ok(sidebarTemplate.includes('data-dpr-hash="#/tutorial/README">教程</a>'));
+  assert.ok(!sidebarTemplate.includes('>使用教程</a>'));
+
   const css = fs.readFileSync('app/app.css', 'utf8');
+  const headerRule = cssRule(css, '.dpr-sidebar-header');
+  assert.ok(/display:\s*grid/i.test(headerRule));
+  assert.ok(/grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/i.test(headerRule));
+
   const quickRule = cssRule(css, '.dpr-sidebar-quick');
   assert.ok(/position:\s*relative/i.test(quickRule));
   assert.ok(/justify-content:\s*center/i.test(quickRule));
+  assert.ok(/min-width:\s*0/i.test(quickRule));
+  assert.ok(/width:\s*100%/i.test(quickRule));
+  assert.ok(/box-sizing:\s*border-box/i.test(quickRule));
+  assert.ok(/cursor:\s*pointer/i.test(quickRule));
+  assert.ok(/overflow:\s*visible/i.test(quickRule));
 
   const labelRule = cssRule(css, '.dpr-sidebar-quick-label');
   assert.ok(/position:\s*relative/i.test(labelRule));
   assert.ok(/display:\s*inline-block/i.test(labelRule));
+  assert.ok(/max-width:\s*100%/i.test(labelRule));
+  assert.ok(/overflow:\s*visible/i.test(labelRule));
+  assert.ok(/white-space:\s*nowrap/i.test(labelRule));
   assert.ok(/text-align:\s*center/i.test(labelRule));
 
   const iconRule = cssRule(css, '.dpr-sidebar-quick-icon');
@@ -642,6 +738,63 @@ function testQuickLinksCenterTextAndDetachIcon() {
   assert.ok(/right:\s*calc\(100%\s*\+\s*4px\)/i.test(iconRule));
   assert.ok(/top:\s*50%/i.test(iconRule));
   assert.ok(/transform:\s*translateY\(-50%\)/i.test(iconRule));
+
+  const feedbackRule = cssRule(css, '.dpr-sidebar-feedback-btn');
+  assert.ok(/background:\s*#f0fdf4/i.test(feedbackRule));
+  assert.ok(/border-color:\s*#86efac/i.test(feedbackRule));
+  assert.ok(/color:\s*#166534/i.test(feedbackRule));
+  assert.ok(/box-shadow:\s*inset 0 0 0 1px rgba\(34,\s*197,\s*94,\s*0\.1\)/i.test(feedbackRule));
+  assert.ok(/@media \(max-width:\s*420px\)[\s\S]*\.dpr-sidebar-header\s*{[^}]*gap:\s*6px/i.test(css));
+  assert.ok(/body\.dpr-dark \.dpr-sidebar-feedback-btn\s*{[^}]*background:\s*#123522/i.test(css));
+}
+
+function testFeedbackEntryClickContractAndFallbacks() {
+  const sidebar = loadSidebarForTest('#/');
+  const tools = sidebar.__test;
+  assert.equal(typeof tools.openFeedbackPanel, 'function');
+
+  const originalCustomEvent = global.CustomEvent;
+  const dispatched = [];
+  const openCalls = [];
+
+  global.CustomEvent = function CustomEvent(name) {
+    this.type = name;
+  };
+  document.dispatchEvent = (event) => {
+    dispatched.push(event.type);
+    return true;
+  };
+  document.createEvent = () => ({
+    initCustomEvent(name) {
+      this.type = name;
+    },
+  });
+
+  window.DPRFeedback = {
+    open() {
+      openCalls.push('open');
+    },
+  };
+  assert.equal(tools.openFeedbackPanel(), true);
+  assert.deepEqual(openCalls, ['open']);
+  assert.deepEqual(dispatched, []);
+
+  delete window.DPRFeedback;
+  assert.equal(tools.openFeedbackPanel(), false);
+  assert.deepEqual(dispatched, ['dpr-open-feedback']);
+
+  if (typeof originalCustomEvent === 'undefined') delete global.CustomEvent;
+  else global.CustomEvent = originalCustomEvent;
+
+  const js = fs.readFileSync('app/dpr-sidebar.js', 'utf8');
+  const start = js.indexOf("var feedbackBtn = e.target.closest('.dpr-sidebar-feedback-btn');");
+  const end = js.indexOf("var axisToggle = e.target.closest('.dpr-sidebar-axis-toggle');", start);
+  assert.ok(start > 0 && end > start, 'feedback button click handler should be present');
+  const block = js.slice(start, end);
+  assert.ok(block.includes('e.preventDefault();'));
+  assert.ok(block.includes('openFeedbackPanel();'));
+  assert.ok(block.includes('if (isOverlaySidebarViewport()) {'));
+  assert.ok(block.includes('toggleMobile(false);'));
 }
 
 function testSidebarFooterControlsReplaceRefresh() {
@@ -1557,6 +1710,7 @@ testAxisTabsRenderUnreadCounts();
 testDailyCalendarViewUsesMonthGridAndActiveDateOnly();
 testDailyCalendarTagViewFiltersActiveDateByKeyword();
 testDailyRangeReportsStayReachableFromCalendarEndDate();
+testDailyRangeSelectableFromOrphanCalendarAnchorDay();
 testDailyCalendarPlacementToggleKeepsControlRowFixedAboveLayers();
 testConferenceAndDailyAxisTogglesRenderBesidePanelTitles();
 testDailyCalendarInPlaceRefreshUsesActiveDailyTag();
@@ -1565,6 +1719,7 @@ testDailyDateAndTagClicksExpandCurrentSectionOnlyForDaily();
 testPaperEvidenceAndActionButtonsRender();
 testPaperMetaOrderKeepsEvidenceBetweenTitleAndStars();
 testQuickLinksCenterTextAndDetachIcon();
+testFeedbackEntryClickContractAndFallbacks();
 testSidebarFooterControlsReplaceRefresh();
 testCollapsedSidebarRecentersChatSurface();
 testResponsiveModeClearsDesktopCollapsedStateOnOverlayViewports();

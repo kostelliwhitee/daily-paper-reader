@@ -173,8 +173,8 @@ function testConferenceCurrentYearDisabledForPendingSources() {
   assert.equal(isConferenceYearSelectable('ACL', currentYear), true);
   assert.equal(isConferenceYearSelectable('OSDI', currentYear), true);
   assert.equal(isConferenceYearSelectable('IEEE S&P', currentYear), true);
-  assert.equal(isConferenceYearSelectable('CVPR', currentYear), false);
-  assert.equal(isConferenceYearSelectable('ECCV', currentYear), false);
+  assert.equal(isConferenceYearSelectable('CVPR', currentYear), true);
+  assert.equal(isConferenceYearSelectable('ECCV', currentYear), true);
   assert.equal(isConferenceYearSelectable('IJCAI', currentYear), false);
   // ECCV biennial: odd years disabled
   assert.equal(isConferenceYearSelectable('ECCV', '2024'), true);
@@ -188,6 +188,29 @@ function testConferenceDefaultYearOnlySelects2025() {
   const pairs = __getSelectedConferenceYearPairs().sort();
   // 不再默认勾选，由用户手动选择
   assert.deepEqual(pairs, []);
+}
+
+function testAvailable2026ConferenceChoicesAndEmnlpEstimate() {
+  __setConferenceStatsSnapshot(require('../app/conference-stats.json'));
+  __setRunSelectionState({ conferencePairs: ['CVPR:2026'] });
+  const html = __buildConferenceChoiceRowsHtml();
+  const buttonFor = (name) => html.match(new RegExp(`<button\\b[^>]*data-conference="${name}"[^>]*data-conference-year="2026"[^>]*>[\\s\\S]*?<\\/button>`))[0];
+  const cvpr = buttonFor('CVPR');
+  assert.equal(isConferenceYearSelectable('CVPR', '2026'), true);
+  assert.equal(/\bdisabled\b/.test(cvpr), false);
+  assert.ok(cvpr.includes('aria-pressed="true"'));
+  assert.ok(cvpr.includes('class="dpr-choice-total">4042</span>'));
+  const emnlp = buttonFor('EMNLP');
+  const eccv = buttonFor('ECCV');
+  assert.equal(/\bdisabled\b/.test(eccv), false);
+  const eccvStats = require('../app/conference-stats.json').items.find(item => item.id === 'eccv-2026');
+  assert.ok(eccvStats.stored_total_count > 0);
+  assert.ok(eccv.includes(`class="dpr-choice-total">${eccvStats.stored_total_count}</span>`));
+  assert.ok(/\bdisabled\b/.test(emnlp));
+  assert.ok(emnlp.includes('10 月中下旬'));
+  assert.ok(emnlp.includes('以官方论文集开放时间为准'));
+  assert.equal(emnlp.includes('11 月会后'), false);
+  __setRunSelectionState({ conferencePairs: [] });
 }
 
 function testConferenceYearChoicesShowTwoDigitYearAndStoredTotalOnly() {
@@ -489,6 +512,7 @@ async function testConferenceRetrievalDispatchesUnifiedConferencePairs() {
   await testRunProfileQuickFetchPassesProfileTagToWorkflow();
   testConferenceCurrentYearDisabledForPendingSources();
   testConferenceDefaultYearOnlySelects2025();
+  testAvailable2026ConferenceChoicesAndEmnlpEstimate();
   testConferenceYearChoicesShowTwoDigitYearAndStoredTotalOnly();
   await testConferenceStatsLoadReusesBootstrappedJsonPromise();
   testQuickRunUnsavedMessageClearsAfterSave();
